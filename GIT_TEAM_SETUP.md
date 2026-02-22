@@ -4,7 +4,26 @@
 
 ---
 
-## 1. GitHub Organization(팀) 만들기
+## 🚀 지금 바로 하기 (이미 WhaleArc 레포 있음)
+
+아래 **3단계**만 하면 팀 프로젝트 완료입니다.
+
+| 순서 | 할 일 | 링크/위치 |
+|------|--------|-----------|
+| **1** | Organization(팀) 만들기 | [GitHub → Settings → Organizations](https://github.com/settings/organizations) → **New organization** |
+| **2** | 저장소를 팀으로 이전 | [WhaleArc 레포 Settings](https://github.com/HaByeong/WhaleArc/settings) → 맨 아래 **Danger Zone** → **Transfer ownership** → 새로 만든 팀 이름 입력 |
+| **3** | 친구 초대 | 팀 페이지 → **People** → **Invite member** → 친구 GitHub 아이디 입력 |
+
+이전 후 로컬에서 한 번만 원격 주소 갱신 (팀 이름이 `WhaleArc` 라면):
+
+```bash
+git remote set-url origin git@github.com:WhaleArc/WhaleArc.git
+git fetch
+```
+
+---
+
+## 1. GitHub Organization(팀) 만들기 (상세)
 
 1. GitHub 로그인 후 우측 상단 프로필 클릭 → **Settings**
 2. 왼쪽 맨 아래 **Organizations** → **New organization**

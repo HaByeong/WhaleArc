@@ -45,3 +45,4 @@ README_INTERNAL.md
 # 분리된 웹/앱 레포 (별도 푸시용)
 WhaleArc_Web/
 WhaleArc_App/
+.DS_Store

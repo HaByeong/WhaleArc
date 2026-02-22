@@ -1,6 +1,6 @@
 # GitHub 팀(Organization) 만들고 WhaleArc 설정하기
 
-친구와 함께 WhaleArc을 만들기 위해 **GitHub Organization(팀)** 을 만들고, **웹 / 앱** 구조로 저장소를 쓰는 방법입니다.
+친구와 함께 WhaleArc을 만들기 위해 **GitHub Organization(팀)** 을 만드는 방법입니다.
 
 ---
 
@@ -39,8 +39,9 @@ git fetch
 
 ```
 whaleArc/
-├── web/          ← 지금 만든 웹 (frontend + backend + images)
-├── app/          ← 모바일 앱용 (나중에 추가)
+├── backend/      ← Spring Boot 백엔드
+├── frontend/     ← React 프론트엔드
+├── images/
 ├── README.md
 └── GIT_TEAM_SETUP.md
 ```
@@ -59,7 +60,7 @@ cd /Users/hanyang/Desktop/whaleArc
 git remote set-url origin git@github.com:YOUR_ORG_NAME/WhaleArc.git
 
 git add .
-git commit -m "chore: web/app 구조로 정리, 팀 설정 가이드 추가"
+git commit -m "chore: 팀 설정 가이드 추가"
 git push -u origin main
 ```
 
@@ -71,11 +72,11 @@ git push -u origin main
 2. 맨 아래 **Danger Zone** → **Transfer ownership**
 3. **New owner**에 만든 Organization 이름 입력 후 이전
 4. 이전 후에는 원격 URL이 `https://github.com/ORG_NAME/WhaleArc` 형태가 됩니다.
-5. 로컬에서 web/app 구조로 정리한 뒤 push:
+5. 로컬에서 push:
 
 ```bash
 git add .
-git commit -m "chore: web/app 구조로 정리, 팀 설정 가이드 추가"
+git commit -m "chore: 팀 설정 가이드 추가"
 git push origin main
 ```
 
@@ -95,14 +96,10 @@ git clone git@github.com:YOUR_ORG_NAME/WhaleArc.git
 
 ---
 
-## 4. 웹 / 앱 폴더에서 작업할 때
+## 4. 작업할 때
 
-- **웹(지금 만든 것)**: `web/` 안에서 작업  
-  - 백엔드: `web/backend/`  
-  - 프론트: `web/frontend/`
-- **앱**: 나중에 `app/` 안에 모바일 프로젝트 추가
-
-필요하면 `web/README.md`, `app/README.md`에 각각 실행 방법·개발 규칙을 적어 두면 됩니다.
+- **백엔드**: `backend/` 에서 실행 (`./gradlew bootRun`)
+- **프론트엔드**: `frontend/` 에서 실행 (`npm run dev`)
 
 ---
 

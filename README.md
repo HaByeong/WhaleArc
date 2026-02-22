@@ -1,6 +1,6 @@
 # 🐋 WhaleArc - 가상 매매 모의 투자 시스템
 
-<img src="https://github.com/user-attachments/assets/da29cc3f-ea9a-40b6-9b2b-3d5dcf8e9ba0" alt="WhaleArcLogo" width="700"/>
+<img src="./web/images/whalearc-logo.png" alt="WhaleArc Logo - QUANT STRATEGY & SIMULATION" width="700"/>
 
 > "고래처럼, 시장을 유영하듯."
 > 

@@ -37,12 +37,5 @@ out/
 .vscode/
 
 ### Documentation (Private) ###
-# 개발 구현 가이드 문서는 로컬에서만 사용
-docs/BACKEND_IMPLEMENTATION_GUIDE.md
-docs/BACKEND_INTEGRATION.md
-docs/IMPLEMENTATION_PLAN.md
-docs/LEARNING_GUIDE.md
-docs/FRONTEND_API_REFERENCE.md
-docs/CFA_FINANCIAL_FEATURES.md
-docs/RANKING_SYSTEM.md
-docs/PROJECT_STATUS.md
+# docs 폴더 전체를 비공개로 유지 (포트폴리오/개발 가이드 문서)
+docs/

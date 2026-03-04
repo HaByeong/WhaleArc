@@ -1,6 +1,6 @@
-package com.project.whalearc.auth.login.repository.user;
+package com.project.whalearc.user.repository;
 
-import com.project.whalearc.auth.login.domain.user.User;
+import com.project.whalearc.user.domain.User;
 import com.project.whalearc.auth.login.dto.auth.RepositoryPasswordReturnDto;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;

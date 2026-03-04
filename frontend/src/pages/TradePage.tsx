@@ -250,7 +250,11 @@ const TradePage = () => {
 
   const loadPortfolioData = async () => {
     try {
-      const portfolioData = await tradeService.getPortfolio();
+      const portfolioData = await tradeService.getPortfolio().catch(() => {
+        // API 실패 시 데모 포트폴리오로 폴백
+        const { demoPortfolio } = getDemoData();
+        return demoPortfolio;
+      });
       setPortfolio(portfolioData);
     } catch (error) {
       console.error('포트폴리오 조회 실패:', error);
@@ -300,7 +304,56 @@ const TradePage = () => {
       alert('주문이 성공적으로 접수되었습니다.');
       setActiveTab('orders');
     } catch (error: any) {
-      alert(error.response?.data?.message || '주문 접수에 실패했습니다.');
+      // 백엔드 미구현 또는 네트워크/인증 문제 시에도
+      // 데모 모드에서는 주문이 접수된 것처럼 "로컬 상태만" 시뮬레이션한다.
+      console.warn('주문 API 실패 - 데모 모드로 처리합니다.', error);
+
+      const { demoPortfolio, demoOrders, demoTrades } = getDemoData();
+      const now = new Date().toISOString();
+
+      // 데모 주문 템플릿을 기반으로, 실제 사용자가 입력한 값으로 새 주문 생성
+      const baseOrder = demoOrders[0];
+      const newOrder: Order = {
+        ...baseOrder,
+        id: `order-demo-${Date.now()}`,
+        stockCode: selectedStock.stockCode,
+        stockName: selectedStock.stockName,
+        orderType,
+        orderMethod,
+        quantity: parseInt(quantity),
+        price:
+          orderMethod === 'LIMIT'
+            ? parseFloat(limitPrice) || selectedStock.currentPrice
+            : selectedStock.currentPrice,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      // 데모 체결 템플릿을 기반으로 새 체결 생성
+      const baseTrade = demoTrades[0];
+      const newTrade: Trade = {
+        ...baseTrade,
+        id: `trade-demo-${Date.now()}`,
+        orderId: newOrder.id,
+        stockCode: newOrder.stockCode,
+        stockName: newOrder.stockName,
+        orderType: newOrder.orderType,
+        quantity: newOrder.quantity,
+        price: newOrder.price,
+        totalAmount: newOrder.price * newOrder.quantity,
+        executedAt: now,
+      };
+
+      // 포트폴리오는 기존 값이 있으면 유지, 없으면 데모 포트폴리오 사용
+      setPortfolio((prev) => prev ?? demoPortfolio);
+      setOrders((prev) => (prev.length ? [...prev, newOrder] : [newOrder]));
+      setTrades((prev) => (prev.length ? [...prev, newTrade] : [newTrade]));
+
+      // 폼 초기화 및 탭 이동
+      setQuantity('');
+      setLimitPrice('');
+      alert('데모 모드에서 주문이 접수된 것으로 시뮬레이션합니다.');
+      setActiveTab('orders');
     } finally {
       setIsSubmitting(false);
     }
@@ -314,7 +367,10 @@ const TradePage = () => {
       await loadInitialData();
       alert('주문이 취소되었습니다.');
     } catch (error: any) {
-      alert(error.response?.data?.message || '주문 취소에 실패했습니다.');
+      // 데모 모드에서는 백엔드 실패 시 로컬 상태만 업데이트
+      console.warn('주문 취소 API 실패 - 데모 모드에서 로컬 상태만 업데이트합니다.', error);
+      setOrders((prev) => prev.filter((order) => order.id !== orderId));
+      alert('데모 모드에서 주문이 취소된 것으로 시뮬레이션합니다.');
     }
   };
 

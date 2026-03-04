@@ -1,12 +1,17 @@
 package com.project.whalearc.auth.login.service.user;
 
-import com.project.whalearc.auth.login.domain.user.User;
+import com.project.whalearc.user.domain.User;
+import com.project.whalearc.auth.login.dto.user.UserProfileResponseDto;
 import com.project.whalearc.auth.login.dto.user.UserUpdateRequestDto;
-import com.project.whalearc.auth.login.repository.user.UserRepository;
+import com.project.whalearc.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+/**
+ * 로그인한 사용자 기준으로 동작한다.
+ * userId는 SecurityContext에 JWT 검증 후 넣어둔 principal에서 가져온다.
+ */
 @Service
 @RequiredArgsConstructor
 public class UserUpdateService implements UserUpdateServiceInterface {
@@ -14,14 +19,23 @@ public class UserUpdateService implements UserUpdateServiceInterface {
     private final UserRepository userRepository;
 
     @Override
-    public void updateUser(UserUpdateRequestDto userUpdateRequestDto) {
-        //userId 꺼내서 이제 전체 수정을 하면 될 것 같다
+    public UserProfileResponseDto getCurrentUserProfile() {
         String userId = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        User user = userRepository.findByUserId(userId);
+        if (user == null) {
+            throw new IllegalArgumentException("사용자를 찾을 수 없습니다.");
+        }
+        return UserProfileResponseDto.builder()
+                .userId(user.getUserId())
+                .name(user.getName())
+                .build();
+    }
 
-        //회원 정보 수정 로직 (User 엔티티 기준: name만 수정 가능)
+    @Override
+    public void updateUser(UserUpdateRequestDto userUpdateRequestDto) {
+        String userId = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         User updateUser = userRepository.findByUserId(userId);
         updateUser.setName(userUpdateRequestDto.getName());
-
         userRepository.save(updateUser);
     }
 }

@@ -1,4 +1,4 @@
-package com.project.whalearc.auth.login.domain.user;
+package com.project.whalearc.user.domain;
 
 import lombok.AccessLevel;
 import lombok.Getter;

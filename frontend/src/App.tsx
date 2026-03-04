@@ -9,6 +9,7 @@ import StrategyPage from './pages/StrategyPage';
 import RankingPage from './pages/RankingPage';
 import PortfolioDetailPage from './pages/PortfolioDetailPage';
 import MyPortfolioPage from './pages/MyPortfolioPage';
+import UserPage from './pages/UserPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -65,6 +66,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <MyPortfolioPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/user"
+            element={
+              <ProtectedRoute>
+                <UserPage />
               </ProtectedRoute>
             }
           />

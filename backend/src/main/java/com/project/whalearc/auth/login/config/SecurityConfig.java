@@ -27,8 +27,9 @@ import java.nio.charset.StandardCharsets;
         }
 
         @Bean
-        public SecurityFilterChain filterChain(HttpSecurity http, JwtTokenProvider jwtTokenProvider) throws Exception {
+        public SecurityFilterChain filterChain(HttpSecurity http, JwtTokenProvider jwtTokenProvider, org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource) throws Exception {
             http
+                    .cors(cors -> cors.configurationSource(corsConfigurationSource))
                     .csrf(csrf -> csrf.disable())
                     .authorizeHttpRequests(auth -> auth
                             .requestMatchers(HttpMethod.POST, "/users").permitAll()

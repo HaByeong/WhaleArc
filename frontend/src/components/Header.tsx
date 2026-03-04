@@ -100,12 +100,16 @@ const Header = ({ showNav = false }: HeaderProps) => {
                 </Link>
                 {isAuthenticated && (
                   <div className="flex items-center space-x-4 ml-4">
-                    <div className="flex items-center space-x-2 text-gray-700" aria-label="사용자 정보">
+                    <Link
+                      to="/user"
+                      className="flex items-center space-x-2 text-gray-700 hover:text-whale-light transition-colors rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2"
+                      aria-label="내 프로필"
+                    >
                       <div className="w-8 h-8 bg-whale-light rounded-full flex items-center justify-center text-white font-semibold">
                         {localStorage.getItem('userId')?.charAt(0).toUpperCase() || 'U'}
                       </div>
                       <span className="text-sm">{localStorage.getItem('userId') || '사용자'}</span>
-                    </div>
+                    </Link>
                     <button
                       onClick={handleLogout}
                       className="px-4 py-2 text-sm text-gray-700 hover:text-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 rounded-lg min-h-[44px] min-w-[44px]"
@@ -207,12 +211,17 @@ const Header = ({ showNav = false }: HeaderProps) => {
             {isAuthenticated && (
               <>
                 <div className="px-4 py-3 border-t border-gray-200 mt-2">
-                  <div className="flex items-center space-x-2 text-gray-700 mb-3" aria-label="사용자 정보">
+                  <Link
+                    to="/user"
+                    onClick={closeMobileMenu}
+                    className="flex items-center space-x-2 text-gray-700 mb-3 focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-lg px-2 py-2"
+                    aria-label="내 프로필"
+                  >
                     <div className="w-8 h-8 bg-whale-light rounded-full flex items-center justify-center text-white font-semibold">
                       {localStorage.getItem('userId')?.charAt(0).toUpperCase() || 'U'}
                     </div>
                     <span className="text-sm">{localStorage.getItem('userId') || '사용자'}</span>
-                  </div>
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="w-full px-4 py-3 text-sm text-gray-700 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 min-h-[44px] text-left"

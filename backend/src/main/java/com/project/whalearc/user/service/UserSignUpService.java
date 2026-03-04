@@ -1,8 +1,8 @@
 package com.project.whalearc.auth.login.service.signup;
 
-import com.project.whalearc.auth.login.domain.user.User;
+import com.project.whalearc.user.domain.User;
 import com.project.whalearc.auth.login.dto.signup.UserSignUpRequestDto;
-import com.project.whalearc.auth.login.repository.user.UserRepository;
+import com.project.whalearc.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;

@@ -1,10 +1,10 @@
 package com.project.whalearc.auth.login.service.auth;
 
-import com.project.whalearc.auth.login.domain.user.User;
+import com.project.whalearc.user.domain.User;
 import com.project.whalearc.auth.login.dto.auth.UserLoginRequestDto;
 import com.project.whalearc.auth.login.dto.auth.UserLoginResponseDto;
 import com.project.whalearc.auth.login.dto.auth.RepositoryPasswordReturnDto;
-import com.project.whalearc.auth.login.repository.user.UserRepository;
+import com.project.whalearc.user.repository.UserRepository;
 import com.project.whalearc.auth.login.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;

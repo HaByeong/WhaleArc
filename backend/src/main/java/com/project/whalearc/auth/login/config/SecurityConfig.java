@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets;
                     .cors(cors -> cors.configurationSource(corsConfigurationSource))
                     .csrf(csrf -> csrf.disable())
                     .authorizeHttpRequests(auth -> auth
+                            .requestMatchers(HttpMethod.GET, "/api/market/**").permitAll()
                             .requestMatchers(HttpMethod.POST, "/users").permitAll()
                             .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                             .requestMatchers(HttpMethod.POST, "/auth/reissue").permitAll()

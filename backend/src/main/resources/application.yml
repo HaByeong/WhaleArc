@@ -7,8 +7,9 @@ spring:
       uri: mongodb://localhost:27017/whaleArc
 
 # CORS 허용 (로컬 개발용; 프로덕션은 application-prod.yml 또는 CORS_ALLOWED_ORIGINS 환경변수)
+# Vite dev 서버 포트가 바뀔 수 있어서 5173~5178까지 허용
 cors:
-  allowed-origins: http://localhost:5173
+  allowed-origins: http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177,http://localhost:5178
 
 logging:
   level:

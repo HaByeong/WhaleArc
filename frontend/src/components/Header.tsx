@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
+import WhaleTailLogo from './WhaleTailLogo';
 
 interface HeaderProps {
   showNav?: boolean;
@@ -31,19 +32,10 @@ const Header = ({ showNav = false }: HeaderProps) => {
             aria-label="홈으로 이동"
           >
             <div className="flex items-center space-x-2">
-              <div className="relative">
-                <div className="absolute inset-0 bg-whale-light opacity-10 rounded-full blur-md scale-125"></div>
-                <img 
-                  src="/whale-tail-logo.png" 
-                  alt="WhaleArc Logo" 
-                  className="relative w-10 h-10 object-contain"
-                  style={{
-                    filter: showNav 
-                      ? 'brightness(1.6) contrast(1.3) drop-shadow(0 0 4px rgba(74, 144, 226, 0.4))'
-                      : 'brightness(1.8) contrast(1.4) drop-shadow(0 0 8px rgba(74, 144, 226, 0.6))',
-                  }}
-                />
-              </div>
+              <WhaleTailLogo
+                size={40}
+                showNav={showNav}
+              />
               <span 
                 className={`font-bold text-xl ${showNav ? 'text-whale-dark' : 'text-white'}`}
               >

@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
+import WhaleTailLogo from '../components/WhaleTailLogo';
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -31,17 +32,7 @@ const LandingPage = () => {
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <Link to="/" className="flex items-center space-x-2">
-              <div className="relative">
-                <div className="absolute inset-0 bg-whale-light opacity-30 rounded-full blur-lg scale-150"></div>
-                <img 
-                  src="/whale-tail-logo.png" 
-                  alt="WhaleArc Logo" 
-                  className="relative w-10 h-10 object-contain"
-                  style={{
-                    filter: 'brightness(1.8) contrast(1.5) drop-shadow(0 0 12px rgba(74, 144, 226, 0.8)) drop-shadow(0 0 20px rgba(91, 163, 245, 0.5))',
-                  }}
-                />
-              </div>
+              <WhaleTailLogo size={40} />
               <span className="text-white font-bold text-xl drop-shadow-lg">WHALEARC</span>
             </Link>
             

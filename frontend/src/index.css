@@ -159,3 +159,41 @@
 .animate-pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
 }
+
+/* SVG 고래 꼬리 로고 애니메이션 */
+.wt-tail {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: wt-wag 2.2s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes wt-wag {
+  0%, 100% { transform: rotate(0deg); }
+  20%       { transform: rotate(-9deg); }
+  50%       { transform: rotate(7deg); }
+  80%       { transform: rotate(-6deg); }
+}
+
+.whale-logo-wag {
+  transform-origin: 50% 85%;
+  animation: wt-wag 2.2s ease-in-out infinite;
+  will-change: transform;
+}
+
+.wt-wave {
+  border-radius: 50%;
+  border: 1.5px solid rgba(74, 144, 226, 0.75);
+  background: transparent;
+  transform-origin: center;
+}
+
+.wt-wave-1 { animation: wt-wave-out 2.6s ease-out infinite; }
+.wt-wave-2 { animation: wt-wave-out 2.6s ease-out 0.87s infinite; }
+.wt-wave-3 { animation: wt-wave-out 2.6s ease-out 1.73s infinite; }
+
+@keyframes wt-wave-out {
+  0%   { transform: scale(0.35, 0.2);  opacity: 0.9; }
+  80%  { opacity: 0.12; }
+  100% { transform: scale(3.8, 1.2); opacity: 0; }
+}

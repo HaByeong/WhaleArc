@@ -55,9 +55,9 @@ const Header = ({ showNav = false }: HeaderProps) => {
                 <Link
                   to="/dashboard"
                   className="text-gray-700 hover:text-whale-light transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5"
-                  aria-label="대시보드"
+                  aria-label="내 투자"
                 >
-                  대시보드
+                  내 투자
                 </Link>
                 <Link
                   to="/my-portfolio"
@@ -145,7 +145,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
               className="px-6 py-2 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center justify-center"
               aria-label="회원가입"
             >
-              Sign Up
+              시작하기
             </Link>
           )}
         </div>

@@ -36,14 +36,14 @@ const LandingPage = () => {
                 to="/dashboard"
                 className="px-6 py-2 bg-whale-light border border-whale-light text-white font-semibold rounded-lg hover:bg-whale-accent transition-colors"
               >
-                Dashboard
+                내 투자
               </Link>
             ) : (
               <Link
                 to="/login"
                 className="px-6 py-2 bg-whale-light border border-whale-light text-white font-semibold rounded-lg hover:bg-whale-accent transition-colors"
               >
-                Sign Up
+                시작하기
               </Link>
             )}
           </div>

@@ -22,11 +22,9 @@ export interface UserUpdateRequest {
  * - name: 간단한 표시용 이름
  */
 const buildDemoProfile = (): UserProfile => {
-  const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
-  const userId = storedUserId || 'demo';
   return {
-    userId,
-    name: userId === 'demo' ? '데모 유저' : `${userId}`,
+    userId: 'demo',
+    name: '데모 유저',
   };
 };
 

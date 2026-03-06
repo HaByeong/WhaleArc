@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
 import WhaleTailLogo from './WhaleTailLogo';
 
 interface HeaderProps {
@@ -9,11 +10,14 @@ interface HeaderProps {
 
 const Header = ({ showNav = false }: HeaderProps) => {
   const navigate = useNavigate();
-  const isAuthenticated = authService.isAuthenticated();
+  const { session, user } = useAuth();
+  const isAuthenticated = !!session;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const handleLogout = () => {
-    authService.logout();
+  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
+
+  const handleLogout = async () => {
+    await authService.logout();
     navigate('/login');
     setIsMobileMenuOpen(false);
   };
@@ -36,8 +40,8 @@ const Header = ({ showNav = false }: HeaderProps) => {
                 size={40}
                 showNav={showNav}
               />
-              <span 
-                className={`font-bold text-xl ${showNav ? 'text-whale-dark' : 'text-white'}`}
+              <span
+                className={`text-xl ml-1 ${showNav ? 'whalearc-text-nav' : 'whalearc-text'}`}
               >
                 WHALEARC
               </span>
@@ -48,47 +52,47 @@ const Header = ({ showNav = false }: HeaderProps) => {
             <>
               {/* 데스크톱 네비게이션 */}
               <nav className="hidden lg:flex items-center space-x-6" aria-label="주요 네비게이션">
-                <Link 
-                  to="/dashboard" 
-                  className="text-gray-700 hover:text-whale-light transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-2 py-1"
+                <Link
+                  to="/dashboard"
+                  className="text-gray-700 hover:text-whale-light transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5"
                   aria-label="대시보드"
                 >
-                  Dashboard
+                  대시보드
                 </Link>
-                <Link 
+                <Link
                   to="/my-portfolio"
-                  className="text-gray-700 hover:text-whale-light transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-2 py-1"
+                  className="text-gray-700 hover:text-whale-light transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5"
                   aria-label="내 포트폴리오"
                 >
-                  💼 내 포트폴리오
+                  포트폴리오
                 </Link>
-                <Link 
-                  to="/market" 
-                  className="text-gray-700 hover:text-whale-light transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-2 py-1"
+                <Link
+                  to="/market"
+                  className="text-gray-700 hover:text-whale-light transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5"
                   aria-label="시장"
                 >
-                  Market
+                  시세
                 </Link>
-                <Link 
-                  to="/trade" 
-                  className="text-gray-700 hover:text-whale-light transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-2 py-1"
+                <Link
+                  to="/trade"
+                  className="text-gray-700 hover:text-whale-light transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5"
                   aria-label="거래"
                 >
-                  Trade
+                  거래
                 </Link>
-                <Link 
-                  to="/strategy" 
-                  className="text-gray-700 hover:text-whale-light transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-2 py-1"
+                <Link
+                  to="/strategy"
+                  className="text-gray-700 hover:text-whale-light transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5"
                   aria-label="전략"
                 >
-                  Strategy
+                  전략
                 </Link>
-                <Link 
-                  to="/ranking" 
-                  className="text-gray-700 hover:text-whale-light transition-colors font-semibold focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-2 py-1"
-                  aria-label="랭킹"
+                <Link
+                  to="/ranking"
+                  className="text-gray-700 hover:text-whale-light transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5"
+                  aria-label="투자 현황"
                 >
-                  🏆 Ranking
+                  투자 현황
                 </Link>
                 {isAuthenticated && (
                   <div className="flex items-center space-x-4 ml-4">
@@ -98,9 +102,9 @@ const Header = ({ showNav = false }: HeaderProps) => {
                       aria-label="내 프로필"
                     >
                       <div className="w-8 h-8 bg-whale-light rounded-full flex items-center justify-center text-white font-semibold">
-                        {localStorage.getItem('userId')?.charAt(0).toUpperCase() || 'U'}
+                        {displayName.charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-sm">{localStorage.getItem('userId') || '사용자'}</span>
+                      <span className="text-sm">{displayName}</span>
                     </Link>
                     <button
                       onClick={handleLogout}
@@ -155,50 +159,50 @@ const Header = ({ showNav = false }: HeaderProps) => {
             <Link
               to="/dashboard"
               onClick={closeMobileMenu}
-              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
+              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
               aria-label="대시보드"
             >
-              Dashboard
+              대시보드
             </Link>
             <Link
               to="/my-portfolio"
               onClick={closeMobileMenu}
-              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
+              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
               aria-label="내 포트폴리오"
             >
-              💼 내 포트폴리오
+              포트폴리오
             </Link>
             <Link
               to="/market"
               onClick={closeMobileMenu}
-              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
+              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
               aria-label="시장"
             >
-              Market
+              시세
             </Link>
             <Link
               to="/trade"
               onClick={closeMobileMenu}
-              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
+              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
               aria-label="거래"
             >
-              Trade
+              거래
             </Link>
             <Link
               to="/strategy"
               onClick={closeMobileMenu}
-              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
+              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
               aria-label="전략"
             >
-              Strategy
+              전략
             </Link>
             <Link
               to="/ranking"
               onClick={closeMobileMenu}
-              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors font-semibold focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
-              aria-label="랭킹"
+              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
+              aria-label="투자 현황"
             >
-              🏆 Ranking
+              투자 현황
             </Link>
             {isAuthenticated && (
               <>
@@ -210,9 +214,9 @@ const Header = ({ showNav = false }: HeaderProps) => {
                     aria-label="내 프로필"
                   >
                     <div className="w-8 h-8 bg-whale-light rounded-full flex items-center justify-center text-white font-semibold">
-                      {localStorage.getItem('userId')?.charAt(0).toUpperCase() || 'U'}
+                      {displayName.charAt(0).toUpperCase()}
                     </div>
-                    <span className="text-sm">{localStorage.getItem('userId') || '사용자'}</span>
+                    <span className="text-sm">{displayName}</span>
                   </Link>
                   <button
                     onClick={handleLogout}

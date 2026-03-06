@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
+import { usePolling } from '../hooks/usePolling';
 import {
   tradeService,
   type StockPrice,
@@ -59,18 +60,18 @@ const TradePage = () => {
     loadInitialData();
   }, []);
 
-  // 실시간 업데이트
-  useEffect(() => {
-    // 실시간 주가 업데이트 (5초마다)
-    const interval = setInterval(() => {
+  // 스마트 폴링: 탭 비활성 시 자동 중지, 중복 요청 방지
+  const pollTradeData = useCallback(async () => {
+    try {
       if (selectedStock) {
         loadStockPrice(selectedStock.stockCode);
       }
       loadPortfolioData();
-    }, 5000);
-
-    return () => clearInterval(interval);
+    } catch {
+      // 폴링 실패는 조용히 무시
+    }
   }, [selectedStock]);
+  usePolling(pollTradeData, 10000);
 
   // 데모 데이터
   const getDemoData = () => {
@@ -549,7 +550,7 @@ const TradePage = () => {
                     </div>
                     {orderType === 'SELL' && (
                       <div className="text-sm text-gray-600 mt-2">
-                        보유 수량: {getAvailableQuantity(selectedStock.stockCode)}주
+                        보유 수량: {getAvailableQuantity(selectedStock.stockCode)}개
                       </div>
                     )}
                   </div>
@@ -822,7 +823,7 @@ const TradePage = () => {
                             <td className="px-4 py-3 font-semibold">
                               {formatCurrency(order.price)}
                             </td>
-                            <td className="px-4 py-3">{order.quantity}주</td>
+                            <td className="px-4 py-3">{order.quantity}개</td>
                             <td className="px-4 py-3">
                               <span
                                 className={`px-2 py-1 rounded text-sm font-semibold ${getStatusColor(
@@ -901,7 +902,7 @@ const TradePage = () => {
                             <td className="px-4 py-3 font-semibold">
                               {formatCurrency(trade.price)}
                             </td>
-                            <td className="px-4 py-3">{trade.quantity}주</td>
+                            <td className="px-4 py-3">{trade.quantity}개</td>
                             <td className="px-4 py-3">{formatCurrency(trade.totalAmount)}</td>
                             <td className="px-4 py-3 text-gray-600">
                               {formatCurrency(trade.commission)}
@@ -945,7 +946,7 @@ const TradePage = () => {
                               <div className="font-semibold">{holding.stockName}</div>
                               <div className="text-sm text-gray-500">{holding.stockCode}</div>
                             </td>
-                            <td className="px-4 py-3">{holding.quantity}주</td>
+                            <td className="px-4 py-3">{holding.quantity}개</td>
                             <td className="px-4 py-3">{formatCurrency(holding.averagePrice)}</td>
                             <td className="px-4 py-3 font-semibold">
                               {formatCurrency(holding.currentPrice)}

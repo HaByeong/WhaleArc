@@ -74,18 +74,48 @@ export interface Portfolio {
   holdings: Holding[];
 }
 
+// 빗썸 마켓 데이터 → StockPrice 변환
+const mapMarketToStockPrice = (item: {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changeRate: number;
+  volume: number;
+}): StockPrice => ({
+  stockCode: item.symbol,
+  stockName: item.name,
+  currentPrice: item.price,
+  change: item.change,
+  changeRate: item.changeRate,
+  volume: item.volume,
+  high: item.price,
+  low: item.price,
+  open: item.price - item.change,
+  previousClose: item.price - item.change,
+  timestamp: new Date().toISOString(),
+});
+
 // API 서비스
 export const tradeService = {
-  // 실시간 주가 조회 (나중에 WebSocket으로 교체 가능)
+  // 실시간 가격 조회 (빗썸 코인)
   getStockPrice: async (stockCode: string): Promise<StockPrice> => {
-    const response = await apiClient.get(`/api/market-data/${stockCode}`);
-    return response.data.data;
+    const response = await apiClient.get('/api/market/prices', {
+      params: { type: 'CRYPTO' },
+    });
+    const list: any[] = response.data;
+    const found = list.find((p) => p.symbol === stockCode);
+    if (!found) throw new Error('종목을 찾을 수 없습니다: ' + stockCode);
+    return mapMarketToStockPrice(found);
   },
 
-  // 종목 목록 조회
+  // 종목 목록 조회 (빗썸 코인)
   getStockList: async (): Promise<StockPrice[]> => {
-    const response = await apiClient.get('/api/market-data');
-    return response.data.data;
+    const response = await apiClient.get('/api/market/prices', {
+      params: { type: 'CRYPTO' },
+    });
+    const list: any[] = response.data;
+    return list.map(mapMarketToStockPrice);
   },
 
   // 주문 생성

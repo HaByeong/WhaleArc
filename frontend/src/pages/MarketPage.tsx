@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { marketService, type MarketPrice, type AssetType } from '../services/marketService';
+import { usePolling } from '../hooks/usePolling';
 import { XAxis, YAxis, ResponsiveContainer, Tooltip, AreaChart, Area } from 'recharts';
 
 /**
@@ -22,11 +23,18 @@ const MarketPage = () => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(() => {
-      loadData();
-    }, 10000);
-    return () => clearInterval(interval);
   }, [assetType]);
+
+  // 스마트 폴링: 탭 비활성 시 자동 중지, 중복 요청 방지
+  const pollPrices = useCallback(async () => {
+    try {
+      const prices = await marketService.getPrices(assetType);
+      setAssetList(prices);
+    } catch {
+      // 폴링 실패는 조용히 무시
+    }
+  }, [assetType]);
+  usePolling(pollPrices, 15000);
 
   // 데모 종목 데이터 (백엔드 실패 시 폴백)
   const getDemoStocks = (): MarketPrice[] => {

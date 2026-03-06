@@ -1,83 +1,61 @@
-import apiClient from '../utils/api';
-
-export interface LoginRequest {
-  userId: string; // 백엔드가 userId로 로그인하므로 변경
-  password: string;
-}
-
-export interface LoginResponse {
-  accessToken: string;
-  refreshToken: string;
-  userId: string;
-}
+import { supabase } from '../lib/supabase';
+import type { Provider } from '@supabase/supabase-js';
 
 export const authService = {
-  login: async (credentials: LoginRequest): Promise<LoginResponse> => {
-    // 데모 계정 처리 (백엔드 구현 전까지)
-    if (credentials.userId === 'demo' && credentials.password === 'demo123') {
-      const demoToken = 'demo-access-token-' + Date.now();
-      const demoRefreshToken = 'demo-refresh-token-' + Date.now();
-      
-      localStorage.setItem('accessToken', demoToken);
-      localStorage.setItem('refreshToken', demoRefreshToken);
-      localStorage.setItem('userId', 'demo');
-      
-      return {
-        accessToken: demoToken,
-        refreshToken: demoRefreshToken,
-        userId: 'demo',
-      };
-    }
+  login: async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data;
+  },
 
-    // 실제 백엔드 API 호출
-    try {
-      const response = await apiClient.post('/auth/login', credentials);
-      const { accessToken, userId } = response.data;
-      // Refresh Token은 서버가 Set-Cookie로 보내므로 localStorage 저장 불필요
-      
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('userId', userId);
-      
-      return { accessToken, refreshToken: '', userId };
-    } catch (error: any) {
-      // 네트워크 에러나 404 에러 시 데모 모드로 처리
-      if (error.code === 'ERR_NETWORK' || error.response?.status === 404) {
-        if (credentials.userId === 'demo' && credentials.password === 'demo123') {
-          const demoToken = 'demo-access-token-' + Date.now();
-          const demoRefreshToken = 'demo-refresh-token-' + Date.now();
-          
-          localStorage.setItem('accessToken', demoToken);
-          localStorage.setItem('refreshToken', demoRefreshToken);
-          localStorage.setItem('userId', 'demo');
-          
-          return {
-            accessToken: demoToken,
-            refreshToken: demoRefreshToken,
-            userId: 'demo',
-          };
-        }
-      }
-      throw error;
+  signUp: async (email: string, password: string, name: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name } },
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  loginWithOAuth: async (provider: Provider) => {
+    const options: Record<string, any> = {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    };
+    // 카카오는 비즈니스 앱이 아니면 이메일 스코프 사용 불가
+    if (provider === 'kakao') {
+      options.scopes = 'profile_nickname profile_image';
     }
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options,
+    });
+    if (error) throw error;
+    return data;
   },
 
   logout: async () => {
-    try {
-      await apiClient.post('/auth/logout');
-    } catch (error) {
-      // 백엔드 호출 실패해도 로컬 토큰은 삭제
-    }
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('userId');
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
   },
 
-  isAuthenticated: (): boolean => {
-    return !!localStorage.getItem('accessToken');
+  getSession: async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session;
   },
 
-  getCurrentUserId: (): string | null => {
-    return localStorage.getItem('userId');
+  getAccessToken: async () => {
+    const session = await authService.getSession();
+    return session?.access_token ?? null;
+  },
+
+  getCurrentUserId: () => {
+    // Supabase 세션에서 동기적으로 가져올 수 없으므로 null 반환 후 비동기로 처리
+    return null;
+  },
+
+  getCurrentUserIdAsync: async () => {
+    const session = await authService.getSession();
+    return session?.user?.id ?? null;
   },
 };
-

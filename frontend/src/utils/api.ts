@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { supabase } from '../lib/supabase';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
@@ -7,40 +8,34 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true,
 });
 
-// Request interceptor - JWT 토큰 추가
+// Request interceptor - Supabase 세션 토큰 추가
 apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+  async (config) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      config.headers.Authorization = `Bearer ${session.access_token}`;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor - 토큰 만료 처리
+// Response interceptor - 토큰 만료 시 자동 갱신 (1회만 재시도)
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      try {
-        // Refresh Token은 쿠키에서 자동 전송 (withCredentials: true)
-        const response = await axios.post(`${API_BASE_URL}/auth/reissue`, {}, {
-          withCredentials: true,
-        });
-        const { accessToken } = response.data;
-        localStorage.setItem('accessToken', accessToken);
-        error.config.headers.Authorization = `Bearer ${accessToken}`;
-        return apiClient.request(error.config);
-      } catch (refreshError) {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('userId');
+    const originalRequest = error.config;
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      const { data, error: refreshError } = await supabase.auth.refreshSession();
+      if (data.session && !refreshError) {
+        originalRequest.headers.Authorization = `Bearer ${data.session.access_token}`;
+        return apiClient.request(originalRequest);
+      }
+      // 콜백 페이지에서는 리다이렉트하지 않음
+      if (!window.location.pathname.startsWith('/auth/')) {
         window.location.href = '/login';
       }
     }
@@ -49,4 +44,3 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
-

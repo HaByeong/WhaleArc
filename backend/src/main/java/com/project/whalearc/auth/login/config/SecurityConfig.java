@@ -1,57 +1,65 @@
 package com.project.whalearc.auth.login.config;
 
-import com.project.whalearc.auth.login.security.JwtAuthenticationFilter;
-import com.project.whalearc.auth.login.security.JwtTokenProvider;
-import io.jsonwebtoken.security.Keys;
+import com.project.whalearc.auth.filter.UserSyncFilter;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
+@Slf4j
+@Configuration
+@RequiredArgsConstructor
+public class SecurityConfig {
 
-    @Configuration
-    public class SecurityConfig {
+    private final UserSyncFilter userSyncFilter;
 
-        @Value("${jwt.secret}")
-        private String jwtSecret;
+    @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")
+    private String jwkSetUri;
 
-        @Bean
-        public BCryptPasswordEncoder passwordEncoder() {
-            return new BCryptPasswordEncoder();
-        }
-
-        @Bean
-        public SecurityFilterChain filterChain(HttpSecurity http, JwtTokenProvider jwtTokenProvider, org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource) throws Exception {
-            http
-                    .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                    .csrf(csrf -> csrf.disable())
-                    .authorizeHttpRequests(auth -> auth
-                            .requestMatchers(HttpMethod.GET, "/api/market/**").permitAll()
-                            .requestMatchers(HttpMethod.POST, "/users").permitAll()
-                            .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
-                            .requestMatchers(HttpMethod.POST, "/auth/reissue").permitAll()
-                            .anyRequest().authenticated()
-                    )
-                    .addFilterBefore(
-                            new JwtAuthenticationFilter(jwtTokenProvider),
-                            UsernamePasswordAuthenticationFilter.class
-                    );
-            return http.build();
-        }
-
-        @Bean
-        public SecretKey secretKey() {
-            return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
-        }
-
-        @Bean
-        public JwtTokenProvider jwtTokenProvider(SecretKey secretKey) {
-            return new JwtTokenProvider(secretKey);
-        }
+    @Bean
+    public SecurityFilterChain filterChain(
+            HttpSecurity http,
+            org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource
+    ) throws Exception {
+        http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/api/market/**").permitAll()
+                        .anyRequest().authenticated()
+                )
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> jwt
+                                .decoder(supabaseJwtDecoder())
+                                .jwtAuthenticationConverter(supabaseJwtConverter())
+                        )
+                )
+                // UserSyncFilter는 JWT 인증 이후에 실행되어야 함
+                .addFilterAfter(userSyncFilter, BasicAuthenticationFilter.class);
+        return http.build();
     }
+
+    @Bean
+    public JwtDecoder supabaseJwtDecoder() {
+        log.info("Supabase JwtDecoder 초기화: jwkSetUri={}, algorithm=ES256", jwkSetUri);
+        // Supabase는 ES256 알고리즘으로 JWT를 서명함 (기본값 RS256이 아님)
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri)
+                .jwsAlgorithm(SignatureAlgorithm.ES256)
+                .build();
+        return decoder;
+    }
+
+    @Bean
+    public JwtAuthenticationConverter supabaseJwtConverter() {
+        return new JwtAuthenticationConverter();
+    }
+}

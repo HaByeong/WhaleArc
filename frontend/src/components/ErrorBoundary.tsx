@@ -1,6 +1,5 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 
 interface Props {
   children: ReactNode;
@@ -61,9 +60,9 @@ class ErrorBoundary extends Component<Props, State> {
               >
                 새로고침
               </button>
-              <Link to="/" className="btn-secondary">
+              <a href="/" className="btn-secondary">
                 홈으로
-              </Link>
+              </a>
             </div>
           </div>
         </div>

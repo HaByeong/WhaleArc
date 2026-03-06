@@ -1,29 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { tradeService, type Portfolio } from '../services/tradeService';
-import { authService } from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
+import { usePolling } from '../hooks/usePolling';
 
 const DashboardPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
 
   useEffect(() => {
-    // 현재 사용자 정보 가져오기
-    setCurrentUserId(authService.getCurrentUserId());
     loadData();
-    // 실시간 포트폴리오 업데이트 (10초마다)
-    const interval = setInterval(() => {
-      loadPortfolio();
-    }, 10000);
-
-    return () => clearInterval(interval);
   }, []);
+
+  // 스마트 폴링: 탭 비활성 시 자동 중지, 중복 요청 방지
+  const pollPortfolio = useCallback(async () => {
+    try {
+      const portfolioData = await tradeService.getPortfolio();
+      setPortfolio(portfolioData);
+    } catch (err) {
+      // 폴링 실패는 조용히 무시 (초기 로드와 다르게)
+    }
+  }, []);
+  usePolling(pollPortfolio, 15000);
 
   // 데모 데이터
   const getDemoPortfolio = (): Portfolio => {
@@ -126,7 +132,7 @@ const DashboardPage = () => {
                   </div>
                   <div>
                     <h1 className="text-2xl md:text-3xl font-bold">
-                      {currentUserId ? `${currentUserId}님, 환영합니다!` : '환영합니다!'}
+                      {displayName}님, 환영합니다!
                     </h1>
                     <p className="text-blue-100 text-sm md:text-base mt-1">
                       오늘도 수익률을 높여보세요

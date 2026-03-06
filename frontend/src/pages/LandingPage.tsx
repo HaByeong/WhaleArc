@@ -1,26 +1,21 @@
 import { Link, useNavigate } from 'react-router-dom';
 import WhaleTailLogo from '../components/WhaleTailLogo';
+import { useAuth } from '../contexts/AuthContext';
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const { session } = useAuth();
 
   const handleFeatureClick = (path: string) => {
-    // 로그인 상태 확인 (localStorage 직접 확인)
-    const accessToken = localStorage.getItem('accessToken');
-    const isAuthenticated = !!accessToken;
-    
-    // 로그인하지 않은 경우 무조건 로그인 페이지로 이동
-    if (!isAuthenticated) {
-      navigate('/login', { 
-        state: { 
-          from: path, 
-          message: '로그인이 필요한 기능입니다. 로그인해주세요.' 
-        } 
+    if (!session) {
+      navigate('/login', {
+        state: {
+          from: path,
+          message: '로그인이 필요한 기능입니다. 로그인해주세요.'
+        }
       });
       return;
     }
-    
-    // 로그인한 경우에만 해당 페이지로 이동
     navigate(path);
   };
 
@@ -33,16 +28,24 @@ const LandingPage = () => {
             {/* Logo */}
             <Link to="/" className="flex items-center space-x-2">
               <WhaleTailLogo size={40} />
-              <span className="text-white font-bold text-xl drop-shadow-lg">WHALEARC</span>
+              <span className="text-xl ml-1 whalearc-text">WHALEARC</span>
             </Link>
             
-            {/* Sign Up Button */}
-            <Link 
-              to="/login" 
-              className="px-6 py-2 bg-whale-light border border-whale-light text-white font-semibold rounded-lg hover:bg-whale-accent transition-colors"
-            >
-              Sign Up
-            </Link>
+            {session ? (
+              <Link
+                to="/dashboard"
+                className="px-6 py-2 bg-whale-light border border-whale-light text-white font-semibold rounded-lg hover:bg-whale-accent transition-colors"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className="px-6 py-2 bg-whale-light border border-whale-light text-white font-semibold rounded-lg hover:bg-whale-accent transition-colors"
+              >
+                Sign Up
+              </Link>
+            )}
           </div>
         </div>
       </header>

@@ -197,3 +197,32 @@
   80%  { opacity: 0.12; }
   100% { transform: scale(3.8, 1.2); opacity: 0; }
 }
+
+/* WHALEARC 로고 텍스트 */
+.whalearc-text {
+  letter-spacing: 0.18em;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffffff 0%, #a8d4ff 40%, #4a90e2 70%, #a8d4ff 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: whalearc-shimmer 4s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(74, 144, 226, 0.4));
+}
+
+.whalearc-text-nav {
+  letter-spacing: 0.18em;
+  font-weight: 800;
+  background: linear-gradient(135deg, #1a2b4d 0%, #2d4a7a 50%, #4a90e2 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: whalearc-shimmer 4s ease-in-out infinite;
+}
+
+@keyframes whalearc-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}

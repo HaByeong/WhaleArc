@@ -4,20 +4,21 @@ import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { tradeService, type Portfolio } from '../services/tradeService';
-import { authService } from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
 
 /**
  * 내 포트폴리오 상세 페이지
  */
 const MyPortfolioPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
 
   useEffect(() => {
-    setCurrentUserId(authService.getCurrentUserId());
     loadPortfolio();
   }, []);
 
@@ -49,7 +50,7 @@ const MyPortfolioPage = () => {
   const getMockPortfolio = (): Portfolio => {
     return {
       id: 'my-portfolio-1',
-      userId: currentUserId || 'demo',
+      userId: 'demo',
       cashBalance: 5000000,
       totalValue: 12500000,
       returnRate: 25.0,
@@ -158,7 +159,7 @@ const MyPortfolioPage = () => {
                   내 포트폴리오
                 </h1>
                 <p className="text-blue-100 text-sm md:text-base mt-1">
-                  {currentUserId ? `${currentUserId}님의 포트폴리오` : '포트폴리오 상세 정보'}
+                  {displayName}님의 포트폴리오
                 </p>
               </div>
             </div>
@@ -213,7 +214,7 @@ const MyPortfolioPage = () => {
                 <div className="text-center py-12">
                   <div className="text-4xl mb-3">📊</div>
                   <div className="text-gray-500 font-medium mb-2">보유 종목이 없습니다</div>
-                  <div className="text-sm text-gray-400 mb-4">거래 페이지에서 주식을 매수해보세요</div>
+                  <div className="text-sm text-gray-400 mb-4">거래 페이지에서 코인을 매수해보세요</div>
                   <button
                     onClick={() => navigate('/trade')}
                     className="btn-primary"
@@ -247,7 +248,7 @@ const MyPortfolioPage = () => {
                               <div className="text-sm text-gray-500">{holding.stockCode}</div>
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-right font-semibold">{holding.quantity}주</td>
+                          <td className="px-4 py-4 text-right font-semibold">{holding.quantity}개</td>
                           <td className="px-4 py-4 text-right text-gray-600">{formatAmount(holding.averagePrice)}</td>
                           <td className="px-4 py-4 text-right font-semibold text-whale-dark">{formatAmount(holding.currentPrice)}</td>
                           <td className={`px-4 py-4 text-right font-bold ${getReturnColor(holding.returnRate)}`}>
@@ -274,7 +275,7 @@ const MyPortfolioPage = () => {
                   onClick={() => navigate('/trade')}
                   className="w-full btn-primary text-left flex items-center justify-between"
                 >
-                  <span>주식 거래하기</span>
+                  <span>코인 거래하기</span>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>

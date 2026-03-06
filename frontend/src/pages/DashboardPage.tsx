@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import { tradeService, type Portfolio } from '../services/tradeService';
+import { tradeService, type Portfolio, type Trade, type StockPrice } from '../services/tradeService';
 import { useAuth } from '../contexts/AuthContext';
 import { usePolling } from '../hooks/usePolling';
 
@@ -11,6 +11,8 @@ const DashboardPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [recentTrades, setRecentTrades] = useState<Trade[]>([]);
+  const [topMovers, setTopMovers] = useState<StockPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,66 +22,77 @@ const DashboardPage = () => {
     loadData();
   }, []);
 
-  // 스마트 폴링: 탭 비활성 시 자동 중지, 중복 요청 방지
-  const pollPortfolio = useCallback(async () => {
+  const pollData = useCallback(async () => {
     try {
-      const portfolioData = await tradeService.getPortfolio();
-      setPortfolio(portfolioData);
-    } catch (err) {
-      // 폴링 실패는 조용히 무시 (초기 로드와 다르게)
+      const [portfolioData, tradesData, stocksData] = await Promise.all([
+        tradeService.getPortfolio().catch(() => null),
+        tradeService.getTrades().catch(() => []),
+        tradeService.getStockList().catch(() => []),
+      ]);
+      if (portfolioData) setPortfolio(portfolioData);
+      if (tradesData.length) setRecentTrades(tradesData.slice(0, 5));
+      if (stocksData.length) {
+        const sorted = [...stocksData].sort((a, b) => Math.abs(b.changeRate) - Math.abs(a.changeRate));
+        setTopMovers(sorted.slice(0, 5));
+      }
+    } catch {
+      // 폴링 실패는 무시
     }
   }, []);
-  usePolling(pollPortfolio, 15000);
+  usePolling(pollData, 15000);
 
-  // 데모 데이터
-  const getDemoPortfolio = (): Portfolio => {
-    return {
-      id: 'demo-1',
-      userId: 'demo-user',
-      cashBalance: 5000000,
-      totalValue: 12500000,
-      returnRate: 25.0,
-      holdings: [
-        {
-          stockCode: '005930',
-          stockName: '삼성전자',
-          quantity: 100,
-          averagePrice: 60000,
-          currentPrice: 75000,
-          marketValue: 7500000,
-          profitLoss: 1500000,
-          returnRate: 25.0,
-        },
-      ],
-    };
-  };
+  const getDemoPortfolio = (): Portfolio => ({
+    id: 'demo-1',
+    userId: 'demo-user',
+    cashBalance: 5000000,
+    totalValue: 12500000,
+    returnRate: 25.0,
+    holdings: [
+      {
+        stockCode: 'BTC',
+        stockName: '비트코인',
+        quantity: 0.05,
+        averagePrice: 85000000,
+        currentPrice: 95000000,
+        marketValue: 4750000,
+        profitLoss: 500000,
+        returnRate: 11.76,
+      },
+      {
+        stockCode: 'ETH',
+        stockName: '이더리움',
+        quantity: 1.5,
+        averagePrice: 3200000,
+        currentPrice: 3500000,
+        marketValue: 5250000,
+        profitLoss: 450000,
+        returnRate: 9.38,
+      },
+    ],
+  });
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const portfolioData = await tradeService.getPortfolio().catch(() => {
-        // API 실패 시 데모 데이터 사용
-        return getDemoPortfolio();
-      });
+
+      const [portfolioData, tradesData, stocksData] = await Promise.all([
+        tradeService.getPortfolio().catch(() => getDemoPortfolio()),
+        tradeService.getTrades().catch(() => []),
+        tradeService.getStockList().catch(() => []),
+      ]);
 
       setPortfolio(portfolioData);
+      setRecentTrades(tradesData.slice(0, 5));
+      if (stocksData.length) {
+        const sorted = [...stocksData].sort((a, b) => Math.abs(b.changeRate) - Math.abs(a.changeRate));
+        setTopMovers(sorted.slice(0, 5));
+      }
     } catch (err: any) {
-      // 에러 발생 시에도 데모 데이터 표시
       setPortfolio(getDemoPortfolio());
-      setError(err.message || '포트폴리오 데이터를 불러오는데 실패했습니다.');
+      setError(err.message || '데이터를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadPortfolio = async () => {
-    try {
-      const portfolioData = await tradeService.getPortfolio();
-      setPortfolio(portfolioData);
-    } catch (err) {
-      console.error('포트폴리오 조회 실패:', err);
     }
   };
 
@@ -115,32 +128,29 @@ const DashboardPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header showNav={true} />
-      
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 환영 메시지 섹션 */}
+        {/* 환영 메시지 */}
         <div className="mb-8 bg-gradient-to-r from-whale-dark to-whale-light rounded-2xl shadow-xl p-6 md:p-8 text-white relative overflow-hidden">
-          {/* 배경 장식 */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-whale-accent opacity-10 rounded-full blur-2xl"></div>
-          
+
           <div className="relative z-10">
             <div className="flex items-center justify-between flex-wrap gap-4">
-              <div>
-                <div className="flex items-center space-x-3 mb-2">
-                  <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-2xl backdrop-blur-sm">
-                    🐋
-                  </div>
-                  <div>
-                    <h1 className="text-2xl md:text-3xl font-bold">
-                      {displayName}님, 환영합니다!
-                    </h1>
-                    <p className="text-blue-100 text-sm md:text-base mt-1">
-                      오늘도 수익률을 높여보세요
-                    </p>
-                  </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-2xl backdrop-blur-sm">
+                  🐋
+                </div>
+                <div>
+                  <h1 className="text-2xl md:text-3xl font-bold">
+                    {displayName}님, 환영합니다!
+                  </h1>
+                  <p className="text-blue-100 text-sm md:text-base mt-1">
+                    오늘의 투자 현황을 확인하세요
+                  </p>
                 </div>
               </div>
-              
+
               {portfolio && (
                 <div className="flex items-center space-x-6">
                   <div className="text-center">
@@ -153,7 +163,7 @@ const DashboardPage = () => {
                   <div className="text-center">
                     <div className="text-xs md:text-sm text-blue-200 mb-1">수익률</div>
                     <div className={`text-xl md:text-2xl font-bold ${
-                      portfolio.returnRate >= 0 ? 'text-green-300' : 'text-red-300'
+                      portfolio.returnRate >= 0 ? 'text-red-300' : 'text-blue-300'
                     }`}>
                       {portfolio.returnRate >= 0 ? '+' : ''}
                       {portfolio.returnRate.toFixed(2)}%
@@ -167,16 +177,12 @@ const DashboardPage = () => {
 
         {/* 포트폴리오 요약 카드 */}
         {portfolio && (
-          <div 
+          <div
             className="mb-8 card card-hover cursor-pointer group"
             onClick={() => navigate('/my-portfolio')}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                navigate('/my-portfolio');
-              }
-            }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/my-portfolio'); }}
             aria-label="내 포트폴리오 상세 보기"
           >
             <div className="flex items-center justify-between mb-4">
@@ -191,213 +197,175 @@ const DashboardPage = () => {
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="relative bg-gradient-to-br from-blue-50 via-blue-100 to-blue-50 rounded-xl p-5 border border-blue-200/50 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group">
-                <div className="absolute top-0 right-0 w-20 h-20 bg-blue-200/20 rounded-full -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-500"></div>
-                <div className="relative">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <span className="text-lg">💰</span>
-                    <div className="text-sm text-gray-600 font-medium">총 자산</div>
-                  </div>
-                  <div className="text-2xl font-bold text-whale-dark">
-                    {formatCurrency(portfolio.totalValue)}
-                  </div>
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-5 border border-blue-200/50">
+                <div className="text-sm text-gray-500 mb-1">총 자산</div>
+                <div className="text-2xl font-bold text-whale-dark">
+                  {formatCurrency(portfolio.totalValue)}
                 </div>
               </div>
-              <div className="relative bg-gradient-to-br from-green-50 via-green-100 to-green-50 rounded-xl p-5 border border-green-200/50 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group">
-                <div className="absolute top-0 right-0 w-20 h-20 bg-green-200/20 rounded-full -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-500"></div>
-                <div className="relative">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <span className="text-lg">💵</span>
-                    <div className="text-sm text-gray-600 font-medium">현금</div>
-                  </div>
-                  <div className="text-2xl font-bold text-whale-dark">
-                    {formatCurrency(portfolio.cashBalance)}
-                  </div>
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-5 border border-gray-200/50">
+                <div className="text-sm text-gray-500 mb-1">현금</div>
+                <div className="text-2xl font-bold text-whale-dark">
+                  {formatCurrency(portfolio.cashBalance)}
                 </div>
               </div>
-              <div className={`relative bg-gradient-to-br rounded-xl p-5 border shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group ${
-                portfolio.returnRate >= 0 
-                  ? 'from-red-50 via-red-100 to-red-50 border-red-200/50' 
-                  : 'from-blue-50 via-blue-100 to-blue-50 border-blue-200/50'
+              <div className={`bg-gradient-to-br rounded-xl p-5 border ${
+                portfolio.returnRate >= 0
+                  ? 'from-red-50 to-red-100/50 border-red-200/50'
+                  : 'from-blue-50 to-blue-100/50 border-blue-200/50'
               }`}>
-                <div className={`absolute top-0 right-0 w-20 h-20 rounded-full -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-500 ${
-                  portfolio.returnRate >= 0 ? 'bg-red-200/20' : 'bg-blue-200/20'
-                }`}></div>
-                <div className="relative">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <span className="text-lg">{portfolio.returnRate >= 0 ? '📈' : '📉'}</span>
-                    <div className="text-sm text-gray-600 font-medium">수익률</div>
-                  </div>
-                  <div className={`text-2xl font-bold ${
-                    portfolio.returnRate >= 0 ? 'text-red-600' : 'text-blue-600'
-                  }`}>
-                    {portfolio.returnRate >= 0 ? '+' : ''}
-                    {portfolio.returnRate.toFixed(2)}%
-                  </div>
+                <div className="text-sm text-gray-500 mb-1">수익률</div>
+                <div className={`text-2xl font-bold ${
+                  portfolio.returnRate >= 0 ? 'text-red-600' : 'text-blue-600'
+                }`}>
+                  {portfolio.returnRate >= 0 ? '+' : ''}
+                  {portfolio.returnRate.toFixed(2)}%
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* 네비게이션 카드 */}
-        <div className="mb-6">
-          <h2 className="text-2xl md:text-3xl font-bold text-whale-dark mb-2">주요 기능</h2>
-          <p className="text-gray-600">원하는 기능을 선택하여 이동하세요</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* 보유 종목 */}
+          {portfolio && portfolio.holdings.length > 0 && (
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-whale-dark">보유 종목</h2>
+                <button
+                  onClick={() => navigate('/my-portfolio')}
+                  className="text-sm text-whale-light hover:text-whale-accent font-medium"
+                >
+                  전체 보기
+                </button>
+              </div>
+              <div className="space-y-3">
+                {portfolio.holdings.slice(0, 5).map((holding) => (
+                  <div key={holding.stockCode} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                    <div>
+                      <div className="font-semibold text-sm text-gray-800">{holding.stockName}</div>
+                      <div className="text-xs text-gray-400">{holding.quantity}개 보유</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-gray-800">{formatCurrency(holding.marketValue)}</div>
+                      <div className={`text-xs font-semibold ${
+                        holding.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'
+                      }`}>
+                        {holding.returnRate >= 0 ? '+' : ''}{holding.returnRate.toFixed(2)}%
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 시세 변동 상위 */}
+          {topMovers.length > 0 && (
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-whale-dark">시세 변동 상위</h2>
+                <button
+                  onClick={() => navigate('/market')}
+                  className="text-sm text-whale-light hover:text-whale-accent font-medium"
+                >
+                  전체 시세
+                </button>
+              </div>
+              <div className="space-y-3">
+                {topMovers.map((stock) => (
+                  <div
+                    key={stock.stockCode}
+                    className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 rounded-lg px-2 -mx-2"
+                    onClick={() => navigate('/trade')}
+                  >
+                    <div>
+                      <div className="font-semibold text-sm text-gray-800">{stock.stockName}</div>
+                      <div className="text-xs text-gray-400">{stock.stockCode}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-gray-800">{formatCurrency(stock.currentPrice)}</div>
+                      <div className={`text-xs font-semibold ${
+                        stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'
+                      }`}>
+                        {stock.changeRate >= 0 ? '+' : ''}{stock.changeRate.toFixed(2)}%
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* 시장 카드 */}
-          <div 
-            className="relative card card-hover cursor-pointer group overflow-hidden"
-            onClick={() => navigate('/market')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                navigate('/market');
-              }
-            }}
-            aria-label="시장 페이지로 이동"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-green-50/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-green-200/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
-            
-            <div className="relative flex items-start space-x-4">
-              <div className="relative w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 group-hover:shadow-xl transition-all duration-300">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-xl"></div>
-                <span className="relative z-10">📈</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-bold text-whale-dark mb-2 group-hover:text-whale-light transition-colors duration-300">
-                  시장
-                </h3>
-                <p className="text-gray-600 text-sm mb-3 leading-relaxed">
-                  실시간 주가와 시장 동향을 확인하세요
-                </p>
-                <div className="flex items-center text-whale-light font-semibold text-sm group-hover:text-whale-accent transition-colors duration-300">
-                  바로가기
-                  <svg className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
+        {/* 최근 체결 내역 */}
+        {recentTrades.length > 0 && (
+          <div className="card mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-whale-dark">최근 체결 내역</h2>
+              <button
+                onClick={() => navigate('/trade')}
+                className="text-sm text-whale-light hover:text-whale-accent font-medium"
+              >
+                전체 내역
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-xs text-gray-400 border-b border-gray-100">
+                    <th className="text-left py-2 font-medium">종목</th>
+                    <th className="text-left py-2 font-medium">구분</th>
+                    <th className="text-right py-2 font-medium">체결가</th>
+                    <th className="text-right py-2 font-medium">수량</th>
+                    <th className="text-right py-2 font-medium">금액</th>
+                    <th className="text-right py-2 font-medium">시간</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentTrades.map((trade) => (
+                    <tr key={trade.id} className="border-b border-gray-50 last:border-0">
+                      <td className="py-2.5 text-sm font-medium text-gray-800">{trade.stockName}</td>
+                      <td className="py-2.5">
+                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                          trade.orderType === 'BUY'
+                            ? 'bg-red-50 text-red-600'
+                            : 'bg-blue-50 text-blue-600'
+                        }`}>
+                          {trade.orderType === 'BUY' ? '매수' : '매도'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-sm text-right text-gray-700">{formatCurrency(trade.price)}</td>
+                      <td className="py-2.5 text-sm text-right text-gray-700">{trade.quantity}개</td>
+                      <td className="py-2.5 text-sm text-right font-medium text-gray-800">{formatCurrency(trade.totalAmount)}</td>
+                      <td className="py-2.5 text-xs text-right text-gray-400">
+                        {new Date(trade.executedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
+        )}
 
-          {/* 거래 카드 */}
-          <div 
-            className="relative card card-hover cursor-pointer group overflow-hidden"
-            onClick={() => navigate('/trade')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                navigate('/trade');
-              }
-            }}
-            aria-label="거래 페이지로 이동"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-orange-50/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-200/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
-            
-            <div className="relative flex items-start space-x-4">
-              <div className="relative w-16 h-16 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 group-hover:shadow-xl transition-all duration-300">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-xl"></div>
-                <span className="relative z-10">💰</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-bold text-whale-dark mb-2 group-hover:text-whale-light transition-colors duration-300">
-                  거래
-                </h3>
-                <p className="text-gray-600 text-sm mb-3 leading-relaxed">
-                  주식을 매수/매도하고 주문을 관리하세요
-                </p>
-                <div className="flex items-center text-whale-light font-semibold text-sm group-hover:text-whale-accent transition-colors duration-300">
-                  바로가기
-                  <svg className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 전략 카드 */}
-          <div 
-            className="relative card card-hover cursor-pointer group overflow-hidden"
-            onClick={() => navigate('/strategy')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                navigate('/strategy');
-              }
-            }}
-            aria-label="전략 페이지로 이동"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-50/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-200/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
-            
-            <div className="relative flex items-start space-x-4">
-              <div className="relative w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 group-hover:shadow-xl transition-all duration-300">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-xl"></div>
-                <span className="relative z-10">🎯</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-bold text-whale-dark mb-2 group-hover:text-whale-light transition-colors duration-300">
-                  전략
-                </h3>
-                <p className="text-gray-600 text-sm mb-3 leading-relaxed">
-                  백테스팅과 기술적 지표로 전략을 분석하세요
-                </p>
-                <div className="flex items-center text-whale-light font-semibold text-sm group-hover:text-whale-accent transition-colors duration-300">
-                  바로가기
-                  <svg className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 랭킹 카드 */}
-          <div 
-            className="relative card card-hover cursor-pointer group overflow-hidden"
-            onClick={() => navigate('/ranking')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                navigate('/ranking');
-              }
-            }}
-            aria-label="랭킹 페이지로 이동"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-yellow-50/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-200/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
-            
-            <div className="relative flex items-start space-x-4">
-              <div className="relative w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 group-hover:shadow-xl transition-all duration-300">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-xl"></div>
-                <span className="relative z-10">🏆</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-bold text-whale-dark mb-2 group-hover:text-whale-light transition-colors duration-300">
-                  랭킹
-                </h3>
-                <p className="text-gray-600 text-sm mb-3 leading-relaxed">
-                  다른 투자자들의 포트폴리오 순위를 확인하세요
-                </p>
-                <div className="flex items-center text-whale-light font-semibold text-sm group-hover:text-whale-accent transition-colors duration-300">
-                  바로가기
-                  <svg className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* 빠른 이동 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { path: '/market', label: '시세 확인', icon: '📊' },
+            { path: '/trade', label: '거래하기', icon: '💱' },
+            { path: '/strategy', label: '전략 분석', icon: '🎯' },
+            { path: '/ranking', label: '투자 현황', icon: '👥' },
+          ].map((item) => (
+            <button
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              className="bg-white border border-gray-100 rounded-xl p-4 text-center hover:border-whale-light hover:shadow-md transition-all group"
+            >
+              <div className="text-2xl mb-1.5">{item.icon}</div>
+              <div className="text-sm font-medium text-gray-600 group-hover:text-whale-light">{item.label}</div>
+            </button>
+          ))}
         </div>
       </div>
     </div>

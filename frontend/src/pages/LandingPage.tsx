@@ -69,7 +69,7 @@ const LandingPage = () => {
                 <span className="text-whale-light">시장을 유영하듯</span>
               </h1>
               <p className="text-lg sm:text-xl text-blue-200">
-                실시간 주가 데이터와 전략 분석으로<br />
+                실시간 시세 데이터와 포트폴리오 분석으로<br />
                 나만의 투자 전략을 실험해보세요
               </p>
             </div>
@@ -104,7 +104,7 @@ const LandingPage = () => {
                 <span className="text-whale-light whitespace-nowrap">시장을 유영하듯</span>
               </h1>
               <p className="text-xl md:text-2xl text-blue-200 max-w-2xl">
-                실시간 주가 데이터와 전략 분석으로<br />
+                실시간 시세 데이터와 포트폴리오 분석으로<br />
                 나만의 투자 전략을 실험해보세요
               </p>
             </div>
@@ -172,10 +172,10 @@ const LandingPage = () => {
                 </svg>
               </div>
               <h3 className="text-xl font-bold text-whale-dark mb-2 group-hover:text-whale-light transition-colors">
-                실시간 주가 확인
+                실시간 시세 확인
               </h3>
               <p className="text-gray-600 text-sm">
-                실시간으로 변동하는 주가를 즉시 확인하고 분석하세요
+                코인과 주식의 실시간 시세를 즉시 확인하고 분석하세요
               </p>
             </div>
 
@@ -210,13 +210,13 @@ const LandingPage = () => {
               </p>
             </div>
 
-            {/* Card 3 - 전략 분석 및 백테스트 */}
-            <div 
-              onClick={() => handleFeatureClick('/strategy')}
+            {/* Card 3 - 포트폴리오 관리 */}
+            <div
+              onClick={() => handleFeatureClick('/my-portfolio')}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  handleFeatureClick('/strategy');
+                  handleFeatureClick('/my-portfolio');
                 }
               }}
               role="button"
@@ -225,19 +225,14 @@ const LandingPage = () => {
             >
               <div className="w-20 h-20 bg-gradient-to-br from-whale-light to-whale-accent rounded-xl mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg">
                 <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  {/* 문서와 차트 아이콘 */}
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  {/* 차트 라인 */}
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 16l4-4 4 4" strokeWidth={2.5} />
-                  {/* 체크마크 (검증) */}
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l3 3 7-7" strokeWidth={2.5} />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
               </div>
               <h3 className="text-xl font-bold text-whale-dark mb-2 group-hover:text-whale-light transition-colors">
-                전략 분석 및 백테스트
+                포트폴리오 관리
               </h3>
               <p className="text-gray-600 text-sm">
-                과거 데이터로 전략을 검증하고 수익률을 분석하세요
+                자산 현황과 수익률을 한눈에 확인하고 관리하세요
               </p>
             </div>
           </div>

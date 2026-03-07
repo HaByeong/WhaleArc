@@ -146,7 +146,7 @@ const DashboardPage = () => {
                     {displayName}님, 환영합니다!
                   </h1>
                   <p className="text-blue-100 text-sm md:text-base mt-1">
-                    오늘의 투자 현황을 확인하세요
+                    오늘도 시장의 바다를 유영해볼까요?
                   </p>
                 </div>
               </div>
@@ -298,10 +298,11 @@ const DashboardPage = () => {
           )}
         </div>
 
-        {/* 최근 체결 내역 */}
-        {recentTrades.length > 0 && (
-          <div className="card mb-8">
-            <div className="flex items-center justify-between mb-4">
+        {/* 하단: 최근 체결 + 빠른 액션 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* 최근 체결 내역 */}
+          <div className="lg:col-span-2 card">
+            <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-whale-dark">최근 체결 내역</h2>
               <button
                 onClick={() => navigate('/trade')}
@@ -310,62 +311,108 @@ const DashboardPage = () => {
                 전체 내역
               </button>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-xs text-gray-400 border-b border-gray-100">
-                    <th className="text-left py-2 font-medium">종목</th>
-                    <th className="text-left py-2 font-medium">구분</th>
-                    <th className="text-right py-2 font-medium">체결가</th>
-                    <th className="text-right py-2 font-medium">수량</th>
-                    <th className="text-right py-2 font-medium">금액</th>
-                    <th className="text-right py-2 font-medium">시간</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentTrades.map((trade) => (
-                    <tr key={trade.id} className="border-b border-gray-50 last:border-0">
-                      <td className="py-2.5 text-sm font-medium text-gray-800">{trade.stockName}</td>
-                      <td className="py-2.5">
-                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
-                          trade.orderType === 'BUY'
-                            ? 'bg-red-50 text-red-600'
-                            : 'bg-blue-50 text-blue-600'
-                        }`}>
-                          {trade.orderType === 'BUY' ? '매수' : '매도'}
-                        </span>
-                      </td>
-                      <td className="py-2.5 text-sm text-right text-gray-700">{formatCurrency(trade.price)}</td>
-                      <td className="py-2.5 text-sm text-right text-gray-700">{trade.quantity}개</td>
-                      <td className="py-2.5 text-sm text-right font-medium text-gray-800">{formatCurrency(trade.totalAmount)}</td>
-                      <td className="py-2.5 text-xs text-right text-gray-400">
-                        {new Date(trade.executedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </td>
+            {recentTrades.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">종목</th>
+                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">구분</th>
+                      <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">체결가</th>
+                      <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">수량</th>
+                      <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">금액</th>
+                      <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">시간</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {recentTrades.map((trade) => (
+                      <tr key={trade.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors">
+                        <td className="py-3 text-sm font-medium text-gray-800">{trade.stockName}</td>
+                        <td className="py-3">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            trade.orderType === 'BUY'
+                              ? 'bg-red-50 text-red-500'
+                              : 'bg-blue-50 text-blue-500'
+                          }`}>
+                            {trade.orderType === 'BUY' ? '매수' : '매도'}
+                          </span>
+                        </td>
+                        <td className="py-3 text-sm text-right text-gray-700">{formatCurrency(trade.price)}</td>
+                        <td className="py-3 text-sm text-right text-gray-700">{trade.quantity}개</td>
+                        <td className="py-3 text-sm text-right font-semibold text-gray-800">{formatCurrency(trade.totalAmount)}</td>
+                        <td className="py-3 text-xs text-right text-gray-400">
+                          {new Date(trade.executedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <div className="text-4xl mb-3">📋</div>
+                <div className="text-gray-500 font-medium">아직 거래 내역이 없습니다</div>
+                <div className="text-sm text-gray-400 mt-1">거래를 시작하면 체결 내역이 표시됩니다</div>
+              </div>
+            )}
           </div>
-        )}
 
-        {/* 빠른 이동 */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { path: '/market', label: '시세 확인', icon: '📊' },
-            { path: '/trade', label: '거래하기', icon: '💱' },
-            { path: '/strategy', label: '전략 분석', icon: '🎯' },
-            { path: '/ranking', label: '투자 현황', icon: '👥' },
-          ].map((item) => (
-            <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              className="bg-white border border-gray-100 rounded-xl p-4 text-center hover:border-whale-light hover:shadow-md transition-all group"
-            >
-              <div className="text-2xl mb-1.5">{item.icon}</div>
-              <div className="text-sm font-medium text-gray-600 group-hover:text-whale-light">{item.label}</div>
-            </button>
-          ))}
+          {/* 우측 사이드바 */}
+          <div className="space-y-6">
+            {/* 빠른 액션 */}
+            <div className="card !p-5">
+              <h2 className="text-lg font-bold text-whale-dark mb-3">어디로 항해할까요?</h2>
+              <div className="space-y-2">
+                <button
+                  onClick={() => navigate('/trade')}
+                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-gradient-to-r from-whale-light to-whale-accent text-white font-semibold text-sm shadow-sm hover:shadow-md hover:opacity-95 transition-all min-h-[44px] border border-transparent"
+                >
+                  거래하기
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </button>
+                {[
+                  { path: '/market', label: '시세 확인하기' },
+                  { path: '/strategy', label: '전략 분석하기' },
+                  { path: '/ranking', label: '투자 현황 보기' },
+                ].map((item) => (
+                  <button
+                    key={item.path}
+                    onClick={() => navigate(item.path)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-white border border-gray-200 text-sm font-semibold text-whale-dark hover:border-whale-light/40 hover:bg-gray-50 transition-all min-h-[44px]"
+                  >
+                    {item.label}
+                    <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 포트폴리오 통계 */}
+            {portfolio && (
+              <div className="card">
+                <h2 className="text-lg font-bold text-whale-dark mb-4">포트폴리오 통계</h2>
+                <div className="space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">총 투자금액</span>
+                    <span className="text-sm font-bold text-whale-dark">{formatCurrency(portfolio.totalValue - portfolio.cashBalance)}</span>
+                  </div>
+                  <div className="h-px bg-gray-100" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">총 수익금</span>
+                    <span className={`text-sm font-bold ${portfolio.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                      {portfolio.returnRate >= 0 ? '+' : ''}{formatCurrency(Math.round(portfolio.totalValue * portfolio.returnRate / (100 + portfolio.returnRate)))}
+                    </span>
+                  </div>
+                  <div className="h-px bg-gray-100" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">보유 종목 수</span>
+                    <span className="text-sm font-bold text-whale-dark">{portfolio.holdings.length}개</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
         </div>
       </div>
     </div>

@@ -180,7 +180,7 @@ const MyPortfolioPage = () => {
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
                 <div className="text-blue-200 text-sm mb-1">수익률</div>
                 <div className={`text-2xl font-bold ${
-                  portfolio.returnRate >= 0 ? 'text-green-300' : 'text-red-300'
+                  portfolio.returnRate >= 0 ? 'text-red-300' : 'text-blue-300'
                 }`}>
                   {portfolio.returnRate >= 0 ? '+' : ''}
                   {portfolio.returnRate.toFixed(2)}%

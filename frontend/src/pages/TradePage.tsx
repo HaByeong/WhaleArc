@@ -653,10 +653,12 @@ const TradePage = () => {
           {/* 우측: 차트 & 주문 내역 */}
           <div className="lg:col-span-2 space-y-6">
             {/* 탭 메뉴 */}
-            <div className="flex space-x-4 border-b border-gray-200">
+            <div className="flex space-x-4 border-b border-gray-200" role="tablist" aria-label="거래 탭">
               <button
                 onClick={() => setActiveTab('order')}
-                className={`pb-3 px-4 font-semibold transition-colors ${
+                role="tab"
+                aria-selected={activeTab === 'order'}
+                className={`pb-3 px-4 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-t-lg min-h-[44px] ${
                   activeTab === 'order'
                     ? 'text-whale-light border-b-2 border-whale-light'
                     : 'text-gray-500 hover:text-whale-light'
@@ -666,7 +668,9 @@ const TradePage = () => {
               </button>
               <button
                 onClick={() => setActiveTab('orders')}
-                className={`pb-3 px-4 font-semibold transition-colors ${
+                role="tab"
+                aria-selected={activeTab === 'orders'}
+                className={`pb-3 px-4 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-t-lg min-h-[44px] ${
                   activeTab === 'orders'
                     ? 'text-whale-light border-b-2 border-whale-light'
                     : 'text-gray-500 hover:text-whale-light'
@@ -676,7 +680,9 @@ const TradePage = () => {
               </button>
               <button
                 onClick={() => setActiveTab('trades')}
-                className={`pb-3 px-4 font-semibold transition-colors ${
+                role="tab"
+                aria-selected={activeTab === 'trades'}
+                className={`pb-3 px-4 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-t-lg min-h-[44px] ${
                   activeTab === 'trades'
                     ? 'text-whale-light border-b-2 border-whale-light'
                     : 'text-gray-500 hover:text-whale-light'
@@ -686,7 +692,9 @@ const TradePage = () => {
               </button>
               <button
                 onClick={() => setActiveTab('portfolio')}
-                className={`pb-3 px-4 font-semibold transition-colors ${
+                role="tab"
+                aria-selected={activeTab === 'portfolio'}
+                className={`pb-3 px-4 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-t-lg min-h-[44px] ${
                   activeTab === 'portfolio'
                     ? 'text-whale-light border-b-2 border-whale-light'
                     : 'text-gray-500 hover:text-whale-light'
@@ -866,7 +874,11 @@ const TradePage = () => {
               <div className="card">
                 <h2 className="text-xl font-bold text-whale-dark mb-4">체결 내역</h2>
                 {trades.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">체결 내역이 없습니다.</div>
+                  <div className="text-center py-12">
+                    <div className="text-4xl mb-3">📋</div>
+                    <div className="text-gray-500 font-medium">체결 내역이 없습니다</div>
+                    <div className="text-sm text-gray-400 mt-1">주문이 체결되면 내역이 표시됩니다</div>
+                  </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full">
@@ -924,7 +936,11 @@ const TradePage = () => {
         <div className="card">
                 <h2 className="text-xl font-bold text-whale-dark mb-4">보유 종목</h2>
                 {portfolio.holdings.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">보유 종목이 없습니다.</div>
+                  <div className="text-center py-12">
+                    <div className="text-4xl mb-3">📊</div>
+                    <div className="text-gray-500 font-medium">보유 종목이 없습니다</div>
+                    <div className="text-sm text-gray-400 mt-1">코인을 매수하면 여기에 표시됩니다</div>
+                  </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full">

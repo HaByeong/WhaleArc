@@ -98,7 +98,10 @@ const LoginPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Login Form */}
           <div className="card">
-            <h2 className="text-3xl font-bold text-whale-dark mb-6">Log In</h2>
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-whale-dark">다시 만나서 반가워요</h2>
+              <p className="text-gray-400 text-sm mt-1">계정에 로그인하고 항해를 이어가세요</p>
+            </div>
 
             {/* OAuth 로그인 버튼 */}
             <div className="space-y-3 mb-6">
@@ -292,12 +295,12 @@ const LoginPage = () => {
               <h3 className="text-lg font-semibold text-whale-dark mb-4">인기 종목</h3>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-2 text-sm font-medium text-gray-600">종목명</th>
-                      <th className="text-left py-2 text-sm font-medium text-gray-600">코드</th>
-                      <th className="text-right py-2 text-sm font-medium text-gray-600">현재가</th>
-                      <th className="text-right py-2 text-sm font-medium text-gray-600">등락률</th>
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">종목명</th>
+                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">코드</th>
+                      <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">현재가</th>
+                      <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">등락률</th>
                     </tr>
                   </thead>
                   <tbody>

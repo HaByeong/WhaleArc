@@ -80,9 +80,9 @@ const LandingPage = () => {
                 {/* 더 강한 글로우 효과 - 여러 색상 레이어 */}
                 <div className="absolute inset-0 bg-whale-light opacity-20 rounded-full blur-3xl animate-pulse scale-150" style={{ willChange: 'opacity' }}></div>
                 <div className="absolute inset-0 bg-whale-accent opacity-12 rounded-full blur-2xl animate-pulse scale-125" style={{ animationDelay: '0.5s', willChange: 'opacity' }}></div>
-                <img 
-                  src="/whale-hero.png" 
-                  alt="WhaleArc Whale Illustration" 
+                <img
+                  src="/whale-hero.png"
+                  alt="WhaleArc Whale Illustration"
                   className="relative w-full h-auto object-contain animate-whale-swim"
                   style={{
                     filter: 'drop-shadow(0 0 25px rgba(74, 144, 226, 0.35)) drop-shadow(0 0 50px rgba(74, 144, 226, 0.15))',
@@ -115,9 +115,9 @@ const LandingPage = () => {
                 {/* 더 강한 글로우 효과 - 여러 색상 레이어 */}
                 <div className="absolute inset-0 bg-whale-light opacity-20 rounded-full blur-3xl animate-pulse scale-150" style={{ willChange: 'opacity' }}></div>
                 <div className="absolute inset-0 bg-whale-accent opacity-12 rounded-full blur-2xl animate-pulse scale-125" style={{ animationDelay: '0.5s', willChange: 'opacity' }}></div>
-                <img 
-                  src="/whale-hero.png" 
-                  alt="WhaleArc Whale Illustration" 
+                <img
+                  src="/whale-hero.png"
+                  alt="WhaleArc Whale Illustration"
                   className="relative w-full max-w-3xl h-auto object-contain animate-whale-swim hover:scale-105 transition-transform duration-500"
                   style={{
                     filter: 'drop-shadow(0 0 25px rgba(74, 144, 226, 0.35)) drop-shadow(0 0 50px rgba(74, 144, 226, 0.15))',

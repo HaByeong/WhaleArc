@@ -4,6 +4,7 @@ import com.project.whalearc.market.domain.AssetType;
 import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.CryptoPriceProvider;
 import com.project.whalearc.market.service.StockPriceProvider;
+import com.project.whalearc.market.websocket.RealtimePriceHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -20,13 +21,20 @@ public class MarketController {
 
     private final StockPriceProvider stockPriceProvider;
     private final CryptoPriceProvider cryptoPriceProvider;
+    private final RealtimePriceHolder realtimePriceHolder;
 
     @GetMapping("/prices")
     public ResponseEntity<List<MarketPriceResponse>> getPrices(@RequestParam AssetType type) {
         try {
             List<MarketPriceResponse> prices = switch (type) {
                 case STOCK -> stockPriceProvider.getMockKrxTickers();
-                case CRYPTO -> cryptoPriceProvider.getAllKrwTickers();
+                case CRYPTO -> {
+                    // 실시간 WebSocket 데이터가 있으면 우선 사용
+                    if (realtimePriceHolder.hasData()) {
+                        yield realtimePriceHolder.getAllLatestPrices();
+                    }
+                    yield cryptoPriceProvider.getAllKrwTickers();
+                }
             };
             return ResponseEntity.ok(prices);
         } catch (Exception e) {

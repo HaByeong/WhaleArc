@@ -84,6 +84,8 @@ const DashboardPage = () => {
     id: 'demo-1',
     userId: 'demo-user',
     cashBalance: 5000000,
+    initialCash: 10000000,
+    turtleAllocated: 0,
     totalValue: 12500000,
     returnRate: 25.0,
     holdings: [
@@ -485,22 +487,30 @@ const DashboardPage = () => {
               <div className="card">
                 <h2 className="text-lg font-bold text-whale-dark mb-4">포트폴리오 통계</h2>
                 <div className="space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">총 투자금액</span>
-                    <span className="text-sm font-bold text-whale-dark">{formatCurrency(portfolio.totalValue - portfolio.cashBalance)}</span>
-                  </div>
-                  <div className="h-px bg-gray-100" />
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">총 수익금</span>
-                    <span className={`text-sm font-bold ${portfolio.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                      {portfolio.returnRate >= 0 ? '+' : ''}{formatCurrency(Math.round(portfolio.totalValue * portfolio.returnRate / (100 + portfolio.returnRate)))}
-                    </span>
-                  </div>
-                  <div className="h-px bg-gray-100" />
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">보유 종목 수</span>
-                    <span className="text-sm font-bold text-whale-dark">{portfolio.holdings.length}개</span>
-                  </div>
+                  {(() => {
+                    const initial = portfolio.initialCash || 10_000_000;
+                    const pnl = portfolio.totalValue - initial;
+                    return (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-500">초기 자본</span>
+                          <span className="text-sm font-bold text-whale-dark">{formatCurrency(initial)}</span>
+                        </div>
+                        <div className="h-px bg-gray-100" />
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-500">총 손익</span>
+                          <span className={`text-sm font-bold ${pnl >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                            {pnl >= 0 ? '+' : ''}{formatCurrency(Math.round(pnl))}
+                          </span>
+                        </div>
+                        <div className="h-px bg-gray-100" />
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-500">보유 종목 수</span>
+                          <span className="text-sm font-bold text-whale-dark">{portfolio.holdings.length}개</span>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             )}

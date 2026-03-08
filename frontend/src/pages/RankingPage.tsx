@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -12,7 +12,10 @@ const RankingPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [selectedRanking, setSelectedRanking] = useState<RankingEntry | null>(null);
   const pageSize = 20;
+
+  const isInitialMount = useRef(true);
 
   useEffect(() => {
     setCurrentPage(0);
@@ -20,6 +23,10 @@ const RankingPage = () => {
   }, [rankingType]);
 
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     loadRankings(currentPage);
   }, [currentPage]);
 
@@ -102,6 +109,10 @@ const RankingPage = () => {
         totalValue,
         rankChange: Math.floor((Math.random() - 0.5) * 4),
         isMyRanking: rank === 7,
+        routeName: null,
+        routeStrategyType: null,
+        routeReturnRate: null,
+        routeDescription: null,
       };
     });
   };
@@ -130,22 +141,28 @@ const RankingPage = () => {
     negativeCount: rankings.filter(r => r.totalReturn < 0).length,
   };
 
+  const strategyLabel = (type: string | null | undefined) => {
+    if (!type) return '일반';
+    if (type === 'TURTLE') return '터틀 트레이딩';
+    return '일반';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header showNav={true} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 페이지 헤더 — 신뢰/투명성 강조 */}
+        {/* 페이지 헤더 */}
         <div className="mb-8">
           <h1 className="text-3xl md:text-4xl font-bold text-whale-dark">
             투자 현황
           </h1>
           <p className="text-gray-500 mt-2 text-base">
-            WhaleArc 투자자들의 실시간 포트폴리오 현황입니다. 다른 투자자들의 전략을 참고해보세요.
+            WhaleArc 투자자들의 대표 항로 수익률을 확인해보세요. 클릭하면 전략 정보를 볼 수 있습니다.
           </p>
         </div>
 
-        {/* 투명한 통계 요약 카드 */}
+        {/* 통계 요약 카드 */}
         {!loading && !error && rankings.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-white rounded-xl p-5 border border-gray-100">
@@ -169,7 +186,7 @@ const RankingPage = () => {
           </div>
         )}
 
-        {/* 기간 필터 — 심플하게 */}
+        {/* 기간 필터 */}
         <div className="mb-6 flex flex-wrap gap-2" role="tablist" aria-label="기간 필터">
           {[
             { key: 'all' as RankingType, label: '전체' },
@@ -199,17 +216,17 @@ const RankingPage = () => {
           <ErrorMessage message={error} onRetry={loadRankings} />
         )}
 
-        {/* 투자자 리스트 — 깔끔한 테이블 */}
+        {/* 투자자 리스트 */}
         {!loading && !error && (
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             {/* 테이블 헤더 */}
             <div className="px-6 py-3.5 border-b border-gray-100 bg-gray-50/50">
               <div className="grid grid-cols-12 gap-4 text-xs font-medium text-gray-400 uppercase tracking-wider">
                 <div className="col-span-1 text-center">#</div>
-                <div className="col-span-3">투자자</div>
-                <div className="col-span-3">포트폴리오</div>
-                <div className="col-span-2 text-right">수익률</div>
-                <div className="col-span-3 text-right">평가금액</div>
+                <div className="col-span-4">투자자</div>
+                <div className="col-span-3">대표 항로</div>
+                <div className="col-span-2 text-right">항로 수익률</div>
+                <div className="col-span-2 text-right">총 자산</div>
               </div>
             </div>
 
@@ -223,9 +240,10 @@ const RankingPage = () => {
                 rankings.map((ranking) => (
                   <div
                     key={ranking.portfolioId}
-                    className={`px-6 py-4 hover:bg-gray-50/50 transition-colors ${
-                      ranking.isMyRanking ? 'bg-blue-50/40 border-l-3 border-l-whale-light' : ''
-                    }`}
+                    onClick={() => ranking.routeName ? setSelectedRanking(ranking) : undefined}
+                    className={`px-6 py-4 transition-colors ${
+                      ranking.routeName ? 'hover:bg-gray-50/80 cursor-pointer' : 'hover:bg-gray-50/50'
+                    } ${ranking.isMyRanking ? 'bg-blue-50/40 border-l-3 border-l-whale-light' : ''}`}
                   >
                     <div className="grid grid-cols-12 gap-4 items-center">
                       {/* 순번 */}
@@ -244,7 +262,7 @@ const RankingPage = () => {
                       </div>
 
                       {/* 투자자 */}
-                      <div className="col-span-3">
+                      <div className="col-span-4">
                         <div className="flex items-center space-x-2.5">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${
                             ranking.isMyRanking
@@ -266,24 +284,39 @@ const RankingPage = () => {
                         </div>
                       </div>
 
-                      {/* 포트폴리오명 */}
+                      {/* 대표 항로 - 이름 + 전략 타입만 간단히 */}
                       <div className="col-span-3">
-                        <span className="text-sm text-gray-500 truncate block">
-                          {ranking.portfolioName}
-                        </span>
+                        {ranking.routeName ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium text-whale-dark truncate">{ranking.routeName}</span>
+                            {ranking.routeStrategyType === 'TURTLE' && (
+                              <span className="px-1 py-0.5 text-[8px] font-bold bg-amber-100 text-amber-700 rounded flex-shrink-0">
+                                터틀
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-300">미설정</span>
+                        )}
                       </div>
 
-                      {/* 수익률 */}
-                      <div className={`col-span-2 text-right text-sm font-semibold ${getReturnColor(ranking.totalReturn)}`}>
-                        {formatReturn(ranking.totalReturn)}
+                      {/* 항로 수익률 */}
+                      <div className="col-span-2 text-right">
+                        {ranking.routeReturnRate != null ? (
+                          <span className={`text-sm font-semibold ${getReturnColor(ranking.routeReturnRate)}`}>
+                            {formatReturn(ranking.routeReturnRate)}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-300">-</span>
+                        )}
                       </div>
 
-                      {/* 평가금액 */}
-                      <div className="col-span-3 text-right">
+                      {/* 총 자산 */}
+                      <div className="col-span-2 text-right">
                         <span className="text-sm font-medium text-gray-700">
                           {formatAmount(ranking.totalValue)}
                         </span>
-                        <span className="text-xs text-gray-300 ml-1">원</span>
+                        <span className="text-xs text-gray-300 ml-0.5">원</span>
                       </div>
                     </div>
                   </div>
@@ -349,6 +382,108 @@ const RankingPage = () => {
           </p>
         )}
       </div>
+
+      {/* 항로 상세 모달 */}
+      {selectedRanking && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+          onClick={() => setSelectedRanking(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 모달 헤더 */}
+            <div className="bg-gradient-to-r from-whale-dark to-whale-light p-6 text-white relative">
+              <button
+                onClick={() => setSelectedRanking(null)}
+                className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm">
+                  {selectedRanking.nickname.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">{selectedRanking.nickname}</h3>
+                  <p className="text-blue-200 text-xs">{selectedRanking.rank}위 투자자</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 모달 본문 */}
+            <div className="p-6 space-y-5">
+              {/* 대표 항로 정보 */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                  <span className="text-sm font-semibold text-gray-500">대표 항로</span>
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-whale-dark">{selectedRanking.routeName}</span>
+                      {selectedRanking.routeStrategyType === 'TURTLE' && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-700 rounded">
+                          WhaleArc 독점
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-baseline gap-2 mb-3">
+                    {selectedRanking.routeReturnRate != null && (
+                      <span className={`text-2xl font-bold ${getReturnColor(selectedRanking.routeReturnRate)}`}>
+                        {formatReturn(selectedRanking.routeReturnRate)}
+                      </span>
+                    )}
+                    <span className="text-xs text-gray-400">항로 수익률</span>
+                  </div>
+
+                  {/* 전략 정보 */}
+                  <div className="space-y-2.5 pt-3 border-t border-gray-200">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">전략 유형</span>
+                      <span className="font-medium text-gray-700">{strategyLabel(selectedRanking.routeStrategyType)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">총 자산</span>
+                      <span className="font-medium text-gray-700">{formatAmount(selectedRanking.totalValue)}원</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">포트폴리오 수익률</span>
+                      <span className={`font-medium ${getReturnColor(selectedRanking.totalReturn)}`}>
+                        {formatReturn(selectedRanking.totalReturn)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 전략 설명 */}
+              {selectedRanking.routeDescription && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm font-semibold text-gray-500">전략 로직</span>
+                  </div>
+                  <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-xl p-4">
+                    {selectedRanking.routeDescription}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

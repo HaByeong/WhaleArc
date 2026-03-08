@@ -31,6 +31,9 @@ public class Portfolio {
     /** 터틀 전략에 할당된 현금 (cashBalance에서 차감되었지만 자산으로 포함) */
     private double turtleAllocated;
 
+    /** 대표 항로 구매 ID (투자 현황에 공개) */
+    private String representativePurchaseId;
+
     public Portfolio(String userId, double cashBalance) {
         this.userId = userId;
         this.cashBalance = cashBalance;

@@ -69,10 +69,19 @@ export interface Portfolio {
   id: string;
   userId: string;
   cashBalance: number;
+  initialCash: number;
+  turtleAllocated: number;
   totalValue: number;
   returnRate: number;
   holdings: Holding[];
+  representativePurchaseId?: string | null;
 }
+
+export const portfolioService = {
+  setRepresentativeRoute: async (purchaseId: string | null): Promise<void> => {
+    await apiClient.put('/api/portfolio/representative-route', { purchaseId });
+  },
+};
 
 // 빗썸 마켓 데이터 → StockPrice 변환
 const mapMarketToStockPrice = (item: {

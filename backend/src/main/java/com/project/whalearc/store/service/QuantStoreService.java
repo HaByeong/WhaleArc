@@ -307,6 +307,13 @@ public class QuantStoreService {
             }
         }
 
+        // 대표 항로가 취소된 항로였으면 해제
+        Portfolio repPortfolio = portfolioService.getOrCreatePortfolio(userId);
+        if (purchaseId.equals(repPortfolio.getRepresentativePurchaseId())) {
+            repPortfolio.setRepresentativePurchaseId(null);
+            portfolioService.save(repPortfolio);
+        }
+
         purchase.setStatus(ProductPurchase.Status.REFUNDED);
         purchase = purchaseRepository.save(purchase);
 

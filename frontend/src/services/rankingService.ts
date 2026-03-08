@@ -18,6 +18,11 @@ export interface RankingEntry {
   totalValue: number;
   rankChange: number;
   isMyRanking?: boolean;
+  // 대표 항로
+  routeName?: string | null;
+  routeStrategyType?: string | null;
+  routeReturnRate?: number | null;
+  routeDescription?: string | null;
 }
 
 export interface PortfolioDetail {

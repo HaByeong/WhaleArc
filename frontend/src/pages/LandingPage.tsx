@@ -36,7 +36,7 @@ const LandingPage = () => {
                 to="/dashboard"
                 className="px-6 py-2 bg-whale-light border border-whale-light text-white font-semibold rounded-lg hover:bg-whale-accent transition-colors"
               >
-                내 투자
+                대시보드
               </Link>
             ) : (
               <Link
@@ -72,6 +72,15 @@ const LandingPage = () => {
                 실시간 시세 데이터와 포트폴리오 분석으로<br />
                 나만의 투자 전략을 실험해보세요
               </p>
+              <button
+                onClick={() => handleFeatureClick('/dashboard')}
+                className="inline-flex items-center gap-2 px-8 py-3.5 bg-whale-light text-white font-bold text-lg rounded-xl hover:bg-whale-accent transition-all duration-300 shadow-lg hover:shadow-whale-light/30 hover:-translate-y-0.5"
+              >
+                항해 시작하기
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
             </div>
             
             {/* Whale Illustration - 모바일에서 적당한 크기 */}
@@ -107,6 +116,15 @@ const LandingPage = () => {
                 실시간 시세 데이터와 포트폴리오 분석으로<br />
                 나만의 투자 전략을 실험해보세요
               </p>
+              <button
+                onClick={() => handleFeatureClick('/dashboard')}
+                className="inline-flex items-center gap-2 px-10 py-4 bg-whale-light text-white font-bold text-lg rounded-xl hover:bg-whale-accent transition-all duration-300 shadow-lg hover:shadow-whale-light/30 hover:-translate-y-0.5"
+              >
+                항해 시작하기
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
             </div>
             
             {/* Right: Whale Illustration */}
@@ -144,99 +162,80 @@ const LandingPage = () => {
             </p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Card 1 - 실시간 주가 확인 */}
-            <div 
-              onClick={() => handleFeatureClick('/market')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleFeatureClick('/market');
-                }
-              }}
-              role="button"
-              tabIndex={0}
-              className="group card text-center cursor-pointer hover:shadow-xl hover:-translate-y-2 transition-all duration-300 border border-gray-100 hover:border-whale-light"
-            >
-              <div className="w-20 h-20 bg-gradient-to-br from-whale-light to-whale-accent rounded-xl mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  {/* 실시간 라인 차트 */}
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 18l6-6 4 4 8-8" strokeWidth={2.5} />
-                  {/* 실시간 표시 원 */}
-                  <circle cx="3" cy="18" r="2" fill="currentColor" />
-                  <circle cx="9" cy="12" r="2" fill="currentColor" />
-                  <circle cx="13" cy="16" r="2" fill="currentColor" />
-                  <circle cx="21" cy="10" r="2" fill="currentColor" />
-                  {/* 실시간 깜빡임 표시 */}
-                  <circle cx="21" cy="10" r="3" fill="currentColor" opacity="0.3" className="animate-ping" />
-                </svg>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              {
+                title: '실시간 시세',
+                desc: '실시간 시세 데이터를 한눈에 확인',
+                icon: (
+                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 18l6-6 4 4 8-8" strokeWidth={2.5} />
+                    <circle cx="21" cy="10" r="2" fill="currentColor" />
+                  </svg>
+                ),
+              },
+              {
+                title: '모의투자 거래',
+                desc: '실제 돈 없이 매수·매도를 체험',
+                icon: (
+                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                ),
+              },
+              {
+                title: '항로 상점',
+                desc: '검증된 퀀트 전략을 구매하고 자동 투자',
+                icon: (
+                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                ),
+              },
+              {
+                title: '포트폴리오 관리',
+                desc: '자산 배분, 수익률, 항로 성과를 한눈에',
+                icon: (
+                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                  </svg>
+                ),
+              },
+              {
+                title: '투자 현황',
+                desc: '다른 투자자의 대표 항로와 수익률 비교',
+                icon: (
+                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                ),
+              },
+              {
+                title: '전략 백테스트',
+                desc: '과거 데이터로 전략 검증 및 수익률 분석',
+                icon: (
+                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                ),
+              },
+            ].map((feature) => (
+              <div
+                key={feature.title}
+                className="group card text-center hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 border border-gray-100 hover:border-whale-light"
+              >
+                <div className="w-16 h-16 bg-gradient-to-br from-whale-light to-whale-accent rounded-xl mx-auto mb-4 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg">
+                  {feature.icon}
+                </div>
+                <h3 className="text-lg font-bold text-whale-dark mb-1.5 group-hover:text-whale-light transition-colors">
+                  {feature.title}
+                </h3>
+                <p className="text-gray-500 text-sm leading-relaxed">
+                  {feature.desc}
+                </p>
               </div>
-              <h3 className="text-xl font-bold text-whale-dark mb-2 group-hover:text-whale-light transition-colors">
-                실시간 시세 확인
-              </h3>
-              <p className="text-gray-600 text-sm">
-                코인과 주식의 실시간 시세를 즉시 확인하고 분석하세요
-              </p>
-            </div>
-
-            {/* Card 2 - 모의투자 체험 */}
-            <div 
-              onClick={() => handleFeatureClick('/trade')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleFeatureClick('/trade');
-                }
-              }}
-              role="button"
-              tabIndex={0}
-              className="group card text-center cursor-pointer hover:shadow-xl hover:-translate-y-2 transition-all duration-300 border border-gray-100 hover:border-whale-light"
-            >
-              <div className="w-20 h-20 bg-gradient-to-br from-whale-light to-whale-accent rounded-xl mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  {/* 게임 컨트롤러/체험 아이콘 */}
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  {/* 체험/플레이 표시 */}
-                  <circle cx="8" cy="12" r="1.5" fill="currentColor" />
-                  <circle cx="16" cy="12" r="1.5" fill="currentColor" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-whale-dark mb-2 group-hover:text-whale-light transition-colors">
-                모의투자 체험
-              </h3>
-              <p className="text-gray-600 text-sm">
-                실제 돈 없이 안전하게 투자 전략을 실험해보세요
-              </p>
-            </div>
-
-            {/* Card 3 - 전략 분석 및 백테스트 */}
-            <div
-              onClick={() => handleFeatureClick('/strategy')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleFeatureClick('/strategy');
-                }
-              }}
-              role="button"
-              tabIndex={0}
-              className="group card text-center cursor-pointer hover:shadow-xl hover:-translate-y-2 transition-all duration-300 border border-gray-100 hover:border-whale-light"
-            >
-              <div className="w-20 h-20 bg-gradient-to-br from-whale-light to-whale-accent rounded-xl mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 16l4-4 4 4" strokeWidth={2.5} />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l3 3 7-7" strokeWidth={2.5} />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-whale-dark mb-2 group-hover:text-whale-light transition-colors">
-                전략 분석 및 백테스트
-              </h3>
-              <p className="text-gray-600 text-sm">
-                과거 데이터로 전략을 검증하고 수익률을 분석하세요
-              </p>
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -246,10 +245,10 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-3" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-              고래의 바다, <span className="text-whale-light">WhaleArc 용어 가이드</span>
+              <span className="text-whale-light">WhaleArc</span> 용어 가이드
             </h2>
             <p className="text-blue-200 text-lg">
-              WhaleArc는 투자의 세계를 고래의 항해에 빗대어 표현합니다
+              투자의 세계를 고래의 항해에 빗대어 표현합니다
             </p>
           </div>
 
@@ -259,25 +258,25 @@ const LandingPage = () => {
                 icon: '/whales/narwhal.png',
                 term: '항로',
                 meaning: '퀀트 트레이딩 전략',
-                desc: '고래가 바다를 건너는 검증된 경로처럼, 과거 데이터로 백테스트를 거친 자동 투자 전략입니다.',
+                desc: '과거 데이터로 백테스트를 거친 검증된 자동 투자 전략. 항로를 따라가면 전략대로 자동 매매됩니다.',
               },
               {
                 icon: '/whales/sperm-whale.png',
                 term: '항해',
                 meaning: '전략 기반 투자 실행',
-                desc: '항로를 구매하고 투자 금액을 설정하면, 해당 전략대로 자동 매수가 진행됩니다.',
+                desc: '항로를 구매하고 투자금을 설정하면 항해가 시작됩니다. 항해 중 = 전략 운용 중.',
               },
               {
                 icon: '/whales/humpback.png',
                 term: '파고',
-                meaning: '최대 낙폭 (Max Drawdown)',
-                desc: '항해 중 만날 수 있는 가장 큰 파도. 최고점 대비 최대 하락 폭을 뜻합니다.',
+                meaning: '최대 낙폭 (MDD)',
+                desc: '항해 중 만날 수 있는 가장 큰 파도. 최고점 대비 최대 하락 폭입니다.',
               },
               {
                 icon: '/whales/blue-whale.png',
                 term: '유영',
-                meaning: '시장 탐색 및 분석',
-                desc: '고래가 바다를 유영하듯, 실시간 시세를 확인하고 시장 흐름을 분석하는 과정입니다.',
+                meaning: '시장 탐색 · 분석',
+                desc: '실시간 시세를 확인하고 시장 흐름을 분석하는 과정. 시세 페이지에서 유영할 수 있습니다.',
               },
               {
                 icon: '/whales/dolphin.png',
@@ -286,10 +285,28 @@ const LandingPage = () => {
                 desc: '다양한 퀀트 전략(항로)을 탐색하고 구매할 수 있는 공간입니다.',
               },
               {
+                icon: '/whales/orca.png',
+                term: '항해 중',
+                meaning: '전략 운용 상태',
+                desc: '구매한 항로가 활성화되어 자동 매매가 진행되고 있는 상태입니다.',
+              },
+              {
                 icon: '/whales/beluga.png',
                 term: '포트폴리오',
                 meaning: '나의 투자 현황',
-                desc: '보유 자산, 수익률, 현금 잔고 등 나의 전체 투자 현황을 한눈에 볼 수 있습니다.',
+                desc: '보유 자산, 수익률, 현금 잔고 등 전체 투자 현황을 한눈에 볼 수 있습니다.',
+              },
+              {
+                icon: '/whales/risso-dolphin.png',
+                term: '선원',
+                meaning: 'WhaleArc 사용자',
+                desc: '바다 위의 투자자. 회원가입하면 선원이 되어 항해를 시작할 수 있습니다.',
+              },
+              {
+                icon: '/whales/gray-whale.png',
+                term: '해류',
+                meaning: '시장 추세 · 흐름',
+                desc: '시장의 전체적인 방향성. 해류를 읽어야 좋은 항로를 선택할 수 있습니다.',
               },
             ].map((item) => (
               <div

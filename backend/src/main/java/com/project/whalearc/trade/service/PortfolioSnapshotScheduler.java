@@ -1,0 +1,76 @@
+package com.project.whalearc.trade.service;
+
+import com.project.whalearc.market.dto.MarketPriceResponse;
+import com.project.whalearc.market.service.CryptoPriceProvider;
+import com.project.whalearc.trade.domain.Holding;
+import com.project.whalearc.trade.domain.Portfolio;
+import com.project.whalearc.trade.domain.PortfolioSnapshot;
+import com.project.whalearc.trade.repository.PortfolioRepository;
+import com.project.whalearc.trade.repository.PortfolioSnapshotRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class PortfolioSnapshotScheduler {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
+    private final PortfolioRepository portfolioRepository;
+    private final PortfolioSnapshotRepository snapshotRepository;
+    private final CryptoPriceProvider cryptoPriceProvider;
+
+    /**
+     * 매일 자정(KST)에 모든 포트폴리오의 스냅샷 저장
+     * 가격은 1회만 조회하여 모든 포트폴리오에 적용
+     */
+    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
+    public void captureDaily() {
+        LocalDate today = LocalDate.now(KST);
+        List<Portfolio> all = portfolioRepository.findAll();
+
+        // 시세 1회 조회
+        Map<String, Double> priceMap = Map.of();
+        try {
+            List<MarketPriceResponse> prices = cryptoPriceProvider.getAllKrwTickers();
+            priceMap = prices.stream()
+                    .collect(Collectors.toMap(
+                            MarketPriceResponse::getSymbol,
+                            MarketPriceResponse::getPrice,
+                            (a, b) -> a));
+        } catch (Exception e) {
+            log.warn("스냅샷용 시세 조회 실패, 기존 가격으로 저장: {}", e.getMessage());
+        }
+
+        int saved = 0;
+        for (Portfolio portfolio : all) {
+            try {
+                if (snapshotRepository.findByUserIdAndDate(portfolio.getUserId(), today).isPresent()) {
+                    continue;
+                }
+                // 보유 종목 현재가 갱신
+                for (Holding holding : portfolio.getHoldings()) {
+                    Double price = priceMap.get(holding.getStockCode());
+                    if (price != null) {
+                        holding.setCurrentPrice(price);
+                    }
+                }
+                snapshotRepository.save(new PortfolioSnapshot(portfolio.getUserId(), today, portfolio));
+                saved++;
+            } catch (Exception e) {
+                log.debug("스냅샷 저장 스킵 [{}]: {}", portfolio.getUserId(), e.getMessage());
+            }
+        }
+
+        log.info("일별 포트폴리오 스냅샷 완료: {}건 / 전체 {}건", saved, all.size());
+    }
+}

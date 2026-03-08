@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Area, AreaChart } from 'recharts';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import { tradeService, portfolioService, type Portfolio, type Trade } from '../services/tradeService';
+import { tradeService, portfolioService, type Portfolio, type Trade, type PortfolioSnapshot } from '../services/tradeService';
 import {
   quantStoreService,
   type PurchasePerformance,
@@ -23,6 +23,7 @@ const MyPortfolioPage = () => {
   const { user, profileName } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [purchasePerformance, setPurchasePerformance] = useState<PurchasePerformance[]>([]);
+  const [historyData, setHistoryData] = useState<PortfolioSnapshot[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,14 +40,16 @@ const MyPortfolioPage = () => {
         setError(null);
       }
 
-      const [portfolioData, perfData, tradeData] = await Promise.all([
+      const [portfolioData, perfData, tradeData, history] = await Promise.all([
         tradeService.getPortfolio(),
         quantStoreService.getMyPurchasesPerformance().catch(() => [] as PurchasePerformance[]),
         tradeService.getTrades().catch(() => [] as Trade[]),
+        portfolioService.getHistory(30).catch(() => [] as PortfolioSnapshot[]),
       ]);
 
       setPortfolio(portfolioData);
       setPurchasePerformance(perfData);
+      setHistoryData(history);
       setTrades(tradeData.sort((a, b) => new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime()));
     } catch (err: any) {
       if (!silent) setError(err.message || '포트폴리오 정보를 불러오는데 실패했습니다.');
@@ -226,6 +229,88 @@ const MyPortfolioPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* ─── 메인 영역 (2/3) ─── */}
           <div className="lg:col-span-2 space-y-6">
+
+            {/* 자산 추이 차트 */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-whale-dark">자산 추이</h2>
+                <span className="text-xs text-gray-400">최근 30일</span>
+              </div>
+              {historyData.length >= 2 ? (() => {
+                const chartData = historyData.map((s) => ({
+                  date: s.date,
+                  label: new Date(s.date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+                  totalValue: Math.round(s.totalValue),
+                  returnRate: Number(s.returnRate.toFixed(2)),
+                }));
+                const values = chartData.map((d) => d.totalValue);
+                const minVal = Math.min(...values);
+                const maxVal = Math.max(...values);
+                const padding = Math.max((maxVal - minVal) * 0.1, 10000);
+                const trend = chartData[chartData.length - 1].totalValue - chartData[0].totalValue;
+                const gradientColor = trend >= 0 ? '#ef4444' : '#3b82f6';
+                const lineColor = trend >= 0 ? '#ef4444' : '#3b82f6';
+
+                return (
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                        <defs>
+                          <linearGradient id="assetGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={gradientColor} stopOpacity={0.15} />
+                            <stop offset="100%" stopColor={gradientColor} stopOpacity={0.02} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis
+                          dataKey="label"
+                          tick={{ fontSize: 11, fill: '#9ca3af' }}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis
+                          domain={[Math.floor(minVal - padding), Math.ceil(maxVal + padding)]}
+                          tick={{ fontSize: 11, fill: '#9ca3af' }}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(v: number) => {
+                            if (v >= 1_0000_0000) return `${(v / 1_0000_0000).toFixed(1)}억`;
+                            if (v >= 1_0000) return `${(v / 1_0000).toFixed(0)}만`;
+                            return `${v}`;
+                          }}
+                          width={50}
+                        />
+                        <Tooltip
+                          contentStyle={{ borderRadius: '10px', fontSize: '13px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                          formatter={(value: number, name: string) => {
+                            if (name === 'totalValue') return [fmt(value), '총 자산'];
+                            return [value, name];
+                          }}
+                          labelFormatter={(label: string) => label}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="totalValue"
+                          stroke={lineColor}
+                          strokeWidth={2.5}
+                          fill="url(#assetGradient)"
+                          dot={false}
+                          activeDot={{ r: 4, fill: lineColor, strokeWidth: 2, stroke: '#fff' }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                );
+              })() : (
+                <div className="h-56 flex flex-col items-center justify-center text-gray-400">
+                  <svg className="w-10 h-10 mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                  </svg>
+                  <p className="text-sm font-medium">자산 추이 데이터 수집 중</p>
+                  <p className="text-xs mt-1">매일 자산이 기록되며, 2일 이상 데이터가 쌓이면 차트가 표시됩니다</p>
+                </div>
+              )}
+            </div>
 
             {/* 자산 배분 */}
             <div className="bg-white rounded-xl shadow-lg p-6">

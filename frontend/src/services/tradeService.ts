@@ -77,9 +77,22 @@ export interface Portfolio {
   representativePurchaseId?: string | null;
 }
 
+export interface PortfolioSnapshot {
+  date: string;         // "2026-03-09"
+  totalValue: number;
+  cashBalance: number;
+  holdingsValue: number;
+  turtleAllocated: number;
+  returnRate: number;
+}
+
 export const portfolioService = {
   setRepresentativeRoute: async (purchaseId: string | null): Promise<void> => {
     await apiClient.put('/api/portfolio/representative-route', { purchaseId });
+  },
+  getHistory: async (days: number = 30): Promise<PortfolioSnapshot[]> => {
+    const response = await apiClient.get('/api/portfolio/history', { params: { days } });
+    return response.data.data;
   },
 };
 

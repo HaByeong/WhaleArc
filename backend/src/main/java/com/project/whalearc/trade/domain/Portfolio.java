@@ -28,17 +28,21 @@ public class Portfolio {
 
     private List<Holding> holdings = new ArrayList<>();
 
+    /** 터틀 전략에 할당된 현금 (cashBalance에서 차감되었지만 자산으로 포함) */
+    private double turtleAllocated;
+
     public Portfolio(String userId, double cashBalance) {
         this.userId = userId;
         this.cashBalance = cashBalance;
         this.initialCash = cashBalance;
+        this.turtleAllocated = 0;
     }
 
     public double getTotalValue() {
         double holdingsValue = holdings.stream()
                 .mapToDouble(Holding::getMarketValue)
                 .sum();
-        return cashBalance + holdingsValue;
+        return cashBalance + holdingsValue + turtleAllocated;
     }
 
     public double getReturnRate() {

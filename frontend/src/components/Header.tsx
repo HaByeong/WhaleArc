@@ -10,11 +10,12 @@ interface HeaderProps {
 
 const Header = ({ showNav = false }: HeaderProps) => {
   const navigate = useNavigate();
-  const { session, user } = useAuth();
+  const { session, user, profileName } = useAuth();
   const isAuthenticated = !!session;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
+  // 백엔드 DB 닉네임 우선 → Supabase metadata → 이메일 앞부분 → 기본값
+  const displayName = profileName || user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
 
   const handleLogout = async () => {
     await authService.logout();

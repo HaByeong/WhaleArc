@@ -4,7 +4,7 @@ import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { tradeService, type Portfolio } from '../services/tradeService';
-import { quantStoreService, type ProductPurchase, cryptoDisplayName, formatQuantity } from '../services/quantStoreService';
+import { quantStoreService, type ProductPurchase, type PurchasePerformance, cryptoDisplayName, formatQuantity } from '../services/quantStoreService';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
@@ -12,14 +12,15 @@ import { useAuth } from '../contexts/AuthContext';
  */
 const MyPortfolioPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profileName } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [activePurchases, setActivePurchases] = useState<ProductPurchase[]>([]);
+  const [purchasePerformance, setPurchasePerformance] = useState<PurchasePerformance[]>([]);
   const [assetRouteMap, setAssetRouteMap] = useState<Record<string, { routeName: string; quantity: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
+  const displayName = profileName || user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
 
   useEffect(() => {
     loadPortfolio();
@@ -30,7 +31,7 @@ const MyPortfolioPage = () => {
       setLoading(true);
       setError(null);
 
-      const [portfolioData, purchaseData] = await Promise.all([
+      const [portfolioData, purchaseData, perfData] = await Promise.all([
         tradeService.getPortfolio().catch((apiError: any) => {
           if (apiError.response?.status === 404 || apiError.code === 'ERR_NETWORK') {
             return getMockPortfolio();
@@ -38,7 +39,10 @@ const MyPortfolioPage = () => {
           throw apiError;
         }),
         quantStoreService.getMyPurchases().catch(() => ({ purchases: [], purchasedProductIds: [] })),
+        quantStoreService.getMyPurchasesPerformance().catch(() => [] as PurchasePerformance[]),
       ]);
+
+      setPurchasePerformance(perfData);
 
       setPortfolio(portfolioData);
 
@@ -300,8 +304,8 @@ const MyPortfolioPage = () => {
 
           {/* 사이드바 */}
           <div className="lg:col-span-1 space-y-6">
-            {/* 항해 중인 항로 */}
-            {activePurchases.length > 0 && (
+            {/* 항해 중인 항로 — 수익률 카드 */}
+            {(purchasePerformance.length > 0 || activePurchases.length > 0) && (
               <div className="bg-white rounded-xl shadow-lg p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-bold text-whale-dark">항해 중인 항로</h2>
@@ -312,8 +316,49 @@ const MyPortfolioPage = () => {
                     항로 상점
                   </button>
                 </div>
-                <div className="space-y-3">
-                  {activePurchases.map((p) => (
+                <div className="space-y-4">
+                  {purchasePerformance.length > 0 ? purchasePerformance.map((perf) => (
+                    <div key={perf.purchaseId} className="bg-gradient-to-r from-whale-light/5 to-whale-accent/5 border border-whale-light/20 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-bold text-sm text-whale-dark">{perf.productName}</div>
+                        {perf.strategyType === 'TURTLE' && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-700 rounded">WhaleArc 독점</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 mb-2">투자: {formatAmount(perf.investmentAmount)}</div>
+                      <div className={`text-lg font-bold mb-3 ${perf.totalReturnRate >= 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                        {perf.totalReturnRate >= 0 ? '+' : ''}{perf.totalReturnRate.toFixed(2)}%
+                        <span className="text-xs font-normal ml-1">
+                          ({perf.totalPnl >= 0 ? '+' : ''}{formatAmount(Math.round(perf.totalPnl))})
+                        </span>
+                      </div>
+
+                      {/* 자산별 수익률 */}
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {perf.assets.map((a) => (
+                          <span
+                            key={a.code}
+                            className={`px-2 py-1 text-[11px] font-semibold rounded ${
+                              a.returnRate >= 0 ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                            }`}
+                          >
+                            {a.code} {a.returnRate >= 0 ? '+' : ''}{a.returnRate.toFixed(1)}%
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* 터틀 전용 통계 */}
+                      {perf.strategyType === 'TURTLE' && perf.totalTradeCount != null && (
+                        <div className="mt-2 pt-2 border-t border-whale-light/10 text-[11px] text-gray-500 flex gap-3">
+                          <span>거래 {perf.totalTradeCount}회</span>
+                          <span>승률 {perf.totalTradeCount > 0
+                            ? ((perf.totalWinCount || 0) / perf.totalTradeCount * 100).toFixed(1)
+                            : '0.0'}%</span>
+                          <span>실현 {formatAmount(Math.round(perf.realizedPnl || 0))}</span>
+                        </div>
+                      )}
+                    </div>
+                  )) : activePurchases.map((p) => (
                     <div key={p.id} className="bg-gradient-to-r from-whale-light/5 to-whale-accent/5 border border-whale-light/20 rounded-lg p-3">
                       <div className="font-semibold text-sm text-whale-dark mb-1">{p.productName}</div>
                       <div className="flex justify-between text-xs text-gray-500">

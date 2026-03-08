@@ -2,6 +2,7 @@ package com.project.whalearc.store.controller;
 
 import com.project.whalearc.store.domain.ProductPurchase;
 import com.project.whalearc.store.domain.QuantProduct;
+import com.project.whalearc.store.dto.PurchasePerformanceDto;
 import com.project.whalearc.store.service.QuantStoreService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -58,6 +59,13 @@ public class QuantStoreController {
         List<ProductPurchase> purchases = storeService.getMyPurchases(userId);
         Set<String> purchasedIds = storeService.getMyPurchasedProductIds(userId);
         return ResponseEntity.ok(Map.of("data", purchases, "purchasedProductIds", purchasedIds));
+    }
+
+    @GetMapping("/my-purchases/performance")
+    public ResponseEntity<Map<String, Object>> getMyPurchasesPerformance(@AuthenticationPrincipal Jwt jwt) {
+        String userId = jwt.getSubject();
+        List<PurchasePerformanceDto> performance = storeService.getMyPurchasesPerformance(userId);
+        return ResponseEntity.ok(Map.of("data", performance));
     }
 
     @DeleteMapping("/my-purchases/{purchaseId}")

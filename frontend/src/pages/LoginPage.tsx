@@ -226,12 +226,19 @@ const LoginPage = () => {
                 {isLoading ? '로그인 중...' : '로그인'}
               </button>
             </form>
-            <p className="mt-4 text-center text-gray-600">
-              계정이 없으신가요?{' '}
-              <Link to="/signup" className="text-whale-light hover:underline font-semibold">
-                회원가입
-              </Link>
-            </p>
+            <div className="mt-4 text-center space-y-2">
+              <p className="text-gray-600">
+                계정이 없으신가요?{' '}
+                <Link to="/signup" className="text-whale-light hover:underline font-semibold">
+                  회원가입
+                </Link>
+              </p>
+              <p>
+                <Link to="/forgot-password" className="text-sm text-gray-500 hover:text-whale-light hover:underline">
+                  비밀번호를 잊으셨나요?
+                </Link>
+              </p>
+            </div>
           </div>
 
           {/* Market Data */}

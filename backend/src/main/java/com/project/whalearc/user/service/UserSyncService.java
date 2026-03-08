@@ -3,11 +3,14 @@ package com.project.whalearc.user.service;
 import com.project.whalearc.user.domain.User;
 import com.project.whalearc.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserSyncService {
@@ -43,7 +46,13 @@ public class UserSyncService {
                         name = email.split("@")[0];
                     }
 
-                    return userRepository.save(new User(supabaseId, email, name, provider));
+                    try {
+                        return userRepository.save(new User(supabaseId, email, name, provider));
+                    } catch (DuplicateKeyException e) {
+                        // 동시 요청으로 중복 생성 시도 — 이미 생성된 레코드 반환
+                        log.debug("User already created by concurrent request: {}", supabaseId);
+                        return userRepository.findBySupabaseId(supabaseId).orElseThrow();
+                    }
                 });
     }
 }

@@ -1,10 +1,24 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { userService } from '../services/userService';
 
 const AuthCallbackPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const redirectWithOnboardingCheck = async () => {
+      try {
+        const profile = await userService.getProfile();
+        if (profile && !profile.investmentStyle) {
+          window.location.replace('/user?onboarding=true');
+          return;
+        }
+      } catch {
+        // 프로필 조회 실패 시 대시보드로 폴백
+      }
+      window.location.replace('/dashboard');
+    };
+
     const handleCallback = async () => {
       try {
         const url = new URL(window.location.href);
@@ -20,7 +34,7 @@ const AuthCallbackPage = () => {
             return;
           }
           // 전체 페이지 리로드로 AuthProvider가 새 세션을 인식하도록 함
-          window.location.replace('/dashboard');
+          await redirectWithOnboardingCheck();
           return;
         }
 
@@ -34,13 +48,13 @@ const AuthCallbackPage = () => {
         }
 
         if (data.session) {
-          window.location.replace('/dashboard');
+          await redirectWithOnboardingCheck();
         } else {
           // 세션이 아직 없으면 onAuthStateChange로 대기
-          const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'SIGNED_IN' && session) {
               subscription.unsubscribe();
-              window.location.replace('/dashboard');
+              await redirectWithOnboardingCheck();
             }
           });
 

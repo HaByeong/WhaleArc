@@ -37,6 +37,38 @@ export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 export interface PurchasedAsset {
   code: string;
   quantity: number;
+  purchasePrice?: number;
+}
+
+export interface AssetPerformance {
+  code: string;
+  name: string;
+  quantity: number;
+  purchasePrice: number;
+  currentPrice: number;
+  pnl: number;
+  returnRate: number;
+  // 터틀 전용
+  direction?: string;
+  realizedPnl?: number;
+  tradeCount?: number;
+  winCount?: number;
+}
+
+export interface PurchasePerformance {
+  purchaseId: string;
+  productName: string;
+  strategyType: 'SIMPLE' | 'TURTLE';
+  investmentAmount: number;
+  totalCurrentValue: number;
+  totalPnl: number;
+  totalReturnRate: number;
+  assets: AssetPerformance[];
+  // 터틀 전용
+  realizedPnl?: number;
+  unrealizedPnl?: number;
+  totalTradeCount?: number;
+  totalWinCount?: number;
 }
 
 export interface ProductPurchase {
@@ -129,5 +161,10 @@ export const quantStoreService = {
       purchases: res.data.data || [],
       purchasedProductIds: res.data.purchasedProductIds || [],
     };
+  },
+
+  async getMyPurchasesPerformance(): Promise<PurchasePerformance[]> {
+    const res = await apiClient.get('/api/store/my-purchases/performance');
+    return res.data.data || [];
   },
 };

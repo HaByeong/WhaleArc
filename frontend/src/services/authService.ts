@@ -34,9 +34,26 @@ export const authService = {
     return data;
   },
 
-  logout: async () => {
-    const { error } = await supabase.auth.signOut();
+  resetPassword: async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
     if (error) throw error;
+  },
+
+  updatePassword: async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+  },
+
+  logout: async () => {
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      // 세션이 이미 만료/없는 경우 — 로컬 스토리지만 직접 정리
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith('sb-'));
+      keys.forEach((k) => localStorage.removeItem(k));
+    }
   },
 
   getSession: async () => {

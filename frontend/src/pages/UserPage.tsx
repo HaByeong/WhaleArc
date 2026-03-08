@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -9,6 +9,7 @@ import {
   type InvestmentStyle,
   type ExperienceLevel,
 } from '../services/userService';
+import { useAuth } from '../contexts/AuthContext';
 
 const INVESTMENT_STYLES: { value: InvestmentStyle; label: string; whale: string; desc: string; color: string; selectedBg: string; img: string }[] = [
   { value: 'AGGRESSIVE', label: '범고래', whale: 'Orca', desc: '바다의 최상위 포식자처럼, 과감한 공격으로 높은 수익을 노립니다', color: 'border-red-400', selectedBg: 'bg-gradient-to-r from-red-50 to-orange-50', img: '/whales/orca.png' },
@@ -26,6 +27,9 @@ const POPULAR_ASSETS = ['BTC', 'ETH', 'XRP', 'SOL', 'DOGE', 'ADA', 'DOT', 'AVAX'
 
 const UserPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isOnboarding = searchParams.get('onboarding') === 'true';
+  const { refreshProfile, markOnboardingDone } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +53,10 @@ const UserPage = () => {
         setError(null);
         const data = await userService.getProfile();
         if (!cancelled) {
+          if (!data) {
+            setError('서버에 연결할 수 없습니다. 백엔드가 실행 중인지 확인해주세요.');
+            return;
+          }
           setProfile(data);
           setEditName(data.name ?? '');
           setBio(data.bio ?? '');
@@ -72,6 +80,13 @@ const UserPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile || saving) return;
+
+    // 온보딩 모드에서는 투자 성향 필수
+    if (isOnboarding && !investmentStyle) {
+      setSaveMessage({ type: 'error', text: '투자 성향을 선택해주세요 (나는 어떤 고래?)' });
+      return;
+    }
+
     setSaving(true);
     setSaveMessage(null);
     try {
@@ -92,6 +107,13 @@ const UserPage = () => {
         experienceLevel,
         favoriteAssets,
       } : null);
+      // Header 닉네임 + 온보딩 상태 즉시 반영
+      markOnboardingDone();
+      await refreshProfile();
+      if (isOnboarding) {
+        navigate('/dashboard');
+        return;
+      }
       setSaveMessage({ type: 'success', text: '프로필이 바다에 새겨졌습니다!' });
       setTimeout(() => setSaveMessage(null), 3000);
     } catch (e: unknown) {
@@ -138,6 +160,19 @@ const UserPage = () => {
     <div className="min-h-screen bg-gray-50">
       <Header showNav />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* 온보딩 환영 배너 */}
+        {isOnboarding && (
+          <div className="mb-6 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl shadow-lg p-5 text-white">
+            <div className="flex items-center gap-3">
+              <img src="/whales/risso-dolphin.png" alt="환영" className="w-12 h-12 object-contain" />
+              <div>
+                <h2 className="text-lg font-bold">바다에 오신 것을 환영합니다!</h2>
+                <p className="text-emerald-100 text-sm mt-0.5">투자 프로필을 설정하면 맞춤형 경험을 제공해드려요</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 상단 헤더 */}
         <div className="mb-8 bg-gradient-to-r from-whale-dark to-whale-light rounded-2xl shadow-xl p-6 md:p-8 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl" />
@@ -146,9 +181,9 @@ const UserPage = () => {
               {(profile?.name ?? 'U').charAt(0).toUpperCase()}
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold">내 프로필</h1>
+              <h1 className="text-2xl md:text-3xl font-bold">{isOnboarding ? '프로필 설정' : '내 프로필'}</h1>
               <p className="text-blue-100 text-sm md:text-base mt-1">
-                나만의 투자 프로필을 완성해보세요
+                {isOnboarding ? '나만의 투자 프로필을 만들어보세요' : '나만의 투자 프로필을 완성해보세요'}
               </p>
             </div>
           </div>
@@ -398,7 +433,7 @@ const UserPage = () => {
                   className="w-full btn-secondary mt-3"
                   onClick={() => navigate('/dashboard')}
                 >
-                  대시보드로 이동
+                  {isOnboarding ? '건너뛰기' : '대시보드로 이동'}
                 </button>
               </div>
             </div>

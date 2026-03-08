@@ -4,8 +4,11 @@ import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.CryptoPriceProvider;
 import com.project.whalearc.store.domain.ProductPurchase;
 import com.project.whalearc.store.domain.QuantProduct;
+import com.project.whalearc.store.dto.PurchasePerformanceDto;
 import com.project.whalearc.store.repository.ProductPurchaseRepository;
 import com.project.whalearc.store.repository.QuantProductRepository;
+import com.project.whalearc.strategy.domain.TurtlePosition;
+import com.project.whalearc.strategy.repository.TurtlePositionRepository;
 import com.project.whalearc.trade.domain.Holding;
 import com.project.whalearc.trade.domain.Order;
 import com.project.whalearc.trade.domain.Portfolio;
@@ -35,6 +38,7 @@ public class QuantStoreService {
     private final CryptoPriceProvider cryptoPriceProvider;
     private final PortfolioService portfolioService;
     private final TurtleStrategyService turtleStrategyService;
+    private final TurtlePositionRepository turtlePositionRepository;
 
     /**
      * 최초 실행 시 샘플 퀀트 상품 시드
@@ -186,8 +190,9 @@ public class QuantStoreService {
 
         // ── 터틀 전략: 즉시 매수하지 않고 포지션 초기화 (스케줄러가 시그널에 따라 자동매매) ──
         if (product.getStrategyType() == QuantProduct.StrategyType.TURTLE) {
-            // 현금을 포트폴리오에서 차감 (터틀 전용 자금으로 할당)
+            // 현금을 포트폴리오에서 차감하고, 터틀 할당금으로 이동 (totalValue 유지)
             portfolio.setCashBalance(portfolio.getCashBalance() - investmentAmount);
+            portfolio.setTurtleAllocated(portfolio.getTurtleAllocated() + investmentAmount);
             portfolioService.save(portfolio);
 
             purchase.setPurchasedAssets(new ArrayList<>());
@@ -223,7 +228,7 @@ public class QuantStoreService {
                 try {
                     orderService.createOrder(userId, asset, priceInfo.getName(),
                             Order.OrderType.BUY, Order.OrderMethod.MARKET, quantity, null);
-                    purchasedAssets.add(new ProductPurchase.PurchasedAsset(asset, quantity));
+                    purchasedAssets.add(new ProductPurchase.PurchasedAsset(asset, quantity, priceInfo.getPrice()));
                     log.info("항로 자동 매수: asset={}, qty={}, price={}", asset, quantity, priceInfo.getPrice());
                 } catch (Exception e) {
                     log.warn("항로 자동 매수 실패: asset={}, reason={}", asset, e.getMessage());
@@ -272,6 +277,11 @@ public class QuantStoreService {
         if (isTurtle) {
             // 터틀: 포지션 청산 + 할당 현금 반환
             turtleStrategyService.closeAllPositions(purchase.getId());
+            Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
+            double allocated = purchase.getInvestmentAmount();
+            portfolio.setTurtleAllocated(Math.max(0, portfolio.getTurtleAllocated() - allocated));
+            portfolio.setCashBalance(portfolio.getCashBalance() + allocated);
+            portfolioService.save(portfolio);
         } else {
             // 일반: 매수한 자산들을 항로 매수 수량만큼만 매도
             Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
@@ -315,5 +325,151 @@ public class QuantStoreService {
                 .filter(p -> p.getStatus() == ProductPurchase.Status.ACTIVE)
                 .map(ProductPurchase::getProductId)
                 .collect(Collectors.toSet());
+    }
+
+    /**
+     * 사용자의 활성 항로별 수익률 성과를 계산합니다.
+     */
+    public List<PurchasePerformanceDto> getMyPurchasesPerformance(String userId) {
+        List<ProductPurchase> activePurchases = purchaseRepository.findByUserIdOrderByPurchasedAtDesc(userId)
+                .stream()
+                .filter(p -> p.getStatus() == ProductPurchase.Status.ACTIVE)
+                .toList();
+
+        if (activePurchases.isEmpty()) return List.of();
+
+        // 현재가 한번에 조회
+        Map<String, MarketPriceResponse> priceMap = cryptoPriceProvider.getAllKrwTickers().stream()
+                .collect(Collectors.toMap(MarketPriceResponse::getSymbol, p -> p, (a, b) -> a));
+
+        List<PurchasePerformanceDto> results = new ArrayList<>();
+
+        for (ProductPurchase purchase : activePurchases) {
+            QuantProduct product = productRepository.findById(purchase.getProductId()).orElse(null);
+            boolean isTurtle = product != null && product.getStrategyType() == QuantProduct.StrategyType.TURTLE;
+
+            if (isTurtle) {
+                results.add(buildTurtlePerformance(purchase, priceMap));
+            } else {
+                results.add(buildSimplePerformance(purchase, priceMap));
+            }
+        }
+
+        return results;
+    }
+
+    private PurchasePerformanceDto buildSimplePerformance(ProductPurchase purchase,
+                                                           Map<String, MarketPriceResponse> priceMap) {
+        // 레거시 데이터(purchasePrice=0) 폴백용: 포트폴리오의 Holding 평균단가 사용
+        Portfolio portfolio = portfolioService.getOrCreatePortfolio(purchase.getUserId());
+        Map<String, Double> holdingAvgPrices = portfolio.getHoldings().stream()
+                .collect(Collectors.toMap(Holding::getStockCode, Holding::getAveragePrice, (a, b) -> a));
+
+        List<PurchasePerformanceDto.AssetPerformance> assetPerfs = new ArrayList<>();
+        double totalCurrent = 0;
+        double totalCost = 0;
+
+        for (ProductPurchase.PurchasedAsset pa : purchase.getPurchasedAssets()) {
+            MarketPriceResponse mp = priceMap.get(pa.getCode());
+            double currentPrice = mp != null ? mp.getPrice() : 0;
+            double buyPrice = pa.getPurchasePrice();
+            // 레거시 데이터: purchasePrice가 0이면 Holding 평균단가로 폴백
+            if (buyPrice <= 0) {
+                buyPrice = holdingAvgPrices.getOrDefault(pa.getCode(), 0.0);
+            }
+
+            double cost = buyPrice * pa.getQuantity();
+            double current = currentPrice * pa.getQuantity();
+            double pnl = current - cost;
+            double returnRate = cost > 0 ? (pnl / cost) * 100 : 0;
+
+            totalCost += cost;
+            totalCurrent += current;
+
+            assetPerfs.add(PurchasePerformanceDto.AssetPerformance.builder()
+                    .code(pa.getCode())
+                    .name(mp != null ? mp.getName() : pa.getCode())
+                    .quantity(pa.getQuantity())
+                    .purchasePrice(buyPrice)
+                    .currentPrice(currentPrice)
+                    .pnl(pnl)
+                    .returnRate(returnRate)
+                    .build());
+        }
+
+        double totalPnl = totalCurrent - totalCost;
+        double totalReturn = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
+
+        return PurchasePerformanceDto.builder()
+                .purchaseId(purchase.getId())
+                .productName(purchase.getProductName())
+                .strategyType("SIMPLE")
+                .investmentAmount(purchase.getInvestmentAmount())
+                .totalCurrentValue(totalCurrent)
+                .totalPnl(totalPnl)
+                .totalReturnRate(totalReturn)
+                .assets(assetPerfs)
+                .build();
+    }
+
+    private PurchasePerformanceDto buildTurtlePerformance(ProductPurchase purchase,
+                                                           Map<String, MarketPriceResponse> priceMap) {
+        List<TurtlePosition> positions = turtlePositionRepository.findByPurchaseId(purchase.getId());
+
+        List<PurchasePerformanceDto.AssetPerformance> assetPerfs = new ArrayList<>();
+        double totalRealized = 0;
+        double totalUnrealized = 0;
+        int totalTrades = 0;
+        int totalWins = 0;
+
+        for (TurtlePosition pos : positions) {
+            MarketPriceResponse mp = priceMap.get(pos.getSymbol());
+            double currentPrice = mp != null ? mp.getPrice() : 0;
+
+            double unrealized = 0;
+            if (pos.getDirection() == TurtlePosition.Direction.LONG && pos.getAvgPrice() > 0) {
+                unrealized = pos.getAllocatedCash() * pos.getUnitWeight() * pos.getUnits()
+                        * ((currentPrice - pos.getAvgPrice()) / pos.getAvgPrice());
+            }
+
+            totalRealized += pos.getRealizedPnl();
+            totalUnrealized += unrealized;
+            totalTrades += pos.getTradeCount();
+            totalWins += pos.getWinCount();
+
+            assetPerfs.add(PurchasePerformanceDto.AssetPerformance.builder()
+                    .code(pos.getSymbol())
+                    .name(mp != null ? mp.getName() : pos.getSymbol())
+                    .quantity(pos.getUnits())
+                    .purchasePrice(pos.getAvgPrice())
+                    .currentPrice(currentPrice)
+                    .pnl(pos.getRealizedPnl() + unrealized)
+                    .returnRate(pos.getAllocatedCash() > 0
+                            ? ((pos.getRealizedPnl() + unrealized) / pos.getAllocatedCash()) * 100 : 0)
+                    .direction(pos.getDirection().name())
+                    .realizedPnl(pos.getRealizedPnl())
+                    .tradeCount(pos.getTradeCount())
+                    .winCount(pos.getWinCount())
+                    .build());
+        }
+
+        double totalPnl = totalRealized + totalUnrealized;
+        double totalReturn = purchase.getInvestmentAmount() > 0
+                ? (totalPnl / purchase.getInvestmentAmount()) * 100 : 0;
+
+        return PurchasePerformanceDto.builder()
+                .purchaseId(purchase.getId())
+                .productName(purchase.getProductName())
+                .strategyType("TURTLE")
+                .investmentAmount(purchase.getInvestmentAmount())
+                .totalCurrentValue(purchase.getInvestmentAmount() + totalPnl)
+                .totalPnl(totalPnl)
+                .totalReturnRate(totalReturn)
+                .assets(assetPerfs)
+                .realizedPnl(totalRealized)
+                .unrealizedPnl(totalUnrealized)
+                .totalTradeCount(totalTrades)
+                .totalWinCount(totalWins)
+                .build();
     }
 }

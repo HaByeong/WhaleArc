@@ -7,9 +7,12 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const location = useLocation();
-  const { session, loading } = useAuth();
+  const { session, loading, onboardingDone } = useAuth();
 
-  if (loading) {
+  // 온보딩 페이지 자체는 체크 대상에서 제외
+  const isOnboardingPage = location.pathname === '/user' && new URLSearchParams(location.search).get('onboarding') === 'true';
+
+  if (loading || onboardingDone === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="w-10 h-10 border-4 border-whale-light border-t-transparent rounded-full animate-spin" />
@@ -28,6 +31,10 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
         }}
       />
     );
+  }
+
+  if (!onboardingDone && !isOnboardingPage) {
+    return <Navigate to="/user?onboarding=true" replace />;
   }
 
   return <>{children}</>;

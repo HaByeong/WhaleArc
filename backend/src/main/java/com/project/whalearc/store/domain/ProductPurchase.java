@@ -43,10 +43,17 @@ public class ProductPurchase {
     public static class PurchasedAsset {
         private String code;
         private double quantity;
+        private double purchasePrice;
 
         public PurchasedAsset(String code, double quantity) {
             this.code = code;
             this.quantity = quantity;
+        }
+
+        public PurchasedAsset(String code, double quantity, double purchasePrice) {
+            this.code = code;
+            this.quantity = quantity;
+            this.purchasePrice = purchasePrice;
         }
     }
 

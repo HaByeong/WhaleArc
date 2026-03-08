@@ -12,7 +12,7 @@ import { useRealtimePrice } from '../hooks/useRealtimePrice';
 
 const DashboardPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profileName } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [watchlist, setWatchlist] = useState<StockPrice[]>([]);
   const [topMovers, setTopMovers] = useState<StockPrice[]>([]);
@@ -48,7 +48,7 @@ const DashboardPage = () => {
     });
   }, [topMovers, realtimePrices]);
 
-  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
+  const displayName = profileName || user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
 
   useEffect(() => {
     loadData();

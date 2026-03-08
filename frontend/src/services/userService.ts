@@ -29,62 +29,26 @@ export interface UserInfoRequest {
   favoriteAssets?: string[];
 }
 
-const buildDemoProfile = (): UserProfile => ({
-  userId: 'demo',
-  name: '데모 유저',
-  authProvider: 'email',
-  bio: '',
-  investmentStyle: undefined,
-  experienceLevel: undefined,
-  favoriteAssets: [],
-});
-
 export const userService = {
-  getProfile: async (): Promise<UserProfile> => {
+  /** 프로필 조회 — API 실패 시 null 반환 */
+  getProfile: async (): Promise<UserProfile | null> => {
     try {
       const { data } = await apiClient.get<UserProfile>('/users/me');
       return data;
     } catch {
-      return buildDemoProfile();
+      return null;
     }
   },
 
   updateProfile: async (body: UserUpdateRequest): Promise<void> => {
-    try {
-      await apiClient.put('/users', body);
-    } catch (error: any) {
-      const status = error?.response?.status;
-      const code = error?.code;
-      if (status === 401 || status === 403 || code === 'ERR_NETWORK') {
-        return;
-      }
-      throw error;
-    }
+    await apiClient.put('/users', body);
   },
 
   saveUserInfo: async (body: UserInfoRequest): Promise<void> => {
-    try {
-      await apiClient.post('/users/info', body);
-    } catch (error: any) {
-      const status = error?.response?.status;
-      const code = error?.code;
-      if (status === 401 || status === 403 || code === 'ERR_NETWORK') {
-        return;
-      }
-      throw error;
-    }
+    await apiClient.post('/users/info', body);
   },
 
   updateUserInfo: async (body: UserInfoRequest): Promise<void> => {
-    try {
-      await apiClient.put('/users/info', body);
-    } catch (error: any) {
-      const status = error?.response?.status;
-      const code = error?.code;
-      if (status === 401 || status === 403 || code === 'ERR_NETWORK') {
-        return;
-      }
-      throw error;
-    }
+    await apiClient.put('/users/info', body);
   },
 };

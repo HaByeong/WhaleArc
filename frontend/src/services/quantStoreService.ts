@@ -18,6 +18,7 @@ export interface QuantProduct {
   tags: string[];
   targetAssets: string[];
   strategyLogic: string;
+  strategyType?: 'SIMPLE' | 'TURTLE';
   active: boolean;
   createdAt: string;
   updatedAt: string;

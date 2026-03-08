@@ -233,11 +233,15 @@ const QuantStorePage = () => {
                   } ${product.price > 0 ? 'ring-1 ring-amber-200' : ''}`}
                   onClick={() => setSelectedProduct(selectedProduct?.id === product.id ? null : product)}
                 >
-                  {product.price > 0 && (
+                  {product.strategyType === 'TURTLE' ? (
+                    <div className="absolute -top-2 -right-2 px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-bold rounded-full shadow-sm">
+                      WhaleArc 독점
+                    </div>
+                  ) : product.price > 0 ? (
                     <div className="absolute -top-2 -right-2 px-2.5 py-1 bg-amber-400 text-white text-[10px] font-bold rounded-full shadow-sm">
                       PREMIUM
                     </div>
-                  )}
+                  ) : null}
                   {/* 상단 뱃지 */}
                   <div className="flex items-center justify-between mb-3">
                     <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-whale-light/10 text-whale-light">
@@ -351,6 +355,45 @@ const QuantStorePage = () => {
 
               <h2 className="text-2xl font-bold text-whale-dark mb-3">{selectedProduct.name}</h2>
               <p className="text-gray-600 mb-6">{selectedProduct.description}</p>
+
+              {/* WhaleArc 자체 알고리즘 뱃지 (터틀) */}
+              {selectedProduct.strategyType === 'TURTLE' && (
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="px-2.5 py-1 text-xs font-bold bg-amber-500 text-white rounded-full">WhaleArc 독점</span>
+                    <h3 className="text-sm font-bold text-amber-900">자체 개발 알고리즘</h3>
+                  </div>
+                  <p className="text-sm text-amber-800 leading-relaxed mb-3">
+                    WhaleArc 팀이 직접 개발하고 최적화한 <strong>터틀 트레이딩 알고리즘</strong>입니다.
+                    리처드 데니스의 전설적인 터틀 전략을 암호화폐 시장에 맞게 재설계하였으며,
+                    BTC 1시간봉 기준 백테스트에서 검증된 파라미터를 사용합니다.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-white/70 rounded-lg p-2.5">
+                      <span className="text-amber-600 font-semibold">진입</span>
+                      <p className="text-amber-900 mt-0.5">100시간 Donchian 채널 상단 돌파 + ADX(14) {'>'} 15</p>
+                    </div>
+                    <div className="bg-white/70 rounded-lg p-2.5">
+                      <span className="text-amber-600 font-semibold">청산</span>
+                      <p className="text-amber-900 mt-0.5">30시간 채널 하단 이탈 또는 4% 트레일링 스탑</p>
+                    </div>
+                    <div className="bg-white/70 rounded-lg p-2.5">
+                      <span className="text-amber-600 font-semibold">포지션 사이징</span>
+                      <p className="text-amber-900 mt-0.5">ATR 기반 4% 리스크, 1.75 ATR 손절</p>
+                    </div>
+                    <div className="bg-white/70 rounded-lg p-2.5">
+                      <span className="text-amber-600 font-semibold">피라미딩</span>
+                      <p className="text-amber-900 mt-0.5">최대 5단계 불타기, 1 ATR 간격 추가 진입</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-amber-600 mt-3 flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    알고리즘 파라미터는 서버에서만 관리되며 외부에 공개되지 않습니다.
+                  </p>
+                </div>
+              )}
 
               {/* 항로 로직 */}
               <div className="bg-gray-50 rounded-xl p-5 mb-6">
@@ -549,18 +592,35 @@ const QuantStorePage = () => {
                 )}
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-5">
+              <div className={`border rounded-lg p-3 mb-5 ${
+                investModal.strategyType === 'TURTLE'
+                  ? 'bg-amber-50 border-amber-200'
+                  : 'bg-blue-50 border-blue-200'
+              }`}>
                 <div className="flex gap-2">
-                  <svg className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+                    investModal.strategyType === 'TURTLE' ? 'text-amber-500' : 'text-blue-500'
+                  }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <div className="text-sm text-blue-800">
-                    <p className="font-medium mb-1">시장가 즉시 매수</p>
-                    <p className="text-xs text-blue-600">
-                      현재 시장가로 각 자산이 즉시 매수되며, 포트폴리오에 반영됩니다.
-                      실제 체결 금액은 시장 상황에 따라 다를 수 있습니다.
-                    </p>
-                  </div>
+                  {investModal.strategyType === 'TURTLE' ? (
+                    <div className="text-sm text-amber-800">
+                      <p className="font-medium mb-1">시그널 기반 자동매매</p>
+                      <p className="text-xs text-amber-600">
+                        투자 금액이 각 자산에 배분되며, 즉시 매수하지 않습니다.
+                        매 시간 알고리즘이 시그널을 분석하여 최적의 타이밍에 자동으로 진입/청산합니다.
+                        포지션이 없는 동안에는 현금으로 대기합니다.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-blue-800">
+                      <p className="font-medium mb-1">시장가 즉시 매수</p>
+                      <p className="text-xs text-blue-600">
+                        현재 시장가로 각 자산이 즉시 매수되며, 포트폴리오에 반영됩니다.
+                        실제 체결 금액은 시장 상황에 따라 다를 수 있습니다.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -670,7 +730,7 @@ function getDemoProducts(): QuantProduct[] {
       price: 0, expectedReturn: 18.5, maxDrawdown: -12.3,
       sharpeRatio: 1.45, winRate: 58.2, totalTrades: 0, subscribers: 127,
       tags: ['추세추종', '이동평균', '무료'], targetAssets: ['BTC', 'ETH', 'SOL'],
-      strategyLogic: 'MA(20) > MA(60) → 매수 / MA(20) < MA(60) → 매도',
+      strategyLogic: 'MA(20) > MA(60) → 매수 / MA(20) < MA(60) → 매도', strategyType: 'SIMPLE' as const,
       active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     },
     {
@@ -681,7 +741,7 @@ function getDemoProducts(): QuantProduct[] {
       price: 0, expectedReturn: 32.1, maxDrawdown: -18.7,
       sharpeRatio: 1.82, winRate: 64.8, totalTrades: 0, subscribers: 89,
       tags: ['RSI', '스캘핑', '무료'], targetAssets: ['BTC', 'ETH', 'XRP'],
-      strategyLogic: 'RSI(14) < 30 → 매수 / RSI(14) > 70 → 매도',
+      strategyLogic: 'RSI(14) < 30 → 매수 / RSI(14) > 70 → 매도', strategyType: 'SIMPLE' as const,
       active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     },
     {
@@ -692,7 +752,7 @@ function getDemoProducts(): QuantProduct[] {
       price: 0, expectedReturn: 12.8, maxDrawdown: -8.2,
       sharpeRatio: 1.15, winRate: 72.3, totalTrades: 0, subscribers: 234,
       tags: ['리밸런싱', '안전', '무료'], targetAssets: ['BTC', 'ETH'],
-      strategyLogic: '주간 리밸런싱: BTC 60% / ETH 30% / 현금 10%',
+      strategyLogic: '주간 리밸런싱: BTC 60% / ETH 30% / 현금 10%', strategyType: 'SIMPLE' as const,
       active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     },
     {
@@ -703,7 +763,8 @@ function getDemoProducts(): QuantProduct[] {
       price: 500000, expectedReturn: 35.6, maxDrawdown: -14.8,
       sharpeRatio: 2.12, winRate: 42.5, totalTrades: 0, subscribers: 67,
       tags: ['터틀', '돌파', 'ATR', '피라미딩', '프리미엄'], targetAssets: ['BTC', 'ETH', 'SOL', 'AVAX', 'LINK'],
-      strategyLogic: '진입: 20일 고가 돌파 / 청산: 10일 저가 이탈 / ATR(20) 기반 사이징 / 최대 4단계 피라미딩',
+      strategyLogic: '진입: 100h Donchian 상단 돌파 + ADX(14) > 15 / 청산: 30h 채널 이탈 or 트레일링 스탑 4% / 최대 5유닛 피라미딩',
+      strategyType: 'TURTLE' as const,
       active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     },
   ];

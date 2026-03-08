@@ -4,6 +4,7 @@ import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { tradeService, type Portfolio } from '../services/tradeService';
+import { quantStoreService, type ProductPurchase, cryptoDisplayName, formatQuantity } from '../services/quantStoreService';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
@@ -13,6 +14,8 @@ const MyPortfolioPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [activePurchases, setActivePurchases] = useState<ProductPurchase[]>([]);
+  const [assetRouteMap, setAssetRouteMap] = useState<Record<string, { routeName: string; quantity: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,18 +30,33 @@ const MyPortfolioPage = () => {
       setLoading(true);
       setError(null);
 
-      try {
-        const portfolioData = await tradeService.getPortfolio();
-        setPortfolio(portfolioData);
-      } catch (apiError: any) {
-        // API 에러 시 목업 데이터 표시 (개발 단계)
-        if (apiError.response?.status === 404 || apiError.code === 'ERR_NETWORK') {
-          console.warn('백엔드 API가 아직 구현되지 않았습니다. 목업 데이터를 표시합니다.');
-          setPortfolio(getMockPortfolio());
-        } else {
+      const [portfolioData, purchaseData] = await Promise.all([
+        tradeService.getPortfolio().catch((apiError: any) => {
+          if (apiError.response?.status === 404 || apiError.code === 'ERR_NETWORK') {
+            return getMockPortfolio();
+          }
           throw apiError;
+        }),
+        quantStoreService.getMyPurchases().catch(() => ({ purchases: [], purchasedProductIds: [] })),
+      ]);
+
+      setPortfolio(portfolioData);
+
+      const active = purchaseData.purchases.filter((p) => p.status === 'ACTIVE');
+      setActivePurchases(active);
+
+      // 자산 → 항로 이름 + 수량 매핑
+      const routeMap: Record<string, { routeName: string; quantity: number }> = {};
+      for (const p of active) {
+        for (const asset of p.purchasedAssets || []) {
+          if (routeMap[asset.code]) {
+            routeMap[asset.code].quantity += asset.quantity;
+          } else {
+            routeMap[asset.code] = { routeName: p.productName, quantity: asset.quantity };
+          }
         }
       }
+      setAssetRouteMap(routeMap);
     } catch (err: any) {
       setError(err.message || '포트폴리오 정보를 불러오는데 실패했습니다.');
     } finally {
@@ -151,8 +169,8 @@ const MyPortfolioPage = () => {
           
           <div className="relative z-10">
             <div className="flex items-center space-x-3 mb-6">
-              <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-2xl backdrop-blur-sm">
-                💼
+              <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center backdrop-blur-sm p-1.5">
+                <img src="/whales/sperm-whale.png" alt="향유고래" className="w-full h-full object-contain" />
               </div>
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold">
@@ -212,7 +230,7 @@ const MyPortfolioPage = () => {
               
               {portfolio.holdings.length === 0 ? (
                 <div className="text-center py-12">
-                  <div className="text-4xl mb-3">📊</div>
+                  <img src="/whales/gray-whale.png" alt="빈 목록" className="w-16 h-16 object-contain mx-auto mb-3 opacity-60" />
                   <div className="text-gray-500 font-medium mb-2">보유 종목이 없습니다</div>
                   <div className="text-sm text-gray-400 mb-4">거래 페이지에서 코인을 매수해보세요</div>
                   <button
@@ -244,11 +262,25 @@ const MyPortfolioPage = () => {
                         >
                           <td className="px-4 py-4">
                             <div>
-                              <div className="font-semibold text-whale-dark">{holding.stockName}</div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-whale-dark">{holding.stockName}</span>
+                                {assetRouteMap[holding.stockCode] && (
+                                  <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-whale-light/10 text-whale-light rounded">
+                                    {assetRouteMap[holding.stockCode].routeName}
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-sm text-gray-500">{holding.stockCode}</div>
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-right font-semibold">{holding.quantity}개</td>
+                          <td className="px-4 py-4 text-right">
+                            <div className="font-semibold">{formatQuantity(holding.quantity)}개</div>
+                            {assetRouteMap[holding.stockCode] && (
+                              <div className="text-[11px] text-whale-light">
+                                항로 {formatQuantity(assetRouteMap[holding.stockCode].quantity)}개
+                              </div>
+                            )}
+                          </td>
                           <td className="px-4 py-4 text-right text-gray-600">{formatAmount(holding.averagePrice)}</td>
                           <td className="px-4 py-4 text-right font-semibold text-whale-dark">{formatAmount(holding.currentPrice)}</td>
                           <td className={`px-4 py-4 text-right font-bold ${getReturnColor(holding.returnRate)}`}>
@@ -266,8 +298,42 @@ const MyPortfolioPage = () => {
             </div>
           </div>
 
-          {/* 빠른 액션 */}
+          {/* 사이드바 */}
           <div className="lg:col-span-1 space-y-6">
+            {/* 항해 중인 항로 */}
+            {activePurchases.length > 0 && (
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-whale-dark">항해 중인 항로</h2>
+                  <button
+                    onClick={() => navigate('/store')}
+                    className="text-sm text-whale-light hover:text-whale-accent font-medium"
+                  >
+                    항로 상점
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {activePurchases.map((p) => (
+                    <div key={p.id} className="bg-gradient-to-r from-whale-light/5 to-whale-accent/5 border border-whale-light/20 rounded-lg p-3">
+                      <div className="font-semibold text-sm text-whale-dark mb-1">{p.productName}</div>
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>투자: {formatAmount(p.investmentAmount)}</span>
+                        <span>{p.purchasedAssets?.length || 0}개 자산</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {p.purchasedAssets?.map((asset) => (
+                          <span key={asset.code} className="px-1.5 py-0.5 text-[10px] bg-whale-light/10 text-whale-light rounded font-medium">
+                            {cryptoDisplayName(asset.code)} {formatQuantity(asset.quantity)}개
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 빠른 액션 */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="text-xl font-bold text-whale-dark mb-4">빠른 액션</h2>
               <div className="space-y-3">

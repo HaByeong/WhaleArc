@@ -42,7 +42,7 @@ public class CryptoPriceProvider {
             Map.entry("BTC", "비트코인"), Map.entry("ETH", "이더리움"),
             Map.entry("XRP", "리플"), Map.entry("SOL", "솔라나"),
             Map.entry("DOGE", "도지코인"), Map.entry("ADA", "에이다"),
-            Map.entry("DOT", "폴카닷"), Map.entry("MATIC", "폴리곤"),
+            Map.entry("DOT", "폴카닷"), Map.entry("MATIC", "폴리곤"), Map.entry("POL", "폴리곤"),
             Map.entry("AVAX", "아발란체"), Map.entry("LINK", "체인링크"),
             Map.entry("TRX", "트론"), Map.entry("ATOM", "코스모스"),
             Map.entry("UNI", "유니스왑"), Map.entry("APT", "앱토스"),
@@ -165,9 +165,9 @@ public class CryptoPriceProvider {
                         entry.getValue(), new TypeReference<Map<String, String>>() {}
                 );
 
-                long closingPrice = Long.parseLong(ticker.get("closing_price"));
-                long prevClosing = Long.parseLong(ticker.get("prev_closing_price"));
-                long change = closingPrice - prevClosing;
+                double closingPrice = Double.parseDouble(ticker.get("closing_price"));
+                double prevClosing = Double.parseDouble(ticker.get("prev_closing_price"));
+                double change = closingPrice - prevClosing;
                 double changeRate = prevClosing == 0
                         ? 0
                         : Math.round((change * 10000.0 / prevClosing)) / 100.0;
@@ -179,7 +179,9 @@ public class CryptoPriceProvider {
                 dto.setPrice(closingPrice);
                 dto.setChange(change);
                 dto.setChangeRate(changeRate);
-                dto.setVolume(parseLongSafe(ticker.getOrDefault("units_traded_24H", "0")));
+                // units_traded_24H는 코인 단위 → KRW 환산 거래대금
+                double coinVolume = parseDoubleSafe(ticker.getOrDefault("units_traded_24H", "0"));
+                dto.setVolume((long) (coinVolume * closingPrice));
                 dto.setMarket("BITHUMB_KRW");
 
                 result.add(dto);
@@ -193,11 +195,11 @@ public class CryptoPriceProvider {
         return result;
     }
 
-    private long parseLongSafe(String value) {
+    private double parseDoubleSafe(String value) {
         try {
-            return value.contains(".") ? (long) Double.parseDouble(value) : Long.parseLong(value);
-        } catch (NumberFormatException e) {
-            return 0L;
+            return Double.parseDouble(value);
+        } catch (Exception e) {
+            return 0.0;
         }
     }
 }

@@ -266,7 +266,7 @@ const StrategyPage = () => {
       });
       setBacktestResult(result);
       setActiveTab('backtest');
-      alert('백테스팅이 완료되었습니다.');
+      alert('항로 시뮬레이션이 완료되었습니다!');
     } catch (error: any) {
       // 에러 발생 시에도 데모 결과 표시
       const initialCap = parseInt(backtestInitialCapital);
@@ -487,7 +487,7 @@ const StrategyPage = () => {
               <div className="space-y-2">
                 {strategies.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="text-4xl mb-3">📈</div>
+                    <img src="/whales/narwhal.png" alt="빈 목록" className="w-16 h-16 object-contain mx-auto mb-3 opacity-60" />
                     <div className="text-gray-500 font-medium">등록된 전략이 없습니다</div>
                     <div className="text-sm text-gray-400 mt-1">새 전략을 생성하여 시작하세요</div>
                   </div>

@@ -11,7 +11,7 @@ const LandingPage = () => {
       navigate('/login', {
         state: {
           from: path,
-          message: '로그인이 필요한 기능입니다. 로그인해주세요.'
+          message: '항해를 시작하려면 먼저 로그인해주세요.'
         }
       });
       return;

@@ -11,6 +11,7 @@ import {
   type Trade,
   type Portfolio,
 } from '../services/tradeService';
+import { formatQuantity } from '../services/quantStoreService';
 
 // Holding 타입을 여기에 직접 정의 (import 문제 해결)
 export interface Holding {
@@ -289,7 +290,7 @@ const TradePage = () => {
         stockName: selectedStock.stockName,
         orderType,
         orderMethod,
-        quantity: parseInt(quantity),
+        quantity: parseFloat(quantity),
         price: orderMethod === 'LIMIT' ? parseFloat(limitPrice) : undefined,
       };
 
@@ -302,7 +303,7 @@ const TradePage = () => {
       // 데이터 새로고침
       await loadInitialData();
 
-      alert('주문이 성공적으로 접수되었습니다.');
+      alert('주문이 바다에 던져졌습니다!');
       setActiveTab('orders');
     } catch (error: any) {
       // 백엔드 미구현 또는 네트워크/인증 문제 시에도
@@ -321,7 +322,7 @@ const TradePage = () => {
         stockName: selectedStock.stockName,
         orderType,
         orderMethod,
-        quantity: parseInt(quantity),
+        quantity: parseFloat(quantity),
         price:
           orderMethod === 'LIMIT'
             ? parseFloat(limitPrice) || selectedStock.currentPrice
@@ -353,7 +354,7 @@ const TradePage = () => {
       // 폼 초기화 및 탭 이동
       setQuantity('');
       setLimitPrice('');
-      alert('데모 모드에서 주문이 접수된 것으로 시뮬레이션합니다.');
+      alert('데모 바다에서 주문이 던져졌습니다!');
       setActiveTab('orders');
     } finally {
       setIsSubmitting(false);
@@ -550,7 +551,7 @@ const TradePage = () => {
                     </div>
                     {orderType === 'SELL' && (
                       <div className="text-sm text-gray-600 mt-2">
-                        보유 수량: {getAvailableQuantity(selectedStock.stockCode)}개
+                        보유 수량: {formatQuantity(getAvailableQuantity(selectedStock.stockCode))}개
                       </div>
                     )}
                   </div>
@@ -580,9 +581,9 @@ const TradePage = () => {
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
                       className="input-field"
-                      placeholder="수량 입력"
-                      min="1"
-                      step="1"
+                      placeholder="수량 입력 (소수점 가능)"
+                      min="0.00000001"
+                      step="any"
                       required
                     />
                   </div>
@@ -594,7 +595,7 @@ const TradePage = () => {
                       <div className="text-xl font-bold text-whale-dark">
                         {formatCurrency(
                           (orderMethod === 'MARKET' ? selectedStock.currentPrice : parseFloat(limitPrice) || 0) *
-                            parseInt(quantity || '0')
+                            parseFloat(quantity || '0')
                         )}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
@@ -789,7 +790,7 @@ const TradePage = () => {
                 <h2 className="text-xl font-bold text-whale-dark mb-4">주문 내역</h2>
                 {orders.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="text-4xl mb-3">📋</div>
+                    <img src="/whales/beluga.png" alt="빈 목록" className="w-16 h-16 object-contain mx-auto mb-3 opacity-60" />
                     <div className="text-gray-500 font-medium">주문 내역이 없습니다</div>
                     <div className="text-sm text-gray-400 mt-1">주문을 실행하면 내역이 표시됩니다</div>
                   </div>
@@ -831,7 +832,7 @@ const TradePage = () => {
                             <td className="px-4 py-3 font-semibold">
                               {formatCurrency(order.price)}
                             </td>
-                            <td className="px-4 py-3">{order.quantity}개</td>
+                            <td className="px-4 py-3">{formatQuantity(order.quantity)}개</td>
                             <td className="px-4 py-3">
                               <span
                                 className={`px-2 py-1 rounded text-sm font-semibold ${getStatusColor(
@@ -875,7 +876,7 @@ const TradePage = () => {
                 <h2 className="text-xl font-bold text-whale-dark mb-4">체결 내역</h2>
                 {trades.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="text-4xl mb-3">📋</div>
+                    <img src="/whales/beluga.png" alt="빈 목록" className="w-16 h-16 object-contain mx-auto mb-3 opacity-60" />
                     <div className="text-gray-500 font-medium">체결 내역이 없습니다</div>
                     <div className="text-sm text-gray-400 mt-1">주문이 체결되면 내역이 표시됩니다</div>
                   </div>
@@ -914,7 +915,7 @@ const TradePage = () => {
                             <td className="px-4 py-3 font-semibold">
                               {formatCurrency(trade.price)}
                             </td>
-                            <td className="px-4 py-3">{trade.quantity}개</td>
+                            <td className="px-4 py-3">{formatQuantity(trade.quantity)}개</td>
                             <td className="px-4 py-3">{formatCurrency(trade.totalAmount)}</td>
                             <td className="px-4 py-3 text-gray-600">
                               {formatCurrency(trade.commission)}
@@ -937,7 +938,7 @@ const TradePage = () => {
                 <h2 className="text-xl font-bold text-whale-dark mb-4">보유 종목</h2>
                 {portfolio.holdings.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="text-4xl mb-3">📊</div>
+                    <img src="/whales/gray-whale.png" alt="빈 목록" className="w-16 h-16 object-contain mx-auto mb-3 opacity-60" />
                     <div className="text-gray-500 font-medium">보유 종목이 없습니다</div>
                     <div className="text-sm text-gray-400 mt-1">코인을 매수하면 여기에 표시됩니다</div>
                   </div>
@@ -962,7 +963,7 @@ const TradePage = () => {
                               <div className="font-semibold">{holding.stockName}</div>
                               <div className="text-sm text-gray-500">{holding.stockCode}</div>
                             </td>
-                            <td className="px-4 py-3">{holding.quantity}개</td>
+                            <td className="px-4 py-3">{formatQuantity(holding.quantity)}개</td>
                             <td className="px-4 py-3">{formatCurrency(holding.averagePrice)}</td>
                             <td className="px-4 py-3 font-semibold">
                               {formatCurrency(holding.currentPrice)}

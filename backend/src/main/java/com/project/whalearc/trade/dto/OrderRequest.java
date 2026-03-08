@@ -1,6 +1,6 @@
 package com.project.whalearc.trade.dto;
 
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
@@ -24,8 +24,8 @@ public class OrderRequest {
     @Pattern(regexp = "MARKET|LIMIT", message = "주문 방식은 MARKET 또는 LIMIT이어야 합니다.")
     private String orderMethod;
 
-    @Min(value = 1, message = "수량은 1 이상이어야 합니다.")
-    private int quantity;
+    @DecimalMin(value = "0.00000001", message = "수량은 0보다 커야 합니다.")
+    private double quantity;
 
     private Double price; // 지정가일 때만
 }

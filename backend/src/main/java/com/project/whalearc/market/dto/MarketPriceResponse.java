@@ -15,8 +15,8 @@ public class MarketPriceResponse {
     private AssetType assetType; // STOCK or CRYPTO
     private String symbol;       // 종목 코드 or 코인 심볼 (005930, BTC 등)
     private String name;         // 종목/코인 이름
-    private long price;          // 현재가
-    private long change;         // 전일 대비 절대값
+    private double price;        // 현재가
+    private double change;       // 전일 대비 절대값
     private double changeRate;   // 전일 대비 %
     private long volume;         // 거래량 (24h 등)
     private String market;       // KRX, BITHUMB_KRW 등

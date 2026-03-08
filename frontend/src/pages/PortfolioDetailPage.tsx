@@ -232,7 +232,7 @@ const PortfolioDetailPage = () => {
               
               {portfolio.holdings.length === 0 ? (
                 <div className="text-center py-12">
-                  <div className="text-4xl mb-3">📊</div>
+                  <img src="/whales/gray-whale.png" alt="빈 목록" className="w-16 h-16 object-contain mx-auto mb-3 opacity-60" />
                   <div className="text-gray-500 font-medium">보유 종목이 없습니다</div>
                   <div className="text-sm text-gray-400 mt-1">아직 매수한 종목이 없습니다</div>
                 </div>
@@ -283,7 +283,7 @@ const PortfolioDetailPage = () => {
               
               {portfolio.recentTrades.length === 0 ? (
                 <div className="text-center py-12">
-                  <div className="text-4xl mb-3">📋</div>
+                  <img src="/whales/beluga.png" alt="빈 목록" className="w-16 h-16 object-contain mx-auto mb-3 opacity-60" />
                   <div className="text-gray-500 font-medium">거래 내역이 없습니다</div>
                   <div className="text-sm text-gray-400 mt-1">거래를 시작하면 내역이 표시됩니다</div>
                 </div>

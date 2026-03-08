@@ -73,7 +73,7 @@ const LoginPage = () => {
       const redirectTo = state?.from || '/dashboard';
       navigate(redirectTo, { replace: true });
     } catch (err: any) {
-      setError(err.message || '로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.');
+      setError(err.message || '항해를 시작할 수 없습니다. 이메일과 비밀번호를 확인해주세요.');
     } finally {
       setIsLoading(false);
     }

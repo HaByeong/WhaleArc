@@ -25,7 +25,7 @@ public class TradeRecord {
     private String stockCode;
     private String stockName;
     private Order.OrderType orderType;
-    private int quantity;
+    private double quantity;
     private double price;
     private double totalAmount;
     private double commission;

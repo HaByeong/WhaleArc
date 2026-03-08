@@ -36,6 +36,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/market/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/store/products/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/store/products").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

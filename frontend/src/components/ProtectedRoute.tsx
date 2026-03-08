@@ -24,7 +24,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
         replace
         state={{
           from: location.pathname,
-          message: '로그인이 필요한 페이지입니다. 로그인해주세요.',
+          message: '이 바다에 들어가려면 먼저 로그인이 필요합니다.',
         }}
       />
     );

@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage';
 import MarketPage from './pages/MarketPage';
 import TradePage from './pages/TradePage';
 import StrategyPage from './pages/StrategyPage';
+import QuantStorePage from './pages/QuantStorePage';
 import RankingPage from './pages/RankingPage';
 import PortfolioDetailPage from './pages/PortfolioDetailPage';
 import MyPortfolioPage from './pages/MyPortfolioPage';
@@ -54,6 +55,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <StrategyPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/store"
+            element={
+              <ProtectedRoute>
+                <QuantStorePage />
               </ProtectedRoute>
             }
           />

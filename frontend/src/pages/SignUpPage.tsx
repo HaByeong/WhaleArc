@@ -33,11 +33,11 @@ const SignUpPage = () => {
       if (user?.identities?.length === 0) {
         setError('이미 가입된 이메일입니다.');
       } else {
-        alert('회원가입이 완료되었습니다! 이메일을 확인해주세요.');
+        alert('새로운 고래가 바다에 합류했습니다! 이메일을 확인해주세요.');
         navigate('/login');
       }
     } catch (err: any) {
-      setError(err.message || '회원가입에 실패했습니다. 다시 시도해주세요.');
+      setError(err.message || '합류에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +57,10 @@ const SignUpPage = () => {
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="card">
-          <h2 className="text-3xl font-bold text-whale-dark mb-6 text-center">회원가입</h2>
+          <div className="mb-8 text-center">
+            <h2 className="text-2xl font-bold text-whale-dark">새로운 항해를 시작하세요</h2>
+            <p className="text-gray-400 text-sm mt-1">WhaleArc과 함께 투자의 바다로</p>
+          </div>
 
           {/* OAuth 버튼 */}
           <div className="space-y-3 mb-6">

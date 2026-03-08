@@ -25,10 +25,10 @@ public class Order {
     private String stockName;
     private OrderType orderType;
     private OrderMethod orderMethod;
-    private int quantity;
+    private double quantity;
     private double price;
     private OrderStatus status;
-    private int filledQuantity;
+    private double filledQuantity;
     private Double filledPrice;
     private Instant createdAt;
     private Instant updatedAt;
@@ -39,7 +39,7 @@ public class Order {
 
     public Order(String userId, String stockCode, String stockName,
                  OrderType orderType, OrderMethod orderMethod,
-                 int quantity, double price) {
+                 double quantity, double price) {
         this.userId = userId;
         this.stockCode = stockCode;
         this.stockName = stockName;
@@ -48,7 +48,7 @@ public class Order {
         this.quantity = quantity;
         this.price = price;
         this.status = OrderStatus.PENDING;
-        this.filledQuantity = 0;
+        this.filledQuantity = 0.0;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
     }

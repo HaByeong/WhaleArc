@@ -25,7 +25,7 @@ public class RealtimePriceHolder {
             Map.entry("BTC", "비트코인"), Map.entry("ETH", "이더리움"),
             Map.entry("XRP", "리플"), Map.entry("SOL", "솔라나"),
             Map.entry("DOGE", "도지코인"), Map.entry("ADA", "에이다"),
-            Map.entry("DOT", "폴카닷"), Map.entry("MATIC", "폴리곤"),
+            Map.entry("DOT", "폴카닷"), Map.entry("MATIC", "폴리곤"), Map.entry("POL", "폴리곤"),
             Map.entry("AVAX", "아발란체"), Map.entry("LINK", "체인링크"),
             Map.entry("TRX", "트론"), Map.entry("ATOM", "코스모스"),
             Map.entry("UNI", "유니스왑"), Map.entry("APT", "앱토스"),
@@ -46,11 +46,13 @@ public class RealtimePriceHolder {
 
     public void update(String coin, String closePrice, String prevClosePrice, String volume, String chgRate) {
         try {
-            long price = Long.parseLong(closePrice);
-            long prevPrice = Long.parseLong(prevClosePrice);
-            long change = price - prevPrice;
+            double price = parseDoubleSafe(closePrice);
+            double prevPrice = parseDoubleSafe(prevClosePrice);
+            double change = price - prevPrice;
             double changeRate = parseDoubleSafe(chgRate);
-            long vol = parseLongSafe(volume);
+            // volume은 코인 단위 → KRW 환산 거래대금으로 변환
+            double coinVolume = parseDoubleSafe(volume);
+            long vol = (long) (coinVolume * price);
 
             RealtimeTick tick = new RealtimeTick(
                     coin, price, prevPrice, change, changeRate, vol, System.currentTimeMillis()
@@ -114,9 +116,9 @@ public class RealtimePriceHolder {
 
     public record RealtimeTick(
             String coin,
-            long price,
-            long prevPrice,
-            long change,
+            double price,
+            double prevPrice,
+            double change,
             double changeRate,
             long volume,
             long timestamp

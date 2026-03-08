@@ -1,8 +1,10 @@
 package com.project.whalearc.auth.login.service.user;
 
-import com.project.whalearc.user.domain.User;
+import com.project.whalearc.auth.login.domain.userinfo.UserInfo;
 import com.project.whalearc.auth.login.dto.user.UserProfileResponseDto;
 import com.project.whalearc.auth.login.dto.user.UserUpdateRequestDto;
+import com.project.whalearc.auth.login.repository.userinfo.UserInfoRepository;
+import com.project.whalearc.user.domain.User;
 import com.project.whalearc.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Service;
 public class UserUpdateService implements UserUpdateServiceInterface {
 
     private final UserRepository userRepository;
+    private final UserInfoRepository userInfoRepository;
 
     private String getSupabaseId() {
         Jwt jwt = (Jwt) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -25,10 +28,23 @@ public class UserUpdateService implements UserUpdateServiceInterface {
         String supabaseId = getSupabaseId();
         User user = userRepository.findBySupabaseId(supabaseId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-        return UserProfileResponseDto.builder()
+
+        UserInfo userInfo = userInfoRepository.findByUserId(supabaseId);
+
+        UserProfileResponseDto.UserProfileResponseDtoBuilder builder = UserProfileResponseDto.builder()
                 .userId(user.getEmail())
                 .name(user.getName())
-                .build();
+                .authProvider(user.getAuthProvider());
+
+        if (userInfo != null) {
+            builder.bio(userInfo.getBio())
+                    .investmentStyle(userInfo.getInvestmentStyle())
+                    .experienceLevel(userInfo.getExperienceLevel())
+                    .favoriteAssets(userInfo.getFavoriteAssets())
+                    .createdAt(userInfo.getCreatedAt());
+        }
+
+        return builder.build();
     }
 
     @Override

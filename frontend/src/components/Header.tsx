@@ -88,6 +88,13 @@ const Header = ({ showNav = false }: HeaderProps) => {
                   전략
                 </Link>
                 <Link
+                  to="/store"
+                  className="text-gray-700 hover:text-whale-light transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5"
+                  aria-label="항로"
+                >
+                  항로
+                </Link>
+                <Link
                   to="/ranking"
                   className="text-gray-700 hover:text-whale-light transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5"
                   aria-label="투자 현황"
@@ -95,20 +102,20 @@ const Header = ({ showNav = false }: HeaderProps) => {
                   투자 현황
                 </Link>
                 {isAuthenticated && (
-                  <div className="flex items-center space-x-4 ml-4">
+                  <div className="flex items-center space-x-3 ml-4 pl-4 border-l border-gray-200">
                     <Link
                       to="/user"
-                      className="flex items-center space-x-2 text-gray-700 hover:text-whale-light transition-colors rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2"
+                      className="flex items-center space-x-2 text-gray-700 hover:text-whale-light transition-colors rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2"
                       aria-label="내 프로필"
                     >
-                      <div className="w-8 h-8 bg-whale-light rounded-full flex items-center justify-center text-white font-semibold">
+                      <div className="w-7 h-7 bg-whale-light rounded-full flex items-center justify-center text-white text-xs font-semibold">
                         {displayName.charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-sm">{displayName}</span>
+                      <span className="text-sm font-medium">{displayName}</span>
                     </Link>
                     <button
                       onClick={handleLogout}
-                      className="px-4 py-2 text-sm text-gray-700 hover:text-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 rounded-lg min-h-[44px] min-w-[44px]"
+                      className="px-3 py-1.5 text-sm text-gray-400 hover:text-red-500 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 rounded-lg min-h-[44px] min-w-[44px]"
                       aria-label="로그아웃"
                     >
                       로그아웃
@@ -195,6 +202,14 @@ const Header = ({ showNav = false }: HeaderProps) => {
               aria-label="전략"
             >
               전략
+            </Link>
+            <Link
+              to="/store"
+              onClick={closeMobileMenu}
+              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
+              aria-label="항로"
+            >
+              항로
             </Link>
             <Link
               to="/ranking"

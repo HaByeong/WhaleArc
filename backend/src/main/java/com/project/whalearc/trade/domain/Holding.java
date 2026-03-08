@@ -11,11 +11,11 @@ public class Holding {
 
     private String stockCode;
     private String stockName;
-    private int quantity;
+    private double quantity;
     private double averagePrice;
     private double currentPrice;
 
-    public Holding(String stockCode, String stockName, int quantity, double averagePrice) {
+    public Holding(String stockCode, String stockName, double quantity, double averagePrice) {
         this.stockCode = stockCode;
         this.stockName = stockName;
         this.quantity = quantity;

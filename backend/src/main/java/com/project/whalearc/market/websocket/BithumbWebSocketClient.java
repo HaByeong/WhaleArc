@@ -112,7 +112,7 @@ public class BithumbWebSocketClient {
                 "ATOM_KRW","UNI_KRW","APT_KRW","ARB_KRW","OP_KRW",
                 "NEAR_KRW","EOS_KRW","BCH_KRW","LTC_KRW","ETC_KRW",
                 "SHIB_KRW","SUI_KRW","SEI_KRW","STX_KRW","PEPE_KRW",
-                "WLD_KRW","MATIC_KRW","AAVE_KRW","SAND_KRW","MANA_KRW"
+                "WLD_KRW","MATIC_KRW","POL_KRW","AAVE_KRW","SAND_KRW","MANA_KRW"
                 ],"tickTypes":["MID"]}
                 """;
         ws.sendText(subscribeMsg, true);

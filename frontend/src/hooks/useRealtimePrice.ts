@@ -6,7 +6,6 @@ import type { MarketPrice } from '../services/marketService';
 const WS_URL = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/ws`;
 
 interface UseRealtimePriceOptions {
-  // 구독할 특정 코인 심볼 (null이면 전체 구독)
   symbol?: string | null;
   enabled?: boolean;
 }
@@ -14,27 +13,32 @@ interface UseRealtimePriceOptions {
 export function useRealtimePrice({ symbol = null, enabled = true }: UseRealtimePriceOptions = {}) {
   const [prices, setPrices] = useState<Map<string, MarketPrice>>(new Map());
   const [connected, setConnected] = useState(false);
-  const clientRef = useRef<Client | null>(null);
-  const pricesRef = useRef<Map<string, MarketPrice>>(new Map());
-
-  // 배치 업데이트를 위한 타이머
-  const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingUpdates = useRef<Map<string, MarketPrice>>(new Map());
-
-  const flushUpdates = useCallback(() => {
-    if (pendingUpdates.current.size === 0) return;
-
-    const newMap = new Map(pricesRef.current);
-    pendingUpdates.current.forEach((price, key) => {
-      newMap.set(key, price);
-    });
-    pendingUpdates.current.clear();
-    pricesRef.current = newMap;
-    setPrices(newMap);
-  }, []);
+  const [tickCount, setTickCount] = useState(0); // 틱마다 증가해서 리렌더 보장
 
   useEffect(() => {
     if (!enabled) return;
+
+    const pricesMap = new Map<string, MarketPrice>();
+    let rafId: number | null = null;
+    let dirty = false;
+
+    const flush = () => {
+      rafId = null;
+      if (!dirty) return;
+      dirty = false;
+      setPrices(new Map(pricesMap));
+      setTickCount((c) => c + 1);
+    };
+
+    const onMessage = (message: { body: string }) => {
+      const data: MarketPrice = JSON.parse(message.body);
+      pricesMap.set(data.symbol, data);
+      dirty = true;
+      // requestAnimationFrame으로 브라우저 프레임마다 한 번만 업데이트
+      if (rafId === null) {
+        rafId = requestAnimationFrame(flush);
+      }
+    };
 
     const client = new Client({
       webSocketFactory: () => new SockJS(WS_URL),
@@ -43,53 +47,21 @@ export function useRealtimePrice({ symbol = null, enabled = true }: UseRealtimeP
       heartbeatOutgoing: 10000,
       onConnect: () => {
         setConnected(true);
-
-        if (symbol) {
-          // 특정 코인만 구독
-          client.subscribe(`/topic/ticker/${symbol}`, (message) => {
-            const data: MarketPrice = JSON.parse(message.body);
-            pendingUpdates.current.set(data.symbol, data);
-            scheduleBatchUpdate();
-          });
-        } else {
-          // 전체 틱 구독
-          client.subscribe('/topic/ticker', (message) => {
-            const data: MarketPrice = JSON.parse(message.body);
-            pendingUpdates.current.set(data.symbol, data);
-            scheduleBatchUpdate();
-          });
-        }
+        const topic = symbol ? `/topic/ticker/${symbol}` : '/topic/ticker';
+        client.subscribe(topic, onMessage);
       },
-      onDisconnect: () => {
-        setConnected(false);
-      },
-      onStompError: (frame) => {
-        console.error('STOMP error:', frame.headers['message']);
-        setConnected(false);
-      },
+      onDisconnect: () => setConnected(false),
+      onStompError: () => setConnected(false),
     });
 
-    clientRef.current = client;
     client.activate();
 
     return () => {
-      if (batchTimerRef.current) {
-        clearTimeout(batchTimerRef.current);
-      }
+      if (rafId !== null) cancelAnimationFrame(rafId);
       client.deactivate();
-      clientRef.current = null;
       setConnected(false);
     };
   }, [symbol, enabled]);
-
-  // 100ms마다 배치 업데이트 (너무 빠른 렌더링 방지)
-  const scheduleBatchUpdate = useCallback(() => {
-    if (batchTimerRef.current) return;
-    batchTimerRef.current = setTimeout(() => {
-      batchTimerRef.current = null;
-      flushUpdates();
-    }, 100);
-  }, [flushUpdates]);
 
   const getPrice = useCallback((sym: string): MarketPrice | undefined => {
     return prices.get(sym);
@@ -99,10 +71,5 @@ export function useRealtimePrice({ symbol = null, enabled = true }: UseRealtimeP
     return Array.from(prices.values());
   }, [prices]);
 
-  return {
-    prices,
-    connected,
-    getPrice,
-    getAllPrices,
-  };
+  return { prices, connected, getPrice, getAllPrices, tickCount };
 }

@@ -12,11 +12,11 @@ const MarketPage = () => {
   const [assetList, setAssetList] = useState<MarketPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'name' | 'price' | 'change'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'price' | 'change' | 'volume'>('volume');
   const [filterText, setFilterText] = useState('');
 
   // 실시간 WebSocket 구독 (코인 탭일 때만)
-  const { prices: realtimePrices, connected } = useRealtimePrice({
+  const { prices: realtimePrices, connected, tickCount } = useRealtimePrice({
     enabled: assetType === 'CRYPTO',
   });
 
@@ -46,7 +46,7 @@ const MarketPage = () => {
       return { ...selectedAsset, price: realtime.price, change: realtime.change, changeRate: realtime.changeRate, volume: realtime.volume };
     }
     return selectedAsset;
-  }, [selectedAsset, realtimePrices, assetType]);
+  }, [selectedAsset, realtimePrices, assetType, tickCount]);
 
   const getDemoStocks = (): MarketPrice[] => [
     { assetType: 'STOCK', symbol: '005930', name: '삼성전자', price: 75000, change: 1500, changeRate: 2.04, volume: 12500000, market: 'KRX' },
@@ -102,6 +102,7 @@ const MarketPage = () => {
         case 'name': return a.name.localeCompare(b.name);
         case 'price': return b.price - a.price;
         case 'change': return b.changeRate - a.changeRate;
+        case 'volume': return b.volume - a.volume;
         default: return 0;
       }
     });
@@ -186,9 +187,10 @@ const MarketPage = () => {
                 />
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as 'name' | 'price' | 'change')}
+                  onChange={(e) => setSortBy(e.target.value as 'name' | 'price' | 'change' | 'volume')}
                   className="input-field bg-white"
                 >
+                  <option value="volume">거래량순</option>
                   <option value="name">이름순</option>
                   <option value="price">가격순</option>
                   <option value="change">등락률순</option>
@@ -198,8 +200,8 @@ const MarketPage = () => {
               <div className="space-y-2 max-h-[600px] overflow-y-auto">
                 {filteredAndSortedAssets.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="text-4xl mb-3">🔍</div>
-                    <div className="text-gray-500 font-medium">검색 결과가 없습니다</div>
+                    <div className="text-gray-400 font-medium">검색 결과가 없습니다</div>
+                    <div className="text-gray-300 text-sm mt-1">다른 키워드로 검색해보세요</div>
                   </div>
                 ) : (
                   filteredAndSortedAssets.map((asset) => (
@@ -225,6 +227,9 @@ const MarketPage = () => {
                           </div>
                           <div className={`text-sm font-semibold ${asset.changeRate >= 0 ? 'price-up' : 'price-down'}`}>
                             {asset.changeRate >= 0 ? '+' : ''}{asset.changeRate.toFixed(2)}%
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Vol {formatVolume(asset.volume)}
                           </div>
                         </div>
                       </div>
@@ -264,18 +269,13 @@ const MarketPage = () => {
                   {/* 실시간 차트 */}
                   {assetType === 'CRYPTO' && connected ? (
                     <div className="mt-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-lg font-semibold text-whale-dark">실시간 차트</h3>
-                        <span className="text-xs text-gray-400">WebSocket 실시간 데이터</span>
-                      </div>
                       <RealtimeChart
                         symbol={liveSelectedAsset.symbol}
                         price={liveSelectedAsset.price}
-                        className="rounded-lg overflow-hidden"
                       />
                     </div>
                   ) : (
-                    <div className="mt-4 bg-gray-50 rounded-lg p-8 text-center">
+                    <div className="mt-4 bg-gray-50 rounded-xl p-8 text-center border border-gray-100">
                       <div className="text-gray-400 text-sm">
                         {assetType === 'CRYPTO'
                           ? '실시간 연결 중... 잠시 후 차트가 표시됩니다'
@@ -314,10 +314,9 @@ const MarketPage = () => {
                 </div>
               </>
             ) : (
-              <div className="card text-center py-12">
-                <div className="text-4xl mb-3">📊</div>
-                <div className="text-gray-500 font-medium">종목을 선택하세요</div>
-                <div className="text-sm text-gray-400 mt-1">좌측 목록에서 종목을 클릭하여 상세 정보를 확인하세요</div>
+              <div className="card text-center py-16">
+                <div className="text-gray-300 text-sm font-medium tracking-wide mb-2">종목을 선택해주세요</div>
+                <div className="text-gray-400 text-xs">좌측 목록에서 종목을 클릭하면 상세 정보를 확인할 수 있습니다</div>
               </div>
             )}
           </div>

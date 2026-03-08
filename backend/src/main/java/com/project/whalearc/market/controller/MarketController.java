@@ -1,7 +1,9 @@
 package com.project.whalearc.market.controller;
 
 import com.project.whalearc.market.domain.AssetType;
+import com.project.whalearc.market.dto.CandlestickResponse;
 import com.project.whalearc.market.dto.MarketPriceResponse;
+import com.project.whalearc.market.service.CandlestickService;
 import com.project.whalearc.market.service.CryptoPriceProvider;
 import com.project.whalearc.market.service.StockPriceProvider;
 import com.project.whalearc.market.websocket.RealtimePriceHolder;
@@ -10,8 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -22,6 +24,7 @@ public class MarketController {
     private final StockPriceProvider stockPriceProvider;
     private final CryptoPriceProvider cryptoPriceProvider;
     private final RealtimePriceHolder realtimePriceHolder;
+    private final CandlestickService candlestickService;
 
     @GetMapping("/prices")
     public ResponseEntity<List<MarketPriceResponse>> getPrices(@RequestParam AssetType type) {
@@ -29,11 +32,19 @@ public class MarketController {
             List<MarketPriceResponse> prices = switch (type) {
                 case STOCK -> stockPriceProvider.getMockKrxTickers();
                 case CRYPTO -> {
-                    // 실시간 WebSocket 데이터가 있으면 우선 사용
+                    // REST 데이터를 기본으로, 실시간 WebSocket 데이터로 덮어쓰기
+                    List<MarketPriceResponse> restData = cryptoPriceProvider.getAllKrwTickers();
                     if (realtimePriceHolder.hasData()) {
-                        yield realtimePriceHolder.getAllLatestPrices();
+                        Map<String, MarketPriceResponse> merged = new LinkedHashMap<>();
+                        for (MarketPriceResponse r : restData) {
+                            merged.put(r.getSymbol(), r);
+                        }
+                        for (MarketPriceResponse rt : realtimePriceHolder.getAllLatestPrices()) {
+                            merged.put(rt.getSymbol(), rt); // 실시간 데이터로 덮어쓰기
+                        }
+                        yield new ArrayList<>(merged.values());
                     }
-                    yield cryptoPriceProvider.getAllKrwTickers();
+                    yield restData;
                 }
             };
             return ResponseEntity.ok(prices);
@@ -50,6 +61,20 @@ public class MarketController {
             return ResponseEntity.ok(cryptoPriceProvider.forceRefresh());
         } catch (Exception e) {
             log.error("강제 새로고침 실패: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body(List.of());
+        }
+    }
+
+    /** 캔들스틱 (과거 시세 차트 데이터) */
+    @GetMapping("/candlestick/{symbol}")
+    public ResponseEntity<List<CandlestickResponse>> getCandlestick(
+            @PathVariable String symbol,
+            @RequestParam(defaultValue = "10m") String interval
+    ) {
+        try {
+            return ResponseEntity.ok(candlestickService.getCandlesticks(symbol, interval));
+        } catch (Exception e) {
+            log.error("캔들스틱 조회 실패 [{}/{}]: {}", symbol, interval, e.getMessage());
             return ResponseEntity.internalServerError().body(List.of());
         }
     }

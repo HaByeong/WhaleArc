@@ -47,11 +47,11 @@ public class PortfolioService {
                 log.warn("빗썸 시세 데이터가 비어있습니다. 기존 가격을 유지합니다.");
                 return;
             }
-            Map<String, Long> priceMap = prices.stream()
+            Map<String, Double> priceMap = prices.stream()
                     .collect(Collectors.toMap(MarketPriceResponse::getSymbol, MarketPriceResponse::getPrice));
 
             for (Holding holding : portfolio.getHoldings()) {
-                Long currentPrice = priceMap.get(holding.getStockCode());
+                Double currentPrice = priceMap.get(holding.getStockCode());
                 if (currentPrice != null) {
                     holding.setCurrentPrice(currentPrice);
                 }

@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface OrderRepository extends MongoRepository<Order, String> {
     List<Order> findByUserIdOrderByCreatedAtDesc(String userId);
+    List<Order> findByStatusAndOrderMethod(Order.OrderStatus status, Order.OrderMethod orderMethod);
 }

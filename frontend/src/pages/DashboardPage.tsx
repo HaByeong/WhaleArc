@@ -1,20 +1,52 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import { tradeService, type Portfolio, type Trade, type StockPrice } from '../services/tradeService';
+import { tradeService, type Portfolio, type StockPrice } from '../services/tradeService';
+import { quantStoreService, type ProductPurchase, cryptoDisplayName, formatQuantity } from '../services/quantStoreService';
+import { userService } from '../services/userService';
 import { useAuth } from '../contexts/AuthContext';
 import { usePolling } from '../hooks/usePolling';
+import { useRealtimePrice } from '../hooks/useRealtimePrice';
 
 const DashboardPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
-  const [recentTrades, setRecentTrades] = useState<Trade[]>([]);
+  const [watchlist, setWatchlist] = useState<StockPrice[]>([]);
   const [topMovers, setTopMovers] = useState<StockPrice[]>([]);
+  const [favoriteAssets, setFavoriteAssets] = useState<string[]>([]);
+  const [activePurchases, setActivePurchases] = useState<ProductPurchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 실시간 WebSocket 시세
+  const { prices: realtimePrices } = useRealtimePrice({ enabled: true });
+
+  // 관심 종목에 실시간 시세 병합
+  const liveWatchlist = useMemo(() => {
+    if (realtimePrices.size === 0) return watchlist;
+    return watchlist.map((stock) => {
+      const rt = realtimePrices.get(stock.stockCode);
+      if (rt) {
+        return { ...stock, currentPrice: rt.price, change: rt.change, changeRate: rt.changeRate, volume: rt.volume };
+      }
+      return stock;
+    });
+  }, [watchlist, realtimePrices]);
+
+  // 시세 변동 상위에도 실시간 반영
+  const liveTopMovers = useMemo(() => {
+    if (realtimePrices.size === 0) return topMovers;
+    return topMovers.map((stock) => {
+      const rt = realtimePrices.get(stock.stockCode);
+      if (rt) {
+        return { ...stock, currentPrice: rt.price, change: rt.change, changeRate: rt.changeRate, volume: rt.volume };
+      }
+      return stock;
+    });
+  }, [topMovers, realtimePrices]);
 
   const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
 
@@ -24,21 +56,28 @@ const DashboardPage = () => {
 
   const pollData = useCallback(async () => {
     try {
-      const [portfolioData, tradesData, stocksData] = await Promise.all([
+      const [portfolioData, stocksData] = await Promise.all([
         tradeService.getPortfolio().catch(() => null),
-        tradeService.getTrades().catch(() => []),
         tradeService.getStockList().catch(() => []),
       ]);
       if (portfolioData) setPortfolio(portfolioData);
-      if (tradesData.length) setRecentTrades(tradesData.slice(0, 5));
       if (stocksData.length) {
         const sorted = [...stocksData].sort((a, b) => Math.abs(b.changeRate) - Math.abs(a.changeRate));
         setTopMovers(sorted.slice(0, 5));
+        if (favoriteAssets.length > 0) {
+          const favSet = new Set(favoriteAssets);
+          const SYMBOL_ALIASES: Record<string, string> = { MATIC: 'POL', POL: 'MATIC' };
+          for (const fav of favoriteAssets) {
+            const alias = SYMBOL_ALIASES[fav];
+            if (alias) favSet.add(alias);
+          }
+          setWatchlist(stocksData.filter((s) => favSet.has(s.stockCode)));
+        }
       }
     } catch {
       // 폴링 실패는 무시
     }
-  }, []);
+  }, [favoriteAssets]);
   usePolling(pollData, 15000);
 
   const getDemoPortfolio = (): Portfolio => ({
@@ -76,17 +115,31 @@ const DashboardPage = () => {
       setLoading(true);
       setError(null);
 
-      const [portfolioData, tradesData, stocksData] = await Promise.all([
+      const [portfolioData, stocksData, profile, purchaseData] = await Promise.all([
         tradeService.getPortfolio().catch(() => getDemoPortfolio()),
-        tradeService.getTrades().catch(() => []),
         tradeService.getStockList().catch(() => []),
+        userService.getProfile().catch(() => null),
+        quantStoreService.getMyPurchases().catch(() => ({ purchases: [], purchasedProductIds: [] })),
       ]);
 
+      setActivePurchases(purchaseData.purchases.filter((p) => p.status === 'ACTIVE'));
+
+      const favAssets = profile?.favoriteAssets?.length ? profile.favoriteAssets : [];
+      setFavoriteAssets(favAssets);
       setPortfolio(portfolioData);
-      setRecentTrades(tradesData.slice(0, 5));
       if (stocksData.length) {
         const sorted = [...stocksData].sort((a, b) => Math.abs(b.changeRate) - Math.abs(a.changeRate));
         setTopMovers(sorted.slice(0, 5));
+        if (favAssets.length > 0) {
+          const favSet = new Set(favAssets);
+          // MATIC↔POL 등 리브랜딩 심볼 양방향 매핑
+          const SYMBOL_ALIASES: Record<string, string> = { MATIC: 'POL', POL: 'MATIC' };
+          for (const fav of favAssets) {
+            const alias = SYMBOL_ALIASES[fav];
+            if (alias) favSet.add(alias);
+          }
+          setWatchlist(stocksData.filter((s) => favSet.has(s.stockCode)));
+        }
       }
     } catch (err: any) {
       setPortfolio(getDemoPortfolio());
@@ -138,12 +191,12 @@ const DashboardPage = () => {
           <div className="relative z-10">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-2xl backdrop-blur-sm">
-                  🐋
+                <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center backdrop-blur-sm p-1.5">
+                  <img src="/whales/blue-whale.png" alt="고래" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <h1 className="text-2xl md:text-3xl font-bold">
-                    {displayName}님, 환영합니다!
+                    {displayName}님, 다시 바다에 오셨군요!
                   </h1>
                   <p className="text-blue-100 text-sm md:text-base mt-1">
                     오늘도 시장의 바다를 유영해볼까요?
@@ -243,8 +296,18 @@ const DashboardPage = () => {
                 {portfolio.holdings.slice(0, 5).map((holding) => (
                   <div key={holding.stockCode} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                     <div>
-                      <div className="font-semibold text-sm text-gray-800">{holding.stockName}</div>
-                      <div className="text-xs text-gray-400">{holding.quantity}개 보유</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-sm text-gray-800">{holding.stockName}</span>
+                        {(() => {
+                          const route = activePurchases.find((p) => p.purchasedAssets?.some(a => a.code === holding.stockCode));
+                          return route ? (
+                            <span className="px-1 py-0.5 text-[9px] font-semibold bg-whale-light/10 text-whale-light rounded">
+                              {route.productName}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
+                      <div className="text-xs text-gray-400">{formatQuantity(holding.quantity)}개 보유</div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-semibold text-gray-800">{formatCurrency(holding.marketValue)}</div>
@@ -260,8 +323,33 @@ const DashboardPage = () => {
             </div>
           )}
 
+          {/* 항해 중인 항로 */}
+          {activePurchases.length > 0 && !(portfolio && portfolio.holdings.length > 0) && (
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-whale-dark">항해 중인 항로</h2>
+                <button onClick={() => navigate('/store')} className="text-sm text-whale-light hover:text-whale-accent font-medium">
+                  항로 상점
+                </button>
+              </div>
+              <div className="space-y-3">
+                {activePurchases.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                    <div>
+                      <div className="font-semibold text-sm text-gray-800">{p.productName}</div>
+                      <div className="text-xs text-gray-400">
+                        투자: {formatCurrency(p.investmentAmount)} · {p.purchasedAssets?.map(a => cryptoDisplayName(a.code)).join(', ')}
+                      </div>
+                    </div>
+                    <span className="px-2 py-1 text-xs font-semibold bg-green-50 text-green-600 rounded-full">항해 중</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 시세 변동 상위 */}
-          {topMovers.length > 0 && (
+          {liveTopMovers.length > 0 && (
             <div className="card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-whale-dark">시세 변동 상위</h2>
@@ -273,7 +361,7 @@ const DashboardPage = () => {
                 </button>
               </div>
               <div className="space-y-3">
-                {topMovers.map((stock) => (
+                {liveTopMovers.map((stock) => (
                   <div
                     key={stock.stockCode}
                     className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 rounded-lg px-2 -mx-2"
@@ -298,61 +386,55 @@ const DashboardPage = () => {
           )}
         </div>
 
-        {/* 하단: 최근 체결 + 빠른 액션 */}
+        {/* 하단: 관심 종목 + 빠른 액션 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* 최근 체결 내역 */}
+          {/* 관심 종목 */}
           <div className="lg:col-span-2 card">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-whale-dark">최근 체결 내역</h2>
+              <h2 className="text-lg font-bold text-whale-dark">관심 종목</h2>
               <button
-                onClick={() => navigate('/trade')}
+                onClick={() => navigate('/user')}
                 className="text-sm text-whale-light hover:text-whale-accent font-medium"
               >
-                전체 내역
+                종목 편집
               </button>
             </div>
-            {recentTrades.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">종목</th>
-                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">구분</th>
-                      <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">체결가</th>
-                      <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">수량</th>
-                      <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">금액</th>
-                      <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">시간</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentTrades.map((trade) => (
-                      <tr key={trade.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors">
-                        <td className="py-3 text-sm font-medium text-gray-800">{trade.stockName}</td>
-                        <td className="py-3">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                            trade.orderType === 'BUY'
-                              ? 'bg-red-50 text-red-500'
-                              : 'bg-blue-50 text-blue-500'
-                          }`}>
-                            {trade.orderType === 'BUY' ? '매수' : '매도'}
-                          </span>
-                        </td>
-                        <td className="py-3 text-sm text-right text-gray-700">{formatCurrency(trade.price)}</td>
-                        <td className="py-3 text-sm text-right text-gray-700">{trade.quantity}개</td>
-                        <td className="py-3 text-sm text-right font-semibold text-gray-800">{formatCurrency(trade.totalAmount)}</td>
-                        <td className="py-3 text-xs text-right text-gray-400">
-                          {new Date(trade.executedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {liveWatchlist.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {liveWatchlist.map((stock) => (
+                  <div
+                    key={stock.stockCode}
+                    className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-whale-light/40 hover:shadow-sm cursor-pointer transition-all"
+                    onClick={() => navigate('/trade')}
+                  >
+                    <div>
+                      <div className="font-semibold text-sm text-gray-800">{stock.stockName}</div>
+                      <div className="text-xs text-gray-400">{stock.stockCode}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-gray-800">{formatCurrency(stock.currentPrice)}</div>
+                      <div className={`text-xs font-semibold ${
+                        stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'
+                      }`}>
+                        {stock.changeRate >= 0 ? '+' : ''}{stock.changeRate.toFixed(2)}%
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="text-center py-12">
-                <div className="text-4xl mb-3">📋</div>
-                <div className="text-gray-500 font-medium">아직 거래 내역이 없습니다</div>
-                <div className="text-sm text-gray-400 mt-1">거래를 시작하면 체결 내역이 표시됩니다</div>
+                <img src="/whales/beluga.png" alt="벨루가" className="w-16 h-16 object-contain mx-auto mb-3" />
+                <div className="text-gray-500 font-medium">관심 종목이 없습니다</div>
+                <div className="text-sm text-gray-400 mt-1">
+                  프로필에서 관심 종목을 추가하면 여기에 실시간 시세가 표시됩니다
+                </div>
+                <button
+                  onClick={() => navigate('/user')}
+                  className="mt-4 btn-secondary text-sm"
+                >
+                  관심 종목 추가하기
+                </button>
               </div>
             )}
           </div>

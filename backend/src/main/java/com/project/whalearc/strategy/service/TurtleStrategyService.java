@@ -49,6 +49,7 @@ public class TurtleStrategyService {
     private static final double SL_MUL = 1.75;     // 손절 배수 (1.75 ATR)
     private static final double TRAIL_PCT = 0.04;  // 트레일링 스탑 4%
     private static final double FEE_RATE = 0.001;  // 수수료 0.1%
+    private static final double SLIPPAGE = 0.0001; // 슬리피지 0.01%
 
     /**
      * 특정 심볼에 대한 터틀 시그널을 체크하고 포지션을 관리합니다.
@@ -75,6 +76,7 @@ public class TurtleStrategyService {
         double currPrice = closes[last];
         double currHigh = highs[last];
         double currATR = atr[last];
+        double prevATR = atr[prev];  // 진입 시 이전 봉 ATR 사용 (Python 동일)
         double prevADX = adx[prev];
 
         // Donchian Channel
@@ -88,7 +90,8 @@ public class TurtleStrategyService {
             boolean longSignal = currHigh >= entryHigh && prevADX > ADX_THRESHOLD;
 
             if (longSignal && currPrice > 0) {
-                double volatility = currATR / currPrice;
+                // Python 동일: entry_atr (이전 봉 ATR) 사용
+                double volatility = prevATR / currPrice;
                 if (volatility <= 0) return;
 
                 double unitWeight = (RISK_PER_TRADE / MAX_UNITS) / (SL_MUL * volatility);
@@ -112,13 +115,13 @@ public class TurtleStrategyService {
                     pos.setAvgPrice(currPrice);
                     pos.setUnits(1);
                     pos.setUnitWeight(unitWeight);
-                    pos.setStopLoss(currPrice - SL_MUL * currATR);
+                    pos.setStopLoss(currPrice - SL_MUL * prevATR);
                     pos.setTrailRef(currPrice);
                     pos.setTradeCount(pos.getTradeCount() + 1);
                     pos.setUpdatedAt(Instant.now());
                     positionRepository.save(pos);
 
-                    log.info("터틀 진입: userId={}, symbol={}, price={}, qty={}, ADX={:.1f}",
+                    log.info("터틀 진입: userId={}, symbol={}, price={}, qty={}, ADX={}",
                             pos.getUserId(), pos.getSymbol(), currPrice, quantity, prevADX);
                 } catch (Exception e) {
                     log.warn("터틀 진입 실패: symbol={}, reason={}", pos.getSymbol(), e.getMessage());
@@ -187,17 +190,26 @@ public class TurtleStrategyService {
 
         if (holding != null && holding.getQuantity() > 0.0000001) {
             try {
+                // Python 동일: 손절 시 슬리피지 적용
+                double exitPrice = "STOP".equals(reason)
+                        ? price * (1 - SLIPPAGE)
+                        : price;
+
                 orderService.createOrder(pos.getUserId(), pos.getSymbol(),
                         getSymbolName(pos.getSymbol()),
                         Order.OrderType.SELL, Order.OrderMethod.MARKET,
                         holding.getQuantity(), null);
 
-                double pnl = (price - pos.getAvgPrice()) / pos.getAvgPrice();
-                if (pnl > 0) pos.setWinCount(pos.getWinCount() + 1);
+                double pnl = (exitPrice - pos.getAvgPrice()) / pos.getAvgPrice();
+                // Python 동일: Exit Channel 청산에서만 승수 카운트 (손절 시 미카운트)
+                if (!"STOP".equals(reason) && pnl > 0) {
+                    pos.setWinCount(pos.getWinCount() + 1);
+                }
                 pos.setRealizedPnl(pos.getRealizedPnl() + pnl * pos.getUnitWeight() * pos.getUnits());
 
-                log.info("터틀 청산 [{}]: symbol={}, price={}, avgPrice={}, pnl={:.2f}%, units={}",
-                        reason, pos.getSymbol(), price, pos.getAvgPrice(), pnl * 100, pos.getUnits());
+                log.info("터틀 청산 [{}]: symbol={}, price={}, avgPrice={}, pnl={}%, units={}",
+                        reason, pos.getSymbol(), exitPrice, pos.getAvgPrice(),
+                        String.format("%.2f", pnl * 100), pos.getUnits());
             } catch (Exception e) {
                 log.warn("터틀 청산 실패: symbol={}, reason={}", pos.getSymbol(), e.getMessage());
             }

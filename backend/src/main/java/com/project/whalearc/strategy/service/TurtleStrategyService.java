@@ -22,11 +22,19 @@ import java.util.Map;
 /**
  * 터틀 트레이딩 전략 엔진
  *
+ * Python backtest_turtle.py 로직을 완전히 동일하게 포팅한 구현체입니다.
  * Donchian Channel Breakout + ADX 필터를 핵심으로 하며,
  * ATR 기반 포지션 사이징 / 피라미딩 / 트레일링 스탑을 구현합니다.
- * 현물 시뮬레이션 특성상 Long-Only로 동작합니다.
  *
  * 파라미터는 서버 사이드에만 존재하며 프론트엔드에 노출되지 않습니다.
+ *
+ * ── 원본(Python) 대비 의도적 차이점 ──
+ * 1. Long-Only: 현물 시뮬레이션 플랫폼이므로 공매도(Short) 불가.
+ *    하락장에서는 포지션을 잡지 않고 관망합니다.
+ * 2. Leverage 미적용: 현물 거래는 1배 고정이므로 leverage 변수를 제거.
+ *    유닛 사이징 공식에서 ÷leverage 생략 (÷1과 동일).
+ *    수익률은 선물(7x) 대비 낮지만 리스크도 1/7이며,
+ *    unitWeight 상한(0.9/MAX_UNITS)으로 과집중 방지.
  */
 @Slf4j
 @Service

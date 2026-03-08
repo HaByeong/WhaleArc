@@ -240,6 +240,77 @@ const LandingPage = () => {
           </div>
         </div>
       </div>
+
+      {/* 용어 가이드 섹션 */}
+      <div className="bg-whale-dark text-white py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold mb-3" style={{ fontFamily: "'Quicksand', sans-serif" }}>
+              고래의 바다, <span className="text-whale-light">WhaleArc 용어 가이드</span>
+            </h2>
+            <p className="text-blue-200 text-lg">
+              WhaleArc는 투자의 세계를 고래의 항해에 빗대어 표현합니다
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              {
+                icon: '/whales/narwhal.png',
+                term: '항로',
+                meaning: '퀀트 트레이딩 전략',
+                desc: '고래가 바다를 건너는 검증된 경로처럼, 과거 데이터로 백테스트를 거친 자동 투자 전략입니다.',
+              },
+              {
+                icon: '/whales/sperm-whale.png',
+                term: '항해',
+                meaning: '전략 기반 투자 실행',
+                desc: '항로를 구매하고 투자 금액을 설정하면, 해당 전략대로 자동 매수가 진행됩니다.',
+              },
+              {
+                icon: '/whales/humpback.png',
+                term: '파고',
+                meaning: '최대 낙폭 (Max Drawdown)',
+                desc: '항해 중 만날 수 있는 가장 큰 파도. 최고점 대비 최대 하락 폭을 뜻합니다.',
+              },
+              {
+                icon: '/whales/blue-whale.png',
+                term: '유영',
+                meaning: '시장 탐색 및 분석',
+                desc: '고래가 바다를 유영하듯, 실시간 시세를 확인하고 시장 흐름을 분석하는 과정입니다.',
+              },
+              {
+                icon: '/whales/dolphin.png',
+                term: '항로 상점',
+                meaning: '전략 마켓플레이스',
+                desc: '다양한 퀀트 전략(항로)을 탐색하고 구매할 수 있는 공간입니다.',
+              },
+              {
+                icon: '/whales/beluga.png',
+                term: '포트폴리오',
+                meaning: '나의 투자 현황',
+                desc: '보유 자산, 수익률, 현금 잔고 등 나의 전체 투자 현황을 한눈에 볼 수 있습니다.',
+              },
+            ].map((item) => (
+              <div
+                key={item.term}
+                className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 hover:bg-white/10 transition-colors"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <img src={item.icon} alt={item.term} className="w-10 h-10 object-contain"
+/>
+                  <div>
+                    <span className="text-lg font-bold text-white">{item.term}</span>
+                    <span className="mx-2 text-white/30">=</span>
+                    <span className="text-sm font-medium text-whale-light">{item.meaning}</span>
+                  </div>
+                </div>
+                <p className="text-sm text-blue-200/80 leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

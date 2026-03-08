@@ -280,8 +280,8 @@ const DashboardPage = () => {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* 보유 종목 */}
-          {portfolio && portfolio.holdings.length > 0 && (
+          {/* 보유 종목 or 빈 상태 */}
+          {portfolio && portfolio.holdings.length > 0 ? (
             <div className="card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-whale-dark">보유 종목</h2>
@@ -321,10 +321,7 @@ const DashboardPage = () => {
                 ))}
               </div>
             </div>
-          )}
-
-          {/* 항해 중인 항로 */}
-          {activePurchases.length > 0 && !(portfolio && portfolio.holdings.length > 0) && (
+          ) : activePurchases.length > 0 ? (
             <div className="card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-whale-dark">항해 중인 항로</h2>
@@ -344,6 +341,20 @@ const DashboardPage = () => {
                     <span className="px-2 py-1 text-xs font-semibold bg-green-50 text-green-600 rounded-full">항해 중</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          ) : (
+            <div className="card flex flex-col items-center justify-center text-center py-10">
+              <img src="/whales/gray-whale.png" alt="회색고래" className="w-16 h-16 object-contain mb-4 opacity-60" />
+              <h3 className="text-lg font-bold text-whale-dark mb-1">아직 보유 종목이 없어요</h3>
+              <p className="text-sm text-gray-400 mb-5">거래 또는 항로를 통해 첫 투자를 시작해보세요</p>
+              <div className="flex gap-3">
+                <button onClick={() => navigate('/trade')} className="btn-primary text-sm px-5 py-2">
+                  거래하기
+                </button>
+                <button onClick={() => navigate('/store')} className="btn-secondary text-sm px-5 py-2">
+                  항로 상점
+                </button>
               </div>
             </div>
           )}

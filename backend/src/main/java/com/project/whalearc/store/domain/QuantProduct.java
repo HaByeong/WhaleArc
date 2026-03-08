@@ -38,6 +38,9 @@ public class QuantProduct {
     private List<String> targetAssets = new ArrayList<>();
     private String strategyLogic;
 
+    /** SIMPLE: 균등 분배 즉시 매수, TURTLE: 터틀 트레이딩 자동매매 */
+    private StrategyType strategyType = StrategyType.SIMPLE;
+
     private boolean active;
     private Instant createdAt;
     private Instant updatedAt;
@@ -53,5 +56,9 @@ public class QuantProduct {
 
     public enum RiskLevel {
         LOW, MEDIUM, HIGH
+    }
+
+    public enum StrategyType {
+        SIMPLE, TURTLE
     }
 }

@@ -11,6 +11,7 @@ import com.project.whalearc.trade.domain.Order;
 import com.project.whalearc.trade.domain.Portfolio;
 import com.project.whalearc.trade.service.OrderService;
 import com.project.whalearc.trade.service.PortfolioService;
+import com.project.whalearc.strategy.service.TurtleStrategyService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ public class QuantStoreService {
     private final OrderService orderService;
     private final CryptoPriceProvider cryptoPriceProvider;
     private final PortfolioService portfolioService;
+    private final TurtleStrategyService turtleStrategyService;
 
     /**
      * 최초 실행 시 샘플 퀀트 상품 시드
@@ -85,13 +87,8 @@ public class QuantStoreService {
                         List.of("차익거래", "김프", "안전", "무료"), List.of("BTC", "ETH", "XRP"),
                         "김프 > 3% → 매도 / 김프 < -1% → 매수"),
 
-                // ── 유료 프리미엄 항로: 터틀 트레이딩 ──
-                createProduct("터틀 트레이딩",
-                        "리처드 데니스의 전설적인 터틀 트레이딩 전략을 암호화폐 시장에 최적화했습니다. 20일 고가 돌파 시 진입, 10일 저가 이탈 시 청산하며, ATR 기반 포지션 사이징과 피라미딩으로 추세에서 최대 수익을 추구합니다. 손절은 2ATR로 엄격히 관리합니다.",
-                        "WhaleArc", QuantProduct.Category.TREND_FOLLOWING, QuantProduct.RiskLevel.MEDIUM,
-                        500000, 35.6, -14.8, 2.12, 42.5, 67,
-                        List.of("터틀", "돌파", "ATR", "피라미딩", "프리미엄"), List.of("BTC", "ETH", "SOL", "AVAX", "LINK"),
-                        "진입: 20일 고가 돌파 / 청산: 10일 저가 이탈 / 포지션: 자산의 1% 리스크 / ATR(20) 기반 사이징 / 최대 4단계 피라미딩")
+                // ── 유료 프리미엄 항로: 터틀 트레이딩 (자체 알고리즘) ──
+                createTurtleProduct()
         );
 
         productRepository.saveAll(seeds);
@@ -123,6 +120,23 @@ public class QuantStoreService {
         p.setActive(true);
         p.setCreatedAt(Instant.now());
         p.setUpdatedAt(Instant.now());
+        return p;
+    }
+
+    private QuantProduct createTurtleProduct() {
+        QuantProduct p = createProduct("터틀 트레이딩",
+                "Donchian Channel Breakout + ADX 필터를 핵심으로 하는 자체 개발 알고리즘입니다. "
+                + "100시간 채널 돌파 시 진입, 30시간 채널 이탈 또는 4% 트레일링 스탑으로 청산합니다. "
+                + "ATR 기반 포지션 사이징과 최대 5단계 피라미딩으로 추세에서 최대 수익을 추구하며, "
+                + "1.75 ATR 손절로 리스크를 엄격히 관리합니다. 매 시간 자동으로 시그널을 분석하여 매매합니다.",
+                "WhaleArc", QuantProduct.Category.TREND_FOLLOWING, QuantProduct.RiskLevel.MEDIUM,
+                500000, 35.6, -14.8, 2.12, 42.5, 67,
+                List.of("터틀", "Donchian", "ADX", "ATR", "피라미딩", "프리미엄"),
+                List.of("BTC", "ETH", "SOL", "AVAX", "LINK"),
+                "진입: 100h Donchian 상단 돌파 + ADX(14) > 15 / "
+                + "청산: 30h 채널 이탈 or 트레일링 스탑 4% / "
+                + "사이징: 4% 리스크, 1.75 ATR 손절 / 최대 5유닛 피라미딩");
+        p.setStrategyType(QuantProduct.StrategyType.TURTLE);
         return p;
     }
 
@@ -161,61 +175,74 @@ public class QuantStoreService {
                     String.format("%,.0f", portfolio.getCashBalance()) + "원");
         }
 
-        // 현재 시세 조회
-        List<MarketPriceResponse> allPrices = cryptoPriceProvider.getAllKrwTickers();
-        Map<String, MarketPriceResponse> priceMap = allPrices.stream()
-                .collect(Collectors.toMap(MarketPriceResponse::getSymbol, p -> p, (a, b) -> a));
-
         List<String> targetAssets = product.getTargetAssets();
         if (targetAssets == null || targetAssets.isEmpty()) {
             throw new IllegalArgumentException("이 상품에 설정된 투자 대상 자산이 없습니다.");
         }
-        double perAssetAmount = investmentAmount / targetAssets.size();
 
-        // 각 타겟 자산에 시장가 매수 주문 (소수점 수량 지원)
-        List<ProductPurchase.PurchasedAsset> purchasedAssets = new ArrayList<>();
-        for (String asset : targetAssets) {
-            MarketPriceResponse priceInfo = priceMap.get(asset);
-            if (priceInfo == null || priceInfo.getPrice() <= 0) {
-                log.warn("시세를 찾을 수 없는 자산 스킵: {}", asset);
-                continue;
-            }
-
-            double quantity = perAssetAmount / (priceInfo.getPrice() * 1.001);
-            if (quantity <= 0) {
-                log.warn("투자 금액 부족으로 스킵: asset={}, price={}, perAssetAmount={}",
-                        asset, priceInfo.getPrice(), perAssetAmount);
-                continue;
-            }
-
-            // 소수점 8자리까지 (암호화폐 표준)
-            quantity = Math.floor(quantity * 100000000.0) / 100000000.0;
-
-            try {
-                orderService.createOrder(userId, asset, priceInfo.getName(),
-                        Order.OrderType.BUY, Order.OrderMethod.MARKET, quantity, null);
-                purchasedAssets.add(new ProductPurchase.PurchasedAsset(asset, quantity));
-                log.info("항로 자동 매수: asset={}, qty={}, price={}", asset, quantity, priceInfo.getPrice());
-            } catch (Exception e) {
-                log.warn("항로 자동 매수 실패: asset={}, reason={}", asset, e.getMessage());
-            }
-        }
-
-        if (purchasedAssets.isEmpty()) {
-            throw new IllegalArgumentException("투자 금액이 너무 적어 매수할 수 있는 자산이 없습니다.");
-        }
-
-        // 구매 기록 저장
+        // 구매 기록 저장 (공통)
         ProductPurchase purchase = new ProductPurchase(userId, productId, product.getName(),
                 product.getPrice(), investmentAmount);
-        purchase.setPurchasedAssets(purchasedAssets);
-        purchase = purchaseRepository.save(purchase);
+
+        // ── 터틀 전략: 즉시 매수하지 않고 포지션 초기화 (스케줄러가 시그널에 따라 자동매매) ──
+        if (product.getStrategyType() == QuantProduct.StrategyType.TURTLE) {
+            // 현금을 포트폴리오에서 차감 (터틀 전용 자금으로 할당)
+            portfolio.setCashBalance(portfolio.getCashBalance() - investmentAmount);
+            portfolioService.save(portfolio);
+
+            purchase.setPurchasedAssets(new ArrayList<>());
+            purchase = purchaseRepository.save(purchase);
+
+            turtleStrategyService.initializePositions(userId, purchase.getId(), targetAssets, investmentAmount);
+            log.info("터틀 항로 구매: userId={}, investment={}, assets={}", userId, investmentAmount, targetAssets);
+        } else {
+            // ── 일반 전략: 기존 균등 분배 즉시 매수 ──
+            List<MarketPriceResponse> allPrices = cryptoPriceProvider.getAllKrwTickers();
+            Map<String, MarketPriceResponse> priceMap = allPrices.stream()
+                    .collect(Collectors.toMap(MarketPriceResponse::getSymbol, p -> p, (a, b) -> a));
+
+            double perAssetAmount = investmentAmount / targetAssets.size();
+            List<ProductPurchase.PurchasedAsset> purchasedAssets = new ArrayList<>();
+
+            for (String asset : targetAssets) {
+                MarketPriceResponse priceInfo = priceMap.get(asset);
+                if (priceInfo == null || priceInfo.getPrice() <= 0) {
+                    log.warn("시세를 찾을 수 없는 자산 스킵: {}", asset);
+                    continue;
+                }
+
+                double quantity = perAssetAmount / (priceInfo.getPrice() * 1.001);
+                if (quantity <= 0) {
+                    log.warn("투자 금액 부족으로 스킵: asset={}, price={}, perAssetAmount={}",
+                            asset, priceInfo.getPrice(), perAssetAmount);
+                    continue;
+                }
+
+                quantity = Math.floor(quantity * 100000000.0) / 100000000.0;
+
+                try {
+                    orderService.createOrder(userId, asset, priceInfo.getName(),
+                            Order.OrderType.BUY, Order.OrderMethod.MARKET, quantity, null);
+                    purchasedAssets.add(new ProductPurchase.PurchasedAsset(asset, quantity));
+                    log.info("항로 자동 매수: asset={}, qty={}, price={}", asset, quantity, priceInfo.getPrice());
+                } catch (Exception e) {
+                    log.warn("항로 자동 매수 실패: asset={}, reason={}", asset, e.getMessage());
+                }
+            }
+
+            if (purchasedAssets.isEmpty()) {
+                throw new IllegalArgumentException("투자 금액이 너무 적어 매수할 수 있는 자산이 없습니다.");
+            }
+
+            purchase.setPurchasedAssets(purchasedAssets);
+            purchase = purchaseRepository.save(purchase);
+        }
 
         product.setSubscribers(product.getSubscribers() + 1);
         productRepository.save(product);
 
         log.info("항로 구매 완료: userId={}, product={}, investment={}, assets={}",
-                userId, product.getName(), investmentAmount, purchasedAssets);
+                userId, product.getName(), investmentAmount, purchase.getPurchasedAssets());
         return purchase;
     }
 
@@ -238,38 +265,45 @@ public class QuantStoreService {
             throw new IllegalArgumentException("이미 취소된 구매입니다.");
         }
 
-        // 구매한 자산들을 항로 매수 수량만큼만 매도
-        Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
-        for (ProductPurchase.PurchasedAsset pa : purchase.getPurchasedAssets()) {
-            Holding holding = portfolio.getHoldings().stream()
-                    .filter(h -> h.getStockCode().equals(pa.getCode()))
-                    .findFirst()
-                    .orElse(null);
+        // 터틀 전략인지 확인
+        QuantProduct product = productRepository.findById(purchase.getProductId()).orElse(null);
+        boolean isTurtle = product != null && product.getStrategyType() == QuantProduct.StrategyType.TURTLE;
 
-            if (holding != null && holding.getQuantity() > 0) {
-                // 항로로 매수한 수량과 실제 보유 수량 중 작은 값만 매도
-                double sellQty = Math.min(pa.getQuantity(), holding.getQuantity());
-                try {
-                    orderService.createOrder(userId, pa.getCode(), holding.getStockName(),
-                            Order.OrderType.SELL, Order.OrderMethod.MARKET,
-                            sellQty, null);
-                    log.info("항로 취소 자동 매도: asset={}, qty={} (항로 매수량: {})",
-                            pa.getCode(), sellQty, pa.getQuantity());
-                } catch (Exception e) {
-                    log.warn("항로 취소 자동 매도 실패: asset={}, reason={}", pa.getCode(), e.getMessage());
+        if (isTurtle) {
+            // 터틀: 포지션 청산 + 할당 현금 반환
+            turtleStrategyService.closeAllPositions(purchase.getId());
+        } else {
+            // 일반: 매수한 자산들을 항로 매수 수량만큼만 매도
+            Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
+            for (ProductPurchase.PurchasedAsset pa : purchase.getPurchasedAssets()) {
+                Holding holding = portfolio.getHoldings().stream()
+                        .filter(h -> h.getStockCode().equals(pa.getCode()))
+                        .findFirst()
+                        .orElse(null);
+
+                if (holding != null && holding.getQuantity() > 0) {
+                    double sellQty = Math.min(pa.getQuantity(), holding.getQuantity());
+                    try {
+                        orderService.createOrder(userId, pa.getCode(), holding.getStockName(),
+                                Order.OrderType.SELL, Order.OrderMethod.MARKET,
+                                sellQty, null);
+                        log.info("항로 취소 자동 매도: asset={}, qty={} (항로 매수량: {})",
+                                pa.getCode(), sellQty, pa.getQuantity());
+                    } catch (Exception e) {
+                        log.warn("항로 취소 자동 매도 실패: asset={}, reason={}", pa.getCode(), e.getMessage());
+                    }
                 }
+                portfolio = portfolioService.getOrCreatePortfolio(userId);
             }
-            // 매도 후 portfolio 객체 갱신 (다음 자산 매도를 위해)
-            portfolio = portfolioService.getOrCreatePortfolio(userId);
         }
 
         purchase.setStatus(ProductPurchase.Status.REFUNDED);
         purchase = purchaseRepository.save(purchase);
 
         // 구독자 수 감소
-        productRepository.findById(purchase.getProductId()).ifPresent(product -> {
-            product.setSubscribers(Math.max(0, product.getSubscribers() - 1));
-            productRepository.save(product);
+        productRepository.findById(purchase.getProductId()).ifPresent(p -> {
+            p.setSubscribers(Math.max(0, p.getSubscribers() - 1));
+            productRepository.save(p);
         });
 
         log.info("항로 구매 취소 완료: userId={}, product={}", userId, purchase.getProductName());

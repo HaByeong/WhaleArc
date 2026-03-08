@@ -51,4 +51,8 @@ README_INTERNAL.md
 # 분리된 웹/앱 레포 (별도 푸시용)
 WhaleArc_Web/
 WhaleArc_App/
+
+### 자체 알고리즘 소스 (보안 — GitHub에 올라가지 않음) ###
+WhaleArc_algo/
+
 .DS_Store

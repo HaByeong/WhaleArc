@@ -48,7 +48,7 @@ public class TurtleStrategyService {
     private static final int MAX_UNITS = 5;        // 최대 피라미딩 유닛
     private static final double SL_MUL = 1.75;     // 손절 배수 (1.75 ATR)
     private static final double TRAIL_PCT = 0.04;  // 트레일링 스탑 4%
-    private static final double FEE_RATE = 0.001;  // 수수료 0.1%
+    private static final double FEE_RATE = 0.0008; // 수수료 0.08% (진입 0.04% + 청산 0.04%)
     private static final double SLIPPAGE = 0.0001; // 슬리피지 0.01%
 
     /**
@@ -89,9 +89,12 @@ public class TurtleStrategyService {
             // ── 신규 진입 ──
             boolean longSignal = currHigh >= entryHigh && prevADX > ADX_THRESHOLD;
 
-            if (longSignal && currPrice > 0) {
-                // Python 동일: entry_atr (이전 봉 ATR) 사용
-                double volatility = prevATR / currPrice;
+            if (longSignal && entryHigh > 0) {
+                // Python 동일: entry_price_candidate = high_break (브레이크아웃 레벨)
+                double entryPriceCandidate = entryHigh;
+
+                // Python 동일: volatility = entry_atr / entry_price_candidate
+                double volatility = prevATR / entryPriceCandidate;
                 if (volatility <= 0) return;
 
                 double unitWeight = (RISK_PER_TRADE / MAX_UNITS) / (SL_MUL * volatility);
@@ -109,20 +112,21 @@ public class TurtleStrategyService {
                             getSymbolName(pos.getSymbol()),
                             Order.OrderType.BUY, Order.OrderMethod.MARKET, quantity, null);
 
+                    // Python 동일: 진입가/평단가/트레일기준 모두 브레이크아웃 레벨 사용
                     pos.setDirection(TurtlePosition.Direction.LONG);
-                    pos.setEntryPrice(currPrice);
-                    pos.setLastEntryPrice(currPrice);
-                    pos.setAvgPrice(currPrice);
+                    pos.setEntryPrice(entryPriceCandidate);
+                    pos.setLastEntryPrice(entryPriceCandidate);
+                    pos.setAvgPrice(entryPriceCandidate);
                     pos.setUnits(1);
                     pos.setUnitWeight(unitWeight);
-                    pos.setStopLoss(currPrice - SL_MUL * prevATR);
-                    pos.setTrailRef(currPrice);
+                    pos.setStopLoss(entryPriceCandidate - SL_MUL * prevATR);
+                    pos.setTrailRef(entryPriceCandidate);
                     pos.setTradeCount(pos.getTradeCount() + 1);
                     pos.setUpdatedAt(Instant.now());
                     positionRepository.save(pos);
 
-                    log.info("터틀 진입: userId={}, symbol={}, price={}, qty={}, ADX={}",
-                            pos.getUserId(), pos.getSymbol(), currPrice, quantity, prevADX);
+                    log.info("터틀 진입: userId={}, symbol={}, entryPrice={}, qty={}, ADX={}",
+                            pos.getUserId(), pos.getSymbol(), entryPriceCandidate, quantity, prevADX);
                 } catch (Exception e) {
                     log.warn("터틀 진입 실패: symbol={}, reason={}", pos.getSymbol(), e.getMessage());
                 }

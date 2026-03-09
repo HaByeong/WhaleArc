@@ -29,8 +29,8 @@ const INTERVALS = [
 const TradingChart = ({ symbol, price, changeRate, className = '' }: TradingChartProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<ISeriesApi<typeof CandlestickSeries> | null>(null);
-  const volumeSeriesRef = useRef<ISeriesApi<typeof HistogramSeries> | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const dataRef = useRef<CandlestickData<Time>[]>([]);
   const prevSymbolRef = useRef('');
   const prevIntervalRef = useRef('');
@@ -164,7 +164,15 @@ const TradingChart = ({ symbol, price, changeRate, className = '' }: TradingChar
         dataRef.current = candleData;
         candleSeriesRef.current!.setData(candleData);
         volumeSeriesRef.current!.setData(volumeData);
-        chartRef.current?.timeScale().scrollToRealTime();
+
+        // 최근 100개 캔들만 보이도록 범위 설정
+        if (candleData.length > 100) {
+          const from = candleData[candleData.length - 100].time;
+          const to = candleData[candleData.length - 1].time;
+          chartRef.current?.timeScale().setVisibleRange({ from, to });
+        } else {
+          chartRef.current?.timeScale().fitContent();
+        }
         setHistoryLoaded(true);
       })
       .catch(() => setHistoryLoaded(true));

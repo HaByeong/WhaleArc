@@ -101,15 +101,16 @@ const TradePage = () => {
       setOrders(ordersData);
       setTrades(tradesData);
 
-      // 선택된 종목 가격 업데이트
-      if (selectedStock) {
-        const updated = stocks.find(s => s.stockCode === selectedStock.stockCode);
+      // 선택된 종목 가격 업데이트 (ref로 stale closure 방지)
+      const current = selectedStockRef.current;
+      if (current) {
+        const updated = stocks.find(s => s.stockCode === current.stockCode);
         if (updated) {
           setSelectedStock(updated);
         }
       }
     } catch { /* 폴링 실패 무시 */ }
-  }, [selectedStock]);
+  }, []);
 
   usePolling(pollData, 10000);
 

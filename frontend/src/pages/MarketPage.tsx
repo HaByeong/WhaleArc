@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import RealtimeChart from '../components/RealtimeChart';
+import TradingChart from '../components/TradingChart';
 import { marketService, type MarketPrice, type AssetType } from '../services/marketService';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
 
@@ -14,6 +15,7 @@ const MarketPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'change' | 'volume'>('volume');
   const [filterText, setFilterText] = useState('');
+  const [chartType, setChartType] = useState<'area' | 'candle'>('area');
 
   // 실시간 WebSocket 구독 (코인 탭일 때만)
   const { prices: realtimePrices, connected, tickCount } = useRealtimePrice({
@@ -266,21 +268,61 @@ const MarketPage = () => {
                     </div>
                   </div>
 
-                  {/* 실시간 차트 */}
-                  {assetType === 'CRYPTO' && connected ? (
+                  {/* 차트 */}
+                  {assetType === 'CRYPTO' ? (
                     <div className="mt-4">
-                      <RealtimeChart
-                        symbol={liveSelectedAsset.symbol}
-                        price={liveSelectedAsset.price}
-                      />
+                      {/* 차트 타입 토글 */}
+                      <div className="flex items-center gap-1 mb-3">
+                        <button
+                          onClick={() => setChartType('area')}
+                          className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                            chartType === 'area'
+                              ? 'bg-whale-light text-white shadow-sm'
+                              : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4" />
+                          </svg>
+                          영역
+                        </button>
+                        <button
+                          onClick={() => setChartType('candle')}
+                          className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                            chartType === 'candle'
+                              ? 'bg-whale-light text-white shadow-sm'
+                              : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l6 13V6" />
+                          </svg>
+                          캔들
+                        </button>
+                      </div>
+
+                      {chartType === 'area' ? (
+                        connected ? (
+                          <RealtimeChart
+                            symbol={liveSelectedAsset.symbol}
+                            price={liveSelectedAsset.price}
+                          />
+                        ) : (
+                          <div className="bg-gray-50 rounded-xl p-8 text-center border border-gray-100">
+                            <div className="text-gray-400 text-sm">실시간 연결 중... 잠시 후 차트가 표시됩니다</div>
+                          </div>
+                        )
+                      ) : (
+                        <TradingChart
+                          symbol={liveSelectedAsset.symbol}
+                          price={liveSelectedAsset.price}
+                          changeRate={liveSelectedAsset.changeRate}
+                        />
+                      )}
                     </div>
                   ) : (
                     <div className="mt-4 bg-gray-50 rounded-xl p-8 text-center border border-gray-100">
-                      <div className="text-gray-400 text-sm">
-                        {assetType === 'CRYPTO'
-                          ? '실시간 연결 중... 잠시 후 차트가 표시됩니다'
-                          : '주식 실시간 차트는 준비 중입니다'}
-                      </div>
+                      <div className="text-gray-400 text-sm">주식 실시간 차트는 준비 중입니다</div>
                     </div>
                   )}
                 </div>

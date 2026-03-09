@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { usePolling } from '../hooks/usePolling';
+import { useRealtimePrice } from '../hooks/useRealtimePrice';
 import {
   tradeService,
   type StockPrice,
@@ -50,6 +51,31 @@ const TradePage = () => {
   const selectedStockRef = useRef<StockPrice | null>(null);
   selectedStockRef.current = selectedStock;
 
+  // WebSocket 실시간 가격
+  const { prices: realtimePrices, connected } = useRealtimePrice({ enabled: true });
+
+  // 실시간 가격을 종목 목록에 병합
+  const mergedStockList = useMemo(() => {
+    if (realtimePrices.size === 0) return stockList;
+    return stockList.map(stock => {
+      const rt = realtimePrices.get(stock.stockCode);
+      if (rt) {
+        return { ...stock, currentPrice: rt.price, change: rt.change, changeRate: rt.changeRate, volume: rt.volume };
+      }
+      return stock;
+    });
+  }, [stockList, realtimePrices]);
+
+  // 선택된 종목도 실시간 반영
+  const liveSelectedStock = useMemo(() => {
+    if (!selectedStock) return null;
+    const rt = realtimePrices.get(selectedStock.stockCode);
+    if (rt) {
+      return { ...selectedStock, currentPrice: rt.price, change: rt.change, changeRate: rt.changeRate, volume: rt.volume };
+    }
+    return selectedStock;
+  }, [selectedStock, realtimePrices]);
+
   // 토스트 타이머 cleanup
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
@@ -87,28 +113,17 @@ const TradePage = () => {
 
   useEffect(() => { loadInitialData(); }, [loadInitialData]);
 
-  /* ─── 폴링 (10초) ─── */
+  /* ─── 폴링 (10초) — 포트폴리오/주문/체결만 (가격은 WebSocket) ─── */
   const pollData = useCallback(async () => {
     try {
-      const [stocks, portfolioData, ordersData, tradesData] = await Promise.all([
-        tradeService.getStockList(),
+      const [portfolioData, ordersData, tradesData] = await Promise.all([
         tradeService.getPortfolio(),
         tradeService.getOrders(),
         tradeService.getTrades(),
       ]);
-      setStockList(stocks);
       setPortfolio(portfolioData);
       setOrders(ordersData);
       setTrades(tradesData);
-
-      // 선택된 종목 가격 업데이트 (ref로 stale closure 방지)
-      const current = selectedStockRef.current;
-      if (current) {
-        const updated = stocks.find(s => s.stockCode === current.stockCode);
-        if (updated) {
-          setSelectedStock(updated);
-        }
-      }
     } catch { /* 폴링 실패 무시 */ }
   }, []);
 
@@ -231,7 +246,7 @@ const TradePage = () => {
   };
 
   /* ─── 종목 필터 ─── */
-  const filteredStocks = stockList.filter(s => {
+  const filteredStocks = mergedStockList.filter(s => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     const name = coinName(s.stockCode).toLowerCase();
@@ -249,8 +264,8 @@ const TradePage = () => {
   });
 
   /* ─── 예상 금액 ─── */
-  const estimatedTotal = selectedStock && quantity
-    ? (orderMethod === 'MARKET' ? selectedStock.currentPrice : parseFloat(limitPrice) || 0) * parseFloat(quantity || '0') * (orderType === 'BUY' ? (1 + COMMISSION_RATE) : (1 - COMMISSION_RATE))
+  const estimatedTotal = liveSelectedStock && quantity
+    ? (orderMethod === 'MARKET' ? liveSelectedStock.currentPrice : parseFloat(limitPrice) || 0) * parseFloat(quantity || '0') * (orderType === 'BUY' ? (1 + COMMISSION_RATE) : (1 - COMMISSION_RATE))
     : 0;
 
   /* ─── 로딩/에러 ─── */
@@ -365,20 +380,20 @@ const TradePage = () => {
 
           {/* ━━━ 중앙: 차트 + 탭 내용 (5칸) ━━━ */}
           <div className="lg:col-span-5 space-y-4">
-            {selectedStock && (
+            {liveSelectedStock && (
               <>
                 {/* 종목 헤더 */}
                 <div className="bg-white rounded-xl shadow-lg p-5">
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <h2 className="text-xl font-bold text-whale-dark">{coinName(selectedStock.stockCode)}</h2>
-                      <span className="text-sm text-gray-400">{selectedStock.stockCode}/KRW</span>
+                      <h2 className="text-xl font-bold text-whale-dark">{coinName(liveSelectedStock.stockCode)}</h2>
+                      <span className="text-sm text-gray-400">{liveSelectedStock.stockCode}/KRW</span>
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-whale-dark">{fmt(selectedStock.currentPrice)}</div>
-                      <div className={`text-sm font-semibold ${selectedStock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                        {selectedStock.changeRate >= 0 ? '+' : ''}{fmt(selectedStock.change)}
-                        <span className="ml-1">({selectedStock.changeRate >= 0 ? '+' : ''}{selectedStock.changeRate.toFixed(2)}%)</span>
+                      <div className="text-2xl font-bold text-whale-dark">{fmt(liveSelectedStock.currentPrice)}</div>
+                      <div className={`text-sm font-semibold ${liveSelectedStock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                        {liveSelectedStock.changeRate >= 0 ? '+' : ''}{fmt(liveSelectedStock.change)}
+                        <span className="ml-1">({liveSelectedStock.changeRate >= 0 ? '+' : ''}{liveSelectedStock.changeRate.toFixed(2)}%)</span>
                       </div>
                     </div>
                   </div>
@@ -386,10 +401,10 @@ const TradePage = () => {
                   {/* 미니 지표 */}
                   <div className="grid grid-cols-4 gap-3">
                     {[
-                      { label: '고가', value: fmt(selectedStock.high), cls: 'text-red-500' },
-                      { label: '저가', value: fmt(selectedStock.low), cls: 'text-blue-500' },
-                      { label: '시가', value: fmt(selectedStock.open), cls: 'text-gray-700' },
-                      { label: '거래량', value: fmtNum(selectedStock.volume), cls: 'text-gray-700' },
+                      { label: '고가', value: fmt(liveSelectedStock.high), cls: 'text-red-500' },
+                      { label: '저가', value: fmt(liveSelectedStock.low), cls: 'text-blue-500' },
+                      { label: '시가', value: fmt(liveSelectedStock.open), cls: 'text-gray-700' },
+                      { label: '거래량', value: fmtNum(liveSelectedStock.volume), cls: 'text-gray-700' },
                     ].map(item => (
                       <div key={item.label} className="bg-gray-50 rounded-lg p-2 text-center">
                         <div className="text-[10px] text-gray-400 mb-0.5">{item.label}</div>
@@ -426,9 +441,9 @@ const TradePage = () => {
                     {/* 차트 탭 */}
                     {activeTab === 'chart' && (
                       <TradingChart
-                        symbol={selectedStock.stockCode}
-                        price={selectedStock.currentPrice}
-                        changeRate={selectedStock.changeRate}
+                        symbol={liveSelectedStock.stockCode}
+                        price={liveSelectedStock.currentPrice}
+                        changeRate={liveSelectedStock.changeRate}
                       />
                     )}
 
@@ -536,7 +551,7 @@ const TradePage = () => {
 
           {/* ━━━ 우측: 주문 폼 + 포트폴리오 (4칸) ━━━ */}
           <div className="lg:col-span-4 space-y-4">
-            {selectedStock && (
+            {liveSelectedStock && (
               <div className="bg-white rounded-xl shadow-lg p-5">
                 {/* 매수/매도 토글 */}
                 <div className="flex gap-2 mb-4">
@@ -586,7 +601,7 @@ const TradePage = () => {
                       {orderMethod === 'MARKET' ? '현재가 (시장가)' : '지정가'}
                     </div>
                     {orderMethod === 'MARKET' ? (
-                      <div className="text-lg font-bold text-whale-dark">{fmt(selectedStock.currentPrice)}</div>
+                      <div className="text-lg font-bold text-whale-dark">{fmt(liveSelectedStock.currentPrice)}</div>
                     ) : (
                       <input
                         type="number"
@@ -606,7 +621,7 @@ const TradePage = () => {
                       <span className="text-xs text-gray-400">
                         {orderType === 'BUY'
                           ? `잔고: ${fmt(portfolio?.cashBalance || 0)}`
-                          : `보유: ${formatQuantity(getAvailableQuantity(selectedStock.stockCode))}개`
+                          : `보유: ${formatQuantity(getAvailableQuantity(liveSelectedStock.stockCode))}개`
                         }
                       </span>
                     </div>
@@ -664,7 +679,7 @@ const TradePage = () => {
                   >
                     {isSubmitting
                       ? '주문 처리 중...'
-                      : `${coinName(selectedStock.stockCode)} ${orderType === 'BUY' ? '매수' : '매도'}`
+                      : `${coinName(liveSelectedStock.stockCode)} ${orderType === 'BUY' ? '매수' : '매도'}`
                     }
                   </button>
                 </form>

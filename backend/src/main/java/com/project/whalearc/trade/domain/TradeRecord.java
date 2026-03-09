@@ -25,6 +25,7 @@ public class TradeRecord {
     private String stockCode;
     private String stockName;
     private Order.OrderType orderType;
+    private String assetType;
     private double quantity;
     private double price;
     private double totalAmount;
@@ -38,6 +39,7 @@ public class TradeRecord {
         this.stockCode = order.getStockCode();
         this.stockName = order.getStockName();
         this.orderType = order.getOrderType();
+        this.assetType = order.getAssetType();
         this.quantity = order.getQuantity();
         this.price = executionPrice;
         this.totalAmount = executionPrice * order.getQuantity();

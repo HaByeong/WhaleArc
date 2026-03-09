@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -8,7 +8,7 @@ import { marketService, type MarketPrice, type AssetType } from '../services/mar
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
 
 const MarketPage = () => {
-  const [assetType, setAssetType] = useState<AssetType>('CRYPTO');
+  const [assetType, setAssetType] = useState<AssetType>('STOCK');
   const [selectedAsset, setSelectedAsset] = useState<MarketPrice | null>(null);
   const [assetList, setAssetList] = useState<MarketPrice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,6 +16,56 @@ const MarketPage = () => {
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'change' | 'volume'>('volume');
   const [filterText, setFilterText] = useState('');
   const [chartType, setChartType] = useState<'area' | 'candle'>('area');
+
+  // 주식 종목 검색
+  const [searchResults, setSearchResults] = useState<{ code: string; name: string; market: string }[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const handleStockSearch = useCallback((keyword: string) => {
+    setFilterText(keyword);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    if (assetType !== 'STOCK' || keyword.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    // 이미 리스트에 있는지 로컬 필터로 충분한지 확인
+    const localMatch = assetList.filter(a =>
+      a.name.toLowerCase().includes(keyword.toLowerCase()) || a.symbol.includes(keyword)
+    );
+    if (localMatch.length > 0) {
+      setSearchResults([]);
+      return;
+    }
+
+    // 서버 검색 (300ms debounce)
+    searchTimerRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const results = await marketService.searchStocks(keyword);
+        // 이미 리스트에 있는 종목 제외
+        const existing = new Set(assetList.map(a => a.symbol));
+        setSearchResults(results.filter(r => !existing.has(r.code)));
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  }, [assetType, assetList]);
+
+  const handleSearchResultClick = async (result: { code: string; name: string; market: string }) => {
+    try {
+      const price = await marketService.getStockPrice(result.code);
+      setAssetList(prev => [price, ...prev]);
+      setSelectedAsset(price);
+      setSearchResults([]);
+    } catch {
+      // 조회 실패 시 무시
+    }
+  };
 
   // 실시간 WebSocket 구독 (코인 탭일 때만)
   const { prices: realtimePrices, connected, tickCount } = useRealtimePrice({
@@ -50,28 +100,17 @@ const MarketPage = () => {
     return selectedAsset;
   }, [selectedAsset, realtimePrices, assetType, tickCount]);
 
-  const getDemoStocks = (): MarketPrice[] => [
-    { assetType: 'STOCK', symbol: '005930', name: '삼성전자', price: 75000, change: 1500, changeRate: 2.04, volume: 12500000, market: 'KRX' },
-    { assetType: 'STOCK', symbol: '000660', name: 'SK하이닉스', price: 145000, change: -2000, changeRate: -1.36, volume: 3500000, market: 'KRX' },
-    { assetType: 'STOCK', symbol: '035420', name: 'NAVER', price: 185000, change: 3000, changeRate: 1.65, volume: 1200000, market: 'KRX' },
-    { assetType: 'STOCK', symbol: '035720', name: '카카오', price: 52000, change: -500, changeRate: -0.95, volume: 2500000, market: 'KRX' },
-  ];
-
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const prices = await marketService.getPrices(assetType).catch(() => getDemoStocks());
+      const prices = await marketService.getPrices(assetType);
       setAssetList(prices);
       if (prices.length > 0 && !selectedAsset) {
         setSelectedAsset(prices[0]);
       }
     } catch {
-      const demo = getDemoStocks();
-      setAssetList(demo);
-      if (demo.length > 0 && !selectedAsset) {
-        setSelectedAsset(demo[0]);
-      }
+      setError('시세 데이터를 불러오지 못했습니다.');
     } finally {
       setLoading(false);
     }
@@ -180,13 +219,41 @@ const MarketPage = () => {
               <h2 className="text-xl font-bold text-whale-dark mb-4">종목 목록</h2>
 
               <div className="mb-4 space-y-3">
-                <input
-                  type="text"
-                  placeholder="종목명 또는 코드 검색..."
-                  value={filterText}
-                  onChange={(e) => setFilterText(e.target.value)}
-                  className="input-field"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder={assetType === 'STOCK' ? '종목명 또는 코드 검색 (전 종목)...' : '종목명 또는 코드 검색...'}
+                    value={filterText}
+                    onChange={(e) => assetType === 'STOCK' ? handleStockSearch(e.target.value) : setFilterText(e.target.value)}
+                    className="input-field"
+                  />
+                  {searchLoading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="w-4 h-4 border-2 border-whale-light border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                  {/* 서버 검색 결과 드롭다운 */}
+                  {searchResults.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      <div className="px-3 py-1.5 text-[10px] text-gray-400 font-medium border-b">
+                        검색 결과 ({searchResults.length}건) — 클릭하여 추가
+                      </div>
+                      {searchResults.map((r) => (
+                        <div
+                          key={r.code}
+                          onClick={() => handleSearchResultClick(r)}
+                          className="px-3 py-2.5 hover:bg-blue-50 cursor-pointer flex justify-between items-center border-b border-gray-50 last:border-0"
+                        >
+                          <div>
+                            <span className="font-medium text-whale-dark">{r.name}</span>
+                            <span className="text-xs text-gray-400 ml-2">{r.code}</span>
+                          </div>
+                          <span className="text-[10px] text-gray-400">{r.market}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as 'name' | 'price' | 'change' | 'volume')}
@@ -321,8 +388,13 @@ const MarketPage = () => {
                       )}
                     </div>
                   ) : (
-                    <div className="mt-4 bg-gray-50 rounded-xl p-8 text-center border border-gray-100">
-                      <div className="text-gray-400 text-sm">주식 실시간 차트는 준비 중입니다</div>
+                    <div className="mt-4">
+                      <TradingChart
+                        symbol={liveSelectedAsset.symbol}
+                        price={liveSelectedAsset.price}
+                        changeRate={liveSelectedAsset.changeRate}
+                        assetType="STOCK"
+                      />
                     </div>
                   )}
                 </div>

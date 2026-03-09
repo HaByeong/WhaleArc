@@ -41,6 +41,13 @@ public class QuantProduct {
     /** SIMPLE: 균등 분배 즉시 매수, TURTLE: 터틀 트레이딩 자동매매 */
     private StrategyType strategyType = StrategyType.SIMPLE;
 
+    /** STOCK: 주식 전용, CRYPTO: 코인 전용 (null → CRYPTO 호환) */
+    private String assetType; // "STOCK" or "CRYPTO"
+
+    public boolean isStock() {
+        return "STOCK".equals(assetType);
+    }
+
     private boolean active;
     private Instant createdAt;
     private Instant updatedAt;

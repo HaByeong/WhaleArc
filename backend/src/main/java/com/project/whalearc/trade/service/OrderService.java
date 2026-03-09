@@ -2,6 +2,8 @@ package com.project.whalearc.trade.service;
 
 import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.CryptoPriceProvider;
+import com.project.whalearc.market.service.KisApiClient;
+import com.project.whalearc.market.service.StockPriceProvider;
 import com.project.whalearc.trade.domain.*;
 import com.project.whalearc.trade.repository.OrderRepository;
 import com.project.whalearc.trade.repository.TradeRecordRepository;
@@ -11,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -23,6 +26,8 @@ public class OrderService {
     private final TradeRecordRepository tradeRecordRepository;
     private final PortfolioService portfolioService;
     private final CryptoPriceProvider cryptoPriceProvider;
+    private final StockPriceProvider stockPriceProvider;
+    private final KisApiClient kisApiClient;
 
     // 유저별 동시 주문 방지 락
     private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
@@ -38,6 +43,12 @@ public class OrderService {
     public Order createOrder(String userId, String stockCode, String stockName,
                              Order.OrderType orderType, Order.OrderMethod orderMethod,
                              double quantity, Double limitPrice) {
+        return createOrder(userId, stockCode, stockName, orderType, orderMethod, quantity, limitPrice, "CRYPTO");
+    }
+
+    public Order createOrder(String userId, String stockCode, String stockName,
+                             Order.OrderType orderType, Order.OrderMethod orderMethod,
+                             double quantity, Double limitPrice, String assetType) {
 
         if (quantity <= 0) {
             throw new IllegalArgumentException("수량은 0보다 커야 합니다.");
@@ -45,11 +56,15 @@ public class OrderService {
         if (orderMethod == Order.OrderMethod.LIMIT && (limitPrice == null || limitPrice <= 0)) {
             throw new IllegalArgumentException("지정가 주문은 가격을 입력해야 합니다.");
         }
+        // 주식은 정수 단위만 거래 가능
+        if ("STOCK".equals(assetType) && quantity != Math.floor(quantity)) {
+            throw new IllegalArgumentException("주식은 1주 단위로만 거래할 수 있습니다.");
+        }
 
         ReentrantLock lock = getUserLock(userId);
         lock.lock();
         try {
-            double executionPrice = getExecutionPrice(stockCode, orderMethod, limitPrice);
+            double executionPrice = getExecutionPrice(stockCode, orderMethod, limitPrice, assetType);
 
             if (executionPrice <= 0) {
                 throw new IllegalArgumentException("유효하지 않은 체결 가격입니다: " + stockCode);
@@ -59,7 +74,7 @@ public class OrderService {
 
             validateOrder(orderType, stockCode, stockName, quantity, executionPrice, portfolio);
 
-            Order order = new Order(userId, stockCode, stockName, orderType, orderMethod, quantity, executionPrice);
+            Order order = new Order(userId, stockCode, stockName, orderType, orderMethod, quantity, executionPrice, assetType);
             order = orderRepository.save(order);
 
             // 시장가 주문은 즉시 체결
@@ -120,7 +135,7 @@ public class OrderService {
             }
             portfolio.setCashBalance(newBalance);
             addOrUpdateHolding(portfolio, order.getStockCode(), order.getStockName(),
-                    order.getQuantity(), executionPrice);
+                    order.getQuantity(), executionPrice, order.getAssetType());
         } else {
             portfolio.setCashBalance(portfolio.getCashBalance() + trade.getNetAmount());
             reduceHolding(portfolio, order.getStockCode(), order.getQuantity());
@@ -133,7 +148,7 @@ public class OrderService {
     }
 
     private void addOrUpdateHolding(Portfolio portfolio, String stockCode, String stockName,
-                                     double quantity, double price) {
+                                     double quantity, double price, String assetType) {
         Holding existing = portfolio.getHoldings().stream()
                 .filter(h -> h.getStockCode().equals(stockCode))
                 .findFirst()
@@ -146,7 +161,7 @@ public class OrderService {
             existing.setQuantity(totalQty);
             existing.setCurrentPrice(price);
         } else {
-            portfolio.getHoldings().add(new Holding(stockCode, stockName, quantity, price));
+            portfolio.getHoldings().add(new Holding(stockCode, stockName, quantity, price, assetType != null ? assetType : "CRYPTO"));
         }
     }
 
@@ -167,12 +182,18 @@ public class OrderService {
     }
 
     /**
-     * 실행 가격 결정 (시장가: 빗썸 현재가, 지정가: 유저 입력값)
+     * 실행 가격 결정 (시장가: 현재가 조회, 지정가: 유저 입력값)
      */
-    private double getExecutionPrice(String stockCode, Order.OrderMethod method, Double limitPrice) {
+    private double getExecutionPrice(String stockCode, Order.OrderMethod method, Double limitPrice, String assetType) {
         if (method == Order.OrderMethod.LIMIT && limitPrice != null) {
             return limitPrice;
         }
+
+        if ("STOCK".equals(assetType)) {
+            return getStockCurrentPrice(stockCode);
+        }
+
+        // 코인: 빗썸 현재가
         List<MarketPriceResponse> prices = cryptoPriceProvider.getAllKrwTickers();
         if (prices.isEmpty()) {
             throw new IllegalStateException("시세 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.");
@@ -182,6 +203,28 @@ public class OrderService {
                 .findFirst()
                 .map(MarketPriceResponse::getPrice)
                 .orElseThrow(() -> new IllegalArgumentException("해당 종목의 시세를 찾을 수 없습니다: " + stockCode));
+    }
+
+    /** 주식 현재가 조회 (KIS API) */
+    private double getStockCurrentPrice(String stockCode) {
+        // 인기 종목 캐시에서 먼저 조회
+        List<MarketPriceResponse> cached = stockPriceProvider.getAllStockPrices();
+        for (MarketPriceResponse p : cached) {
+            if (p.getSymbol().equals(stockCode)) {
+                return p.getPrice();
+            }
+        }
+        // 캐시에 없으면 개별 조회
+        Map<String, String> output = kisApiClient.getStockPrice(stockCode);
+        if (output == null) {
+            throw new IllegalStateException("주식 시세를 불러올 수 없습니다: " + stockCode);
+        }
+        long price = 0;
+        try { price = Long.parseLong(output.get("stck_prpr")); } catch (Exception ignored) {}
+        if (price <= 0) {
+            throw new IllegalStateException("유효하지 않은 주식 시세입니다: " + stockCode);
+        }
+        return price;
     }
 
     public List<Order> getOrders(String userId) {

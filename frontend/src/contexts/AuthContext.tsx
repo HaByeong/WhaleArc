@@ -40,9 +40,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const profile = await userService.getProfile();
       setProfileName(profile?.name ?? null);
-      setOnboardingDone(profile ? !!profile.investmentStyle : null);
+      setOnboardingDone(profile ? !!profile.investmentStyle : false);
     } catch {
-      // fallback
+      // 프로필 조회 실패 시 온보딩 완료로 간주 (로딩 무한루프 방지)
+      setOnboardingDone(true);
     }
   }, []);
 

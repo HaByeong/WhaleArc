@@ -2,6 +2,7 @@ package com.project.whalearc.store.service;
 
 import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.CryptoPriceProvider;
+import com.project.whalearc.market.service.StockPriceProvider;
 import com.project.whalearc.store.domain.ProductPurchase;
 import com.project.whalearc.store.domain.QuantProduct;
 import com.project.whalearc.store.dto.PurchasePerformanceDto;
@@ -36,6 +37,7 @@ public class QuantStoreService {
     private final ProductPurchaseRepository purchaseRepository;
     private final OrderService orderService;
     private final CryptoPriceProvider cryptoPriceProvider;
+    private final StockPriceProvider stockPriceProvider;
     private final PortfolioService portfolioService;
     private final TurtleStrategyService turtleStrategyService;
     private final TurtlePositionRepository turtlePositionRepository;
@@ -45,7 +47,10 @@ public class QuantStoreService {
      */
     @PostConstruct
     public void seedProducts() {
-        if (productRepository.count() > 0) return;
+        if (productRepository.count() > 0) {
+            seedNewProducts();
+            return;
+        }
 
         List<QuantProduct> seeds = List.of(
                 // ── 무료 기본 항로 ──
@@ -91,6 +96,63 @@ public class QuantStoreService {
                         List.of("차익거래", "김프", "안전", "무료"), List.of("BTC", "ETH", "XRP"),
                         "김프 > 3% → 매도 / 김프 < -1% → 매수"),
 
+                // ── 주식 전용 항로 ──
+                createProduct("래리 윌리엄스 변동성 돌파",
+                        "래리 윌리엄스가 1987년 로빈스 월드컵에서 11,376% 수익을 달성한 전설적 전략입니다. "
+                        + "전일 변동폭(고가-저가)의 일정 비율(k=0.5)을 당일 시가에 더한 가격을 돌파하면 매수, "
+                        + "당일 종가에 전량 청산합니다. 단기 모멘텀을 포착하는 데이트레이딩 전략입니다.",
+                        "Larry Williams", QuantProduct.Category.VOLATILITY, QuantProduct.RiskLevel.HIGH,
+                        0, 38.2, -16.5, 1.92, 56.8, 203,
+                        List.of("변동성돌파", "래리윌리엄스", "데이트레이딩", "무료", "주식"),
+                        List.of("005930", "000660", "005380", "035420", "035720"),
+                        "매수: 시가 + (전일 고가-저가) × 0.5 돌파 / 매도: 당일 종가 청산",
+                        "STOCK"),
+
+                createProduct("듀얼 모멘텀",
+                        "Gary Antonacci가 개발한 노벨상 수상 개념(상대 모멘텀 + 절대 모멘텀) 기반 전략입니다. "
+                        + "12개월 수익률이 양(+)이면서 동시에 상대적으로 강한 자산에만 투자합니다. "
+                        + "시장 하락기에는 현금 비중을 높여 MDD를 크게 줄이는 것이 특징입니다.",
+                        "Gary Antonacci", QuantProduct.Category.MOMENTUM, QuantProduct.RiskLevel.MEDIUM,
+                        0, 22.4, -11.2, 1.78, 65.3, 156,
+                        List.of("듀얼모멘텀", "상대강도", "절대모멘텀", "무료", "주식"),
+                        List.of("005930", "000660", "373220", "005380", "035420"),
+                        "12개월 수익률 > 0 (절대 모멘텀) + 상대 강도 상위 종목 선별 → 매수 / 조건 미충족 → 현금",
+                        "STOCK"),
+
+                createProduct("마크 미너비니 트렌드 템플릿",
+                        "미국 투자 챔피언십 우승자 Mark Minervini의 VCP(Volatility Contraction Pattern) 전략입니다. "
+                        + "150일/200일 이동평균선 위에 있고, 52주 신고가 대비 25% 이내인 종목 중 "
+                        + "변동성이 수축하며 거래량이 감소하는 패턴을 찾아 돌파 시 매수합니다.",
+                        "Mark Minervini", QuantProduct.Category.TREND_FOLLOWING, QuantProduct.RiskLevel.MEDIUM,
+                        0, 26.8, -13.5, 1.85, 48.7, 89,
+                        List.of("VCP", "트렌드템플릿", "미너비니", "무료", "주식"),
+                        List.of("005930", "000660", "207940", "068270", "035420"),
+                        "조건: 주가 > MA(150) > MA(200), 52주 고가 대비 -25% 이내 / 매수: VCP 수축 후 돌파 / 손절: -8%",
+                        "STOCK"),
+
+                // ── 코인 추가 항로 ──
+                createProduct("MACD 다이버전스",
+                        "Gerald Appel이 1979년 개발한 MACD 지표의 다이버전스(괴리) 신호를 활용합니다. "
+                        + "가격은 저점을 낮추는데 MACD는 저점을 높이는 상승 다이버전스 시 매수, "
+                        + "가격은 고점을 높이는데 MACD는 고점을 낮추는 하락 다이버전스 시 매도합니다. "
+                        + "50년 이상 검증된 클래식 기술적 분석 전략입니다.",
+                        "Gerald Appel", QuantProduct.Category.MEAN_REVERSION, QuantProduct.RiskLevel.MEDIUM,
+                        0, 25.6, -14.2, 1.72, 59.4, 167,
+                        List.of("MACD", "다이버전스", "클래식", "무료"),
+                        List.of("BTC", "ETH", "SOL", "XRP"),
+                        "매수: 가격 저점↓ + MACD 저점↑ (상승 다이버전스) / 매도: 가격 고점↑ + MACD 고점↓ (하락 다이버전스)"),
+
+                createProduct("래리 코너스 RSI(2) 평균회귀",
+                        "Larry Connors가 개발한 초단기 RSI(2) 평균회귀 전략입니다. "
+                        + "200일 이동평균 위에 있는 상승 추세 종목에서 RSI(2)가 5 이하로 극단적 과매도일 때 매수, "
+                        + "종가가 5일 이동평균을 상회하면 매도합니다. "
+                        + "20년간의 백테스트에서 승률 80% 이상을 기록한 검증된 전략입니다.",
+                        "Larry Connors", QuantProduct.Category.MEAN_REVERSION, QuantProduct.RiskLevel.MEDIUM,
+                        0, 29.3, -10.8, 2.15, 82.1, 245,
+                        List.of("RSI2", "코너스", "평균회귀", "고승률", "무료"),
+                        List.of("BTC", "ETH", "SOL", "AVAX", "LINK"),
+                        "조건: 종가 > MA(200) / 매수: RSI(2) ≤ 5 / 매도: 종가 > MA(5)"),
+
                 // ── 유료 프리미엄 항로: 터틀 트레이딩 (자체 알고리즘) ──
                 createTurtleProduct()
         );
@@ -99,11 +161,100 @@ public class QuantStoreService {
         log.info("퀀트 상품 시드 데이터 {}개 생성 완료", seeds.size());
     }
 
+    /** 기존 DB에 없는 새 전략만 추가 */
+    private void seedNewProducts() {
+        Set<String> existingNames = productRepository.findAll().stream()
+                .map(QuantProduct::getName)
+                .collect(Collectors.toSet());
+
+        List<QuantProduct> newProducts = new ArrayList<>();
+
+        if (!existingNames.contains("래리 윌리엄스 변동성 돌파")) {
+            newProducts.add(createProduct("래리 윌리엄스 변동성 돌파",
+                    "래리 윌리엄스가 1987년 로빈스 월드컵에서 11,376% 수익을 달성한 전설적 전략입니다. "
+                    + "전일 변동폭(고가-저가)의 일정 비율(k=0.5)을 당일 시가에 더한 가격을 돌파하면 매수, "
+                    + "당일 종가에 전량 청산합니다. 단기 모멘텀을 포착하는 데이트레이딩 전략입니다.",
+                    "Larry Williams", QuantProduct.Category.VOLATILITY, QuantProduct.RiskLevel.HIGH,
+                    0, 38.2, -16.5, 1.92, 56.8, 203,
+                    List.of("변동성돌파", "래리윌리엄스", "데이트레이딩", "무료", "주식"),
+                    List.of("005930", "000660", "005380", "035420", "035720"),
+                    "매수: 시가 + (전일 고가-저가) × 0.5 돌파 / 매도: 당일 종가 청산",
+                    "STOCK"));
+        }
+
+        if (!existingNames.contains("듀얼 모멘텀")) {
+            newProducts.add(createProduct("듀얼 모멘텀",
+                    "Gary Antonacci가 개발한 노벨상 수상 개념(상대 모멘텀 + 절대 모멘텀) 기반 전략입니다. "
+                    + "12개월 수익률이 양(+)이면서 동시에 상대적으로 강한 자산에만 투자합니다. "
+                    + "시장 하락기에는 현금 비중을 높여 MDD를 크게 줄이는 것이 특징입니다.",
+                    "Gary Antonacci", QuantProduct.Category.MOMENTUM, QuantProduct.RiskLevel.MEDIUM,
+                    0, 22.4, -11.2, 1.78, 65.3, 156,
+                    List.of("듀얼모멘텀", "상대강도", "절대모멘텀", "무료", "주식"),
+                    List.of("005930", "000660", "373220", "005380", "035420"),
+                    "12개월 수익률 > 0 (절대 모멘텀) + 상대 강도 상위 종목 선별 → 매수 / 조건 미충족 → 현금",
+                    "STOCK"));
+        }
+
+        if (!existingNames.contains("마크 미너비니 트렌드 템플릿")) {
+            newProducts.add(createProduct("마크 미너비니 트렌드 템플릿",
+                    "미국 투자 챔피언십 우승자 Mark Minervini의 VCP(Volatility Contraction Pattern) 전략입니다. "
+                    + "150일/200일 이동평균선 위에 있고, 52주 신고가 대비 25% 이내인 종목 중 "
+                    + "변동성이 수축하며 거래량이 감소하는 패턴을 찾아 돌파 시 매수합니다.",
+                    "Mark Minervini", QuantProduct.Category.TREND_FOLLOWING, QuantProduct.RiskLevel.MEDIUM,
+                    0, 26.8, -13.5, 1.85, 48.7, 89,
+                    List.of("VCP", "트렌드템플릿", "미너비니", "무료", "주식"),
+                    List.of("005930", "000660", "207940", "068270", "035420"),
+                    "조건: 주가 > MA(150) > MA(200), 52주 고가 대비 -25% 이내 / 매수: VCP 수축 후 돌파 / 손절: -8%",
+                    "STOCK"));
+        }
+
+        if (!existingNames.contains("MACD 다이버전스")) {
+            newProducts.add(createProduct("MACD 다이버전스",
+                    "Gerald Appel이 1979년 개발한 MACD 지표의 다이버전스(괴리) 신호를 활용합니다. "
+                    + "가격은 저점을 낮추는데 MACD는 저점을 높이는 상승 다이버전스 시 매수, "
+                    + "가격은 고점을 높이는데 MACD는 고점을 낮추는 하락 다이버전스 시 매도합니다. "
+                    + "50년 이상 검증된 클래식 기술적 분석 전략입니다.",
+                    "Gerald Appel", QuantProduct.Category.MEAN_REVERSION, QuantProduct.RiskLevel.MEDIUM,
+                    0, 25.6, -14.2, 1.72, 59.4, 167,
+                    List.of("MACD", "다이버전스", "클래식", "무료"),
+                    List.of("BTC", "ETH", "SOL", "XRP"),
+                    "매수: 가격 저점↓ + MACD 저점↑ (상승 다이버전스) / 매도: 가격 고점↑ + MACD 고점↓ (하락 다이버전스)"));
+        }
+
+        if (!existingNames.contains("래리 코너스 RSI(2) 평균회귀")) {
+            newProducts.add(createProduct("래리 코너스 RSI(2) 평균회귀",
+                    "Larry Connors가 개발한 초단기 RSI(2) 평균회귀 전략입니다. "
+                    + "200일 이동평균 위에 있는 상승 추세 종목에서 RSI(2)가 5 이하로 극단적 과매도일 때 매수, "
+                    + "종가가 5일 이동평균을 상회하면 매도합니다. "
+                    + "20년간의 백테스트에서 승률 80% 이상을 기록한 검증된 전략입니다.",
+                    "Larry Connors", QuantProduct.Category.MEAN_REVERSION, QuantProduct.RiskLevel.MEDIUM,
+                    0, 29.3, -10.8, 2.15, 82.1, 245,
+                    List.of("RSI2", "코너스", "평균회귀", "고승률", "무료"),
+                    List.of("BTC", "ETH", "SOL", "AVAX", "LINK"),
+                    "조건: 종가 > MA(200) / 매수: RSI(2) ≤ 5 / 매도: 종가 > MA(5)"));
+        }
+
+        if (!newProducts.isEmpty()) {
+            productRepository.saveAll(newProducts);
+            log.info("새 퀀트 전략 {}개 추가 완료", newProducts.size());
+        }
+    }
+
     private QuantProduct createProduct(String name, String description, String creatorName,
                                         QuantProduct.Category category, QuantProduct.RiskLevel riskLevel,
                                         double price, double expectedReturn, double maxDrawdown,
                                         double sharpeRatio, double winRate, int subscribers,
                                         List<String> tags, List<String> targetAssets, String strategyLogic) {
+        return createProduct(name, description, creatorName, category, riskLevel, price,
+                expectedReturn, maxDrawdown, sharpeRatio, winRate, subscribers, tags, targetAssets, strategyLogic, "CRYPTO");
+    }
+
+    private QuantProduct createProduct(String name, String description, String creatorName,
+                                        QuantProduct.Category category, QuantProduct.RiskLevel riskLevel,
+                                        double price, double expectedReturn, double maxDrawdown,
+                                        double sharpeRatio, double winRate, int subscribers,
+                                        List<String> tags, List<String> targetAssets, String strategyLogic,
+                                        String assetType) {
         QuantProduct p = new QuantProduct();
         p.setName(name);
         p.setDescription(description);
@@ -121,6 +272,7 @@ public class QuantStoreService {
         p.setTags(tags);
         p.setTargetAssets(targetAssets);
         p.setStrategyLogic(strategyLogic);
+        p.setAssetType(assetType);
         p.setActive(true);
         p.setCreatedAt(Instant.now());
         p.setUpdatedAt(Instant.now());
@@ -201,8 +353,13 @@ public class QuantStoreService {
             turtleStrategyService.initializePositions(userId, purchase.getId(), targetAssets, investmentAmount);
             log.info("터틀 항로 구매: userId={}, investment={}, assets={}", userId, investmentAmount, targetAssets);
         } else {
-            // ── 일반 전략: 기존 균등 분배 즉시 매수 ──
-            List<MarketPriceResponse> allPrices = cryptoPriceProvider.getAllKrwTickers();
+            // ── 일반 전략: 균등 분배 즉시 매수 (코인 or 주식) ──
+            boolean isStockProduct = product.isStock();
+            String assetType = isStockProduct ? "STOCK" : "CRYPTO";
+
+            List<MarketPriceResponse> allPrices = isStockProduct
+                    ? stockPriceProvider.getAllStockPrices()
+                    : cryptoPriceProvider.getAllKrwTickers();
             Map<String, MarketPriceResponse> priceMap = allPrices.stream()
                     .collect(Collectors.toMap(MarketPriceResponse::getSymbol, p -> p, (a, b) -> a));
 
@@ -223,13 +380,22 @@ public class QuantStoreService {
                     continue;
                 }
 
-                quantity = Math.floor(quantity * 100000000.0) / 100000000.0;
+                // 주식은 정수 단위, 코인은 소수점 8자리
+                if (isStockProduct) {
+                    quantity = Math.floor(quantity);
+                    if (quantity <= 0) {
+                        log.warn("투자 금액 부족 (1주 미만): asset={}, price={}", asset, priceInfo.getPrice());
+                        continue;
+                    }
+                } else {
+                    quantity = Math.floor(quantity * 100000000.0) / 100000000.0;
+                }
 
                 try {
                     orderService.createOrder(userId, asset, priceInfo.getName(),
-                            Order.OrderType.BUY, Order.OrderMethod.MARKET, quantity, null);
+                            Order.OrderType.BUY, Order.OrderMethod.MARKET, quantity, null, assetType);
                     purchasedAssets.add(new ProductPurchase.PurchasedAsset(asset, quantity, priceInfo.getPrice()));
-                    log.info("항로 자동 매수: asset={}, qty={}, price={}", asset, quantity, priceInfo.getPrice());
+                    log.info("항로 자동 매수: asset={}, qty={}, price={}, type={}", asset, quantity, priceInfo.getPrice(), assetType);
                 } catch (Exception e) {
                     log.warn("항로 자동 매수 실패: asset={}, reason={}", asset, e.getMessage());
                 }
@@ -284,6 +450,8 @@ public class QuantStoreService {
             portfolioService.save(portfolio);
         } else {
             // 일반: 매수한 자산들을 항로 매수 수량만큼만 매도
+            boolean isStockProduct = product != null && product.isStock();
+            String cancelAssetType = isStockProduct ? "STOCK" : "CRYPTO";
             Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
             for (ProductPurchase.PurchasedAsset pa : purchase.getPurchasedAssets()) {
                 Holding holding = portfolio.getHoldings().stream()
@@ -296,7 +464,7 @@ public class QuantStoreService {
                     try {
                         orderService.createOrder(userId, pa.getCode(), holding.getStockName(),
                                 Order.OrderType.SELL, Order.OrderMethod.MARKET,
-                                sellQty, null);
+                                sellQty, null, cancelAssetType);
                         log.info("항로 취소 자동 매도: asset={}, qty={} (항로 매수량: {})",
                                 pa.getCode(), sellQty, pa.getQuantity());
                     } catch (Exception e) {
@@ -345,9 +513,10 @@ public class QuantStoreService {
 
         if (activePurchases.isEmpty()) return List.of();
 
-        // 현재가 한번에 조회
-        Map<String, MarketPriceResponse> priceMap = cryptoPriceProvider.getAllKrwTickers().stream()
-                .collect(Collectors.toMap(MarketPriceResponse::getSymbol, p -> p, (a, b) -> a));
+        // 현재가 한번에 조회 (코인 + 주식)
+        Map<String, MarketPriceResponse> priceMap = new java.util.HashMap<>();
+        cryptoPriceProvider.getAllKrwTickers().forEach(p -> priceMap.put(p.getSymbol(), p));
+        stockPriceProvider.getAllStockPrices().forEach(p -> priceMap.put(p.getSymbol(), p));
 
         List<PurchasePerformanceDto> results = new ArrayList<>();
 

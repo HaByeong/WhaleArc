@@ -30,10 +30,24 @@ export const marketService = {
     return res.data;
   },
 
-  getCandlesticks: async (symbol: string, interval: string = '10m'): Promise<Candlestick[]> => {
+  getCandlesticks: async (symbol: string, interval: string = '10m', assetType?: AssetType): Promise<Candlestick[]> => {
     const res = await apiClient.get<Candlestick[]>(`/api/market/candlestick/${symbol}`, {
-      params: { interval },
+      params: { interval, ...(assetType ? { assetType } : {}) },
     });
+    return res.data;
+  },
+
+  /** 주식 종목 검색 (이름/코드 부분 매칭) */
+  searchStocks: async (keyword: string): Promise<{ code: string; name: string; market: string }[]> => {
+    const res = await apiClient.get<{ code: string; name: string; market: string }[]>('/api/market/stock/search', {
+      params: { keyword },
+    });
+    return res.data;
+  },
+
+  /** 개별 종목 현재가 조회 */
+  getStockPrice: async (code: string): Promise<MarketPrice> => {
+    const res = await apiClient.get<MarketPrice>(`/api/market/stock/price/${code}`);
     return res.data;
   },
 };

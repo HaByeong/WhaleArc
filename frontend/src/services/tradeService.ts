@@ -13,6 +13,7 @@ export interface StockPrice {
   open: number;
   previousClose: number;
   timestamp: string;
+  assetType?: 'STOCK' | 'CRYPTO';
 }
 
 export interface OrderRequest {
@@ -22,6 +23,7 @@ export interface OrderRequest {
   orderMethod: 'MARKET' | 'LIMIT';
   quantity: number;
   price?: number; // 지정가 주문일 때만 필요
+  assetType?: 'STOCK' | 'CRYPTO';
 }
 
 export interface Order {
@@ -36,6 +38,7 @@ export interface Order {
   status: 'PENDING' | 'PARTIALLY_FILLED' | 'FILLED' | 'CANCELLED';
   filledQuantity: number;
   filledPrice: number | null;
+  assetType?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -51,6 +54,7 @@ export interface Trade {
   totalAmount: number;
   commission: number;
   netAmount: number;
+  assetType?: string;
   executedAt: string;
 }
 
@@ -63,6 +67,7 @@ export interface Holding {
   marketValue: number;
   profitLoss: number;
   returnRate: number;
+  assetType?: string;
 }
 
 export interface Portfolio {
@@ -104,7 +109,7 @@ const mapMarketToStockPrice = (item: {
   change: number;
   changeRate: number;
   volume: number;
-}): StockPrice => ({
+}, assetType: 'STOCK' | 'CRYPTO' = 'CRYPTO'): StockPrice => ({
   stockCode: item.symbol,
   stockName: item.name,
   currentPrice: item.price,
@@ -116,6 +121,7 @@ const mapMarketToStockPrice = (item: {
   open: item.price - item.change,
   previousClose: item.price - item.change,
   timestamp: new Date().toISOString(),
+  assetType,
 });
 
 // API 서비스
@@ -137,7 +143,31 @@ export const tradeService = {
       params: { type: 'CRYPTO' },
     });
     const list: any[] = response.data;
-    return list.map(mapMarketToStockPrice);
+    return list.map((item) => mapMarketToStockPrice(item, 'CRYPTO'));
+  },
+
+  // 주식 종목 목록 조회 (KIS 인기 30종목)
+  getKrxStockList: async (): Promise<StockPrice[]> => {
+    const response = await apiClient.get('/api/market/prices', {
+      params: { type: 'STOCK' },
+    });
+    const list: any[] = response.data;
+    return list.map((item) => mapMarketToStockPrice(item, 'STOCK'));
+  },
+
+  // 주식 종목 검색 (전체 KRX)
+  searchKrxStocks: async (keyword: string): Promise<{ code: string; name: string; market: string }[]> => {
+    const response = await apiClient.get('/api/market/stock/search', {
+      params: { keyword },
+    });
+    return response.data;
+  },
+
+  // 주식 개별 현재가 조회
+  getKrxStockPrice: async (code: string): Promise<StockPrice> => {
+    const response = await apiClient.get(`/api/market/stock/price/${code}`);
+    const data = response.data;
+    return mapMarketToStockPrice(data, 'STOCK');
   },
 
   // 주문 생성
@@ -169,5 +199,3 @@ export const tradeService = {
     await apiClient.delete(`/api/orders/${orderId}`);
   },
 };
-
-

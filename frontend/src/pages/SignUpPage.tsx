@@ -37,7 +37,12 @@ const SignUpPage = () => {
         navigate('/login');
       }
     } catch (err: any) {
-      setError(err.message || '합류에 실패했습니다. 다시 시도해주세요.');
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('rate limit')) {
+        setError('이메일 발송 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
+      } else {
+        setError(msg || '합류에 실패했습니다. 다시 시도해주세요.');
+      }
     } finally {
       setIsLoading(false);
     }

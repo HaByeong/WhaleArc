@@ -2,6 +2,7 @@ package com.project.whalearc.trade.service;
 
 import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.CryptoPriceProvider;
+import com.project.whalearc.market.service.StockPriceProvider;
 import com.project.whalearc.trade.domain.Holding;
 import com.project.whalearc.trade.domain.Portfolio;
 import com.project.whalearc.trade.domain.PortfolioSnapshot;
@@ -28,6 +29,7 @@ public class PortfolioSnapshotScheduler {
     private final PortfolioRepository portfolioRepository;
     private final PortfolioSnapshotRepository snapshotRepository;
     private final CryptoPriceProvider cryptoPriceProvider;
+    private final StockPriceProvider stockPriceProvider;
 
     /**
      * 매일 자정(KST)에 모든 포트폴리오의 스냅샷 저장
@@ -38,17 +40,28 @@ public class PortfolioSnapshotScheduler {
         LocalDate today = LocalDate.now(KST);
         List<Portfolio> all = portfolioRepository.findAll();
 
-        // 시세 1회 조회
-        Map<String, Double> priceMap = Map.of();
+        // 시세 1회 조회 (코인 + 주식)
+        Map<String, Double> cryptoPriceMap = Map.of();
+        Map<String, Double> stockPriceMap = Map.of();
         try {
-            List<MarketPriceResponse> prices = cryptoPriceProvider.getAllKrwTickers();
-            priceMap = prices.stream()
+            List<MarketPriceResponse> cryptoPrices = cryptoPriceProvider.getAllKrwTickers();
+            cryptoPriceMap = cryptoPrices.stream()
                     .collect(Collectors.toMap(
                             MarketPriceResponse::getSymbol,
                             MarketPriceResponse::getPrice,
                             (a, b) -> a));
         } catch (Exception e) {
-            log.warn("스냅샷용 시세 조회 실패, 기존 가격으로 저장: {}", e.getMessage());
+            log.warn("스냅샷용 코인 시세 조회 실패: {}", e.getMessage());
+        }
+        try {
+            List<MarketPriceResponse> stockPrices = stockPriceProvider.getAllStockPrices();
+            stockPriceMap = stockPrices.stream()
+                    .collect(Collectors.toMap(
+                            MarketPriceResponse::getSymbol,
+                            MarketPriceResponse::getPrice,
+                            (a, b) -> a));
+        } catch (Exception e) {
+            log.warn("스냅샷용 주식 시세 조회 실패: {}", e.getMessage());
         }
 
         int saved = 0;
@@ -59,6 +72,7 @@ public class PortfolioSnapshotScheduler {
                 }
                 // 보유 종목 현재가 갱신
                 for (Holding holding : portfolio.getHoldings()) {
+                    Map<String, Double> priceMap = holding.isStock() ? stockPriceMap : cryptoPriceMap;
                     Double price = priceMap.get(holding.getStockCode());
                     if (price != null) {
                         holding.setCurrentPrice(price);

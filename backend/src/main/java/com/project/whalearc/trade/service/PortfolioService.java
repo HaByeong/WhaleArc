@@ -2,6 +2,8 @@ package com.project.whalearc.trade.service;
 
 import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.CryptoPriceProvider;
+import com.project.whalearc.market.service.KisApiClient;
+import com.project.whalearc.market.service.StockPriceProvider;
 import com.project.whalearc.trade.domain.Holding;
 import com.project.whalearc.trade.domain.Portfolio;
 import com.project.whalearc.trade.domain.PortfolioSnapshot;
@@ -26,6 +28,8 @@ public class PortfolioService {
 
     private final PortfolioRepository portfolioRepository;
     private final CryptoPriceProvider cryptoPriceProvider;
+    private final StockPriceProvider stockPriceProvider;
+    private final KisApiClient kisApiClient;
     private final PortfolioSnapshotRepository snapshotRepository;
 
     /**
@@ -42,24 +46,56 @@ public class PortfolioService {
     }
 
     /**
-     * 보유 종목의 현재가를 빗썸 API 기준으로 갱신
+     * 보유 종목의 현재가를 갱신 (코인: 빗썸, 주식: KIS API)
      */
     private void updateHoldingPrices(Portfolio portfolio) {
         if (portfolio.getHoldings().isEmpty()) return;
 
         try {
-            List<MarketPriceResponse> prices = cryptoPriceProvider.getAllKrwTickers();
-            if (prices.isEmpty()) {
-                log.warn("빗썸 시세 데이터가 비어있습니다. 기존 가격을 유지합니다.");
-                return;
+            // 코인 시세 맵
+            Map<String, Double> cryptoPriceMap = Map.of();
+            boolean hasCrypto = portfolio.getHoldings().stream().anyMatch(h -> !h.isStock());
+            if (hasCrypto) {
+                List<MarketPriceResponse> cryptoPrices = cryptoPriceProvider.getAllKrwTickers();
+                if (!cryptoPrices.isEmpty()) {
+                    cryptoPriceMap = cryptoPrices.stream()
+                            .collect(Collectors.toMap(MarketPriceResponse::getSymbol, MarketPriceResponse::getPrice, (a, b) -> a));
+                }
             }
-            Map<String, Double> priceMap = prices.stream()
-                    .collect(Collectors.toMap(MarketPriceResponse::getSymbol, MarketPriceResponse::getPrice, (a, b) -> a));
+
+            // 주식 시세 맵 (캐시된 인기종목)
+            Map<String, Double> stockPriceMap = Map.of();
+            boolean hasStock = portfolio.getHoldings().stream().anyMatch(Holding::isStock);
+            if (hasStock) {
+                List<MarketPriceResponse> stockPrices = stockPriceProvider.getAllStockPrices();
+                if (!stockPrices.isEmpty()) {
+                    stockPriceMap = stockPrices.stream()
+                            .collect(Collectors.toMap(MarketPriceResponse::getSymbol, MarketPriceResponse::getPrice, (a, b) -> a));
+                }
+            }
 
             for (Holding holding : portfolio.getHoldings()) {
-                Double currentPrice = priceMap.get(holding.getStockCode());
-                if (currentPrice != null) {
-                    holding.setCurrentPrice(currentPrice);
+                if (holding.isStock()) {
+                    Double price = stockPriceMap.get(holding.getStockCode());
+                    if (price != null) {
+                        holding.setCurrentPrice(price);
+                    } else {
+                        // 캐시에 없는 주식은 개별 조회
+                        try {
+                            Map<String, String> output = kisApiClient.getStockPrice(holding.getStockCode());
+                            if (output != null) {
+                                long p = Long.parseLong(output.get("stck_prpr"));
+                                if (p > 0) holding.setCurrentPrice(p);
+                            }
+                        } catch (Exception e) {
+                            log.debug("주식 시세 개별 조회 실패 [{}]: {}", holding.getStockCode(), e.getMessage());
+                        }
+                    }
+                } else {
+                    Double price = cryptoPriceMap.get(holding.getStockCode());
+                    if (price != null) {
+                        holding.setCurrentPrice(price);
+                    }
                 }
             }
         } catch (Exception e) {

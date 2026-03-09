@@ -19,6 +19,7 @@ export interface QuantProduct {
   targetAssets: string[];
   strategyLogic: string;
   strategyType?: 'SIMPLE' | 'TURTLE';
+  assetType?: 'STOCK' | 'CRYPTO';
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -127,10 +128,35 @@ export const formatQuantity = (qty: number): string => {
   return parseFloat(qty.toFixed(8)).toString();
 };
 
-/** 심볼 코드를 "한글명(코드)" 형태로 변환 */
+// 주요 주식 종목코드 → 한글 이름 매핑
+export const STOCK_NAMES: Record<string, string> = {
+  '005930': '삼성전자', '000660': 'SK하이닉스', '373220': 'LG에너지솔루션',
+  '207940': '삼성바이오로직스', '005380': '현대차', '000270': '기아',
+  '006400': '삼성SDI', '051910': 'LG화학', '035420': 'NAVER', '035720': '카카오',
+  '068270': '셀트리온', '105560': 'KB금융', '055550': '신한지주',
+  '012330': '현대모비스', '028260': '삼성물산', '003670': '포스코퓨처엠',
+  '247540': '에코프로비엠', '086790': '하나금융지주', '066570': 'LG전자',
+  '096770': 'SK이노베이션', '034730': 'SK', '003550': 'LG',
+  '032830': '삼성생명', '030200': 'KT', '017670': 'SK텔레콤',
+  '009150': '삼성전기', '010130': '고려아연', '033780': 'KT&G',
+  '329180': '현대중공업', '352820': '하이브',
+};
+
+/** 심볼 코드를 "한글명(코드)" 형태로 변환 (주식 종목코드도 지원) */
 export const cryptoDisplayName = (code: string): string => {
-  const name = CRYPTO_NAMES[code];
-  return name ? `${name}(${code})` : code;
+  const cryptoName = CRYPTO_NAMES[code];
+  if (cryptoName) return `${cryptoName}(${code})`;
+  const stockName = STOCK_NAMES[code];
+  if (stockName) return stockName;
+  return code;
+};
+
+/** 주식/코인 통합: 심볼 코드를 한글명으로 변환 */
+export const assetDisplayName = (code: string, assetType?: string): string => {
+  if (assetType === 'STOCK') {
+    return STOCK_NAMES[code] || code;
+  }
+  return CRYPTO_NAMES[code] ? `${CRYPTO_NAMES[code]}(${code})` : code;
 };
 
 export const quantStoreService = {

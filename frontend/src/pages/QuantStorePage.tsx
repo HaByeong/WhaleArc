@@ -9,6 +9,7 @@ import {
   RISK_LABELS,
   RISK_COLORS,
   cryptoDisplayName,
+  assetDisplayName,
   formatQuantity,
 } from '../services/quantStoreService';
 
@@ -244,9 +245,16 @@ const QuantStorePage = () => {
                   ) : null}
                   {/* 상단 뱃지 */}
                   <div className="flex items-center justify-between mb-3">
-                    <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-whale-light/10 text-whale-light">
-                      {CATEGORY_LABELS[product.category]}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-whale-light/10 text-whale-light">
+                        {CATEGORY_LABELS[product.category]}
+                      </span>
+                      {product.assetType === 'STOCK' ? (
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">주식</span>
+                      ) : (
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-600">코인</span>
+                      )}
+                    </div>
                     <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${RISK_COLORS[product.riskLevel]}`}>
                       {RISK_LABELS[product.riskLevel]}
                     </span>
@@ -284,7 +292,7 @@ const QuantStorePage = () => {
                   <div className="flex flex-wrap gap-1 mb-4">
                     {product.targetAssets.map((asset) => (
                       <span key={asset} className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
-                        {cryptoDisplayName(asset)}
+                        {assetDisplayName(asset, product.assetType)}
                       </span>
                     ))}
                   </div>

@@ -30,6 +30,7 @@ public class Order {
     private OrderStatus status;
     private double filledQuantity;
     private Double filledPrice;
+    private String assetType; // "STOCK" or "CRYPTO"
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -40,6 +41,12 @@ public class Order {
     public Order(String userId, String stockCode, String stockName,
                  OrderType orderType, OrderMethod orderMethod,
                  double quantity, double price) {
+        this(userId, stockCode, stockName, orderType, orderMethod, quantity, price, "CRYPTO");
+    }
+
+    public Order(String userId, String stockCode, String stockName,
+                 OrderType orderType, OrderMethod orderMethod,
+                 double quantity, double price, String assetType) {
         this.userId = userId;
         this.stockCode = stockCode;
         this.stockName = stockName;
@@ -47,9 +54,14 @@ public class Order {
         this.orderMethod = orderMethod;
         this.quantity = quantity;
         this.price = price;
+        this.assetType = assetType;
         this.status = OrderStatus.PENDING;
         this.filledQuantity = 0.0;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
+    }
+
+    public boolean isStock() {
+        return "STOCK".equals(assetType);
     }
 }

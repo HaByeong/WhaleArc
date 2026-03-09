@@ -16,6 +16,7 @@ interface TradingChartProps {
   price: number;
   changeRate: number;
   className?: string;
+  assetType?: 'STOCK' | 'CRYPTO';
 }
 
 const INTERVALS = [
@@ -26,7 +27,7 @@ const INTERVALS = [
   { label: '24시간', value: '24h' },
 ];
 
-const TradingChart = ({ symbol, price, changeRate, className = '' }: TradingChartProps) => {
+const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: TradingChartProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -135,7 +136,7 @@ const TradingChart = ({ symbol, price, changeRate, className = '' }: TradingChar
     if (candleSeriesRef.current) candleSeriesRef.current.setData([]);
     if (volumeSeriesRef.current) volumeSeriesRef.current.setData([]);
 
-    marketService.getCandlesticks(symbol, interval)
+    marketService.getCandlesticks(symbol, interval, assetType)
       .then((candles: Candlestick[]) => {
         if (!candleSeriesRef.current || prevSymbolRef.current !== symbol) return;
 
@@ -176,7 +177,7 @@ const TradingChart = ({ symbol, price, changeRate, className = '' }: TradingChar
         setHistoryLoaded(true);
       })
       .catch(() => setHistoryLoaded(true));
-  }, [symbol, interval]);
+  }, [symbol, interval, assetType]);
 
   // 실시간 가격 업데이트
   useEffect(() => {
@@ -226,25 +227,31 @@ const TradingChart = ({ symbol, price, changeRate, className = '' }: TradingChar
     <div className={className}>
       {/* 인터벌 선택 + LIVE 표시 */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex space-x-1">
-          {INTERVALS.map(iv => (
-            <button
-              key={iv.value}
-              onClick={() => setInterval(iv.value)}
-              className={`px-3 py-1.5 text-xs rounded-full font-medium transition-all ${
-                interval === iv.value
-                  ? 'bg-whale-dark text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {iv.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center space-x-1.5">
-          <span className={`inline-block w-1.5 h-1.5 rounded-full animate-pulse ${changeRate >= 0 ? 'bg-red-500' : 'bg-blue-500'}`} />
-          <span className="text-[10px] text-gray-400 font-medium">LIVE</span>
-        </div>
+        {assetType === 'STOCK' ? (
+          <div className="text-xs text-gray-400 font-medium">일봉 (3개월)</div>
+        ) : (
+          <div className="flex space-x-1">
+            {INTERVALS.map(iv => (
+              <button
+                key={iv.value}
+                onClick={() => setInterval(iv.value)}
+                className={`px-3 py-1.5 text-xs rounded-full font-medium transition-all ${
+                  interval === iv.value
+                    ? 'bg-whale-dark text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {iv.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {assetType !== 'STOCK' && (
+          <div className="flex items-center space-x-1.5">
+            <span className={`inline-block w-1.5 h-1.5 rounded-full animate-pulse ${changeRate >= 0 ? 'bg-red-500' : 'bg-blue-500'}`} />
+            <span className="text-[10px] text-gray-400 font-medium">LIVE</span>
+          </div>
+        )}
       </div>
 
       {/* 차트 영역 */}

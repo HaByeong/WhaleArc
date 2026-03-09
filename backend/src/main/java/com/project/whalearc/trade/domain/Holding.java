@@ -14,13 +14,24 @@ public class Holding {
     private double quantity;
     private double averagePrice;
     private double currentPrice;
+    private String assetType; // "STOCK" or "CRYPTO" (null → CRYPTO for backward compat)
 
     public Holding(String stockCode, String stockName, double quantity, double averagePrice) {
+        this(stockCode, stockName, quantity, averagePrice, "CRYPTO");
+    }
+
+    public Holding(String stockCode, String stockName, double quantity, double averagePrice, String assetType) {
         this.stockCode = stockCode;
         this.stockName = stockName;
         this.quantity = quantity;
         this.averagePrice = averagePrice;
         this.currentPrice = averagePrice;
+        this.assetType = assetType;
+    }
+
+    /** 주식 여부 판단 (null/빈값은 CRYPTO로 간주) */
+    public boolean isStock() {
+        return "STOCK".equals(assetType);
     }
 
     public double getMarketValue() {

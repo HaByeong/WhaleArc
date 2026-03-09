@@ -146,11 +146,15 @@ const MyPortfolioPage = () => {
   const totalPnl = totalValue - initialCash;
   const returnRate = portfolio.returnRate;
 
+  // 주식/코인 구분 헬퍼
+  const holdingName = (h: { stockCode: string; stockName: string; assetType?: string }) =>
+    h.assetType === 'STOCK' ? h.stockName : (CRYPTO_NAMES[h.stockCode] || h.stockName || h.stockCode);
+
   // 자산 배분 데이터
   const allocationData = [
     ...(cashBalance > 0 ? [{ name: '현금', value: cashBalance, color: '#94a3b8' }] : []),
     ...portfolio.holdings.map((h, i) => ({
-      name: CRYPTO_NAMES[h.stockCode] || h.stockCode,
+      name: holdingName(h),
       value: h.marketValue,
       color: CHART_COLORS[i % CHART_COLORS.length],
     })),
@@ -416,43 +420,94 @@ const MyPortfolioPage = () => {
                           {signPrefix(totalHoldingsPnl)}{fmt(Math.round(totalHoldingsPnl))}
                         </div>
                       </div>
-                      <div className="space-y-3">
-                        {portfolio.holdings.map((h) => (
-                          <div
-                            key={h.stockCode}
-                            className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-gray-100"
-                            onClick={() => navigate('/trade')}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-whale-light/20 to-whale-accent/20 flex items-center justify-center text-sm font-bold text-whale-dark">
-                                {h.stockCode.slice(0, 2)}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-sm text-whale-dark">
-                                  {CRYPTO_NAMES[h.stockCode] || h.stockName}
-                                </span>
-                                {assetRouteMap[h.stockCode]?.map((routeName) => (
-                                  <span key={routeName} className="px-1.5 py-0.5 text-[9px] font-semibold bg-whale-light/10 text-whale-light rounded">
-                                    {routeName}
-                                  </span>
-                                ))}
-                              </div>
-                              <div className="text-xs text-gray-400">{h.stockCode} · {formatQuantity(h.quantity)}개</div>
-                              </div>
+
+                      {/* 주식 섹션 */}
+                      {(() => {
+                        const stockHoldings = portfolio.holdings.filter(h => h.assetType === 'STOCK');
+                        return stockHoldings.length > 0 ? (
+                          <div className="mb-5">
+                            <div className="flex items-center gap-1.5 mb-3 px-1">
+                              <img src="/whales/spotted-dolphin.png" alt="주식" className="w-5 h-5 object-contain" />
+                              <span className="text-sm font-bold text-amber-700">주식</span>
+                              <span className="text-xs text-gray-400">{stockHoldings.length}종목</span>
                             </div>
-                            <div className="text-right">
-                              <div className="font-semibold text-sm">{fmt(h.marketValue)}</div>
-                              <div className={`text-xs font-semibold ${returnColor(h.returnRate)}`}>
-                                {signPrefix(h.returnRate)}{h.returnRate.toFixed(2)}%
-                                <span className="text-gray-400 font-normal ml-1">
-                                  ({signPrefix(h.profitLoss)}{fmt(Math.round(h.profitLoss))})
-                                </span>
-                              </div>
+                            <div className="space-y-3">
+                              {stockHoldings.map((h) => (
+                                <div
+                                  key={h.stockCode}
+                                  className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-gray-100"
+                                  onClick={() => navigate('/trade')}
+                                >
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-semibold text-sm text-whale-dark">{holdingName(h)}</span>
+                                      {assetRouteMap[h.stockCode]?.map((routeName) => (
+                                        <span key={routeName} className="px-1.5 py-0.5 text-[9px] font-semibold bg-whale-light/10 text-whale-light rounded">
+                                          {routeName}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    <div className="text-xs text-gray-400">{h.stockCode} · {Math.floor(h.quantity)}주</div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="font-semibold text-sm">{fmt(h.marketValue)}</div>
+                                    <div className={`text-xs font-semibold ${returnColor(h.returnRate)}`}>
+                                      {signPrefix(h.returnRate)}{h.returnRate.toFixed(2)}%
+                                      <span className="text-gray-400 font-normal ml-1">
+                                        ({signPrefix(h.profitLoss)}{fmt(Math.round(h.profitLoss))})
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        ) : null;
+                      })()}
+
+                      {/* 코인 섹션 */}
+                      {(() => {
+                        const cryptoHoldings = portfolio.holdings.filter(h => h.assetType !== 'STOCK');
+                        return cryptoHoldings.length > 0 ? (
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-3 px-1">
+                              <img src="/whales/wild-cat-whale.png" alt="코인" className="w-5 h-5 object-contain" />
+                              <span className="text-sm font-bold text-orange-600">코인</span>
+                              <span className="text-xs text-gray-400">{cryptoHoldings.length}종목</span>
+                            </div>
+                            <div className="space-y-3">
+                              {cryptoHoldings.map((h) => (
+                                <div
+                                  key={h.stockCode}
+                                  className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-gray-100"
+                                  onClick={() => navigate('/trade')}
+                                >
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-semibold text-sm text-whale-dark">{holdingName(h)}</span>
+                                      {assetRouteMap[h.stockCode]?.map((routeName) => (
+                                        <span key={routeName} className="px-1.5 py-0.5 text-[9px] font-semibold bg-whale-light/10 text-whale-light rounded">
+                                          {routeName}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    <div className="text-xs text-gray-400">{h.stockCode} · {formatQuantity(h.quantity)}개</div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="font-semibold text-sm">{fmt(h.marketValue)}</div>
+                                    <div className={`text-xs font-semibold ${returnColor(h.returnRate)}`}>
+                                      {signPrefix(h.returnRate)}{h.returnRate.toFixed(2)}%
+                                      <span className="text-gray-400 font-normal ml-1">
+                                        ({signPrefix(h.profitLoss)}{fmt(Math.round(h.profitLoss))})
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
                     </>
                   )
                 ) : (
@@ -474,13 +529,18 @@ const MyPortfolioPage = () => {
                             </span>
                             <div>
                               <span className="font-semibold text-sm text-whale-dark">
-                                {CRYPTO_NAMES[t.stockCode] || t.stockName}
+                                {t.assetType === 'STOCK' ? t.stockName : (CRYPTO_NAMES[t.stockCode] || t.stockName)}
                               </span>
+                              {t.assetType === 'STOCK' && (
+                                <span className="ml-1 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-700 rounded">주식</span>
+                              )}
                               <span className="text-xs text-gray-400 ml-1">{t.stockCode}</span>
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-sm font-medium">{formatQuantity(t.quantity)}개 · {fmt(t.price)}</div>
+                            <div className="text-sm font-medium">
+                              {t.assetType === 'STOCK' ? `${Math.floor(t.quantity)}주` : `${formatQuantity(t.quantity)}개`} · {fmt(t.price)}
+                            </div>
                             <div className="text-xs text-gray-400">
                               {new Date(t.executedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </div>
@@ -652,7 +712,7 @@ const MyPortfolioPage = () => {
               <h2 className="text-lg font-bold text-whale-dark mb-3">빠른 액션</h2>
               <div className="space-y-2">
                 {[
-                  { label: '코인 거래하기', path: '/trade', primary: true },
+                  { label: '거래하기', path: '/trade', primary: true },
                   { label: '항로 둘러보기', path: '/store', primary: false },
                   { label: '전략 분석', path: '/strategy', primary: false },
                 ].map((action) => (

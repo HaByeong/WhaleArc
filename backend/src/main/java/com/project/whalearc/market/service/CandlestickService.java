@@ -4,19 +4,26 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.whalearc.market.dto.CandlestickResponse;
 import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class CandlestickService {
+
+    private final KisApiClient kisApiClient;
 
     @Value("${bithumb.api.base-url:https://api.bithumb.com}")
     private String baseUrl;
@@ -36,12 +43,66 @@ public class CandlestickService {
     }
 
     /**
-     * 빗썸 캔들스틱 API 호출
-     * @param symbol 코인 심볼 (BTC, ETH 등)
-     * @param interval 차트 간격 (1m, 3m, 5m, 10m, 30m, 1h, 6h, 12h, 24h)
+     * 캔들스틱 조회 — 암호화폐 or 주식
+     * @param symbol 코인 심볼(BTC 등) 또는 주식 종목코드(005930 등)
+     * @param interval 차트 간격
+     * @param assetType "STOCK" 또는 null(=CRYPTO)
      */
-    @SuppressWarnings("unchecked")
+    public List<CandlestickResponse> getCandlesticks(String symbol, String interval, String assetType) {
+        if ("STOCK".equalsIgnoreCase(assetType)) {
+            return getStockCandlesticks(symbol);
+        }
+        return getCryptoCandlesticks(symbol, interval);
+    }
+
+    /** 기존 빗썸 캔들스틱 (하위 호환) */
     public List<CandlestickResponse> getCandlesticks(String symbol, String interval) {
+        return getCryptoCandlesticks(symbol, interval);
+    }
+
+    /** 국내주식 일봉 (KIS API) */
+    private List<CandlestickResponse> getStockCandlesticks(String stockCode) {
+        if (!kisApiClient.isConfigured()) {
+            return List.of();
+        }
+
+        try {
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
+            String endDate = LocalDate.now().format(fmt);
+            String startDate = LocalDate.now().minusMonths(3).format(fmt);
+
+            List<Map<String, String>> candles = kisApiClient.getStockDailyCandles(stockCode, startDate, endDate);
+            if (candles == null || candles.isEmpty()) return List.of();
+
+            List<CandlestickResponse> result = new ArrayList<>();
+            for (Map<String, String> c : candles) {
+                String dateStr = c.get("stck_bsop_date"); // YYYYMMDD
+                if (dateStr == null || dateStr.isEmpty()) continue;
+
+                LocalDate date = LocalDate.parse(dateStr, fmt);
+                long time = date.atStartOfDay().toEpochSecond(java.time.ZoneOffset.of("+09:00"));
+                long open = parseLong(c.get("stck_oprc"));
+                long high = parseLong(c.get("stck_hgpr"));
+                long low = parseLong(c.get("stck_lwpr"));
+                long close = parseLong(c.get("stck_clpr"));
+                double volume = parseDouble(c.get("acml_vol"));
+
+                result.add(new CandlestickResponse(time, open, high, low, close, volume));
+            }
+
+            // KIS API는 최신순 → 오래된순으로 정렬
+            Collections.reverse(result);
+            log.debug("주식 일봉 {}개 조회: {}", result.size(), stockCode);
+            return result;
+        } catch (Exception e) {
+            log.error("주식 캔들스틱 조회 실패 [{}]: {}", stockCode, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** 빗썸 캔들스틱 API 호출 */
+    @SuppressWarnings("unchecked")
+    private List<CandlestickResponse> getCryptoCandlesticks(String symbol, String interval) {
         String url = baseUrl + "/public/candlestick/" + symbol + "_KRW/" + interval;
 
         try {

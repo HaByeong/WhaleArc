@@ -36,6 +36,7 @@ public class OrderController {
             }
         }
 
+        String assetType = request.getAssetType() != null ? request.getAssetType() : "CRYPTO";
         Order order = orderService.createOrder(
                 userId,
                 request.getStockCode(),
@@ -43,7 +44,8 @@ public class OrderController {
                 Order.OrderType.valueOf(request.getOrderType()),
                 Order.OrderMethod.valueOf(request.getOrderMethod()),
                 request.getQuantity(),
-                request.getPrice()
+                request.getPrice(),
+                assetType
         );
         log.info("주문 생성: userId={}, stock={}, type={}, qty={}",
                 userId, request.getStockCode(), request.getOrderType(), request.getQuantity());

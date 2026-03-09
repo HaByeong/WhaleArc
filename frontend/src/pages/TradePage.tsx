@@ -25,12 +25,19 @@ const fmt = (v: number) =>
 
 const fmtNum = (v: number) => new Intl.NumberFormat('ko-KR').format(v);
 
-const coinName = (code: string) => CRYPTO_NAMES[code] || code;
+const assetName = (code: string, assetType?: string) => {
+  if (assetType === 'STOCK') return code; // 주식은 stockName 사용
+  return CRYPTO_NAMES[code] || code;
+};
 
 const TradePage = () => {
+  /* ─── 마켓 탭 ─── */
+  const [marketTab, setMarketTab] = useState<'CRYPTO' | 'STOCK'>('STOCK');
+
   /* ─── 상태 ─── */
   const [selectedStock, setSelectedStock] = useState<StockPrice | null>(null);
   const [stockList, setStockList] = useState<StockPrice[]>([]);
+  const [krxStockList, setKrxStockList] = useState<StockPrice[]>([]);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -47,15 +54,21 @@ const TradePage = () => {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  // 주식 검색
+  const [stockSearchResults, setStockSearchResults] = useState<{ code: string; name: string; market: string }[]>([]);
+  const [stockSearchLoading, setStockSearchLoading] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const selectedStockRef = useRef<StockPrice | null>(null);
   selectedStockRef.current = selectedStock;
 
-  // WebSocket 실시간 가격
-  const { prices: realtimePrices } = useRealtimePrice({ enabled: true });
+  // WebSocket 실시간 가격 (코인만)
+  const { prices: realtimePrices } = useRealtimePrice({ enabled: marketTab === 'CRYPTO' });
 
-  // 실시간 가격을 종목 목록에 병합
+  // 실시간 가격을 종목 목록에 병합 (코인만)
   const mergedStockList = useMemo(() => {
+    if (marketTab === 'STOCK') return krxStockList;
     if (realtimePrices.size === 0) return stockList;
     return stockList.map(stock => {
       const rt = realtimePrices.get(stock.stockCode);
@@ -64,11 +77,12 @@ const TradePage = () => {
       }
       return stock;
     });
-  }, [stockList, realtimePrices]);
+  }, [stockList, krxStockList, realtimePrices, marketTab]);
 
   // 선택된 종목도 실시간 반영
   const liveSelectedStock = useMemo(() => {
     if (!selectedStock) return null;
+    if (selectedStock.assetType === 'STOCK') return selectedStock;
     const rt = realtimePrices.get(selectedStock.stockCode);
     if (rt) {
       return { ...selectedStock, currentPrice: rt.price, change: rt.change, changeRate: rt.changeRate, volume: rt.volume };
@@ -91,18 +105,20 @@ const TradePage = () => {
     try {
       setLoading(true);
       setError(null);
-      const [stocks, portfolioData, ordersData, tradesData] = await Promise.all([
+      const [stocks, krxStocks, portfolioData, ordersData, tradesData] = await Promise.all([
         tradeService.getStockList(),
+        tradeService.getKrxStockList(),
         tradeService.getPortfolio(),
         tradeService.getOrders(),
         tradeService.getTrades(),
       ]);
       setStockList(stocks);
+      setKrxStockList(krxStocks);
       setPortfolio(portfolioData);
       setOrders(ordersData);
       setTrades(tradesData);
-      if (stocks.length > 0 && !selectedStockRef.current) {
-        setSelectedStock(stocks[0]);
+      if (krxStocks.length > 0 && !selectedStockRef.current) {
+        setSelectedStock(krxStocks[0]);
       }
     } catch (err: any) {
       setError(err.message || '데이터를 불러오는데 실패했습니다.');
@@ -113,7 +129,20 @@ const TradePage = () => {
 
   useEffect(() => { loadInitialData(); }, [loadInitialData]);
 
-  /* ─── 폴링 (10초) — 포트폴리오/주문/체결만 (가격은 WebSocket) ─── */
+  /* ─── 마켓 탭 전환 시 선택 초기화 ─── */
+  useEffect(() => {
+    const list = marketTab === 'CRYPTO' ? stockList : krxStockList;
+    if (list.length > 0) {
+      setSelectedStock(list[0]);
+    }
+    setSearchQuery('');
+    setStockSearchResults([]);
+    setQuantity('');
+    setLimitPrice('');
+    setActiveTab('chart');
+  }, [marketTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ─── 폴링 (10초) — 포트폴리오/주문/체결만 ─── */
   const pollData = useCallback(async () => {
     try {
       const [portfolioData, ordersData, tradesData] = await Promise.all([
@@ -129,10 +158,68 @@ const TradePage = () => {
 
   usePolling(pollData, 10000);
 
+  // 주식 탭일 때 시세 폴링 (30초)
+  const pollStockPrices = useCallback(async () => {
+    if (marketTab !== 'STOCK') return;
+    try {
+      const fresh = await tradeService.getKrxStockList();
+      setKrxStockList(fresh);
+      // 선택된 종목 시세 갱신
+      if (selectedStockRef.current?.assetType === 'STOCK') {
+        const updated = fresh.find(s => s.stockCode === selectedStockRef.current!.stockCode);
+        if (updated) {
+          setSelectedStock(prev => prev ? { ...prev, currentPrice: updated.currentPrice, change: updated.change, changeRate: updated.changeRate, volume: updated.volume } : prev);
+        }
+      }
+    } catch { /* ignore */ }
+  }, [marketTab]);
+
+  usePolling(pollStockPrices, 30000);
+
   /* ─── 종목 선택 ─── */
   const handleStockSelect = (stock: StockPrice) => {
     setSelectedStock(stock);
     setActiveTab('chart');
+    setQuantity('');
+    setLimitPrice('');
+  };
+
+  /* ─── 주식 검색 (디바운스) ─── */
+  const handleStockSearch = (keyword: string) => {
+    setSearchQuery(keyword);
+    if (marketTab !== 'STOCK') return;
+
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (!keyword.trim()) {
+      setStockSearchResults([]);
+      return;
+    }
+
+    searchTimerRef.current = setTimeout(async () => {
+      setStockSearchLoading(true);
+      try {
+        const results = await tradeService.searchKrxStocks(keyword.trim());
+        // 이미 리스트에 있는 종목 제외
+        const existingCodes = new Set(krxStockList.map(s => s.stockCode));
+        setStockSearchResults(results.filter(r => !existingCodes.has(r.code)));
+      } catch { /* ignore */ }
+      setStockSearchLoading(false);
+    }, 300);
+  };
+
+  /* ─── 주식 검색 결과 클릭 ─── */
+  const handleSearchResultClick = async (result: { code: string; name: string; market: string }) => {
+    setStockSearchResults([]);
+    setSearchQuery('');
+    try {
+      const stockPrice = await tradeService.getKrxStockPrice(result.code);
+      stockPrice.stockName = result.name;
+      setKrxStockList(prev => [stockPrice, ...prev]);
+      setSelectedStock(stockPrice);
+      setActiveTab('chart');
+    } catch {
+      showToast('종목 시세를 불러올 수 없습니다.', 'error');
+    }
   };
 
   /* ─── 주문 제출 ─── */
@@ -143,23 +230,32 @@ const TradePage = () => {
       showToast('종목과 수량을 확인해주세요.', 'error');
       return;
     }
+
+    const isStock = selectedStock.assetType === 'STOCK';
+
+    // 주식은 정수 단위만
+    if (isStock && qty !== Math.floor(qty)) {
+      showToast('주식은 1주 단위로만 거래할 수 있습니다.', 'error');
+      return;
+    }
+
     if (orderMethod === 'LIMIT' && (!limitPrice || parseFloat(limitPrice) <= 0)) {
       showToast('지정가를 입력해주세요.', 'error');
       return;
     }
 
-    // 잔고 체크 (수수료 0.1% 포함) — 실시간 가격 사용
-    const rt = realtimePrices.get(selectedStock.stockCode);
+    // 잔고 체크 — 실시간 가격 사용
+    const rt = !isStock ? realtimePrices.get(selectedStock.stockCode) : null;
     const currentPrice = rt ? rt.price : selectedStock.currentPrice;
     const price = orderMethod === 'MARKET' ? currentPrice : parseFloat(limitPrice);
-    const total = price * parseFloat(quantity) * (1 + COMMISSION_RATE);
+    const total = price * qty * (1 + COMMISSION_RATE);
     if (orderType === 'BUY' && portfolio && total > portfolio.cashBalance) {
       showToast('잔고가 부족합니다.', 'error');
       return;
     }
     if (orderType === 'SELL') {
       const available = getAvailableQuantity(selectedStock.stockCode);
-      if (parseFloat(quantity) > available) {
+      if (qty > available) {
         showToast('보유 수량이 부족합니다.', 'error');
         return;
       }
@@ -167,22 +263,23 @@ const TradePage = () => {
 
     setIsSubmitting(true);
     try {
+      const displayName = isStock ? selectedStock.stockName : assetName(selectedStock.stockCode);
       const orderRequest: OrderRequest = {
         stockCode: selectedStock.stockCode,
-        stockName: coinName(selectedStock.stockCode),
+        stockName: displayName,
         orderType,
         orderMethod,
-        quantity: parseFloat(quantity),
+        quantity: qty,
         price: orderMethod === 'LIMIT' ? parseFloat(limitPrice) : undefined,
+        assetType: isStock ? 'STOCK' : 'CRYPTO',
       };
       await tradeService.createOrder(orderRequest);
       setQuantity('');
       setLimitPrice('');
       showToast(
-        `${coinName(selectedStock.stockCode)} ${orderType === 'BUY' ? '매수' : '매도'} 주문 완료!`,
+        `${displayName} ${orderType === 'BUY' ? '매수' : '매도'} 주문 완료!`,
         'success'
       );
-      // 데이터 새로고침
       const [portfolioData, ordersData, tradesData] = await Promise.all([
         tradeService.getPortfolio(),
         tradeService.getOrders(),
@@ -221,6 +318,11 @@ const TradePage = () => {
     return portfolio.holdings.find(h => h.stockCode === stockCode)?.quantity || 0;
   };
 
+  const getDisplayName = (code: string, name?: string, type?: string) => {
+    if (type === 'STOCK' && name) return name;
+    return CRYPTO_NAMES[code] || name || code;
+  };
+
   const getStatusLabel = (status: Order['status']) => {
     const map: Record<string, { label: string; cls: string }> = {
       FILLED: { label: '체결', cls: 'bg-green-50 text-green-700' },
@@ -234,17 +336,26 @@ const TradePage = () => {
   /* ─── 빠른 수량 버튼 계산 ─── */
   const setQuickQuantity = (pct: number) => {
     if (!selectedStock) return;
+    const isStock = selectedStock.assetType === 'STOCK';
     if (orderType === 'BUY') {
       const cash = portfolio?.cashBalance || 0;
-      const rtPrice = realtimePrices.get(selectedStock.stockCode)?.price ?? selectedStock.currentPrice;
+      const rtPrice = !isStock ? (realtimePrices.get(selectedStock.stockCode)?.price ?? selectedStock.currentPrice) : selectedStock.currentPrice;
       const price = orderMethod === 'LIMIT' && limitPrice ? parseFloat(limitPrice) : rtPrice;
       if (price <= 0) return;
       const maxQty = (cash * pct) / (price * (1 + COMMISSION_RATE));
-      setQuantity(maxQty > 0 ? maxQty.toFixed(8).replace(/\.?0+$/, '') : '0');
+      if (isStock) {
+        setQuantity(Math.floor(maxQty).toString());
+      } else {
+        setQuantity(maxQty > 0 ? maxQty.toFixed(8).replace(/\.?0+$/, '') : '0');
+      }
     } else {
       const holding = getAvailableQuantity(selectedStock.stockCode);
       const qty = holding * pct;
-      setQuantity(qty > 0 ? qty.toFixed(8).replace(/\.?0+$/, '') : '0');
+      if (isStock) {
+        setQuantity(Math.floor(qty).toString());
+      } else {
+        setQuantity(qty > 0 ? qty.toFixed(8).replace(/\.?0+$/, '') : '0');
+      }
     }
   };
 
@@ -252,19 +363,27 @@ const TradePage = () => {
   const filteredStocks = mergedStockList.filter(s => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
-    const name = coinName(s.stockCode).toLowerCase();
+    const name = (s.assetType === 'STOCK' ? s.stockName : assetName(s.stockCode)).toLowerCase();
     return s.stockCode.toLowerCase().includes(q) || name.includes(q);
   });
 
-  // 인기 코인을 상단에 정렬
+  // 인기 코인을 상단에 정렬 (코인만)
   const sortedStocks = [...filteredStocks].sort((a, b) => {
-    const aPopular = POPULAR_COINS.indexOf(a.stockCode);
-    const bPopular = POPULAR_COINS.indexOf(b.stockCode);
-    if (aPopular >= 0 && bPopular >= 0) return aPopular - bPopular;
-    if (aPopular >= 0) return -1;
-    if (bPopular >= 0) return 1;
+    if (marketTab === 'CRYPTO') {
+      const aPopular = POPULAR_COINS.indexOf(a.stockCode);
+      const bPopular = POPULAR_COINS.indexOf(b.stockCode);
+      if (aPopular >= 0 && bPopular >= 0) return aPopular - bPopular;
+      if (aPopular >= 0) return -1;
+      if (bPopular >= 0) return 1;
+    }
     return b.volume - a.volume; // 거래량 순
   });
+
+  /* ─── 현재 선택 종목이 주식인지 ─── */
+  const isSelectedStock = liveSelectedStock?.assetType === 'STOCK';
+  const selectedDisplayName = liveSelectedStock
+    ? (isSelectedStock ? liveSelectedStock.stockName : assetName(liveSelectedStock.stockCode))
+    : '';
 
   /* ─── 예상 금액 ─── */
   const estimatedTotal = liveSelectedStock && quantity
@@ -311,6 +430,30 @@ const TradePage = () => {
 
           {/* ━━━ 좌측: 종목 목록 (3칸) ━━━ */}
           <div className="lg:col-span-3 space-y-4">
+            {/* 코인/주식 탭 */}
+            <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+              <button
+                onClick={() => setMarketTab('CRYPTO')}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                  marketTab === 'CRYPTO'
+                    ? 'bg-white text-whale-dark shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                코인
+              </button>
+              <button
+                onClick={() => setMarketTab('STOCK')}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                  marketTab === 'STOCK'
+                    ? 'bg-white text-whale-dark shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                주식
+              </button>
+            </div>
+
             {/* 검색 */}
             <div className="relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -319,14 +462,38 @@ const TradePage = () => {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="코인 검색 (이름/코드)"
+                onChange={e => marketTab === 'STOCK' ? handleStockSearch(e.target.value) : setSearchQuery(e.target.value)}
+                placeholder={marketTab === 'CRYPTO' ? '코인 검색 (이름/코드)' : '주식 검색 (이름/코드)'}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-whale-light/50 focus:border-whale-light"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <button onClick={() => { setSearchQuery(''); setStockSearchResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
+              )}
+              {stockSearchLoading && (
+                <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-whale-light border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+
+              {/* 주식 검색 드롭다운 */}
+              {marketTab === 'STOCK' && stockSearchResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-200 z-20 max-h-60 overflow-y-auto">
+                  {stockSearchResults.map(r => (
+                    <div
+                      key={r.code}
+                      onClick={() => handleSearchResultClick(r)}
+                      className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer transition-colors flex justify-between items-center"
+                    >
+                      <div>
+                        <span className="text-sm font-semibold text-gray-800">{r.name}</span>
+                        <span className="text-xs text-gray-400 ml-2">{r.code}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{r.market}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
@@ -334,14 +501,15 @@ const TradePage = () => {
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               <div className="px-4 py-3 bg-gradient-to-r from-whale-dark to-whale-light">
                 <div className="flex items-center justify-between text-white">
-                  <span className="text-sm font-semibold">종목</span>
+                  <span className="text-sm font-semibold">{marketTab === 'CRYPTO' ? '코인' : '주식'}</span>
                   <span className="text-xs opacity-80">{sortedStocks.length}개</span>
                 </div>
               </div>
-              <div className="max-h-[calc(100vh-260px)] overflow-y-auto divide-y divide-gray-50">
+              <div className="max-h-[calc(100vh-320px)] overflow-y-auto divide-y divide-gray-50">
                 {sortedStocks.map(stock => {
                   const isSelected = selectedStock?.stockCode === stock.stockCode;
-                  const isPopular = POPULAR_COINS.includes(stock.stockCode);
+                  const isPopular = marketTab === 'CRYPTO' && POPULAR_COINS.includes(stock.stockCode);
+                  const name = stock.assetType === 'STOCK' ? stock.stockName : assetName(stock.stockCode);
                   return (
                     <div
                       key={stock.stockCode}
@@ -356,7 +524,7 @@ const TradePage = () => {
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span className={`font-semibold text-sm truncate ${isSelected ? 'text-whale-dark' : 'text-gray-800'}`}>
-                              {coinName(stock.stockCode)}
+                              {name}
                             </span>
                             {isPopular && (
                               <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400" />
@@ -389,8 +557,15 @@ const TradePage = () => {
                 <div className="bg-white rounded-xl shadow-lg p-5">
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <h2 className="text-xl font-bold text-whale-dark">{coinName(liveSelectedStock.stockCode)}</h2>
-                      <span className="text-sm text-gray-400">{liveSelectedStock.stockCode}/KRW</span>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl font-bold text-whale-dark">{selectedDisplayName}</h2>
+                        {isSelectedStock && (
+                          <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">주식</span>
+                        )}
+                      </div>
+                      <span className="text-sm text-gray-400">
+                        {isSelectedStock ? `${liveSelectedStock.stockCode} · KRX` : `${liveSelectedStock.stockCode}/KRW`}
+                      </span>
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold text-whale-dark">{fmt(liveSelectedStock.currentPrice)}</div>
@@ -402,19 +577,34 @@ const TradePage = () => {
                   </div>
 
                   {/* 미니 지표 */}
-                  <div className="grid grid-cols-4 gap-3">
-                    {[
-                      { label: '고가', value: fmt(liveSelectedStock.high), cls: 'text-red-500' },
-                      { label: '저가', value: fmt(liveSelectedStock.low), cls: 'text-blue-500' },
-                      { label: '시가', value: fmt(liveSelectedStock.open), cls: 'text-gray-700' },
-                      { label: '거래량', value: fmtNum(liveSelectedStock.volume), cls: 'text-gray-700' },
-                    ].map(item => (
-                      <div key={item.label} className="bg-gray-50 rounded-lg p-2 text-center">
-                        <div className="text-[10px] text-gray-400 mb-0.5">{item.label}</div>
-                        <div className={`text-xs font-semibold ${item.cls}`}>{item.value}</div>
-                      </div>
-                    ))}
-                  </div>
+                  {!isSelectedStock && (
+                    <div className="grid grid-cols-4 gap-3">
+                      {[
+                        { label: '고가', value: fmt(liveSelectedStock.high), cls: 'text-red-500' },
+                        { label: '저가', value: fmt(liveSelectedStock.low), cls: 'text-blue-500' },
+                        { label: '시가', value: fmt(liveSelectedStock.open), cls: 'text-gray-700' },
+                        { label: '거래량', value: fmtNum(liveSelectedStock.volume), cls: 'text-gray-700' },
+                      ].map(item => (
+                        <div key={item.label} className="bg-gray-50 rounded-lg p-2 text-center">
+                          <div className="text-[10px] text-gray-400 mb-0.5">{item.label}</div>
+                          <div className={`text-xs font-semibold ${item.cls}`}>{item.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {isSelectedStock && (
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: '거래량', value: fmtNum(liveSelectedStock.volume), cls: 'text-gray-700' },
+                        { label: '전일 종가', value: fmt(liveSelectedStock.previousClose), cls: 'text-gray-700' },
+                      ].map(item => (
+                        <div key={item.label} className="bg-gray-50 rounded-lg p-2 text-center">
+                          <div className="text-[10px] text-gray-400 mb-0.5">{item.label}</div>
+                          <div className={`text-xs font-semibold ${item.cls}`}>{item.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* 탭 */}
@@ -447,6 +637,7 @@ const TradePage = () => {
                         symbol={liveSelectedStock.stockCode}
                         price={liveSelectedStock.currentPrice}
                         changeRate={liveSelectedStock.changeRate}
+                        assetType={isSelectedStock ? 'STOCK' : undefined}
                       />
                     )}
 
@@ -458,6 +649,7 @@ const TradePage = () => {
                         <div className="space-y-2 max-h-80 overflow-y-auto">
                           {orders.map(order => {
                             const st = getStatusLabel(order.status);
+                            const name = getDisplayName(order.stockCode, order.stockName, order.assetType);
                             return (
                               <div key={order.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
                                 <div className="flex items-center gap-3">
@@ -465,9 +657,12 @@ const TradePage = () => {
                                     {order.orderType === 'BUY' ? '매수' : '매도'}
                                   </span>
                                   <div>
-                                    <div className="text-sm font-semibold">{coinName(order.stockCode)}</div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-sm font-semibold">{name}</span>
+                                      {order.assetType === 'STOCK' && <span className="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded">주식</span>}
+                                    </div>
                                     <div className="text-xs text-gray-400">
-                                      {order.orderMethod === 'MARKET' ? '시장가' : '지정가'} · {formatQuantity(order.quantity)}개 · {fmt(order.price)}
+                                      {order.orderMethod === 'MARKET' ? '시장가' : '지정가'} · {order.assetType === 'STOCK' ? `${Math.floor(order.quantity)}주` : `${formatQuantity(order.quantity)}개`} · {fmt(order.price)}
                                     </div>
                                   </div>
                                 </div>
@@ -490,27 +685,33 @@ const TradePage = () => {
                         <div className="py-12 text-center text-gray-400 text-sm">체결 내역이 없습니다</div>
                       ) : (
                         <div className="space-y-2 max-h-80 overflow-y-auto">
-                          {trades.map(trade => (
-                            <div key={trade.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center gap-3">
-                                <span className={`px-2 py-1 text-xs font-bold rounded ${trade.orderType === 'BUY' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
-                                  {trade.orderType === 'BUY' ? '매수' : '매도'}
-                                </span>
-                                <div>
-                                  <div className="text-sm font-semibold">{coinName(trade.stockCode)}</div>
+                          {trades.map(trade => {
+                            const name = getDisplayName(trade.stockCode, trade.stockName, trade.assetType);
+                            return (
+                              <div key={trade.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <span className={`px-2 py-1 text-xs font-bold rounded ${trade.orderType === 'BUY' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                                    {trade.orderType === 'BUY' ? '매수' : '매도'}
+                                  </span>
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-sm font-semibold">{name}</span>
+                                      {trade.assetType === 'STOCK' && <span className="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded">주식</span>}
+                                    </div>
+                                    <div className="text-xs text-gray-400">
+                                      {trade.assetType === 'STOCK' ? `${Math.floor(trade.quantity)}주` : `${formatQuantity(trade.quantity)}개`} · {fmt(trade.price)}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-semibold">{fmt(trade.totalAmount)}</div>
                                   <div className="text-xs text-gray-400">
-                                    {formatQuantity(trade.quantity)}개 · {fmt(trade.price)}
+                                    {new Date(trade.executedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                   </div>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <div className="text-sm font-semibold">{fmt(trade.totalAmount)}</div>
-                                <div className="text-xs text-gray-400">
-                                  {new Date(trade.executedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )
                     )}
@@ -521,28 +722,36 @@ const TradePage = () => {
                         <div className="py-12 text-center text-gray-400 text-sm">보유 종목이 없습니다</div>
                       ) : (
                         <div className="space-y-2 max-h-80 overflow-y-auto">
-                          {portfolio.holdings.map(h => (
-                            <div
-                              key={h.stockCode}
-                              onClick={() => {
-                                const stock = mergedStockList.find(s => s.stockCode === h.stockCode);
-                                if (stock) handleStockSelect(stock);
-                              }}
-                              className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
-                            >
-                              <div>
-                                <div className="text-sm font-semibold">{coinName(h.stockCode)}</div>
-                                <div className="text-xs text-gray-400">{formatQuantity(h.quantity)}개 · 평단 {fmt(h.averagePrice)}</div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-semibold">{fmt(h.marketValue)}</div>
-                                <div className={`text-xs font-semibold ${h.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                                  {h.returnRate >= 0 ? '+' : ''}{h.returnRate.toFixed(2)}%
-                                  <span className="text-gray-400 font-normal ml-1">({h.profitLoss >= 0 ? '+' : ''}{fmt(Math.round(h.profitLoss))})</span>
+                          {portfolio.holdings.map(h => {
+                            const name = getDisplayName(h.stockCode, h.stockName, h.assetType);
+                            return (
+                              <div
+                                key={h.stockCode}
+                                onClick={() => {
+                                  const stock = mergedStockList.find(s => s.stockCode === h.stockCode);
+                                  if (stock) handleStockSelect(stock);
+                                }}
+                                className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                              >
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm font-semibold">{name}</span>
+                                    {h.assetType === 'STOCK' && <span className="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded">주식</span>}
+                                  </div>
+                                  <div className="text-xs text-gray-400">
+                                    {h.assetType === 'STOCK' ? `${Math.floor(h.quantity)}주` : `${formatQuantity(h.quantity)}개`} · 평단 {fmt(h.averagePrice)}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-semibold">{fmt(h.marketValue)}</div>
+                                  <div className={`text-xs font-semibold ${h.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                                    {h.returnRate >= 0 ? '+' : ''}{h.returnRate.toFixed(2)}%
+                                    <span className="text-gray-400 font-normal ml-1">({h.profitLoss >= 0 ? '+' : ''}{fmt(Math.round(h.profitLoss))})</span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )
                     )}
@@ -612,7 +821,7 @@ const TradePage = () => {
                         onChange={e => setLimitPrice(e.target.value)}
                         placeholder="희망 가격 입력"
                         className="w-full text-lg font-bold text-whale-dark bg-transparent border-none outline-none placeholder:text-gray-300 placeholder:font-normal"
-                        step="1"
+                        step={isSelectedStock ? '1' : '1'}
                       />
                     )}
                   </div>
@@ -620,11 +829,11 @@ const TradePage = () => {
                   {/* 수량 */}
                   <div className="bg-gray-50 rounded-xl p-3">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-gray-400">수량</span>
+                      <span className="text-xs text-gray-400">수량 {isSelectedStock ? '(주)' : ''}</span>
                       <span className="text-xs text-gray-400">
                         {orderType === 'BUY'
                           ? `잔고: ${fmt(portfolio?.cashBalance || 0)}`
-                          : `보유: ${formatQuantity(getAvailableQuantity(liveSelectedStock.stockCode))}개`
+                          : `보유: ${isSelectedStock ? `${Math.floor(getAvailableQuantity(liveSelectedStock.stockCode))}주` : `${formatQuantity(getAvailableQuantity(liveSelectedStock.stockCode))}개`}`
                         }
                       </span>
                     </div>
@@ -632,10 +841,10 @@ const TradePage = () => {
                       type="number"
                       value={quantity}
                       onChange={e => setQuantity(e.target.value)}
-                      placeholder="수량 입력"
+                      placeholder={isSelectedStock ? '주 수 입력' : '수량 입력'}
                       className="w-full text-lg font-bold text-whale-dark bg-transparent border-none outline-none placeholder:text-gray-300 placeholder:font-normal"
                       min="0"
-                      step="any"
+                      step={isSelectedStock ? '1' : 'any'}
                     />
                     {/* 빠른 수량 버튼 */}
                     <div className="flex gap-1.5 mt-2">
@@ -682,7 +891,7 @@ const TradePage = () => {
                   >
                     {isSubmitting
                       ? '주문 처리 중...'
-                      : `${coinName(liveSelectedStock.stockCode)} ${orderType === 'BUY' ? '매수' : '매도'}`
+                      : `${selectedDisplayName} ${orderType === 'BUY' ? '매수' : '매도'}`
                     }
                   </button>
                 </form>
@@ -724,21 +933,27 @@ const TradePage = () => {
                   <div className="mt-3 pt-3 border-t border-gray-100">
                     <div className="text-xs text-gray-400 mb-2">보유 종목</div>
                     <div className="space-y-1.5">
-                      {portfolio.holdings.slice(0, 5).map(h => (
-                        <div
-                          key={h.stockCode}
-                          onClick={() => {
-                            const stock = mergedStockList.find(s => s.stockCode === h.stockCode);
-                            if (stock) handleStockSelect(stock);
-                          }}
-                          className="flex justify-between items-center py-1 cursor-pointer hover:bg-gray-50 rounded px-1 -mx-1 transition-colors"
-                        >
-                          <span className="text-xs font-semibold text-gray-700">{coinName(h.stockCode)}</span>
-                          <span className={`text-xs font-semibold ${h.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                            {h.returnRate >= 0 ? '+' : ''}{h.returnRate.toFixed(1)}%
-                          </span>
-                        </div>
-                      ))}
+                      {portfolio.holdings.slice(0, 5).map(h => {
+                        const name = getDisplayName(h.stockCode, h.stockName, h.assetType);
+                        return (
+                          <div
+                            key={h.stockCode}
+                            onClick={() => {
+                              const stock = mergedStockList.find(s => s.stockCode === h.stockCode);
+                              if (stock) handleStockSelect(stock);
+                            }}
+                            className="flex justify-between items-center py-1 cursor-pointer hover:bg-gray-50 rounded px-1 -mx-1 transition-colors"
+                          >
+                            <span className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+                              {name}
+                              {h.assetType === 'STOCK' && <span className="text-[8px] bg-amber-100 text-amber-600 px-1 rounded">주식</span>}
+                            </span>
+                            <span className={`text-xs font-semibold ${h.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                              {h.returnRate >= 0 ? '+' : ''}{h.returnRate.toFixed(1)}%
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

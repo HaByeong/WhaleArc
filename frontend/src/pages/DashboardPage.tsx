@@ -294,34 +294,86 @@ const DashboardPage = () => {
                   전체 보기
                 </button>
               </div>
-              <div className="space-y-3">
-                {portfolio.holdings.slice(0, 5).map((holding) => (
-                  <div key={holding.stockCode} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-sm text-gray-800">{holding.stockName}</span>
-                        {(() => {
-                          const route = activePurchases.find((p) => p.purchasedAssets?.some(a => a.code === holding.stockCode));
-                          return route ? (
-                            <span className="px-1 py-0.5 text-[9px] font-semibold bg-whale-light/10 text-whale-light rounded">
-                              {route.productName}
-                            </span>
-                          ) : null;
-                        })()}
-                      </div>
-                      <div className="text-xs text-gray-400">{formatQuantity(holding.quantity)}개 보유</div>
+
+              {/* 주식 섹션 */}
+              {(() => {
+                const stockHoldings = portfolio.holdings.filter(h => h.assetType === 'STOCK');
+                return stockHoldings.length > 0 ? (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <img src="/whales/spotted-dolphin.png" alt="주식" className="w-5 h-5 object-contain" />
+                      <span className="text-sm font-bold text-amber-700">주식</span>
+                      <span className="text-xs text-gray-400">{stockHoldings.length}종목</span>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm font-semibold text-gray-800">{formatCurrency(holding.marketValue)}</div>
-                      <div className={`text-xs font-semibold ${
-                        holding.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'
-                      }`}>
-                        {holding.returnRate >= 0 ? '+' : ''}{holding.returnRate.toFixed(2)}%
-                      </div>
+                    <div className="space-y-2">
+                      {stockHoldings.slice(0, 5).map((holding) => (
+                        <div key={holding.stockCode} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-sm text-gray-800">{holding.stockName}</span>
+                              {(() => {
+                                const route = activePurchases.find((p) => p.purchasedAssets?.some(a => a.code === holding.stockCode));
+                                return route ? (
+                                  <span className="px-1 py-0.5 text-[9px] font-semibold bg-whale-light/10 text-whale-light rounded">
+                                    {route.productName}
+                                  </span>
+                                ) : null;
+                              })()}
+                            </div>
+                            <div className="text-xs text-gray-400">{Math.floor(holding.quantity)}주 보유</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-semibold text-gray-800">{formatCurrency(holding.marketValue)}</div>
+                            <div className={`text-xs font-semibold ${holding.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                              {holding.returnRate >= 0 ? '+' : ''}{holding.returnRate.toFixed(2)}%
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
+                ) : null;
+              })()}
+
+              {/* 코인 섹션 */}
+              {(() => {
+                const cryptoHoldings = portfolio.holdings.filter(h => h.assetType !== 'STOCK');
+                return cryptoHoldings.length > 0 ? (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <img src="/whales/wild-cat-whale.png" alt="코인" className="w-5 h-5 object-contain" />
+                      <span className="text-sm font-bold text-orange-600">코인</span>
+                      <span className="text-xs text-gray-400">{cryptoHoldings.length}종목</span>
+                    </div>
+                    <div className="space-y-2">
+                      {cryptoHoldings.slice(0, 5).map((holding) => (
+                        <div key={holding.stockCode} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-sm text-gray-800">{holding.stockName}</span>
+                              {(() => {
+                                const route = activePurchases.find((p) => p.purchasedAssets?.some(a => a.code === holding.stockCode));
+                                return route ? (
+                                  <span className="px-1 py-0.5 text-[9px] font-semibold bg-whale-light/10 text-whale-light rounded">
+                                    {route.productName}
+                                  </span>
+                                ) : null;
+                              })()}
+                            </div>
+                            <div className="text-xs text-gray-400">{formatQuantity(holding.quantity)}개 보유</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-semibold text-gray-800">{formatCurrency(holding.marketValue)}</div>
+                            <div className={`text-xs font-semibold ${holding.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                              {holding.returnRate >= 0 ? '+' : ''}{holding.returnRate.toFixed(2)}%
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
             </div>
           ) : activePurchases.length > 0 ? (
             <div className="card">
@@ -506,7 +558,17 @@ const DashboardPage = () => {
                         <div className="h-px bg-gray-100" />
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-gray-500">보유 종목 수</span>
-                          <span className="text-sm font-bold text-whale-dark">{portfolio.holdings.length}개</span>
+                          <span className="text-sm font-bold text-whale-dark">
+                            {portfolio.holdings.length}개
+                            {(() => {
+                              const stockCount = portfolio.holdings.filter(h => h.assetType === 'STOCK').length;
+                              const cryptoCount = portfolio.holdings.length - stockCount;
+                              if (stockCount > 0 && cryptoCount > 0) {
+                                return <span className="text-xs font-normal text-gray-400 ml-1">(주식 {stockCount} · 코인 {cryptoCount})</span>;
+                              }
+                              return null;
+                            })()}
+                          </span>
                         </div>
                       </>
                     );

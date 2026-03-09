@@ -12,4 +12,5 @@ public interface ProductPurchaseRepository extends MongoRepository<ProductPurcha
     List<ProductPurchase> findByUserIdOrderByPurchasedAtDesc(String userId);
     Optional<ProductPurchase> findByUserIdAndProductIdAndStatus(String userId, String productId, ProductPurchase.Status status);
     boolean existsByUserIdAndProductIdAndStatus(String userId, String productId, ProductPurchase.Status status);
+    void deleteByUserId(String userId);
 }

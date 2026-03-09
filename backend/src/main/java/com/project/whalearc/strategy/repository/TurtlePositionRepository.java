@@ -18,4 +18,5 @@ public interface TurtlePositionRepository extends MongoRepository<TurtlePosition
     List<TurtlePosition> findByDirection(TurtlePosition.Direction direction);
 
     void deleteByPurchaseId(String purchaseId);
+    void deleteByUserId(String userId);
 }

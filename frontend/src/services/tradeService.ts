@@ -198,4 +198,10 @@ export const tradeService = {
   cancelOrder: async (orderId: string): Promise<void> => {
     await apiClient.delete(`/api/orders/${orderId}`);
   },
+
+  // 모의투자 초기화
+  resetPortfolio: async (): Promise<Portfolio> => {
+    const response = await apiClient.post('/api/portfolio/reset');
+    return response.data.data;
+  },
 };

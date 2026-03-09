@@ -9,7 +9,9 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -28,6 +30,13 @@ public class Strategy {
     private List<Indicator> indicators = new ArrayList<>();
     private List<Condition> entryConditions = new ArrayList<>();
     private List<Condition> exitConditions = new ArrayList<>();
+    private List<String> targetAssets = new ArrayList<>();  // 투자 대상 자산 코드 (BTC, ETH, 005930 등)
+    private Map<String, String> targetAssetNames = new HashMap<>(); // 자산코드 → 자산명 매핑
+    private String assetType;       // CRYPTO, STOCK, MIXED
+    private String strategyLogic;   // 전략 로직 설명
+    private boolean applied;        // 포트폴리오에 적용 여부
+    private int appliedSuccessCount; // 적용 시 매수 성공 자산 수
+    private int appliedTotalCount;   // 적용 시 전체 대상 자산 수
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -43,5 +52,16 @@ public class Strategy {
         this.exitConditions = exitConditions != null ? exitConditions : new ArrayList<>();
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
+    }
+
+    public Strategy(String userId, String name, String description,
+                    List<Indicator> indicators,
+                    List<Condition> entryConditions,
+                    List<Condition> exitConditions,
+                    List<String> targetAssets, String assetType, String strategyLogic) {
+        this(userId, name, description, indicators, entryConditions, exitConditions);
+        this.targetAssets = targetAssets != null ? targetAssets : new ArrayList<>();
+        this.assetType = assetType;
+        this.strategyLogic = strategyLogic;
     }
 }

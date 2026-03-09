@@ -5,7 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import apiClient from '../utils/api';
 
-interface PortfolioDetail {
+interface PortfolioSummary {
   portfolioId: string;
   portfolioName: string;
   nickname: string;
@@ -14,64 +14,30 @@ interface PortfolioDetail {
   totalReturnAmount: number;
   initialCapital: number;
   totalValue: number;
-  currentCash: number;
-  holdings: {
-    stockCode: string;
-    stockName: string;
-    quantity: number;
-    avgPrice: number;
-    currentPrice: number;
-    profit: number;
-    profitRate: number;
-  }[];
-  recentTrades: {
-    date: string;
-    type: '매수' | '매도';
-    stockName: string;
-    quantity: number;
-    price: number;
-    amount: number;
-  }[];
+  stockCount: number;
+  cryptoCount: number;
+  routeName?: string | null;
+  routeStrategyType?: string | null;
+  routeReturnRate?: number | null;
+  routeDescription?: string | null;
 }
 
-/**
- * 포트폴리오 상세 페이지
- */
 const PortfolioDetailPage = () => {
   const { portfolioId } = useParams<{ portfolioId: string }>();
-  const [portfolio, setPortfolio] = useState<PortfolioDetail | null>(null);
+  const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (portfolioId) {
-      loadPortfolioDetail();
-    }
+    if (portfolioId) loadDetail();
   }, [portfolioId]);
 
-  const loadPortfolioDetail = async () => {
+  const loadDetail = async () => {
     try {
       setLoading(true);
       setError(null);
-
-      try {
-        const response = await apiClient.get(`/api/portfolios/${portfolioId}`);
-        
-        if (response.data?.data) {
-          setPortfolio(response.data.data);
-        } else {
-          // 백엔드가 아직 구현되지 않은 경우 목업 데이터 사용
-          setPortfolio(getMockPortfolio());
-        }
-      } catch (apiError: any) {
-        // API 에러 시 목업 데이터 표시 (개발 단계)
-        if (apiError.response?.status === 404 || apiError.code === 'ERR_NETWORK') {
-          console.warn('백엔드 API가 아직 구현되지 않았습니다. 목업 데이터를 표시합니다.');
-          setPortfolio(getMockPortfolio());
-        } else {
-          throw apiError;
-        }
-      }
+      const res = await apiClient.get(`/api/rankings/portfolios/${portfolioId}`);
+      setPortfolio(res.data.data);
     } catch (err: any) {
       setError(err.message || '포트폴리오 정보를 불러오는데 실패했습니다.');
     } finally {
@@ -79,243 +45,192 @@ const PortfolioDetailPage = () => {
     }
   };
 
-  // 목업 데이터
-  const getMockPortfolio = (): PortfolioDetail => {
-    return {
-      portfolioId: portfolioId || '1',
-      portfolioName: '나만의 전략1',
-      nickname: '고래왕',
-      currentRank: 1,
-      totalReturn: 25.3,
-      totalReturnAmount: 2530000,
-      initialCapital: 10000000,
-      totalValue: 12530000,
-      currentCash: 500000,
-      holdings: [
-        { stockCode: '005930', stockName: '삼성전자', quantity: 10, avgPrice: 65000, currentPrice: 71000, profit: 60000, profitRate: 9.2 },
-        { stockCode: '000660', stockName: 'SK하이닉스', quantity: 5, avgPrice: 120000, currentPrice: 135000, profit: 75000, profitRate: 12.5 },
-        { stockCode: '035420', stockName: 'NAVER', quantity: 3, avgPrice: 180000, currentPrice: 195000, profit: 45000, profitRate: 8.3 },
-      ],
-      recentTrades: [
-        { date: '2024-01-15', type: '매수', stockName: '삼성전자', quantity: 5, price: 71000, amount: 355000 },
-        { date: '2024-01-14', type: '매도', stockName: 'SK하이닉스', quantity: 2, price: 132000, amount: 264000 },
-        { date: '2024-01-13', type: '매수', stockName: 'NAVER', quantity: 3, price: 195000, amount: 585000 },
-      ],
-    };
-  };
-
-  const getReturnColor = (returnValue: number) => {
-    if (returnValue > 0) return 'text-red-500';
-    if (returnValue < 0) return 'text-blue-500';
-    return 'text-gray-600';
-  };
-
-  const formatAmount = (amount: number) => {
-    return `${amount.toLocaleString()}원`;
-  };
-
-  const formatAmountWon = (amount: number) => {
-    return `${(amount / 10000).toLocaleString()}만원`;
+  const returnColor = (v: number) =>
+    v > 0 ? 'text-red-500' : v < 0 ? 'text-blue-500' : 'text-gray-600';
+  const signPrefix = (v: number) => (v > 0 ? '+' : '');
+  const fmt = (amount: number) =>
+    new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+  const fmtCompact = (amount: number) => {
+    const abs = Math.abs(amount);
+    if (abs >= 1_0000_0000) return `${(amount / 1_0000_0000).toFixed(1)}억`;
+    if (abs >= 1_0000) return `${(amount / 1_0000).toFixed(0)}만`;
+    return fmt(amount);
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header showNav={true} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Header showNav />
+        <div className="max-w-3xl mx-auto px-4 py-8">
           <LoadingSpinner fullScreen={false} message="포트폴리오 정보를 불러오는 중..." />
         </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error || !portfolio) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header showNav={true} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ErrorMessage message={error} onRetry={loadPortfolioDetail} />
+        <Header showNav />
+        <div className="max-w-3xl mx-auto px-4 py-8">
+          <ErrorMessage message={error || '포트폴리오를 찾을 수 없습니다.'} onRetry={loadDetail} />
         </div>
       </div>
     );
   }
 
-  if (!portfolio) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header showNav={true} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ErrorMessage message="포트폴리오를 찾을 수 없습니다." />
-        </div>
-      </div>
-    );
-  }
+  const rankBadge = portfolio.currentRank <= 3
+    ? ['', '/whales/blue-whale.png', '/whales/narwhal.png', '/whales/dolphin.png'][portfolio.currentRank]
+    : null;
+
+  const totalHoldings = portfolio.stockCount + portfolio.cryptoCount;
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header showNav={true} />
+      <Header showNav />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link 
-          to="/ranking" 
-          className="inline-flex items-center text-gray-600 hover:text-whale-light mb-6 transition-colors"
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+        <Link
+          to="/ranking"
+          className="inline-flex items-center text-gray-500 hover:text-whale-light mb-6 text-sm transition-colors"
         >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          랭킹으로 돌아가기
+          투자 현황
         </Link>
 
-        {/* 포트폴리오 기본 정보 */}
-        <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <div className="flex items-center space-x-3 mb-2">
-                <h1 className="text-3xl font-bold text-whale-dark">
-                  {portfolio.portfolioName}
-                </h1>
-                <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-semibold">
-                  🥇 {portfolio.currentRank}위
-                </span>
+        {/* 헤더 카드 */}
+        <div className="bg-gradient-to-r from-whale-dark to-whale-light rounded-2xl shadow-xl p-6 md:p-8 text-white mb-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-6">
+              {rankBadge ? (
+                <img src={rankBadge} alt="" className="w-10 h-10 object-contain" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-lg">
+                  {portfolio.currentRank}
+                </div>
+              )}
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold">{portfolio.portfolioName}</h1>
+                <p className="text-blue-200 text-sm">{portfolio.nickname} · {portfolio.currentRank}위</p>
               </div>
-              <p className="text-gray-600">
-                운영자: <span className="font-semibold text-whale-dark">{portfolio.nickname}</span>
-              </p>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-6 border border-red-200">
-              <div className="text-gray-600 text-sm mb-1">총 수익률</div>
-              <div className={`text-3xl font-bold ${getReturnColor(portfolio.totalReturn)}`}>
-                +{portfolio.totalReturn.toFixed(1)}%
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                <div className="text-blue-200 text-xs mb-1">총 수익률</div>
+                <div className={`text-xl md:text-2xl font-bold ${portfolio.totalReturn >= 0 ? 'text-red-300' : 'text-blue-300'}`}>
+                  {signPrefix(portfolio.totalReturn)}{portfolio.totalReturn.toFixed(2)}%
+                </div>
+                <div className="text-blue-200 text-xs mt-1">
+                  {signPrefix(portfolio.totalReturnAmount)}{fmt(Math.round(portfolio.totalReturnAmount))}
+                </div>
               </div>
-              <div className="text-gray-600 text-sm mt-2">
-                {formatAmount(portfolio.totalReturnAmount)}
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                <div className="text-blue-200 text-xs mb-1">총 자산</div>
+                <div className="text-xl md:text-2xl font-bold">{fmtCompact(portfolio.totalValue)}</div>
               </div>
-            </div>
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
-              <div className="text-gray-600 text-sm mb-1">총 평가금액</div>
-              <div className="text-3xl font-bold text-whale-dark">
-                {formatAmountWon(portfolio.totalValue)}
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                <div className="text-blue-200 text-xs mb-1">초기 자본</div>
+                <div className="text-xl md:text-2xl font-bold">{fmtCompact(portfolio.initialCapital)}</div>
               </div>
-              <div className="text-gray-600 text-sm mt-2">
-                {formatAmount(portfolio.totalValue)}
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
-              <div className="text-gray-600 text-sm mb-1">초기 자본</div>
-              <div className="text-3xl font-bold text-whale-dark">
-                {formatAmountWon(portfolio.initialCapital)}
-              </div>
-              <div className="text-gray-600 text-sm mt-2">
-                {formatAmount(portfolio.initialCapital)}
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
-              <div className="text-gray-600 text-sm mb-1">보유 현금</div>
-              <div className="text-3xl font-bold text-whale-dark">
-                {formatAmountWon(portfolio.currentCash)}
-              </div>
-              <div className="text-gray-600 text-sm mt-2">
-                {formatAmount(portfolio.currentCash)}
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                <div className="text-blue-200 text-xs mb-1">보유 종목</div>
+                <div className="text-xl md:text-2xl font-bold">{totalHoldings}종목</div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* 보유 종목 */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-whale-dark mb-6">보유 종목</h2>
-              
-              {portfolio.holdings.length === 0 ? (
-                <div className="text-center py-12">
-                  <img src="/whales/gray-whale.png" alt="빈 목록" className="w-16 h-16 object-contain mx-auto mb-3 opacity-60" />
-                  <div className="text-gray-500 font-medium">보유 종목이 없습니다</div>
-                  <div className="text-sm text-gray-400 mt-1">아직 매수한 종목이 없습니다</div>
+        {/* 투자 요약 */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+          <h2 className="text-lg font-bold text-whale-dark mb-4">투자 요약</h2>
+          <div className="space-y-3">
+            {portfolio.stockCount > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <img src="/whales/spotted-dolphin.png" alt="" className="w-5 h-5 object-contain" />
+                  <span className="text-gray-600">주식</span>
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">종목명</th>
-                        <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">보유수량</th>
-                        <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">평균단가</th>
-                        <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">현재가</th>
-                        <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">수익률</th>
-                        <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">평가금액</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {portfolio.holdings.map((holding) => (
-                        <tr key={holding.stockCode} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-4">
-                            <div>
-                              <div className="font-semibold text-whale-dark">{holding.stockName}</div>
-                              <div className="text-sm text-gray-500">{holding.stockCode}</div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 text-right font-semibold">{holding.quantity}주</td>
-                          <td className="px-4 py-4 text-right text-gray-600">{formatAmount(holding.avgPrice)}</td>
-                          <td className="px-4 py-4 text-right font-semibold text-whale-dark">{formatAmount(holding.currentPrice)}</td>
-                          <td className={`px-4 py-4 text-right font-bold ${getReturnColor(holding.profitRate)}`}>
-                            {holding.profitRate > 0 ? '+' : ''}{holding.profitRate.toFixed(1)}%
-                          </td>
-                          <td className="px-4 py-4 text-right font-semibold">
-                            {formatAmount(holding.currentPrice * holding.quantity)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <span className="font-semibold text-indigo-600">{portfolio.stockCount}종목</span>
+              </div>
+            )}
+            {portfolio.cryptoCount > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <img src="/whales/wild-cat-whale.png" alt="" className="w-5 h-5 object-contain" />
+                  <span className="text-gray-600">코인</span>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* 최근 거래 */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-whale-dark mb-6">최근 거래</h2>
-              
-              {portfolio.recentTrades.length === 0 ? (
-                <div className="text-center py-12">
-                  <img src="/whales/beluga.png" alt="빈 목록" className="w-16 h-16 object-contain mx-auto mb-3 opacity-60" />
-                  <div className="text-gray-500 font-medium">거래 내역이 없습니다</div>
-                  <div className="text-sm text-gray-400 mt-1">거래를 시작하면 내역이 표시됩니다</div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {portfolio.recentTrades.map((trade, index) => (
-                    <div 
-                      key={index}
-                      className="border-l-4 pl-4 py-2"
-                      style={{
-                        borderColor: trade.type === '매수' ? '#ef4444' : '#3b82f6'
-                      }}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={`text-sm font-semibold ${
-                          trade.type === '매수' ? 'text-red-600' : 'text-blue-600'
-                        }`}>
-                          {trade.type}
-                        </span>
-                        <span className="text-xs text-gray-500">{trade.date}</span>
-                      </div>
-                      <div className="font-semibold text-whale-dark">{trade.stockName}</div>
-                      <div className="text-sm text-gray-600">
-                        {trade.quantity}주 × {formatAmount(trade.price)} = {formatAmount(trade.amount)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                <span className="font-semibold text-emerald-600">{portfolio.cryptoCount}종목</span>
+              </div>
+            )}
+            {totalHoldings === 0 && (
+              <p className="text-sm text-gray-400 text-center py-4">아직 보유 종목이 없습니다</p>
+            )}
           </div>
         </div>
+
+        {/* 대표 항로 */}
+        {portfolio.routeName && (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+              </svg>
+              <h2 className="text-lg font-bold text-whale-dark">대표 항로</h2>
+            </div>
+
+            <div className="bg-gradient-to-r from-whale-light/5 to-whale-accent/5 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-whale-dark text-lg">{portfolio.routeName}</span>
+                  {portfolio.routeStrategyType === 'TURTLE' && (
+                    <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-700 rounded">
+                      WhaleArc 독점
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {portfolio.routeReturnRate != null && (
+                <div className="flex items-baseline gap-2 mb-4">
+                  <span className={`text-3xl font-bold ${returnColor(portfolio.routeReturnRate)}`}>
+                    {signPrefix(portfolio.routeReturnRate)}{portfolio.routeReturnRate.toFixed(2)}%
+                  </span>
+                  <span className="text-xs text-gray-400">항로 수익률</span>
+                </div>
+              )}
+
+              <div className="space-y-2 pt-3 border-t border-gray-200">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">전략 유형</span>
+                  <span className="font-medium text-gray-700">
+                    {portfolio.routeStrategyType === 'TURTLE' ? '터틀 트레이딩' : '일반'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">포트폴리오 수익률</span>
+                  <span className={`font-medium ${returnColor(portfolio.totalReturn)}`}>
+                    {signPrefix(portfolio.totalReturn)}{portfolio.totalReturn.toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+
+              {portfolio.routeDescription && (
+                <div className="mt-4 pt-3 border-t border-gray-200">
+                  <p className="text-xs text-gray-400 mb-1">전략 로직</p>
+                  <p className="text-sm text-gray-600 leading-relaxed">{portfolio.routeDescription}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <p className="text-center text-xs text-gray-300 mt-6">
+          개인정보 보호를 위해 보유종목 상세 및 거래 내역은 비공개입니다
+        </p>
       </div>
     </div>
   );

@@ -159,6 +159,36 @@ public class StockPriceProvider {
         return result;
     }
 
+    /**
+     * 개별 종목 현재가 조회 (인기 30종목 외 종목용)
+     * @param code 종목 코드 (6자리)
+     * @param name 종목명
+     * @return MarketPriceResponse, 실패 시 null
+     */
+    public MarketPriceResponse getStockPriceByCode(String code, String name) {
+        if (!kisApiClient.isConfigured()) {
+            return null;
+        }
+        try {
+            Map<String, String> output = kisApiClient.getStockPrice(code);
+            if (output == null) return null;
+
+            MarketPriceResponse dto = new MarketPriceResponse();
+            dto.setAssetType(AssetType.STOCK);
+            dto.setSymbol(code);
+            dto.setName(name);
+            dto.setPrice(parseLong(output.get("stck_prpr")));
+            dto.setChange(parseLong(output.get("prdy_vrss")));
+            dto.setChangeRate(parseDouble(output.get("prdy_ctrt")));
+            dto.setVolume(parseLong(output.get("acml_vol")));
+            dto.setMarket("KRX");
+            return dto;
+        } catch (Exception e) {
+            log.warn("개별 종목 [{}] {} 조회 실패: {}", code, name, e.getMessage());
+            return null;
+        }
+    }
+
     /** KIS API 미설정 시 폴백 mock 데이터 */
     public List<MarketPriceResponse> getMockKrxTickers() {
         List<MarketPriceResponse> list = new ArrayList<>();

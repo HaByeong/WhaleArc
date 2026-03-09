@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -6,6 +7,7 @@ import { type RankingType, type RankingEntry } from '../services/rankingService'
 import apiClient from '../utils/api';
 
 const RankingPage = () => {
+  const navigate = useNavigate();
   const [rankingType, setRankingType] = useState<RankingType>('all');
   const [rankings, setRankings] = useState<RankingEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,86 +36,22 @@ const RankingPage = () => {
       setLoading(true);
       setError(null);
 
-      try {
-        const response = await apiClient.get('/api/rankings', {
-          params: { type: rankingType, page, size: pageSize },
-        });
+      const response = await apiClient.get('/api/rankings', {
+        params: { type: rankingType, page, size: pageSize },
+      });
 
-        if (response.data?.data) {
-          setRankings(response.data.data.rankings || []);
-          setTotalPages(Math.ceil((response.data.data.totalCount || 0) / pageSize));
-        } else {
-          const allRankings = getMockRankings();
-          const startIndex = page * pageSize;
-          setRankings(allRankings.slice(startIndex, startIndex + pageSize));
-          setTotalPages(Math.ceil(allRankings.length / pageSize));
-        }
-      } catch (apiError: any) {
-        if (apiError.response?.status === 404 || apiError.code === 'ERR_NETWORK') {
-          const allRankings = getMockRankings();
-          const startIndex = page * pageSize;
-          setRankings(allRankings.slice(startIndex, startIndex + pageSize));
-          setTotalPages(Math.ceil(allRankings.length / pageSize));
-        } else {
-          throw apiError;
-        }
+      if (response.data?.data) {
+        setRankings(response.data.data.rankings || []);
+        setTotalPages(Math.ceil((response.data.data.totalCount || 0) / pageSize));
+      } else {
+        setRankings([]);
+        setTotalPages(1);
       }
     } catch (err: any) {
       setError(err.message || '데이터를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const getMockRankings = (): RankingEntry[] => {
-    const nicknames = [
-      '깊은바다', '잔잔한파도', '조용한항해', '먼바다', '새벽안개',
-      '푸른수평선', '고요한물결', '느린조류', '밤하늘별', '아침이슬',
-      '산들바람', '돌다리', '오래된나무', '작은등대', '긴호흡',
-      '차분한걸음', '넓은시야', '단단한뿌리', '고른숨결', '맑은샘',
-      '여유로운길', '굳건한산', '따뜻한햇살', '흐르는강', '쉬어가기',
-      '한걸음씩', '묵묵히', '꾸준한발걸음', '천천히흐르는', '지금이순간',
-      '고래의노래', '깊은숨', '바다내음', '파도소리', '물안개',
-      '수면위달빛', '해류따라', '조개껍데기', '모래위발자국', '바닷바람',
-      '갯벌의하루', '바다빛깔', '물결무늬', '수평선너머', '등대지기',
-      '닻을내리고', '항구의저녁', '조용한만', '잠잠한호수', '깊은우물',
-    ];
-
-    const portfolioNames = [
-      '꾸준한 분산투자', '장기 보유 전략', '안정적 자산배분', '밸런스 포트폴리오', '차분한 적립식',
-      '기본에 충실한', '리스크 관리형', '느리지만 확실한', '원칙대로', '데이터 기반 판단',
-      '시장을 읽는 눈', '흔들리지 않는', '기초체력 투자', '합리적 선택', '냉정한 분석',
-      '장기 성장 추구', '안전마진 확보', '현금흐름 중심', '가치 중심 투자', '균형잡힌 시선',
-      '조심스런 한걸음', '꼼꼼한 리서치', '인내의 투자', '시간이 답이다', '복리의 마법',
-      '점진적 성장', '작은 수익 모으기', '탄탄한 기반', '변동성과 친구', '흔들려도 괜찮은',
-      '묵묵한 실천', '일관된 원칙', '감정 빼기', '숫자로 말하기', '기록하는 투자',
-      '돌아보는 습관', '반성하는 투자', '겸손한 수익', '욕심 내려놓기', '천천히 가도',
-      '방향이 맞다면', '과정을 믿는', '결과보다 과정', '배움의 투자', '성장하는 투자자',
-      '실수에서 배운', '오늘의 한걸음', '내일을 위한', '작지만 꾸준한', '나다운 투자',
-    ];
-
-    return Array.from({ length: 50 }, (_, i) => {
-      const rank = i + 1;
-      const baseReturn = 25 - (i * 0.8);
-      const randomVariation = (Math.random() - 0.5) * 3;
-      const totalReturn = baseReturn + randomVariation;
-      const totalValue = 10000000 + (totalReturn * 100000);
-
-      return {
-        portfolioId: `portfolio-${rank}`,
-        rank,
-        nickname: nicknames[i % nicknames.length],
-        portfolioName: portfolioNames[i % portfolioNames.length],
-        totalReturn,
-        totalValue,
-        rankChange: Math.floor((Math.random() - 0.5) * 4),
-        isMyRanking: rank === 7,
-        routeName: null,
-        routeStrategyType: null,
-        routeReturnRate: null,
-        routeDescription: null,
-      };
-    });
   };
 
   const getReturnColor = (returnValue: number) => {
@@ -134,7 +72,7 @@ const RankingPage = () => {
 
   // 통계 요약
   const stats = {
-    totalInvestors: rankings.length > 0 ? 50 : 0,
+    totalInvestors: rankings.length,
     avgReturn: rankings.length > 0 ? rankings.reduce((acc, r) => acc + r.totalReturn, 0) / rankings.length : 0,
     positiveCount: rankings.filter(r => r.totalReturn > 0).length,
     negativeCount: rankings.filter(r => r.totalReturn < 0).length,
@@ -239,10 +177,13 @@ const RankingPage = () => {
                 rankings.map((ranking) => (
                   <div
                     key={ranking.portfolioId}
-                    onClick={() => ranking.routeName ? setSelectedRanking(ranking) : undefined}
-                    className={`px-6 py-4 transition-colors ${
-                      ranking.routeName ? 'hover:bg-gray-50/80 cursor-pointer' : 'hover:bg-gray-50/50'
-                    } ${ranking.isMyRanking ? 'bg-blue-50/40 border-l-3 border-l-whale-light' : ''}`}
+                    onClick={() => {
+                      if (ranking.routeName) setSelectedRanking(ranking);
+                      else navigate(`/portfolio/${ranking.portfolioId}`);
+                    }}
+                    className={`px-6 py-4 transition-colors hover:bg-gray-50/80 cursor-pointer ${
+                      ranking.isMyRanking ? 'bg-blue-50/40 border-l-3 border-l-whale-light' : ''
+                    }`}
                   >
                     <div className="grid grid-cols-12 gap-4 items-center">
                       {/* 순번 */}
@@ -479,6 +420,17 @@ const RankingPage = () => {
                   </p>
                 </div>
               )}
+
+              {/* 포트폴리오 상세 보기 */}
+              <button
+                onClick={() => {
+                  setSelectedRanking(null);
+                  navigate(`/portfolio/${selectedRanking.portfolioId}`);
+                }}
+                className="w-full py-2.5 text-sm font-semibold text-whale-light hover:text-whale-dark bg-whale-light/5 hover:bg-whale-light/10 rounded-xl transition-colors"
+              >
+                포트폴리오 상세 보기
+              </button>
             </div>
           </div>
         </div>

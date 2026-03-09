@@ -81,10 +81,10 @@ public class CandlestickService {
 
                 LocalDate date = LocalDate.parse(dateStr, fmt);
                 long time = date.atStartOfDay().toEpochSecond(java.time.ZoneOffset.of("+09:00"));
-                long open = parseLong(c.get("stck_oprc"));
-                long high = parseLong(c.get("stck_hgpr"));
-                long low = parseLong(c.get("stck_lwpr"));
-                long close = parseLong(c.get("stck_clpr"));
+                double open = parseDouble(c.get("stck_oprc"));
+                double high = parseDouble(c.get("stck_hgpr"));
+                double low = parseDouble(c.get("stck_lwpr"));
+                double close = parseDouble(c.get("stck_clpr"));
                 double volume = parseDouble(c.get("acml_vol"));
 
                 result.add(new CandlestickResponse(time, open, high, low, close, volume));
@@ -123,10 +123,10 @@ public class CandlestickService {
             for (List<Object> candle : data) {
                 // [timestamp, open, close, high, low, volume]
                 long time = ((Number) candle.get(0)).longValue() / 1000; // ms -> seconds
-                long open = parseLong(candle.get(1));
-                long close = parseLong(candle.get(2));
-                long high = parseLong(candle.get(3));
-                long low = parseLong(candle.get(4));
+                double open = parseDouble(candle.get(1));
+                double close = parseDouble(candle.get(2));
+                double high = parseDouble(candle.get(3));
+                double low = parseDouble(candle.get(4));
                 double volume = parseDouble(candle.get(5));
 
                 result.add(new CandlestickResponse(time, open, high, low, close, volume));

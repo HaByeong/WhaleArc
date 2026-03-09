@@ -1,6 +1,7 @@
 package com.project.whalearc.ranking.service;
 
 import com.project.whalearc.ranking.dto.MyRankingDto;
+import com.project.whalearc.ranking.dto.PortfolioDetailDto;
 import com.project.whalearc.ranking.dto.RankingEntryDto;
 import com.project.whalearc.ranking.dto.RankingResponseDto;
 import com.project.whalearc.store.domain.ProductPurchase;
@@ -134,5 +135,79 @@ public class RankingService {
                 .totalReturn(mine.getTotalReturn())
                 .totalValue(mine.getTotalValue())
                 .build();
+    }
+
+    /**
+     * 포트폴리오 공개 요약 조회 (랭킹에서 클릭 시 — 프라이버시 보호)
+     * 보유종목 상세, 거래 내역, 현금 잔고는 비공개
+     */
+    public PortfolioDetailDto getPortfolioDetail(String portfolioId) {
+        Portfolio portfolio = portfolioRepository.findById(portfolioId)
+                .orElseThrow(() -> new IllegalArgumentException("포트폴리오를 찾을 수 없습니다."));
+
+        // 유저 정보
+        User user = userRepository.findBySupabaseId(portfolio.getUserId()).orElse(null);
+        String nickname = (user != null && user.getName() != null) ? user.getName() : "익명";
+        String email = (user != null && user.getEmail() != null) ? user.getEmail() : "";
+        String portfolioName = email.contains("@") ? email.split("@")[0] + "의 포트폴리오" : nickname + "의 포트폴리오";
+
+        int rank = calculateRank(portfolio);
+        double initialCapital = portfolio.getInitialCash() > 0 ? portfolio.getInitialCash() : 10_000_000;
+        double totalValue = portfolio.getTotalValue();
+        double totalReturn = portfolio.getReturnRate();
+        double totalReturnAmount = totalValue - initialCapital;
+
+        // 종목 수만 공개
+        int stockCount = (int) portfolio.getHoldings().stream().filter(h -> h.isStock()).count();
+        int cryptoCount = portfolio.getHoldings().size() - stockCount;
+
+        // 대표 항로 정보
+        String routeName = null;
+        String routeStrategyType = null;
+        Double routeReturnRate = null;
+        String routeDescription = null;
+
+        if (portfolio.getRepresentativePurchaseId() != null) {
+            try {
+                var purchase = purchaseRepository.findById(portfolio.getRepresentativePurchaseId()).orElse(null);
+                if (purchase != null && purchase.getStatus() == ProductPurchase.Status.ACTIVE) {
+                    routeName = purchase.getProductName();
+                    var product = productRepository.findById(purchase.getProductId()).orElse(null);
+                    if (product != null) {
+                        routeStrategyType = product.getStrategyType() != null ? product.getStrategyType().name() : "SIMPLE";
+                        routeDescription = product.getStrategyLogic();
+                    }
+                    routeReturnRate = getRouteReturnRate(portfolio.getUserId(), portfolio.getRepresentativePurchaseId());
+                }
+            } catch (Exception e) {
+                log.debug("대표 항로 조회 실패: {}", e.getMessage());
+            }
+        }
+
+        return PortfolioDetailDto.builder()
+                .portfolioId(portfolio.getId())
+                .portfolioName(portfolioName)
+                .nickname(nickname)
+                .currentRank(rank)
+                .totalReturn(Math.round(totalReturn * 100.0) / 100.0)
+                .totalReturnAmount(Math.round(totalReturnAmount))
+                .initialCapital(initialCapital)
+                .totalValue(totalValue)
+                .stockCount(stockCount)
+                .cryptoCount(cryptoCount)
+                .routeName(routeName)
+                .routeStrategyType(routeStrategyType)
+                .routeReturnRate(routeReturnRate)
+                .routeDescription(routeDescription)
+                .build();
+    }
+
+    private int calculateRank(Portfolio target) {
+        List<Portfolio> all = new ArrayList<>(portfolioRepository.findAll());
+        all.sort(Comparator.comparingDouble(Portfolio::getReturnRate).reversed());
+        for (int i = 0; i < all.size(); i++) {
+            if (all.get(i).getId().equals(target.getId())) return i + 1;
+        }
+        return all.size() + 1;
     }
 }

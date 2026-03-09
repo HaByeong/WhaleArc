@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface TradeRecordRepository extends MongoRepository<TradeRecord, String> {
     List<TradeRecord> findByUserIdOrderByExecutedAtDesc(String userId);
+    void deleteByUserId(String userId);
 }

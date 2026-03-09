@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -17,4 +18,8 @@ public class StrategyRequest {
     private List<Indicator> indicators;
     private List<Condition> entryConditions;
     private List<Condition> exitConditions;
+    private List<String> targetAssets;
+    private Map<String, String> targetAssetNames; // 자산코드 → 자산명
+    private String assetType;       // CRYPTO, STOCK, MIXED
+    private String strategyLogic;
 }

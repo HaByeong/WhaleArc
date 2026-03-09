@@ -302,7 +302,7 @@ const DashboardPage = () => {
                   <div className="mb-4">
                     <div className="flex items-center gap-1.5 mb-2">
                       <img src="/whales/spotted-dolphin.png" alt="주식" className="w-5 h-5 object-contain" />
-                      <span className="text-sm font-bold text-amber-700">주식</span>
+                      <span className="text-sm font-bold text-indigo-600">주식</span>
                       <span className="text-xs text-gray-400">{stockHoldings.length}종목</span>
                     </div>
                     <div className="space-y-2">
@@ -342,7 +342,7 @@ const DashboardPage = () => {
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
                       <img src="/whales/wild-cat-whale.png" alt="코인" className="w-5 h-5 object-contain" />
-                      <span className="text-sm font-bold text-orange-600">코인</span>
+                      <span className="text-sm font-bold text-emerald-600">코인</span>
                       <span className="text-xs text-gray-400">{cryptoHoldings.length}종목</span>
                     </div>
                     <div className="space-y-2">
@@ -430,7 +430,7 @@ const DashboardPage = () => {
                   <div
                     key={stock.stockCode}
                     className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 rounded-lg px-2 -mx-2"
-                    onClick={() => navigate('/trade')}
+                    onClick={() => navigate(`/trade?code=${stock.stockCode}&type=${stock.assetType || 'CRYPTO'}`)}
                   >
                     <div>
                       <div className="font-semibold text-sm text-gray-800">{stock.stockName}</div>
@@ -470,7 +470,7 @@ const DashboardPage = () => {
                   <div
                     key={stock.stockCode}
                     className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-whale-light/40 hover:shadow-sm cursor-pointer transition-all"
-                    onClick={() => navigate('/trade')}
+                    onClick={() => navigate(`/trade?code=${stock.stockCode}&type=${stock.assetType || 'CRYPTO'}`)}
                   >
                     <div>
                       <div className="font-semibold text-sm text-gray-800">{stock.stockName}</div>

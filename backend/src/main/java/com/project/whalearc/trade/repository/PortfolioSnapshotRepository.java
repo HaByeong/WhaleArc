@@ -17,4 +17,5 @@ public interface PortfolioSnapshotRepository extends MongoRepository<PortfolioSn
     Optional<PortfolioSnapshot> findByUserIdAndDate(String userId, LocalDate date);
 
     List<PortfolioSnapshot> findByUserIdOrderByDateAsc(String userId);
+    void deleteByUserId(String userId);
 }

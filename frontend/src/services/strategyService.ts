@@ -8,6 +8,13 @@ export interface Strategy {
   indicators: Indicator[];
   entryConditions: Condition[];
   exitConditions: Condition[];
+  targetAssets: string[];
+  targetAssetNames?: Record<string, string>;
+  assetType: 'CRYPTO' | 'STOCK' | 'MIXED';
+  strategyLogic: string;
+  applied: boolean;
+  appliedSuccessCount?: number;
+  appliedTotalCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -81,7 +88,7 @@ export const strategyService = {
   },
 
   // 전략 생성
-  createStrategy: async (strategy: Omit<Strategy, 'id' | 'createdAt' | 'updatedAt'>): Promise<Strategy> => {
+  createStrategy: async (strategy: Omit<Strategy, 'id' | 'createdAt' | 'updatedAt' | 'applied'>): Promise<Strategy> => {
     const response = await apiClient.post('/api/strategies', strategy);
     return response.data.data;
   },
@@ -95,6 +102,18 @@ export const strategyService = {
   // 전략 삭제
   deleteStrategy: async (strategyId: string): Promise<void> => {
     await apiClient.delete(`/api/strategies/${strategyId}`);
+  },
+
+  // 전략을 포트폴리오에 적용
+  applyStrategy: async (strategyId: string, investmentAmount: number): Promise<Strategy> => {
+    const response = await apiClient.post(`/api/strategies/${strategyId}/apply`, { investmentAmount });
+    return response.data.data;
+  },
+
+  // 전략 적용 해제
+  unapplyStrategy: async (strategyId: string): Promise<Strategy> => {
+    const response = await apiClient.post(`/api/strategies/${strategyId}/unapply`);
+    return response.data.data;
   },
 
   // 백테스팅 실행

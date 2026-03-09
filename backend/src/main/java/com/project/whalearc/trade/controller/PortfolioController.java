@@ -55,6 +55,13 @@ public class PortfolioController {
         return ApiResponse.ok(null);
     }
 
+    @PostMapping("/reset")
+    public ApiResponse<Portfolio> resetPortfolio(@AuthenticationPrincipal Jwt jwt) {
+        String userId = jwt.getSubject();
+        Portfolio portfolio = portfolioService.resetPortfolio(userId);
+        return ApiResponse.ok(portfolio);
+    }
+
     @GetMapping("/history")
     public ApiResponse<List<PortfolioSnapshot>> getHistory(
             @AuthenticationPrincipal Jwt jwt,

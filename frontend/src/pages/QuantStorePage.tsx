@@ -62,7 +62,7 @@ const QuantStorePage = () => {
       const data = await quantStoreService.getProducts(category);
       setProducts(data);
     } catch {
-      setProducts(getDemoProducts());
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -250,9 +250,9 @@ const QuantStorePage = () => {
                         {CATEGORY_LABELS[product.category]}
                       </span>
                       {product.assetType === 'STOCK' ? (
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">주식</span>
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-600">주식</span>
                       ) : (
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-600">코인</span>
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-600">코인</span>
                       )}
                     </div>
                     <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${RISK_COLORS[product.riskLevel]}`}>
@@ -726,56 +726,5 @@ const QuantStorePage = () => {
     </div>
   );
 };
-
-// 데모 데이터 (백엔드 미연결 시)
-function getDemoProducts(): QuantProduct[] {
-  return [
-    {
-      id: 'demo-1', name: '골든크로스 추종 전략',
-      description: '20일/60일 이동평균선 골든크로스 발생 시 매수, 데드크로스 시 매도하는 추세추종 전략입니다.',
-      creatorId: 'system', creatorName: 'WhaleArc',
-      category: 'TREND_FOLLOWING', riskLevel: 'MEDIUM',
-      price: 0, expectedReturn: 18.5, maxDrawdown: -12.3,
-      sharpeRatio: 1.45, winRate: 58.2, totalTrades: 0, subscribers: 127,
-      tags: ['추세추종', '이동평균', '무료'], targetAssets: ['BTC', 'ETH', 'SOL'],
-      strategyLogic: 'MA(20) > MA(60) → 매수 / MA(20) < MA(60) → 매도', strategyType: 'SIMPLE' as const,
-      active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'demo-2', name: 'RSI 반전 스캘핑',
-      description: 'RSI 과매도 구간 진입 후 반등 시 매수, 과매수 구간 도달 시 매도.',
-      creatorId: 'system', creatorName: 'WhaleArc',
-      category: 'MEAN_REVERSION', riskLevel: 'HIGH',
-      price: 0, expectedReturn: 32.1, maxDrawdown: -18.7,
-      sharpeRatio: 1.82, winRate: 64.8, totalTrades: 0, subscribers: 89,
-      tags: ['RSI', '스캘핑', '무료'], targetAssets: ['BTC', 'ETH', 'XRP'],
-      strategyLogic: 'RSI(14) < 30 → 매수 / RSI(14) > 70 → 매도', strategyType: 'SIMPLE' as const,
-      active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'demo-3', name: '안전 자산 리밸런싱',
-      description: 'BTC 60% + ETH 30% + 현금 10% 비율을 매주 리밸런싱하는 보수적 전략.',
-      creatorId: 'system', creatorName: 'WhaleArc',
-      category: 'MULTI_FACTOR', riskLevel: 'LOW',
-      price: 0, expectedReturn: 12.8, maxDrawdown: -8.2,
-      sharpeRatio: 1.15, winRate: 72.3, totalTrades: 0, subscribers: 234,
-      tags: ['리밸런싱', '안전', '무료'], targetAssets: ['BTC', 'ETH'],
-      strategyLogic: '주간 리밸런싱: BTC 60% / ETH 30% / 현금 10%', strategyType: 'SIMPLE' as const,
-      active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'demo-4', name: '터틀 트레이딩',
-      description: '리처드 데니스의 전설적인 터틀 트레이딩 전략을 암호화폐 시장에 최적화. 20일 고가 돌파 진입, ATR 기반 포지션 사이징과 피라미딩으로 추세에서 최대 수익을 추구합니다.',
-      creatorId: 'system', creatorName: 'WhaleArc',
-      category: 'TREND_FOLLOWING', riskLevel: 'MEDIUM',
-      price: 500000, expectedReturn: 35.6, maxDrawdown: -14.8,
-      sharpeRatio: 2.12, winRate: 42.5, totalTrades: 0, subscribers: 67,
-      tags: ['터틀', '돌파', 'ATR', '피라미딩', '프리미엄'], targetAssets: ['BTC', 'ETH', 'SOL', 'AVAX', 'LINK'],
-      strategyLogic: '진입: 100h Donchian 상단 돌파 + ADX(14) > 15 / 청산: 30h 채널 이탈 or 트레일링 스탑 4% / 최대 5유닛 피라미딩',
-      strategyType: 'TURTLE' as const,
-      active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    },
-  ];
-}
 
 export default QuantStorePage;

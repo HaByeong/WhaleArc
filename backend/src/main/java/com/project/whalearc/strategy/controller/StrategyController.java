@@ -56,4 +56,32 @@ public class StrategyController {
         strategyService.deleteStrategy(userId, strategyId);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{strategyId}/apply")
+    public ResponseEntity<Map<String, Object>> applyStrategy(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String strategyId,
+            @RequestBody Map<String, Double> body) {
+        String userId = jwt.getSubject();
+        double investmentAmount = body.getOrDefault("investmentAmount", 0.0);
+        try {
+            Strategy applied = strategyService.applyStrategy(userId, strategyId, investmentAmount);
+            return ResponseEntity.ok(Map.of("data", StrategyResponse.from(applied)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{strategyId}/unapply")
+    public ResponseEntity<Map<String, Object>> unapplyStrategy(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String strategyId) {
+        String userId = jwt.getSubject();
+        try {
+            Strategy unapplied = strategyService.unapplyStrategy(userId, strategyId);
+            return ResponseEntity.ok(Map.of("data", StrategyResponse.from(unapplied)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 }

@@ -27,6 +27,15 @@ const INTERVALS = [
   { label: '24시간', value: '24h' },
 ];
 
+/** 가격대에 따라 소수점 정밀도 결정 */
+const getPriceFormat = (p: number, type?: string) => {
+  if (type === 'STOCK') return { type: 'price' as const, precision: 0, minMove: 1 };
+  if (p >= 10000) return { type: 'price' as const, precision: 0, minMove: 1 };
+  if (p >= 100) return { type: 'price' as const, precision: 1, minMove: 0.1 };
+  if (p >= 1) return { type: 'price' as const, precision: 2, minMove: 0.01 };
+  return { type: 'price' as const, precision: 4, minMove: 0.0001 };
+};
+
 const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: TradingChartProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -93,7 +102,7 @@ const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: 
       priceLineColor: 'rgba(107, 114, 128, 0.3)',
       priceLineWidth: 1,
       priceLineStyle: 2,
-      priceFormat: { type: 'price', precision: 0, minMove: 1 },
+      priceFormat: getPriceFormat(price, assetType),
     });
 
     // 거래량 시리즈
@@ -125,6 +134,13 @@ const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: 
       volumeSeriesRef.current = null;
     };
   }, []);
+
+  // 종목 변경 시 가격 정밀도 업데이트
+  useEffect(() => {
+    if (candleSeriesRef.current && price > 0) {
+      candleSeriesRef.current.applyOptions({ priceFormat: getPriceFormat(price, assetType) });
+    }
+  }, [symbol, price, assetType]);
 
   // 캔들 데이터 로드
   useEffect(() => {

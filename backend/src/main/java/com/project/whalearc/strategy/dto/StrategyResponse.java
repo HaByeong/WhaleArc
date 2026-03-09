@@ -9,6 +9,7 @@ import lombok.Getter;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Builder
@@ -20,6 +21,13 @@ public class StrategyResponse {
     private List<Indicator> indicators;
     private List<Condition> entryConditions;
     private List<Condition> exitConditions;
+    private List<String> targetAssets;
+    private Map<String, String> targetAssetNames;
+    private String assetType;
+    private String strategyLogic;
+    private boolean applied;
+    private int appliedSuccessCount;
+    private int appliedTotalCount;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -31,6 +39,13 @@ public class StrategyResponse {
                 .indicators(s.getIndicators())
                 .entryConditions(s.getEntryConditions())
                 .exitConditions(s.getExitConditions())
+                .targetAssets(s.getTargetAssets())
+                .targetAssetNames(s.getTargetAssetNames())
+                .assetType(s.getAssetType())
+                .strategyLogic(s.getStrategyLogic())
+                .applied(s.isApplied())
+                .appliedSuccessCount(s.getAppliedSuccessCount())
+                .appliedTotalCount(s.getAppliedTotalCount())
                 .createdAt(s.getCreatedAt())
                 .updatedAt(s.getUpdatedAt())
                 .build();

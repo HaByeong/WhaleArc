@@ -428,7 +428,7 @@ const MyPortfolioPage = () => {
                           <div className="mb-5">
                             <div className="flex items-center gap-1.5 mb-3 px-1">
                               <img src="/whales/spotted-dolphin.png" alt="주식" className="w-5 h-5 object-contain" />
-                              <span className="text-sm font-bold text-amber-700">주식</span>
+                              <span className="text-sm font-bold text-indigo-600">주식</span>
                               <span className="text-xs text-gray-400">{stockHoldings.length}종목</span>
                             </div>
                             <div className="space-y-3">
@@ -436,7 +436,7 @@ const MyPortfolioPage = () => {
                                 <div
                                   key={h.stockCode}
                                   className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-gray-100"
-                                  onClick={() => navigate('/trade')}
+                                  onClick={() => navigate(`/trade?code=${h.stockCode}&type=STOCK`)}
                                 >
                                   <div>
                                     <div className="flex items-center gap-1.5">
@@ -472,7 +472,7 @@ const MyPortfolioPage = () => {
                           <div>
                             <div className="flex items-center gap-1.5 mb-3 px-1">
                               <img src="/whales/wild-cat-whale.png" alt="코인" className="w-5 h-5 object-contain" />
-                              <span className="text-sm font-bold text-orange-600">코인</span>
+                              <span className="text-sm font-bold text-emerald-600">코인</span>
                               <span className="text-xs text-gray-400">{cryptoHoldings.length}종목</span>
                             </div>
                             <div className="space-y-3">
@@ -480,7 +480,7 @@ const MyPortfolioPage = () => {
                                 <div
                                   key={h.stockCode}
                                   className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-gray-100"
-                                  onClick={() => navigate('/trade')}
+                                  onClick={() => navigate(`/trade?code=${h.stockCode}&type=CRYPTO`)}
                                 >
                                   <div>
                                     <div className="flex items-center gap-1.5">
@@ -532,7 +532,7 @@ const MyPortfolioPage = () => {
                                 {t.assetType === 'STOCK' ? t.stockName : (CRYPTO_NAMES[t.stockCode] || t.stockName)}
                               </span>
                               {t.assetType === 'STOCK' && (
-                                <span className="ml-1 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-700 rounded">주식</span>
+                                <span className="ml-1 px-1 py-0.5 text-[9px] font-bold bg-indigo-50 text-indigo-600 rounded">주식</span>
                               )}
                               <span className="text-xs text-gray-400 ml-1">{t.stockCode}</span>
                             </div>
@@ -729,6 +729,44 @@ const MyPortfolioPage = () => {
                     </svg>
                   </button>
                 ))}
+                <button
+                  onClick={async () => {
+                    if (!window.confirm(
+                      '⚠️ 모의투자를 완전히 초기화합니다.\n\n' +
+                      '다음 데이터가 모두 삭제됩니다:\n' +
+                      '- 보유 종목 전부 삭제\n' +
+                      '- 거래 내역 전부 삭제\n' +
+                      '- 구매한 항로 전부 삭제\n' +
+                      '- 적용한 전략 해제\n' +
+                      '- 포트폴리오 히스토리 삭제\n' +
+                      '- 현금 1,000만원으로 리셋\n\n' +
+                      '정말 초기화하시겠습니까?'
+                    )) return;
+                    if (!window.confirm(
+                      '⛔ 최종 확인\n\n' +
+                      '이 작업은 되돌릴 수 없습니다.\n' +
+                      '모든 투자 기록이 영구 삭제됩니다.\n\n' +
+                      '정말로 초기화할까요?'
+                    )) return;
+                    if (prompt('초기화를 진행하려면 "초기화"를 입력하세요.') !== '초기화') {
+                      alert('초기화가 취소되었습니다.');
+                      return;
+                    }
+                    try {
+                      await tradeService.resetPortfolio();
+                      alert('새 항해가 시작되었습니다! 모의투자가 초기화되었습니다.');
+                      loadPortfolio();
+                    } catch {
+                      alert('초기화에 실패했습니다.');
+                    }
+                  }}
+                  className="w-full text-left flex items-center justify-between text-sm text-red-500 hover:bg-red-50 border border-red-200 rounded-lg py-2.5 px-4 transition-colors"
+                >
+                  <span>새 항해 시작</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>

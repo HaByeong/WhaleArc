@@ -7,9 +7,9 @@ import lombok.Getter;
 @AllArgsConstructor
 public class CandlestickResponse {
     private long time;       // Unix timestamp (seconds)
-    private long open;
-    private long high;
-    private long low;
-    private long close;
+    private double open;
+    private double high;
+    private double low;
+    private double close;
     private double volume;
 }

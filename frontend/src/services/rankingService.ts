@@ -47,6 +47,7 @@ export interface Holding {
   currentPrice: number;
   profit: number;
   profitRate: number;
+  assetType?: string;
 }
 
 export interface Trade {
@@ -66,9 +67,10 @@ export const getRankings = async (
 };
 
 export const getPortfolioDetail = async (
-  _portfolioId: string
+  portfolioId: string
 ): Promise<PortfolioDetail> => {
-  throw new Error('포트폴리오 상세 조회는 2차 개발에서 지원됩니다.');
+  const response = await apiClient.get(`/api/rankings/portfolios/${portfolioId}`);
+  return response.data.data;
 };
 
 export const getMyRanking = async (): Promise<{

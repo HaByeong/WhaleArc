@@ -155,7 +155,7 @@ const MarketPage = () => {
                   ? 'bg-whale-light text-white shadow-md'
                   : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
               }`}
-              onClick={() => { setAssetType('STOCK'); setSelectedAsset(null); }}
+              onClick={() => { setAssetType('STOCK'); setSelectedAsset(null); setChartType('area'); }}
             >
               주식
             </button>
@@ -166,7 +166,7 @@ const MarketPage = () => {
                   ? 'bg-whale-light text-white shadow-md'
                   : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
               }`}
-              onClick={() => { setAssetType('CRYPTO'); setSelectedAsset(null); }}
+              onClick={() => { setAssetType('CRYPTO'); setSelectedAsset(null); setChartType('area'); }}
             >
               코인 (빗썸)
             </button>

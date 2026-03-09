@@ -123,7 +123,8 @@ const TradePage = () => {
   /* ─── 주문 제출 ─── */
   const handleOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStock || !quantity || parseFloat(quantity) <= 0) {
+    const qty = parseFloat(quantity);
+    if (!selectedStock || !quantity || isNaN(qty) || qty <= 0) {
       showToast('종목과 수량을 확인해주세요.', 'error');
       return;
     }
@@ -540,7 +541,7 @@ const TradePage = () => {
                 {/* 매수/매도 토글 */}
                 <div className="flex gap-2 mb-4">
                   <button
-                    onClick={() => { setOrderType('BUY'); setQuantity(''); }}
+                    onClick={() => { setOrderType('BUY'); setQuantity(''); setLimitPrice(''); }}
                     className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${
                       orderType === 'BUY'
                         ? 'bg-red-500 text-white shadow-lg shadow-red-200'
@@ -550,7 +551,7 @@ const TradePage = () => {
                     매수
                   </button>
                   <button
-                    onClick={() => { setOrderType('SELL'); setQuantity(''); }}
+                    onClick={() => { setOrderType('SELL'); setQuantity(''); setLimitPrice(''); }}
                     className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${
                       orderType === 'SELL'
                         ? 'bg-blue-500 text-white shadow-lg shadow-blue-200'

@@ -29,6 +29,7 @@ const MyPortfolioPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'holdings' | 'trades'>('holdings');
   const [settingRoute, setSettingRoute] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
 
   const displayName =
     profileName || user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
@@ -318,11 +319,11 @@ const MyPortfolioPage = () => {
             </div>
 
             {/* 자산 배분 */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="bg-white rounded-xl shadow-lg p-4 md:p-6">
               <h2 className="text-lg font-bold text-whale-dark mb-4">자산 배분</h2>
-              <div className="flex flex-col md:flex-row items-center gap-6">
+              <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6">
                 {/* 도넛 차트 */}
-                <div className="w-48 h-48 flex-shrink-0">
+                <div className="w-36 h-36 md:w-48 md:h-48 flex-shrink-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -352,14 +353,14 @@ const MyPortfolioPage = () => {
                   {allocationData.map((d) => {
                     const pct = totalValue > 0 ? (d.value / totalValue) * 100 : 0;
                     return (
-                      <div key={d.name} className="flex items-center gap-3">
+                      <div key={d.name} className="flex items-center gap-2 md:gap-3">
                         <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
-                        <span className="text-sm text-gray-700 w-20 truncate">{d.name}</span>
-                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <span className="text-xs md:text-sm text-gray-700 w-14 md:w-20 truncate">{d.name}</span>
+                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden hidden sm:block">
                           <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: d.color }} />
                         </div>
                         <span className="text-xs text-gray-500 w-12 text-right">{pct.toFixed(1)}%</span>
-                        <span className="text-xs font-medium text-gray-700 w-24 text-right">{fmt(d.value)}</span>
+                        <span className="text-xs font-medium text-gray-700 w-20 md:w-24 text-right hidden sm:inline">{fmt(d.value)}</span>
                       </div>
                     );
                   })}
@@ -435,7 +436,7 @@ const MyPortfolioPage = () => {
                               {stockHoldings.map((h) => (
                                 <div
                                   key={h.stockCode}
-                                  className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-gray-100"
+                                  className="flex items-center justify-between p-2.5 md:p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-gray-100"
                                   onClick={() => navigate(`/trade?code=${h.stockCode}&type=STOCK`)}
                                 >
                                   <div>
@@ -479,7 +480,7 @@ const MyPortfolioPage = () => {
                               {cryptoHoldings.map((h) => (
                                 <div
                                   key={h.stockCode}
-                                  className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-gray-100"
+                                  className="flex items-center justify-between p-2.5 md:p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-gray-100"
                                   onClick={() => navigate(`/trade?code=${h.stockCode}&type=CRYPTO`)}
                                 >
                                   <div>
@@ -520,25 +521,25 @@ const MyPortfolioPage = () => {
                   ) : (
                     <div className="space-y-2">
                       {trades.slice(0, 20).map((t) => (
-                        <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <span className={`px-2 py-1 text-xs font-bold rounded ${
+                        <div key={t.id} className="flex items-center justify-between p-2.5 md:p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                            <span className={`px-2 py-1 text-xs font-bold rounded flex-shrink-0 ${
                               t.orderType === 'BUY' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
                             }`}>
                               {t.orderType === 'BUY' ? '매수' : '매도'}
                             </span>
-                            <div>
+                            <div className="min-w-0">
                               <span className="font-semibold text-sm text-whale-dark">
                                 {t.assetType === 'STOCK' ? t.stockName : (CRYPTO_NAMES[t.stockCode] || t.stockName)}
                               </span>
                               {t.assetType === 'STOCK' && (
                                 <span className="ml-1 px-1 py-0.5 text-[9px] font-bold bg-indigo-50 text-indigo-600 rounded">주식</span>
                               )}
-                              <span className="text-xs text-gray-400 ml-1">{t.stockCode}</span>
+                              <span className="text-xs text-gray-400 ml-1 hidden sm:inline">{t.stockCode}</span>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-sm font-medium">
+                          <div className="text-right flex-shrink-0 ml-2">
+                            <div className="text-xs md:text-sm font-medium">
                               {t.assetType === 'STOCK' ? `${Math.floor(t.quantity)}주` : `${formatQuantity(t.quantity)}개`} · {fmt(t.price)}
                             </div>
                             <div className="text-xs text-gray-400">
@@ -729,6 +730,49 @@ const MyPortfolioPage = () => {
                     </svg>
                   </button>
                 ))}
+                {/* CSV 내보내기 */}
+                <div className="border-t border-gray-100 pt-2 mt-1 space-y-2">
+                  <div className="text-xs text-gray-400 px-1">내보내기</div>
+                  <button
+                    onClick={async () => {
+                      setExporting('trades');
+                      try {
+                        await tradeService.exportTradesCsv();
+                      } catch {
+                        alert('다운로드에 실패했습니다.');
+                      } finally {
+                        setExporting(null);
+                      }
+                    }}
+                    disabled={exporting === 'trades'}
+                    className="w-full text-left flex items-center justify-between text-sm text-gray-600 hover:bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 transition-colors disabled:opacity-50"
+                  >
+                    <span>{exporting === 'trades' ? '다운로드 중...' : '거래 내역 CSV'}</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setExporting('portfolio');
+                      try {
+                        await tradeService.exportPortfolioCsv();
+                      } catch {
+                        alert('다운로드에 실패했습니다.');
+                      } finally {
+                        setExporting(null);
+                      }
+                    }}
+                    disabled={exporting === 'portfolio'}
+                    className="w-full text-left flex items-center justify-between text-sm text-gray-600 hover:bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 transition-colors disabled:opacity-50"
+                  >
+                    <span>{exporting === 'portfolio' ? '다운로드 중...' : '포트폴리오 리포트 CSV'}</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  </button>
+                </div>
+
                 <button
                   onClick={async () => {
                     if (!window.confirm(

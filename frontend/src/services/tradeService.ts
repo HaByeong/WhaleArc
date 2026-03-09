@@ -204,4 +204,32 @@ export const tradeService = {
     const response = await apiClient.post('/api/portfolio/reset');
     return response.data.data;
   },
+
+  // CSV 내보내기 - 거래 내역
+  exportTradesCsv: async (): Promise<void> => {
+    const response = await apiClient.get('/api/export/trades.csv', { responseType: 'blob' });
+    downloadBlob(response.data, `WhaleArc_trades_${todayStr()}.csv`);
+  },
+
+  // CSV 내보내기 - 포트폴리오 리포트
+  exportPortfolioCsv: async (): Promise<void> => {
+    const response = await apiClient.get('/api/export/portfolio.csv', { responseType: 'blob' });
+    downloadBlob(response.data, `WhaleArc_portfolio_${todayStr()}.csv`);
+  },
 };
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+}

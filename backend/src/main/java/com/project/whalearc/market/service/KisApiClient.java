@@ -160,6 +160,35 @@ public class KisApiClient {
         }
     }
 
+    /**
+     * 업종(지수) 현재가 조회 (KOSPI: 0001, KOSDAQ: 1001)
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, String> getIndexPrice(String indexCode) {
+        String url = baseUrl + "/uapi/domestic-stock/v1/quotations/inquire-index-price"
+                + "?FID_COND_MRKT_DIV_CODE=U"
+                + "&FID_INPUT_ISCD=" + indexCode;
+
+        HttpHeaders headers = buildHeaders("FHPUP02100000");
+        HttpEntity<Void> request = new HttpEntity<>(headers);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
+            Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                    new TypeReference<Map<String, Object>>() {});
+
+            if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
+                log.warn("KIS 지수 조회 실패 [{}]: {}", indexCode, result.get("msg1"));
+                return null;
+            }
+
+            return objectMapper.convertValue(result.get("output"), new TypeReference<Map<String, String>>() {});
+        } catch (Exception e) {
+            log.error("KIS 지수 조회 오류 [{}]: {}", indexCode, e.getMessage());
+            return null;
+        }
+    }
+
     private HttpHeaders buildHeaders(String trId) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

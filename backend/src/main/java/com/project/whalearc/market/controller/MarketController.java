@@ -2,6 +2,7 @@ package com.project.whalearc.market.controller;
 
 import com.project.whalearc.market.domain.AssetType;
 import com.project.whalearc.market.dto.CandlestickResponse;
+import com.project.whalearc.market.dto.IndexPriceResponse;
 import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.*;
 import com.project.whalearc.market.websocket.RealtimePriceHolder;
@@ -113,6 +114,39 @@ public class MarketController {
             log.error("개별 종목 조회 실패 [{}]: {}", code, e.getMessage());
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    /** KOSPI / KOSDAQ 지수 조회 (인증 불필요) */
+    @GetMapping("/indices")
+    public ResponseEntity<List<IndexPriceResponse>> getIndices() {
+        List<IndexPriceResponse> indices = new ArrayList<>();
+
+        if (!kisApiClient.isConfigured()) {
+            return ResponseEntity.ok(indices);
+        }
+
+        // KOSPI: 0001, KOSDAQ: 1001
+        Map<String, String> kospi = kisApiClient.getIndexPrice("0001");
+        if (kospi != null) {
+            indices.add(new IndexPriceResponse(
+                    "KOSPI", "코스피",
+                    parseDouble(kospi.get("bstp_nmix_prpr")),
+                    parseDouble(kospi.get("bstp_nmix_prdy_vrss")),
+                    parseDouble(kospi.get("bstp_nmix_prdy_ctrt"))
+            ));
+        }
+
+        Map<String, String> kosdaq = kisApiClient.getIndexPrice("1001");
+        if (kosdaq != null) {
+            indices.add(new IndexPriceResponse(
+                    "KOSDAQ", "코스닥",
+                    parseDouble(kosdaq.get("bstp_nmix_prpr")),
+                    parseDouble(kosdaq.get("bstp_nmix_prdy_vrss")),
+                    parseDouble(kosdaq.get("bstp_nmix_prdy_ctrt"))
+            ));
+        }
+
+        return ResponseEntity.ok(indices);
     }
 
     /** 캐시 상태 확인 (디버그/모니터링용) */

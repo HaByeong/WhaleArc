@@ -315,19 +315,19 @@ const MarketPage = () => {
               <>
                 {/* 종목 정보 카드 */}
                 <div className="card">
-                  <div className="flex justify-between items-start mb-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start gap-2 mb-4">
                     <div>
-                      <h2 className="text-2xl font-bold text-whale-dark">{liveSelectedAsset.name}</h2>
-                      <p className="text-gray-500">
+                      <h2 className="text-xl md:text-2xl font-bold text-whale-dark">{liveSelectedAsset.name}</h2>
+                      <p className="text-gray-500 text-sm">
                         {liveSelectedAsset.symbol}
                         {liveSelectedAsset.assetType === 'CRYPTO' ? ' / KRW' : ''}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <div className="text-3xl font-bold text-whale-dark mb-1">
+                    <div className="text-left sm:text-right">
+                      <div className="text-2xl md:text-3xl font-bold text-whale-dark mb-1">
                         {formatCurrency(liveSelectedAsset.price)}
                       </div>
-                      <div className={`text-lg font-semibold ${liveSelectedAsset.changeRate >= 0 ? 'price-up' : 'price-down'}`}>
+                      <div className={`text-sm md:text-lg font-semibold ${liveSelectedAsset.changeRate >= 0 ? 'price-up' : 'price-down'}`}>
                         {liveSelectedAsset.change >= 0 ? '+' : ''}
                         {formatCurrency(liveSelectedAsset.change)} ({liveSelectedAsset.changeRate >= 0 ? '+' : ''}
                         {liveSelectedAsset.changeRate.toFixed(2)}%)
@@ -403,7 +403,7 @@ const MarketPage = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="card text-center">
                     <div className="text-sm text-gray-600 mb-1">전일 종가</div>
-                    <div className="text-xl font-bold text-whale-dark">
+                    <div className="text-lg md:text-xl font-bold text-whale-dark">
                       {formatCurrency(liveSelectedAsset.price - liveSelectedAsset.change)}
                     </div>
                   </div>

@@ -207,17 +207,17 @@ const DashboardPage = () => {
               </div>
 
               {portfolio && (
-                <div className="flex items-center space-x-6">
+                <div className="flex items-center gap-4 md:gap-6">
                   <div className="text-center">
                     <div className="text-xs md:text-sm text-blue-200 mb-1">총 자산</div>
-                    <div className="text-xl md:text-2xl font-bold">
+                    <div className="text-lg md:text-2xl font-bold">
                       {formatCurrency(portfolio.totalValue)}
                     </div>
                   </div>
-                  <div className="h-12 w-px bg-white bg-opacity-30"></div>
+                  <div className="h-10 md:h-12 w-px bg-white bg-opacity-30"></div>
                   <div className="text-center">
                     <div className="text-xs md:text-sm text-blue-200 mb-1">수익률</div>
-                    <div className={`text-xl md:text-2xl font-bold ${
+                    <div className={`text-lg md:text-2xl font-bold ${
                       portfolio.returnRate >= 0 ? 'text-red-300' : 'text-blue-300'
                     }`}>
                       {portfolio.returnRate >= 0 ? '+' : ''}

@@ -1,35 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Header from '../components/Header';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
+import apiClient from '../utils/api';
 
-// 코스피 지수 차트 데이터
-const kospiData = [
-  { name: '09:00', value: 2650 },
-  { name: '10:00', value: 2655 },
-  { name: '11:00', value: 2660 },
-  { name: '12:00', value: 2665 },
-  { name: '13:00', value: 2670 },
-];
-
-// 코스닥 지수 차트 데이터
-const kosdaqData = [
-  { name: '09:00', value: 850 },
-  { name: '10:00', value: 852 },
-  { name: '11:00', value: 855 },
-  { name: '12:00', value: 858 },
-  { name: '13:00', value: 860 },
-];
-
-// 인기 종목 (한국 주식)
-const popularStocks = [
-  { symbol: '삼성전자', code: '005930', value: '75,000', change: '+1.20%', isPositive: true },
-  { symbol: 'SK하이닉스', code: '000660', value: '145,000', change: '+2.50%', isPositive: true },
-  { symbol: 'NAVER', code: '035420', value: '185,000', change: '-0.80%', isPositive: false },
-  { symbol: '카카오', code: '035720', value: '52,000', change: '+0.50%', isPositive: true },
-];
+interface IndexData {
+  code: string;
+  name: string;
+  price: number;
+  change: number;
+  changeRate: number;
+}
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -38,6 +20,7 @@ const LoginPage = () => {
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [indices, setIndices] = useState<IndexData[]>([]);
   const navigate = useNavigate();
   const location = useLocation();
   const { session } = useAuth();
@@ -60,6 +43,23 @@ const LoginPage = () => {
       return () => clearTimeout(timer);
     }
   }, [location]);
+
+  // KOSPI / KOSDAQ 실시간 지수 조회
+  useEffect(() => {
+    const fetchIndices = async () => {
+      try {
+        const res = await apiClient.get('/api/market/indices');
+        if (res.data && res.data.length > 0) {
+          setIndices(res.data);
+        }
+      } catch {
+        // 실패 시 조용히 무시 (카드 숨김 처리)
+      }
+    };
+    fetchIndices();
+    const interval = setInterval(fetchIndices, 60_000); // 1분마다 갱신
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +89,49 @@ const LoginPage = () => {
       setOauthLoading(null);
     }
   };
+
+  const features = [
+    {
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      title: '1,000만원 가상자금',
+      desc: '리스크 없이 실전처럼 투자 연습',
+      color: 'bg-blue-50 text-blue-600',
+    },
+    {
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+        </svg>
+      ),
+      title: '주식 + 코인 통합',
+      desc: 'KRX 전종목과 빗썸 코인을 한 포트폴리오에서',
+      color: 'bg-emerald-50 text-emerald-600',
+    },
+    {
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+      ),
+      title: '퀀트 전략 상점',
+      desc: '터틀 트레이딩 등 검증된 알고리즘 자동매매',
+      color: 'bg-purple-50 text-purple-600',
+    },
+    {
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      ),
+      title: '포트폴리오 분석',
+      desc: '자산 추이, 수익률, CSV 리포트까지',
+      color: 'bg-amber-50 text-amber-600',
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -241,88 +284,85 @@ const LoginPage = () => {
             </div>
           </div>
 
-          {/* Market Data */}
+          {/* Right Side - Market + Features */}
           <div className="space-y-6">
-            {/* 코스피 지수 */}
-            <div className="card">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-whale-dark">코스피</h3>
-                <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">KOSPI</span>
+            {/* KOSPI / KOSDAQ 실시간 지수 */}
+            {indices.length > 0 && (
+              <div className="grid grid-cols-2 gap-4">
+                {indices.map((idx) => {
+                  const isUp = idx.change >= 0;
+                  return (
+                    <div key={idx.code} className={`rounded-2xl p-4 sm:p-5 ${isUp ? 'bg-red-50' : 'bg-blue-50'}`}>
+                      <div className="flex items-center space-x-1.5 sm:space-x-2 mb-2 sm:mb-3">
+                        <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded ${isUp ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {idx.code}
+                        </span>
+                        <span className="text-xs sm:text-sm text-gray-500 font-medium">{idx.name}</span>
+                      </div>
+                      <div className="text-xl sm:text-2xl font-bold text-whale-dark">
+                        {idx.price.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <div className={`flex items-center space-x-1 mt-1 text-xs sm:text-sm font-semibold ${isUp ? 'text-red-600' : 'text-blue-600'}`}>
+                        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          {isUp
+                            ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                            : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                          }
+                        </svg>
+                        <span>{Math.abs(idx.changeRate).toFixed(2)}%</span>
+                        <span className="text-[10px] sm:text-xs font-normal text-gray-400">
+                          ({isUp ? '+' : ''}{idx.change.toFixed(2)})
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="mb-4">
-                <div className="text-3xl font-bold text-whale-dark mb-1">2,670.25</div>
-                <div className="text-red-600 font-semibold">+0.75% (+19.80)</div>
+            )}
+
+            {/* WhaleArc를 만든 이유 */}
+            <div className="card border-l-4 border-l-whale-dark">
+              <p className="text-xs font-semibold text-whale-light tracking-widest uppercase mb-3">Why WhaleArc</p>
+              <h3 className="text-lg font-bold text-whale-dark mb-4">
+                투자, 누구에게나 열려 있어야 하니까.
+              </h3>
+              <div className="space-y-2.5 text-sm text-gray-600 leading-relaxed">
+                <p>
+                  높은 진입장벽과 실패에 대한 두려움이
+                  첫 걸음을 망설이게 만듭니다.
+                </p>
+                <p>
+                  WhaleArc는 복잡한 설치 없이,
+                  <span className="text-whale-dark font-semibold"> 웹 접속만으로 실시간 시세와
+                  함께 나만의 포트폴리오를 구성</span>하고
+                  리스크 없이 투자를 경험할 수 있는 공간입니다.
+                </p>
               </div>
-              <div className="h-32">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={kospiData}>
-                    <XAxis dataKey="name" hide />
-                    <YAxis hide />
-                    <Line
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#e53e3e"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              <p className="mt-4 text-xs text-gray-400">
+                당신의 첫 항해, WhaleArc가 함께합니다.
+              </p>
             </div>
 
-            {/* 코스닥 지수 */}
+            {/* WhaleArc 기능 소개 카드 */}
             <div className="card">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-whale-dark">코스닥</h3>
-                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">KOSDAQ</span>
-              </div>
-              <div className="mb-4">
-                <div className="text-3xl font-bold text-whale-dark mb-1">860.45</div>
-                <div className="text-blue-600 font-semibold">+1.20% (+10.20)</div>
-              </div>
-              <div className="h-32">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={kosdaqData}>
-                    <XAxis dataKey="name" hide />
-                    <YAxis hide />
-                    <Line
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#3182ce"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* 인기 종목 */}
-            <div className="card">
-              <h3 className="text-lg font-semibold text-whale-dark mb-4">인기 종목</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">종목명</th>
-                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">코드</th>
-                      <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">현재가</th>
-                      <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">등락률</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {popularStocks.map((stock) => (
-                      <tr key={stock.code} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-3 font-semibold text-whale-dark">{stock.symbol}</td>
-                        <td className="py-3 text-gray-500 text-sm">{stock.code}</td>
-                        <td className="py-3 text-right text-gray-700">{stock.value}원</td>
-                        <td className={`py-3 text-right font-semibold ${stock.isPositive ? 'price-up' : 'price-down'}`}>
-                          {stock.change}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <h3 className="text-lg font-semibold text-whale-dark mb-5">
+                WhaleArc에서 할 수 있는 것들
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {features.map((f, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start space-x-3 p-3 rounded-xl hover:bg-gray-50 transition-colors"
+                  >
+                    <div className={`p-2.5 rounded-xl flex-shrink-0 ${f.color}`}>
+                      {f.icon}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-whale-dark text-sm">{f.title}</div>
+                      <div className="text-xs text-gray-500 mt-0.5 leading-relaxed">{f.desc}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

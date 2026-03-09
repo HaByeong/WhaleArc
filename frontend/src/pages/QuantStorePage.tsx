@@ -161,9 +161,9 @@ const QuantStorePage = () => {
             <img src="/whales/narwhal.png" alt="" className="w-10 h-10 object-contain" />
             <h1 className="text-3xl font-bold text-whale-dark">항로 상점</h1>
           </div>
-          <p className="text-gray-600 ml-13 leading-relaxed">
-            고래가 바다를 건널 때, 본능이 아닌 검증된 경로를 따릅니다.<br />
-            <strong className="text-whale-dark">항로</strong>는 과거 시장 데이터로 백테스트를 거친 퀀트 트레이딩 전략입니다.<br />
+          <p className="text-gray-600 ml-0 md:ml-13 leading-relaxed text-sm md:text-base">
+            고래가 바다를 건널 때, 본능이 아닌 검증된 경로를 따릅니다.<br className="hidden md:inline" />
+            <strong className="text-whale-dark">항로</strong>는 과거 시장 데이터로 백테스트를 거친 퀀트 트레이딩 전략입니다.<br className="hidden md:inline" />
             원하는 항로를 구매하고, 내 포트폴리오에 적용해 수익의 바다를 항해하세요.
           </p>
         </div>
@@ -174,11 +174,11 @@ const QuantStorePage = () => {
             <h2 className="text-lg font-bold text-whale-dark mb-3">내 항해 현황</h2>
             <div className="space-y-3">
               {purchases.map((p) => (
-                <div key={p.id} className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
-                  <div>
-                    <div className="font-semibold text-whale-dark">{p.productName}</div>
-                    <div className="text-sm text-gray-500">
-                      투자 금액: {formatCurrency(p.investmentAmount)} · 자산: {p.purchasedAssets?.map(a => `${cryptoDisplayName(a.code)} ${formatQuantity(a.quantity)}개`).join(', ') || '-'}
+                <div key={p.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-gray-50 rounded-lg p-3 md:p-4 gap-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-whale-dark text-sm md:text-base">{p.productName}</div>
+                    <div className="text-xs md:text-sm text-gray-500 truncate">
+                      투자: {formatCurrency(p.investmentAmount)} · {p.purchasedAssets?.map(a => `${cryptoDisplayName(a.code)} ${formatQuantity(a.quantity)}개`).join(', ') || '-'}
                     </div>
                   </div>
                   <button
@@ -338,10 +338,10 @@ const QuantStorePage = () => {
         {selectedProduct && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedProduct(null)}>
             <div
-              className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-8 shadow-2xl"
+              className="bg-white rounded-2xl max-w-full md:max-w-2xl w-full max-h-[90vh] overflow-y-auto p-4 md:p-8 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4 md:mb-6">
                 <div className="flex items-center space-x-3">
                   <span className="px-3 py-1 text-sm font-semibold rounded-full bg-whale-light/10 text-whale-light">
                     {CATEGORY_LABELS[selectedProduct.category]}
@@ -361,8 +361,8 @@ const QuantStorePage = () => {
                 </button>
               </div>
 
-              <h2 className="text-2xl font-bold text-whale-dark mb-3">{selectedProduct.name}</h2>
-              <p className="text-gray-600 mb-6">{selectedProduct.description}</p>
+              <h2 className="text-xl md:text-2xl font-bold text-whale-dark mb-3">{selectedProduct.name}</h2>
+              <p className="text-gray-600 mb-4 md:mb-6 text-sm md:text-base">{selectedProduct.description}</p>
 
               {/* WhaleArc 자체 알고리즘 뱃지 (터틀) */}
               {selectedProduct.strategyType === 'TURTLE' && (
@@ -376,7 +376,7 @@ const QuantStorePage = () => {
                     리처드 데니스의 전설적인 터틀 전략을 암호화폐 시장에 맞게 재설계하였으며,
                     BTC 1시간봉 기준 백테스트에서 검증된 파라미터를 사용합니다.
                   </p>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div className="bg-white/70 rounded-lg p-2.5">
                       <span className="text-amber-600 font-semibold">진입</span>
                       <p className="text-amber-900 mt-0.5">100시간 Donchian 채널 상단 돌파 + ADX(14) {'>'} 15</p>
@@ -453,7 +453,7 @@ const QuantStorePage = () => {
               </div>
 
               {/* 구매 영역 */}
-              <div className={`flex items-center justify-between p-5 rounded-xl border ${
+              <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 md:p-5 rounded-xl border ${
                 selectedProduct.price > 0
                   ? 'bg-gradient-to-r from-amber-50 to-amber-100/50 border-amber-200'
                   : 'bg-gradient-to-r from-whale-light/5 to-whale-accent/5 border-whale-light/20'
@@ -478,7 +478,7 @@ const QuantStorePage = () => {
                     }
                   }}
                   disabled={purchasedIds.has(selectedProduct.id) || purchasing}
-                  className={`px-8 py-3 rounded-xl text-base font-semibold transition-all ${
+                  className={`w-full sm:w-auto px-8 py-3 rounded-xl text-base font-semibold transition-all ${
                     purchasedIds.has(selectedProduct.id)
                       ? 'bg-green-100 text-green-700 cursor-default'
                       : selectedProduct.price === 0
@@ -523,7 +523,7 @@ const QuantStorePage = () => {
               </div>
 
               {/* 빠른 금액 버튼 */}
-              <div className="grid grid-cols-4 gap-2 mb-6">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
                 {QUICK_AMOUNTS.map((amount) => (
                   <button
                     key={amount}

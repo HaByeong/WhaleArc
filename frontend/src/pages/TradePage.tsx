@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -11,421 +11,262 @@ import {
   type Trade,
   type Portfolio,
 } from '../services/tradeService';
-import { formatQuantity } from '../services/quantStoreService';
+import { CRYPTO_NAMES, formatQuantity } from '../services/quantStoreService';
+import TradingChart from '../components/TradingChart';
 
-// Holding 타입을 여기에 직접 정의 (import 문제 해결)
-export interface Holding {
-  stockCode: string;
-  stockName: string;
-  quantity: number;
-  averagePrice: number;
-  currentPrice: number;
-  marketValue: number;
-  profitLoss: number;
-  returnRate: number;
-}
-import {
-  XAxis,
-  YAxis,
-  ResponsiveContainer,
-  Tooltip,
-  AreaChart,
-  Area,
-} from 'recharts';
+/* ─── 인기 코인 (종목 목록 상단 고정) ─── */
+const POPULAR_COINS = ['BTC', 'ETH', 'XRP', 'SOL', 'DOGE', 'ADA', 'AVAX', 'LINK', 'DOT', 'MATIC'];
+const COMMISSION_RATE = 0.001; // 0.1% (백엔드와 동일)
+
+/* ─── 유틸 ─── */
+const fmt = (v: number) =>
+  new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+
+const fmtNum = (v: number) => new Intl.NumberFormat('ko-KR').format(v);
+
+const coinName = (code: string) => CRYPTO_NAMES[code] || code;
 
 const TradePage = () => {
-  // 상태 관리
+  /* ─── 상태 ─── */
   const [selectedStock, setSelectedStock] = useState<StockPrice | null>(null);
   const [stockList, setStockList] = useState<StockPrice[]>([]);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [priceHistory, setPriceHistory] = useState<{ time: string; price: number }[]>([]);
 
-  // 주문 폼 상태
   const [orderType, setOrderType] = useState<'BUY' | 'SELL'>('BUY');
   const [orderMethod, setOrderMethod] = useState<'MARKET' | 'LIMIT'>('MARKET');
-  const [quantity, setQuantity] = useState<string>('');
-  const [limitPrice, setLimitPrice] = useState<string>('');
+  const [quantity, setQuantity] = useState('');
+  const [limitPrice, setLimitPrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 탭 상태
-  const [activeTab, setActiveTab] = useState<'order' | 'orders' | 'trades' | 'portfolio'>('order');
-  
-  // 로딩 및 에러 상태
+  const [activeTab, setActiveTab] = useState<'chart' | 'orders' | 'trades' | 'holdings'>('chart');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // 데이터 로드
-  useEffect(() => {
-    loadInitialData();
-  }, []);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>();
+  const selectedStockRef = useRef<StockPrice | null>(null);
+  selectedStockRef.current = selectedStock;
 
-  // 스마트 폴링: 탭 비활성 시 자동 중지, 중복 요청 방지
-  const pollTradeData = useCallback(async () => {
-    try {
-      if (selectedStock) {
-        loadStockPrice(selectedStock.stockCode);
-      }
-      loadPortfolioData();
-    } catch {
-      // 폴링 실패는 조용히 무시
-    }
-  }, [selectedStock]);
-  usePolling(pollTradeData, 10000);
+  // 토스트 타이머 cleanup
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
-  // 데모 데이터
-  const getDemoData = () => {
-    const baseDate = new Date().toISOString();
-    const demoStocks: StockPrice[] = [
-      {
-        stockCode: 'BTC',
-        stockName: '비트코인',
-        currentPrice: 95000000,
-        change: 1500000,
-        changeRate: 1.6,
-        volume: 12500,
-        high: 96000000,
-        low: 93000000,
-        open: 93500000,
-        previousClose: 93500000,
-        timestamp: baseDate,
-      },
-      {
-        stockCode: 'ETH',
-        stockName: '이더리움',
-        currentPrice: 3500000,
-        change: -50000,
-        changeRate: -1.41,
-        volume: 85000,
-        high: 3600000,
-        low: 3450000,
-        open: 3550000,
-        previousClose: 3550000,
-        timestamp: baseDate,
-      },
-    ];
-
-    const demoPortfolio: Portfolio = {
-      id: 'demo-1',
-      userId: 'demo-user',
-      cashBalance: 5000000,
-      totalValue: 12500000,
-      returnRate: 25.0,
-      holdings: [
-        {
-          stockCode: 'BTC',
-          stockName: '비트코인',
-          quantity: 0.05,
-          averagePrice: 85000000,
-          currentPrice: 95000000,
-          marketValue: 4750000,
-          profitLoss: 500000,
-          returnRate: 11.76,
-        },
-      ],
-    };
-
-    const demoOrders: Order[] = [
-      {
-        id: 'order-1',
-        userId: 'demo-user',
-        stockCode: 'BTC',
-        stockName: '비트코인',
-        orderType: 'BUY',
-        orderMethod: 'MARKET',
-        quantity: 1,
-        price: 95000000,
-        status: 'FILLED',
-        filledQuantity: 1,
-        filledPrice: 95000000,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    ];
-
-    const demoTrades: Trade[] = [
-      {
-        id: 'trade-1',
-        orderId: 'order-1',
-        stockCode: 'BTC',
-        stockName: '비트코인',
-        orderType: 'BUY',
-        quantity: 1,
-        price: 95000000,
-        totalAmount: 95000000,
-        commission: 14250,
-        netAmount: 95014250,
-        executedAt: new Date().toISOString(),
-      },
-    ];
-
-    return { demoStocks, demoPortfolio, demoOrders, demoTrades };
+  /* ─── 토스트 ─── */
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
   };
 
-  const loadInitialData = async () => {
+  /* ─── 데이터 로드 ─── */
+  const loadInitialData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      
       const [stocks, portfolioData, ordersData, tradesData] = await Promise.all([
-        tradeService.getStockList().catch(() => {
-          const { demoStocks } = getDemoData();
-          return demoStocks;
-        }),
-        tradeService.getPortfolio().catch(() => {
-          const { demoPortfolio } = getDemoData();
-          return demoPortfolio;
-        }),
-        tradeService.getOrders().catch(() => {
-          const { demoOrders } = getDemoData();
-          return demoOrders;
-        }),
-        tradeService.getTrades().catch(() => {
-          const { demoTrades } = getDemoData();
-          return demoTrades;
-        }),
+        tradeService.getStockList(),
+        tradeService.getPortfolio(),
+        tradeService.getOrders(),
+        tradeService.getTrades(),
       ]);
+      setStockList(stocks);
+      setPortfolio(portfolioData);
+      setOrders(ordersData);
+      setTrades(tradesData);
+      if (stocks.length > 0 && !selectedStockRef.current) {
+        setSelectedStock(stocks[0]);
+      }
+    } catch (err: any) {
+      setError(err.message || '데이터를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
+  useEffect(() => { loadInitialData(); }, [loadInitialData]);
+
+  /* ─── 폴링 (10초) ─── */
+  const pollData = useCallback(async () => {
+    try {
+      const [stocks, portfolioData, ordersData, tradesData] = await Promise.all([
+        tradeService.getStockList(),
+        tradeService.getPortfolio(),
+        tradeService.getOrders(),
+        tradeService.getTrades(),
+      ]);
       setStockList(stocks);
       setPortfolio(portfolioData);
       setOrders(ordersData);
       setTrades(tradesData);
 
-      if (stocks.length > 0 && !selectedStock) {
-        setSelectedStock(stocks[0]);
-        loadStockPrice(stocks[0].stockCode);
+      // 선택된 종목 가격 업데이트
+      if (selectedStock) {
+        const updated = stocks.find(s => s.stockCode === selectedStock.stockCode);
+        if (updated) {
+          setSelectedStock(updated);
+        }
       }
-    } catch (err: any) {
-      // 에러 발생 시에도 데모 데이터 표시
-      const { demoStocks, demoPortfolio, demoOrders, demoTrades } = getDemoData();
-      setStockList(demoStocks);
-      setPortfolio(demoPortfolio);
-      setOrders(demoOrders);
-      setTrades(demoTrades);
-      if (demoStocks.length > 0 && !selectedStock) {
-        setSelectedStock(demoStocks[0]);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+    } catch { /* 폴링 실패 무시 */ }
+  }, [selectedStock]);
 
-  const loadStockPrice = async (stockCode: string) => {
-    try {
-      const price = await tradeService.getStockPrice(stockCode).catch(() => {
-        // API 실패 시 데모 데이터
-        const stock = stockList.find(s => s.stockCode === stockCode);
-        const baseDate = new Date().toISOString();
-        return stock || {
-          stockCode: 'BTC',
-          stockName: '비트코인',
-          currentPrice: 95000000,
-          change: 1500000,
-          changeRate: 1.6,
-          volume: 12500,
-          high: 96000000,
-          low: 93000000,
-          open: 93500000,
-          previousClose: 93500000,
-          timestamp: baseDate,
-        };
-      });
-      setSelectedStock(price);
+  usePolling(pollData, 10000);
 
-      // 가격 히스토리 업데이트
-      setPriceHistory((prev) => {
-        const newHistory = [
-          ...prev,
-          {
-            time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            price: price.currentPrice,
-          },
-        ];
-        // 최대 30개까지만 유지
-        return newHistory.slice(-30);
-      });
-    } catch (error) {
-      console.error('주가 조회 실패:', error);
-    }
-  };
-
-  const loadPortfolioData = async () => {
-    try {
-      const portfolioData = await tradeService.getPortfolio().catch(() => {
-        // API 실패 시 데모 포트폴리오로 폴백
-        const { demoPortfolio } = getDemoData();
-        return demoPortfolio;
-      });
-      setPortfolio(portfolioData);
-    } catch (error) {
-      console.error('포트폴리오 조회 실패:', error);
-    }
-  };
-
+  /* ─── 종목 선택 ─── */
   const handleStockSelect = (stock: StockPrice) => {
     setSelectedStock(stock);
-    setPriceHistory([]);
-    loadStockPrice(stock.stockCode);
+    setActiveTab('chart');
   };
 
+  /* ─── 주문 제출 ─── */
   const handleOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!selectedStock || !quantity || quantity === '0') {
-      alert('종목과 수량을 입력해주세요.');
+    if (!selectedStock || !quantity || parseFloat(quantity) <= 0) {
+      showToast('종목과 수량을 확인해주세요.', 'error');
+      return;
+    }
+    if (orderMethod === 'LIMIT' && (!limitPrice || parseFloat(limitPrice) <= 0)) {
+      showToast('지정가를 입력해주세요.', 'error');
       return;
     }
 
-    if (orderMethod === 'LIMIT' && (!limitPrice || limitPrice === '0')) {
-      alert('지정가 주문은 가격을 입력해주세요.');
+    // 잔고 체크 (수수료 0.1% 포함)
+    const price = orderMethod === 'MARKET' ? selectedStock.currentPrice : parseFloat(limitPrice);
+    const total = price * parseFloat(quantity) * (1 + COMMISSION_RATE);
+    if (orderType === 'BUY' && portfolio && total > portfolio.cashBalance) {
+      showToast('잔고가 부족합니다.', 'error');
       return;
+    }
+    if (orderType === 'SELL') {
+      const available = getAvailableQuantity(selectedStock.stockCode);
+      if (parseFloat(quantity) > available) {
+        showToast('보유 수량이 부족합니다.', 'error');
+        return;
+      }
     }
 
     setIsSubmitting(true);
-
     try {
       const orderRequest: OrderRequest = {
         stockCode: selectedStock.stockCode,
-        stockName: selectedStock.stockName,
+        stockName: coinName(selectedStock.stockCode),
         orderType,
         orderMethod,
         quantity: parseFloat(quantity),
         price: orderMethod === 'LIMIT' ? parseFloat(limitPrice) : undefined,
       };
-
       await tradeService.createOrder(orderRequest);
-
-      // 폼 초기화
       setQuantity('');
       setLimitPrice('');
-
+      showToast(
+        `${coinName(selectedStock.stockCode)} ${orderType === 'BUY' ? '매수' : '매도'} 주문 완료!`,
+        'success'
+      );
       // 데이터 새로고침
-      await loadInitialData();
-
-      alert('주문이 바다에 던져졌습니다!');
-      setActiveTab('orders');
-    } catch (error: any) {
-      // 백엔드 미구현 또는 네트워크/인증 문제 시에도
-      // 데모 모드에서는 주문이 접수된 것처럼 "로컬 상태만" 시뮬레이션한다.
-      console.warn('주문 API 실패 - 데모 모드로 처리합니다.', error);
-
-      const { demoPortfolio, demoOrders, demoTrades } = getDemoData();
-      const now = new Date().toISOString();
-
-      // 데모 주문 템플릿을 기반으로, 실제 사용자가 입력한 값으로 새 주문 생성
-      const baseOrder = demoOrders[0];
-      const newOrder: Order = {
-        ...baseOrder,
-        id: `order-demo-${Date.now()}`,
-        stockCode: selectedStock.stockCode,
-        stockName: selectedStock.stockName,
-        orderType,
-        orderMethod,
-        quantity: parseFloat(quantity),
-        price:
-          orderMethod === 'LIMIT'
-            ? parseFloat(limitPrice) || selectedStock.currentPrice
-            : selectedStock.currentPrice,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      // 데모 체결 템플릿을 기반으로 새 체결 생성
-      const baseTrade = demoTrades[0];
-      const newTrade: Trade = {
-        ...baseTrade,
-        id: `trade-demo-${Date.now()}`,
-        orderId: newOrder.id,
-        stockCode: newOrder.stockCode,
-        stockName: newOrder.stockName,
-        orderType: newOrder.orderType,
-        quantity: newOrder.quantity,
-        price: newOrder.price,
-        totalAmount: newOrder.price * newOrder.quantity,
-        executedAt: now,
-      };
-
-      // 포트폴리오는 기존 값이 있으면 유지, 없으면 데모 포트폴리오 사용
-      setPortfolio((prev) => prev ?? demoPortfolio);
-      setOrders((prev) => (prev.length ? [...prev, newOrder] : [newOrder]));
-      setTrades((prev) => (prev.length ? [...prev, newTrade] : [newTrade]));
-
-      // 폼 초기화 및 탭 이동
-      setQuantity('');
-      setLimitPrice('');
-      alert('데모 바다에서 주문이 던져졌습니다!');
-      setActiveTab('orders');
+      const [portfolioData, ordersData, tradesData] = await Promise.all([
+        tradeService.getPortfolio(),
+        tradeService.getOrders(),
+        tradeService.getTrades(),
+      ]);
+      setPortfolio(portfolioData);
+      setOrders(ordersData);
+      setTrades(tradesData);
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || '주문 실패. 다시 시도해주세요.', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  /* ─── 주문 취소 ─── */
   const handleCancelOrder = async (orderId: string) => {
-    if (!confirm('정말 이 주문을 취소하시겠습니까?')) return;
-
+    if (!confirm('주문을 취소하시겠습니까?')) return;
     try {
       await tradeService.cancelOrder(orderId);
-      await loadInitialData();
-      alert('주문이 취소되었습니다.');
-    } catch (error: any) {
-      // 데모 모드에서는 백엔드 실패 시 로컬 상태만 업데이트
-      console.warn('주문 취소 API 실패 - 데모 모드에서 로컬 상태만 업데이트합니다.', error);
-      setOrders((prev) => prev.filter((order) => order.id !== orderId));
-      alert('데모 모드에서 주문이 취소된 것으로 시뮬레이션합니다.');
+      showToast('주문이 취소되었습니다.');
+      const [portfolioData, ordersData] = await Promise.all([
+        tradeService.getPortfolio(),
+        tradeService.getOrders(),
+      ]);
+      setPortfolio(portfolioData);
+      setOrders(ordersData);
+    } catch {
+      showToast('주문 취소 실패', 'error');
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('ko-KR', {
-      style: 'currency',
-      currency: 'KRW',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  const formatNumber = (value: number) => {
-    return new Intl.NumberFormat('ko-KR').format(value);
-  };
-
-  const getStatusColor = (status: Order['status']) => {
-    switch (status) {
-      case 'FILLED':
-        return 'text-green-600 bg-green-50';
-      case 'PENDING':
-        return 'text-yellow-600 bg-yellow-50';
-      case 'CANCELLED':
-        return 'text-gray-600 bg-gray-50';
-      case 'PARTIALLY_FILLED':
-        return 'text-blue-600 bg-blue-50';
-      default:
-        return 'text-gray-600 bg-gray-50';
-    }
-  };
-
+  /* ─── 유틸 함수 ─── */
   const getAvailableQuantity = (stockCode: string): number => {
     if (!portfolio) return 0;
-    const holding = portfolio.holdings.find((h) => h.stockCode === stockCode);
-    return holding?.quantity || 0;
+    return portfolio.holdings.find(h => h.stockCode === stockCode)?.quantity || 0;
   };
 
+  const getStatusLabel = (status: Order['status']) => {
+    const map: Record<string, { label: string; cls: string }> = {
+      FILLED: { label: '체결', cls: 'bg-green-50 text-green-700' },
+      PENDING: { label: '대기', cls: 'bg-amber-50 text-amber-700' },
+      CANCELLED: { label: '취소', cls: 'bg-gray-100 text-gray-500' },
+      PARTIALLY_FILLED: { label: '부분체결', cls: 'bg-blue-50 text-blue-700' },
+    };
+    return map[status] || { label: status, cls: 'bg-gray-100 text-gray-600' };
+  };
+
+  /* ─── 빠른 수량 버튼 계산 ─── */
+  const setQuickQuantity = (pct: number) => {
+    if (!selectedStock) return;
+    if (orderType === 'BUY') {
+      const cash = portfolio?.cashBalance || 0;
+      const price = orderMethod === 'LIMIT' && limitPrice ? parseFloat(limitPrice) : selectedStock.currentPrice;
+      if (price <= 0) return;
+      const maxQty = (cash * pct) / (price * (1 + COMMISSION_RATE));
+      setQuantity(maxQty > 0 ? maxQty.toFixed(8).replace(/\.?0+$/, '') : '0');
+    } else {
+      const holding = getAvailableQuantity(selectedStock.stockCode);
+      const qty = holding * pct;
+      setQuantity(qty > 0 ? qty.toFixed(8).replace(/\.?0+$/, '') : '0');
+    }
+  };
+
+  /* ─── 종목 필터 ─── */
+  const filteredStocks = stockList.filter(s => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    const name = coinName(s.stockCode).toLowerCase();
+    return s.stockCode.toLowerCase().includes(q) || name.includes(q);
+  });
+
+  // 인기 코인을 상단에 정렬
+  const sortedStocks = [...filteredStocks].sort((a, b) => {
+    const aPopular = POPULAR_COINS.indexOf(a.stockCode);
+    const bPopular = POPULAR_COINS.indexOf(b.stockCode);
+    if (aPopular >= 0 && bPopular >= 0) return aPopular - bPopular;
+    if (aPopular >= 0) return -1;
+    if (bPopular >= 0) return 1;
+    return b.volume - a.volume; // 거래량 순
+  });
+
+  /* ─── 예상 금액 ─── */
+  const estimatedTotal = selectedStock && quantity
+    ? (orderMethod === 'MARKET' ? selectedStock.currentPrice : parseFloat(limitPrice) || 0) * parseFloat(quantity || '0') * (orderType === 'BUY' ? (1 + COMMISSION_RATE) : (1 - COMMISSION_RATE))
+    : 0;
+
+  /* ─── 로딩/에러 ─── */
   if (loading && stockList.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header showNav={true} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <LoadingSpinner fullScreen={false} message="데이터를 불러오는 중..." />
+        <Header showNav />
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <LoadingSpinner fullScreen={false} message="시세 데이터를 불러오는 중..." />
         </div>
       </div>
     );
   }
-
   if (error && stockList.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header showNav={true} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Header showNav />
+        <div className="max-w-7xl mx-auto px-4 py-8">
           <ErrorMessage message={error} onRetry={loadInitialData} />
         </div>
       </div>
@@ -434,187 +275,395 @@ const TradePage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header showNav={true} />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* 좌측: 종목 목록 & 주문 폼 */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* 종목 목록 */}
-            <div className="card">
-              <h2 className="text-xl font-bold text-whale-dark mb-4">종목 목록</h2>
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {stockList.map((stock) => (
-                  <div
-                    key={stock.stockCode}
-                    onClick={() => handleStockSelect(stock)}
-                    className={
-                      selectedStock?.stockCode === stock.stockCode
-                        ? 'stock-item-selected'
-                        : 'stock-item-default'
-                    }
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="font-bold text-whale-dark">{stock.stockName}</div>
-                        <div className="text-sm text-gray-500">{stock.stockCode}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold text-whale-dark">
-                          {formatCurrency(stock.currentPrice)}
-                        </div>
-                        <div
-                          className={`text-sm font-semibold ${
-                            stock.change >= 0 ? 'price-up' : 'price-down'
-                          }`}
-                        >
-                          {stock.change >= 0 ? '+' : ''}
-                          {stock.changeRate.toFixed(2)}%
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+      <Header showNav />
+
+      {/* 토스트 */}
+      {toast && (
+        <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg text-sm font-semibold transition-all animate-fade-in ${
+          toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          {toast.message}
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+          {/* ━━━ 좌측: 종목 목록 (3칸) ━━━ */}
+          <div className="lg:col-span-3 space-y-4">
+            {/* 검색 */}
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="코인 검색 (이름/코드)"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-whale-light/50 focus:border-whale-light"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              )}
             </div>
 
-            {/* 주문 폼 */}
-            {selectedStock && (
-              <div className="card">
-                <h2 className="text-xl font-bold text-whale-dark mb-4">주문하기</h2>
-                <form onSubmit={handleOrderSubmit} className="space-y-4">
-                  {/* 매수/매도 선택 */}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setOrderType('BUY')}
-                      className={`flex-1 py-3 rounded-lg font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 min-h-[44px] ${
-                        orderType === 'BUY'
-                          ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md scale-105'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            {/* 종목 리스트 */}
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+              <div className="px-4 py-3 bg-gradient-to-r from-whale-dark to-whale-light">
+                <div className="flex items-center justify-between text-white">
+                  <span className="text-sm font-semibold">종목</span>
+                  <span className="text-xs opacity-80">{sortedStocks.length}개</span>
+                </div>
+              </div>
+              <div className="max-h-[calc(100vh-260px)] overflow-y-auto divide-y divide-gray-50">
+                {sortedStocks.map(stock => {
+                  const isSelected = selectedStock?.stockCode === stock.stockCode;
+                  const isPopular = POPULAR_COINS.includes(stock.stockCode);
+                  return (
+                    <div
+                      key={stock.stockCode}
+                      onClick={() => handleStockSelect(stock)}
+                      className={`px-4 py-3 cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-whale-light/10 border-l-3 border-l-whale-light'
+                          : 'hover:bg-gray-50'
                       }`}
-                      aria-label="매수 주문"
-                      aria-pressed={orderType === 'BUY'}
                     >
-                      매수
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOrderType('SELL')}
-                      className={`flex-1 py-3 rounded-lg font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 min-h-[44px] ${
-                        orderType === 'SELL'
-                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md scale-105'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                      aria-label="매도 주문"
-                      aria-pressed={orderType === 'SELL'}
-                    >
-                      매도
-                    </button>
-                  </div>
-
-                  {/* 시장가/지정가 선택 */}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setOrderMethod('MARKET')}
-                      className={`flex-1 py-2 rounded-lg font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] ${
-                        orderMethod === 'MARKET'
-                          ? 'bg-whale-light text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                      aria-label="시장가 주문"
-                      aria-pressed={orderMethod === 'MARKET'}
-                    >
-                      시장가
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOrderMethod('LIMIT')}
-                      className={`flex-1 py-2 rounded-lg font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] ${
-                        orderMethod === 'LIMIT'
-                          ? 'bg-whale-light text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                      aria-label="지정가 주문"
-                      aria-pressed={orderMethod === 'LIMIT'}
-                    >
-                      지정가
-                    </button>
-                  </div>
-
-                  {/* 현재가 표시 */}
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <div className="text-sm text-gray-600 mb-1">현재가</div>
-                    <div className="text-2xl font-bold text-whale-dark">
-                      {formatCurrency(selectedStock.currentPrice)}
-                    </div>
-                    {orderType === 'SELL' && (
-                      <div className="text-sm text-gray-600 mt-2">
-                        보유 수량: {formatQuantity(getAvailableQuantity(selectedStock.stockCode))}개
+                      <div className="flex justify-between items-center">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-semibold text-sm truncate ${isSelected ? 'text-whale-dark' : 'text-gray-800'}`}>
+                              {coinName(stock.stockCode)}
+                            </span>
+                            {isPopular && (
+                              <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-400">{stock.stockCode}</span>
+                        </div>
+                        <div className="text-right flex-shrink-0 ml-2">
+                          <div className="text-sm font-semibold text-gray-800">{fmt(stock.currentPrice)}</div>
+                          <div className={`text-xs font-semibold ${stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                            {stock.changeRate >= 0 ? '+' : ''}{stock.changeRate.toFixed(2)}%
+                          </div>
+                        </div>
                       </div>
+                    </div>
+                  );
+                })}
+                {sortedStocks.length === 0 && (
+                  <div className="p-6 text-center text-gray-400 text-sm">검색 결과가 없습니다</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ━━━ 중앙: 차트 + 탭 내용 (5칸) ━━━ */}
+          <div className="lg:col-span-5 space-y-4">
+            {selectedStock && (
+              <>
+                {/* 종목 헤더 */}
+                <div className="bg-white rounded-xl shadow-lg p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h2 className="text-xl font-bold text-whale-dark">{coinName(selectedStock.stockCode)}</h2>
+                      <span className="text-sm text-gray-400">{selectedStock.stockCode}/KRW</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-whale-dark">{fmt(selectedStock.currentPrice)}</div>
+                      <div className={`text-sm font-semibold ${selectedStock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                        {selectedStock.changeRate >= 0 ? '+' : ''}{fmt(selectedStock.change)}
+                        <span className="ml-1">({selectedStock.changeRate >= 0 ? '+' : ''}{selectedStock.changeRate.toFixed(2)}%)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 미니 지표 */}
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { label: '고가', value: fmt(selectedStock.high), cls: 'text-red-500' },
+                      { label: '저가', value: fmt(selectedStock.low), cls: 'text-blue-500' },
+                      { label: '시가', value: fmt(selectedStock.open), cls: 'text-gray-700' },
+                      { label: '거래량', value: fmtNum(selectedStock.volume), cls: 'text-gray-700' },
+                    ].map(item => (
+                      <div key={item.label} className="bg-gray-50 rounded-lg p-2 text-center">
+                        <div className="text-[10px] text-gray-400 mb-0.5">{item.label}</div>
+                        <div className={`text-xs font-semibold ${item.cls}`}>{item.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 탭 */}
+                <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                  <div className="flex border-b border-gray-100">
+                    {([
+                      { key: 'chart', label: '차트' },
+                      { key: 'orders', label: `주문 (${orders.length})` },
+                      { key: 'trades', label: `체결 (${trades.length})` },
+                      { key: 'holdings', label: `보유 (${portfolio?.holdings.length || 0})` },
+                    ] as const).map(tab => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`flex-1 py-3 text-xs font-semibold transition-colors ${
+                          activeTab === tab.key
+                            ? 'text-whale-light border-b-2 border-whale-light bg-whale-light/5'
+                            : 'text-gray-400 hover:text-gray-600'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="p-4">
+                    {/* 차트 탭 */}
+                    {activeTab === 'chart' && (
+                      <TradingChart
+                        symbol={selectedStock.stockCode}
+                        price={selectedStock.currentPrice}
+                        changeRate={selectedStock.changeRate}
+                      />
+                    )}
+
+                    {/* 주문 내역 */}
+                    {activeTab === 'orders' && (
+                      orders.length === 0 ? (
+                        <div className="py-12 text-center text-gray-400 text-sm">주문 내역이 없습니다</div>
+                      ) : (
+                        <div className="space-y-2 max-h-80 overflow-y-auto">
+                          {orders.map(order => {
+                            const st = getStatusLabel(order.status);
+                            return (
+                              <div key={order.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <span className={`px-2 py-1 text-xs font-bold rounded ${order.orderType === 'BUY' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                                    {order.orderType === 'BUY' ? '매수' : '매도'}
+                                  </span>
+                                  <div>
+                                    <div className="text-sm font-semibold">{coinName(order.stockCode)}</div>
+                                    <div className="text-xs text-gray-400">
+                                      {order.orderMethod === 'MARKET' ? '시장가' : '지정가'} · {formatQuantity(order.quantity)}개 · {fmt(order.price)}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2 py-0.5 text-xs font-semibold rounded ${st.cls}`}>{st.label}</span>
+                                  {order.status === 'PENDING' && (
+                                    <button onClick={() => handleCancelOrder(order.id)} className="text-xs text-red-500 hover:text-red-700 font-semibold">취소</button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )
+                    )}
+
+                    {/* 체결 내역 */}
+                    {activeTab === 'trades' && (
+                      trades.length === 0 ? (
+                        <div className="py-12 text-center text-gray-400 text-sm">체결 내역이 없습니다</div>
+                      ) : (
+                        <div className="space-y-2 max-h-80 overflow-y-auto">
+                          {trades.map(trade => (
+                            <div key={trade.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <span className={`px-2 py-1 text-xs font-bold rounded ${trade.orderType === 'BUY' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                                  {trade.orderType === 'BUY' ? '매수' : '매도'}
+                                </span>
+                                <div>
+                                  <div className="text-sm font-semibold">{coinName(trade.stockCode)}</div>
+                                  <div className="text-xs text-gray-400">
+                                    {formatQuantity(trade.quantity)}개 · {fmt(trade.price)}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-semibold">{fmt(trade.totalAmount)}</div>
+                                <div className="text-xs text-gray-400">
+                                  {new Date(trade.executedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    )}
+
+                    {/* 보유 종목 */}
+                    {activeTab === 'holdings' && portfolio && (
+                      portfolio.holdings.length === 0 ? (
+                        <div className="py-12 text-center text-gray-400 text-sm">보유 종목이 없습니다</div>
+                      ) : (
+                        <div className="space-y-2 max-h-80 overflow-y-auto">
+                          {portfolio.holdings.map(h => (
+                            <div
+                              key={h.stockCode}
+                              onClick={() => {
+                                const stock = stockList.find(s => s.stockCode === h.stockCode);
+                                if (stock) handleStockSelect(stock);
+                              }}
+                              className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                            >
+                              <div>
+                                <div className="text-sm font-semibold">{coinName(h.stockCode)}</div>
+                                <div className="text-xs text-gray-400">{formatQuantity(h.quantity)}개 · 평단 {fmt(h.averagePrice)}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-semibold">{fmt(h.marketValue)}</div>
+                                <div className={`text-xs font-semibold ${h.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                                  {h.returnRate >= 0 ? '+' : ''}{h.returnRate.toFixed(2)}%
+                                  <span className="text-gray-400 font-normal ml-1">({h.profitLoss >= 0 ? '+' : ''}{fmt(Math.round(h.profitLoss))})</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
                     )}
                   </div>
+                </div>
+              </>
+            )}
+          </div>
 
-                  {/* 지정가 가격 입력 */}
-                  {orderMethod === 'LIMIT' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        지정가격
-                      </label>
+          {/* ━━━ 우측: 주문 폼 + 포트폴리오 (4칸) ━━━ */}
+          <div className="lg:col-span-4 space-y-4">
+            {selectedStock && (
+              <div className="bg-white rounded-xl shadow-lg p-5">
+                {/* 매수/매도 토글 */}
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={() => { setOrderType('BUY'); setQuantity(''); }}
+                    className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${
+                      orderType === 'BUY'
+                        ? 'bg-red-500 text-white shadow-lg shadow-red-200'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    매수
+                  </button>
+                  <button
+                    onClick={() => { setOrderType('SELL'); setQuantity(''); }}
+                    className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${
+                      orderType === 'SELL'
+                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-200'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    매도
+                  </button>
+                </div>
+
+                {/* 시장가/지정가 */}
+                <div className="flex gap-2 mb-4">
+                  {(['MARKET', 'LIMIT'] as const).map(method => (
+                    <button
+                      key={method}
+                      onClick={() => setOrderMethod(method)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        orderMethod === method
+                          ? 'bg-whale-dark text-white'
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      {method === 'MARKET' ? '시장가' : '지정가'}
+                    </button>
+                  ))}
+                </div>
+
+                <form onSubmit={handleOrderSubmit} className="space-y-3">
+                  {/* 주문 가격 */}
+                  <div className="bg-gray-50 rounded-xl p-3">
+                    <div className="text-xs text-gray-400 mb-1">
+                      {orderMethod === 'MARKET' ? '현재가 (시장가)' : '지정가'}
+                    </div>
+                    {orderMethod === 'MARKET' ? (
+                      <div className="text-lg font-bold text-whale-dark">{fmt(selectedStock.currentPrice)}</div>
+                    ) : (
                       <input
                         type="number"
                         value={limitPrice}
-                        onChange={(e) => setLimitPrice(e.target.value)}
-                        className="input-field"
-                        placeholder="가격 입력"
+                        onChange={e => setLimitPrice(e.target.value)}
+                        placeholder="희망 가격 입력"
+                        className="w-full text-lg font-bold text-whale-dark bg-transparent border-none outline-none placeholder:text-gray-300 placeholder:font-normal"
                         step="1"
                       />
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  {/* 수량 입력 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">수량</label>
+                  {/* 수량 */}
+                  <div className="bg-gray-50 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-gray-400">수량</span>
+                      <span className="text-xs text-gray-400">
+                        {orderType === 'BUY'
+                          ? `잔고: ${fmt(portfolio?.cashBalance || 0)}`
+                          : `보유: ${formatQuantity(getAvailableQuantity(selectedStock.stockCode))}개`
+                        }
+                      </span>
+                    </div>
                     <input
                       type="number"
                       value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      className="input-field"
-                      placeholder="수량 입력 (소수점 가능)"
-                      min="0.00000001"
+                      onChange={e => setQuantity(e.target.value)}
+                      placeholder="수량 입력"
+                      className="w-full text-lg font-bold text-whale-dark bg-transparent border-none outline-none placeholder:text-gray-300 placeholder:font-normal"
+                      min="0"
                       step="any"
-                      required
                     />
+                    {/* 빠른 수량 버튼 */}
+                    <div className="flex gap-1.5 mt-2">
+                      {[
+                        { label: '10%', value: 0.1 },
+                        { label: '25%', value: 0.25 },
+                        { label: '50%', value: 0.5 },
+                        { label: '100%', value: 1.0 },
+                      ].map(btn => (
+                        <button
+                          key={btn.label}
+                          type="button"
+                          onClick={() => setQuickQuantity(btn.value)}
+                          className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-500 hover:border-whale-light hover:text-whale-light transition-colors"
+                        >
+                          {btn.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* 예상 금액 */}
-                  {quantity && (
-                    <div className="bg-blue-50 p-3 rounded-lg">
-                      <div className="text-sm text-gray-600 mb-1">예상 금액</div>
-                      <div className="text-xl font-bold text-whale-dark">
-                        {formatCurrency(
-                          (orderMethod === 'MARKET' ? selectedStock.currentPrice : parseFloat(limitPrice) || 0) *
-                            parseFloat(quantity || '0')
-                        )}
+                  {estimatedTotal > 0 && (
+                    <div className={`rounded-xl p-3 ${orderType === 'BUY' ? 'bg-red-50' : 'bg-blue-50'}`}>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500">예상 금액</span>
+                        <span className={`text-lg font-bold ${orderType === 'BUY' ? 'text-red-600' : 'text-blue-600'}`}>
+                          {fmt(Math.round(estimatedTotal))}
+                        </span>
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        (수수료 0.015% 별도)
-                      </div>
+                      <div className="text-right text-[10px] text-gray-400 mt-0.5">수수료 0.1% 포함</div>
                     </div>
                   )}
 
                   {/* 주문 버튼 */}
                   <button
                     type="submit"
-                    disabled={isSubmitting}
-                    className={`w-full py-3 rounded-lg font-semibold text-white transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${
+                    disabled={isSubmitting || !quantity || parseFloat(quantity) <= 0}
+                    className={`w-full py-3.5 rounded-xl font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                       orderType === 'BUY'
-                        ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700'
-                        : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700'
+                        ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg shadow-red-200'
+                        : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-200'
                     }`}
                   >
-                    {isSubmitting ? '처리 중...' : orderType === 'BUY' ? '매수 주문' : '매도 주문'}
+                    {isSubmitting
+                      ? '주문 처리 중...'
+                      : `${coinName(selectedStock.stockCode)} ${orderType === 'BUY' ? '매수' : '매도'}`
+                    }
                   </button>
                 </form>
               </div>
@@ -622,375 +671,55 @@ const TradePage = () => {
 
             {/* 포트폴리오 요약 */}
             {portfolio && (
-              <div className="card">
-                <h2 className="text-xl font-bold text-whale-dark mb-4">포트폴리오</h2>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">총 자산</span>
-                    <span className="text-xl font-bold text-whale-dark">
-                      {formatCurrency(portfolio.totalValue)}
+              <div className="bg-white rounded-xl shadow-lg p-5">
+                <h3 className="text-sm font-bold text-whale-dark mb-3">내 포트폴리오</h3>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-400">총 자산</span>
+                    <span className="text-sm font-bold text-whale-dark">{fmt(portfolio.totalValue)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-400">현금</span>
+                    <span className="text-sm font-semibold">{fmt(portfolio.cashBalance)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-400">평가 손익</span>
+                    <span className={`text-sm font-bold ${portfolio.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                      {portfolio.returnRate >= 0 ? '+' : ''}{portfolio.returnRate.toFixed(2)}%
+                      <span className="text-gray-400 font-normal text-xs ml-1">
+                        ({portfolio.returnRate >= 0 ? '+' : ''}{fmt(Math.round(portfolio.totalValue - (portfolio.initialCash || 10_000_000)))})
+                      </span>
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">현금</span>
-                    <span className="font-semibold">{formatCurrency(portfolio.cashBalance)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">수익률</span>
-                    <span
-                      className={`font-semibold ${
-                        portfolio.returnRate >= 0 ? 'text-red-600' : 'text-blue-600'
-                      }`}
-                    >
-                      {portfolio.returnRate >= 0 ? '+' : ''}
-                      {portfolio.returnRate.toFixed(2)}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 우측: 차트 & 주문 내역 */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* 탭 메뉴 */}
-            <div className="flex space-x-4 border-b border-gray-200" role="tablist" aria-label="거래 탭">
-              <button
-                onClick={() => setActiveTab('order')}
-                role="tab"
-                aria-selected={activeTab === 'order'}
-                className={`pb-3 px-4 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-t-lg min-h-[44px] ${
-                  activeTab === 'order'
-                    ? 'text-whale-light border-b-2 border-whale-light'
-                    : 'text-gray-500 hover:text-whale-light'
-                }`}
-              >
-                실시간 차트
-              </button>
-              <button
-                onClick={() => setActiveTab('orders')}
-                role="tab"
-                aria-selected={activeTab === 'orders'}
-                className={`pb-3 px-4 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-t-lg min-h-[44px] ${
-                  activeTab === 'orders'
-                    ? 'text-whale-light border-b-2 border-whale-light'
-                    : 'text-gray-500 hover:text-whale-light'
-                }`}
-              >
-                주문 내역 ({orders.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('trades')}
-                role="tab"
-                aria-selected={activeTab === 'trades'}
-                className={`pb-3 px-4 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-t-lg min-h-[44px] ${
-                  activeTab === 'trades'
-                    ? 'text-whale-light border-b-2 border-whale-light'
-                    : 'text-gray-500 hover:text-whale-light'
-                }`}
-              >
-                체결 내역 ({trades.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('portfolio')}
-                role="tab"
-                aria-selected={activeTab === 'portfolio'}
-                className={`pb-3 px-4 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-t-lg min-h-[44px] ${
-                  activeTab === 'portfolio'
-                    ? 'text-whale-light border-b-2 border-whale-light'
-                    : 'text-gray-500 hover:text-whale-light'
-                }`}
-              >
-                보유 종목
-              </button>
-            </div>
-
-            {/* 실시간 차트 */}
-            {activeTab === 'order' && selectedStock && (
-              <div className="card">
-                <div className="mb-6">
-                  <h2 className="text-2xl font-bold text-whale-dark">{selectedStock.stockName}</h2>
-                  <div className="text-gray-500">{selectedStock.stockCode}</div>
+                  {(portfolio.turtleAllocated || 0) > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-400">터틀 전략</span>
+                      <span className="text-sm font-semibold text-amber-600">{fmt(portfolio.turtleAllocated)}</span>
+                    </div>
+                  )}
                 </div>
 
-                {priceHistory.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={400}>
-                    <AreaChart data={priceHistory}>
-                      <defs>
-                        <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#4a90e2" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#4a90e2" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="time" />
-                      <YAxis domain={['auto', 'auto']} />
-                      <Tooltip
-                        formatter={(value: number) => formatCurrency(value)}
-                        labelFormatter={(label) => `시간: ${label}`}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="price"
-                        stroke="#4a90e2"
-                        fillOpacity={1}
-                        fill="url(#colorPrice)"
-                        strokeWidth={2}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-96 flex items-center justify-center text-gray-500">
-                    실시간 가격 데이터를 불러오는 중...
-                  </div>
-                )}
-
-                {/* 주가 정보 */}
-                <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-200">
-                  <div>
-                    <div className="text-sm text-gray-600 mb-1">현재가</div>
-                    <div className="text-xl font-bold text-whale-dark">
-                      {formatCurrency(selectedStock.currentPrice)}
+                {/* 보유 종목 미니 리스트 */}
+                {portfolio.holdings.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <div className="text-xs text-gray-400 mb-2">보유 종목</div>
+                    <div className="space-y-1.5">
+                      {portfolio.holdings.slice(0, 5).map(h => (
+                        <div
+                          key={h.stockCode}
+                          onClick={() => {
+                            const stock = stockList.find(s => s.stockCode === h.stockCode);
+                            if (stock) handleStockSelect(stock);
+                          }}
+                          className="flex justify-between items-center py-1 cursor-pointer hover:bg-gray-50 rounded px-1 -mx-1 transition-colors"
+                        >
+                          <span className="text-xs font-semibold text-gray-700">{coinName(h.stockCode)}</span>
+                          <span className={`text-xs font-semibold ${h.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                            {h.returnRate >= 0 ? '+' : ''}{h.returnRate.toFixed(1)}%
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600 mb-1">전일대비</div>
-                    <div
-                      className={`text-xl font-bold ${
-                        selectedStock.change >= 0 ? 'text-red-600' : 'text-blue-600'
-                      }`}
-                    >
-                      {selectedStock.change >= 0 ? '+' : ''}
-                      {formatCurrency(selectedStock.change)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600 mb-1">변동률</div>
-                    <div
-                      className={`text-xl font-bold ${
-                        selectedStock.changeRate >= 0 ? 'text-red-600' : 'text-blue-600'
-                      }`}
-                    >
-                      {selectedStock.changeRate >= 0 ? '+' : ''}
-                      {selectedStock.changeRate.toFixed(2)}%
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600 mb-1">거래량</div>
-                    <div className="text-xl font-bold text-whale-dark">
-                      {formatNumber(selectedStock.volume)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 주문 내역 */}
-            {activeTab === 'orders' && (
-              <div className="card">
-                <h2 className="text-xl font-bold text-whale-dark mb-4">주문 내역</h2>
-                {orders.length === 0 ? (
-                  <div className="text-center py-12">
-                    <img src="/whales/beluga.png" alt="빈 목록" className="w-16 h-16 object-contain mx-auto mb-3 opacity-60" />
-                    <div className="text-gray-500 font-medium">주문 내역이 없습니다</div>
-                    <div className="text-sm text-gray-400 mt-1">주문을 실행하면 내역이 표시됩니다</div>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">종목</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">구분</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">가격</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">수량</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">상태</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">시간</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">액션</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {orders.map((order) => (
-                          <tr key={order.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3">
-                              <div className="font-semibold">{order.stockName}</div>
-                              <div className="text-sm text-gray-500">{order.stockCode}</div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`px-2 py-1 rounded text-sm font-semibold ${
-                                  order.orderType === 'BUY'
-                                    ? 'bg-red-100 text-red-700'
-                                    : 'bg-blue-100 text-blue-700'
-                                }`}
-                              >
-                                {order.orderType === 'BUY' ? '매수' : '매도'}
-                              </span>
-                              <div className="text-xs text-gray-500 mt-1">
-                                {order.orderMethod === 'MARKET' ? '시장가' : '지정가'}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 font-semibold">
-                              {formatCurrency(order.price)}
-                            </td>
-                            <td className="px-4 py-3">{formatQuantity(order.quantity)}개</td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`px-2 py-1 rounded text-sm font-semibold ${getStatusColor(
-                                  order.status
-                                )}`}
-                              >
-                                {order.status === 'PENDING'
-                                  ? '대기'
-                                  : order.status === 'FILLED'
-                                  ? '체결'
-                                  : order.status === 'PARTIALLY_FILLED'
-                                  ? '부분체결'
-                                  : '취소'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-600">
-                              {new Date(order.createdAt).toLocaleString('ko-KR')}
-                            </td>
-                            <td className="px-4 py-3">
-                              {order.status === 'PENDING' && (
-                                <button
-                                  onClick={() => handleCancelOrder(order.id)}
-                                  className="text-red-600 hover:text-red-800 text-sm font-semibold"
-                                >
-                                  취소
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 체결 내역 */}
-            {activeTab === 'trades' && (
-              <div className="card">
-                <h2 className="text-xl font-bold text-whale-dark mb-4">체결 내역</h2>
-                {trades.length === 0 ? (
-                  <div className="text-center py-12">
-                    <img src="/whales/beluga.png" alt="빈 목록" className="w-16 h-16 object-contain mx-auto mb-3 opacity-60" />
-                    <div className="text-gray-500 font-medium">체결 내역이 없습니다</div>
-                    <div className="text-sm text-gray-400 mt-1">주문이 체결되면 내역이 표시됩니다</div>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">종목</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">구분</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">체결가</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">수량</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">금액</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">수수료</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">체결시간</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {trades.map((trade) => (
-                          <tr key={trade.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3">
-                              <div className="font-semibold">{trade.stockName}</div>
-                              <div className="text-sm text-gray-500">{trade.stockCode}</div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`px-2 py-1 rounded text-sm font-semibold ${
-                                  trade.orderType === 'BUY'
-                                    ? 'bg-red-100 text-red-700'
-                                    : 'bg-blue-100 text-blue-700'
-                                }`}
-                              >
-                                {trade.orderType === 'BUY' ? '매수' : '매도'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 font-semibold">
-                              {formatCurrency(trade.price)}
-                            </td>
-                            <td className="px-4 py-3">{formatQuantity(trade.quantity)}개</td>
-                            <td className="px-4 py-3">{formatCurrency(trade.totalAmount)}</td>
-                            <td className="px-4 py-3 text-gray-600">
-                              {formatCurrency(trade.commission)}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-600">
-                              {new Date(trade.executedAt).toLocaleString('ko-KR')}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 보유 종목 */}
-            {activeTab === 'portfolio' && portfolio && (
-        <div className="card">
-                <h2 className="text-xl font-bold text-whale-dark mb-4">보유 종목</h2>
-                {portfolio.holdings.length === 0 ? (
-                  <div className="text-center py-12">
-                    <img src="/whales/gray-whale.png" alt="빈 목록" className="w-16 h-16 object-contain mx-auto mb-3 opacity-60" />
-                    <div className="text-gray-500 font-medium">보유 종목이 없습니다</div>
-                    <div className="text-sm text-gray-400 mt-1">코인을 매수하면 여기에 표시됩니다</div>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">종목</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">보유 수량</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">평균 매수가</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">현재가</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">평가금액</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">평가손익</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">수익률</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {portfolio.holdings.map((holding) => (
-                          <tr key={holding.stockCode} className="hover:bg-gray-50">
-                            <td className="px-4 py-3">
-                              <div className="font-semibold">{holding.stockName}</div>
-                              <div className="text-sm text-gray-500">{holding.stockCode}</div>
-                            </td>
-                            <td className="px-4 py-3">{formatQuantity(holding.quantity)}개</td>
-                            <td className="px-4 py-3">{formatCurrency(holding.averagePrice)}</td>
-                            <td className="px-4 py-3 font-semibold">
-                              {formatCurrency(holding.currentPrice)}
-                            </td>
-                            <td className="px-4 py-3 font-semibold">
-                              {formatCurrency(holding.marketValue)}
-                            </td>
-                            <td
-                              className={`px-4 py-3 font-semibold ${
-                                holding.profitLoss >= 0 ? 'text-red-600' : 'text-blue-600'
-                              }`}
-                            >
-                              {holding.profitLoss >= 0 ? '+' : ''}
-                              {formatCurrency(holding.profitLoss)}
-                            </td>
-                            <td
-                              className={`px-4 py-3 font-semibold ${
-                                holding.returnRate >= 0 ? 'text-red-600' : 'text-blue-600'
-                              }`}
-                            >
-                              {holding.returnRate >= 0 ? '+' : ''}
-                              {holding.returnRate.toFixed(2)}%
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
                   </div>
                 )}
               </div>
@@ -998,6 +727,12 @@ const TradePage = () => {
           </div>
         </div>
       </div>
+
+      {/* 토스트 애니메이션 */}
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+      `}</style>
     </div>
   );
 };

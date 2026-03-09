@@ -111,7 +111,8 @@ const UserPage = () => {
       markOnboardingDone();
       await refreshProfile();
       if (isOnboarding) {
-        navigate('/dashboard');
+        const returnTo = searchParams.get('from');
+        navigate(returnTo ? decodeURIComponent(returnTo) : '/dashboard');
         return;
       }
       setSaveMessage({ type: 'success', text: '프로필이 바다에 새겨졌습니다!' });

@@ -1,6 +1,8 @@
 package com.project.whalearc.trade.controller;
 
 import com.project.whalearc.common.dto.ApiResponse;
+import com.project.whalearc.store.domain.ProductPurchase;
+import com.project.whalearc.store.repository.ProductPurchaseRepository;
 import com.project.whalearc.trade.domain.Portfolio;
 import com.project.whalearc.trade.domain.PortfolioSnapshot;
 import com.project.whalearc.trade.repository.PortfolioSnapshotRepository;
@@ -22,6 +24,7 @@ public class PortfolioController {
 
     private final PortfolioService portfolioService;
     private final PortfolioSnapshotRepository snapshotRepository;
+    private final ProductPurchaseRepository purchaseRepository;
 
     @GetMapping
     public ApiResponse<Portfolio> getPortfolio(@AuthenticationPrincipal Jwt jwt) {
@@ -36,6 +39,16 @@ public class PortfolioController {
             @RequestBody Map<String, String> body) {
         String userId = jwt.getSubject();
         String purchaseId = body.get("purchaseId"); // null이면 해제
+
+        // purchaseId 소유권 검증
+        if (purchaseId != null) {
+            ProductPurchase purchase = purchaseRepository.findById(purchaseId).orElse(null);
+            if (purchase == null || !purchase.getUserId().equals(userId)
+                    || purchase.getStatus() != ProductPurchase.Status.ACTIVE) {
+                return ApiResponse.ok(null); // 잘못된 purchaseId는 무시
+            }
+        }
+
         Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
         portfolio.setRepresentativePurchaseId(purchaseId);
         portfolioService.save(portfolio);

@@ -52,7 +52,7 @@ const TradePage = () => {
   selectedStockRef.current = selectedStock;
 
   // WebSocket 실시간 가격
-  const { prices: realtimePrices, connected } = useRealtimePrice({ enabled: true });
+  const { prices: realtimePrices } = useRealtimePrice({ enabled: true });
 
   // 실시간 가격을 종목 목록에 병합
   const mergedStockList = useMemo(() => {
@@ -148,8 +148,10 @@ const TradePage = () => {
       return;
     }
 
-    // 잔고 체크 (수수료 0.1% 포함)
-    const price = orderMethod === 'MARKET' ? selectedStock.currentPrice : parseFloat(limitPrice);
+    // 잔고 체크 (수수료 0.1% 포함) — 실시간 가격 사용
+    const rt = realtimePrices.get(selectedStock.stockCode);
+    const currentPrice = rt ? rt.price : selectedStock.currentPrice;
+    const price = orderMethod === 'MARKET' ? currentPrice : parseFloat(limitPrice);
     const total = price * parseFloat(quantity) * (1 + COMMISSION_RATE);
     if (orderType === 'BUY' && portfolio && total > portfolio.cashBalance) {
       showToast('잔고가 부족합니다.', 'error');
@@ -234,7 +236,8 @@ const TradePage = () => {
     if (!selectedStock) return;
     if (orderType === 'BUY') {
       const cash = portfolio?.cashBalance || 0;
-      const price = orderMethod === 'LIMIT' && limitPrice ? parseFloat(limitPrice) : selectedStock.currentPrice;
+      const rtPrice = realtimePrices.get(selectedStock.stockCode)?.price ?? selectedStock.currentPrice;
+      const price = orderMethod === 'LIMIT' && limitPrice ? parseFloat(limitPrice) : rtPrice;
       if (price <= 0) return;
       const maxQty = (cash * pct) / (price * (1 + COMMISSION_RATE));
       setQuantity(maxQty > 0 ? maxQty.toFixed(8).replace(/\.?0+$/, '') : '0');
@@ -522,7 +525,7 @@ const TradePage = () => {
                             <div
                               key={h.stockCode}
                               onClick={() => {
-                                const stock = stockList.find(s => s.stockCode === h.stockCode);
+                                const stock = mergedStockList.find(s => s.stockCode === h.stockCode);
                                 if (stock) handleStockSelect(stock);
                               }}
                               className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
@@ -725,7 +728,7 @@ const TradePage = () => {
                         <div
                           key={h.stockCode}
                           onClick={() => {
-                            const stock = stockList.find(s => s.stockCode === h.stockCode);
+                            const stock = mergedStockList.find(s => s.stockCode === h.stockCode);
                             if (stock) handleStockSelect(stock);
                           }}
                           className="flex justify-between items-center py-1 cursor-pointer hover:bg-gray-50 rounded px-1 -mx-1 transition-colors"

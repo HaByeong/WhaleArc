@@ -15,18 +15,17 @@ const RankingPage = () => {
   const [selectedRanking, setSelectedRanking] = useState<RankingEntry | null>(null);
   const pageSize = 20;
 
-  const isInitialMount = useRef(true);
+  const rankingTypeRef = useRef(rankingType);
 
   useEffect(() => {
+    rankingTypeRef.current = rankingType;
     setCurrentPage(0);
     loadRankings(0);
   }, [rankingType]);
 
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
+    // rankingType 변경으로 page가 0으로 리셋된 경우 중복 호출 방지
+    if (currentPage === 0) return;
     loadRankings(currentPage);
   }, [currentPage]);
 

@@ -159,12 +159,13 @@ const MyPortfolioPage = () => {
 
   const totalHoldingsPnl = portfolio.holdings.reduce((s, h) => s + h.profitLoss, 0);
 
-  // 자산 → 항로 이름 매핑 (purchasePerformance에서 추출)
-  const assetRouteMap: Record<string, string> = {};
+  // 자산 → 항로 이름 매핑 (purchasePerformance에서 추출, 복수 항로 지원)
+  const assetRouteMap: Record<string, string[]> = {};
   for (const perf of purchasePerformance) {
     for (const a of perf.assets) {
-      if (!assetRouteMap[a.code]) {
-        assetRouteMap[a.code] = perf.productName;
+      if (!assetRouteMap[a.code]) assetRouteMap[a.code] = [];
+      if (!assetRouteMap[a.code].includes(perf.productName)) {
+        assetRouteMap[a.code].push(perf.productName);
       }
     }
   }
@@ -431,11 +432,11 @@ const MyPortfolioPage = () => {
                                 <span className="font-semibold text-sm text-whale-dark">
                                   {CRYPTO_NAMES[h.stockCode] || h.stockName}
                                 </span>
-                                {assetRouteMap[h.stockCode] && (
-                                  <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-whale-light/10 text-whale-light rounded">
-                                    {assetRouteMap[h.stockCode]}
+                                {assetRouteMap[h.stockCode]?.map((routeName) => (
+                                  <span key={routeName} className="px-1.5 py-0.5 text-[9px] font-semibold bg-whale-light/10 text-whale-light rounded">
+                                    {routeName}
                                   </span>
-                                )}
+                                ))}
                               </div>
                               <div className="text-xs text-gray-400">{h.stockCode} · {formatQuantity(h.quantity)}개</div>
                               </div>

@@ -91,7 +91,7 @@ public class TurtleStrategyService {
         double entryHigh = rollingMax(highs, last, ENTRY_PERIOD);
         double exitLow = rollingMin(lows, last, EXIT_PERIOD);
 
-        if (currATR <= 0 || Double.isNaN(prevADX)) return;
+        if (currATR <= 0 || Double.isNaN(currATR) || Double.isNaN(prevADX)) return;
 
         if (pos.getDirection() == TurtlePosition.Direction.NONE) {
             // ── 신규 진입 ──

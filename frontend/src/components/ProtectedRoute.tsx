@@ -34,7 +34,9 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   }
 
   if (!onboardingDone && !isOnboardingPage) {
-    return <Navigate to="/user?onboarding=true" replace />;
+    const returnPath = location.pathname !== '/dashboard' ? location.pathname : '';
+    const onboardingUrl = `/user?onboarding=true${returnPath ? `&from=${encodeURIComponent(returnPath)}` : ''}`;
+    return <Navigate to={onboardingUrl} replace />;
   }
 
   return <>{children}</>;

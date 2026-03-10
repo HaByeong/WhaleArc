@@ -306,6 +306,11 @@ const MarketPage = () => {
                   ))
                 )}
               </div>
+              {assetType === 'STOCK' && (
+                <p className="text-[10px] text-gray-400 text-right mt-2">
+                  * 주식 시세는 KIS 모의투자 API 기준 약 15~20초 지연
+                </p>
+              )}
             </div>
           </div>
 

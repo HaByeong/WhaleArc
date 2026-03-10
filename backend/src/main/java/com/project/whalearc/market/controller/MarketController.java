@@ -26,6 +26,11 @@ public class MarketController {
     private final StockMasterService stockMasterService;
     private final KisApiClient kisApiClient;
 
+    // 지수 캐시 (30초)
+    private volatile List<IndexPriceResponse> cachedIndices = List.of();
+    private volatile long indicesCacheTime = 0;
+    private static final long INDICES_CACHE_TTL = 30_000; // 30초
+
     @GetMapping("/prices")
     public ResponseEntity<List<MarketPriceResponse>> getPrices(@RequestParam AssetType type) {
         try {
@@ -116,16 +121,20 @@ public class MarketController {
         }
     }
 
-    /** KOSPI / KOSDAQ 지수 조회 (인증 불필요) */
+    /** KOSPI / KOSDAQ 지수 조회 (인증 불필요, 30초 캐싱) */
     @GetMapping("/indices")
     public ResponseEntity<List<IndexPriceResponse>> getIndices() {
-        List<IndexPriceResponse> indices = new ArrayList<>();
-
-        if (!kisApiClient.isConfigured()) {
-            return ResponseEntity.ok(indices);
+        // 캐시 유효하면 즉시 반환
+        if (System.currentTimeMillis() - indicesCacheTime < INDICES_CACHE_TTL && !cachedIndices.isEmpty()) {
+            return ResponseEntity.ok(cachedIndices);
         }
 
-        // KOSPI: 0001, KOSDAQ: 1001
+        if (!kisApiClient.isConfigured()) {
+            return ResponseEntity.ok(List.of());
+        }
+
+        List<IndexPriceResponse> indices = new ArrayList<>();
+
         Map<String, String> kospi = kisApiClient.getIndexPrice("0001");
         if (kospi != null) {
             indices.add(new IndexPriceResponse(
@@ -144,6 +153,11 @@ public class MarketController {
                     parseDouble(kosdaq.get("bstp_nmix_prdy_vrss")),
                     parseDouble(kosdaq.get("bstp_nmix_prdy_ctrt"))
             ));
+        }
+
+        if (!indices.isEmpty()) {
+            cachedIndices = indices;
+            indicesCacheTime = System.currentTimeMillis();
         }
 
         return ResponseEntity.ok(indices);

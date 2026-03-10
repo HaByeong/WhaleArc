@@ -579,6 +579,11 @@ const TradePage = () => {
                   <div className="p-6 text-center text-gray-400 text-sm">검색 결과가 없습니다</div>
                 )}
               </div>
+              {marketTab === 'STOCK' && (
+                <p className="text-[10px] text-gray-400 text-right px-4 py-1.5">
+                  * 주식 시세는 KIS 모의투자 API 기준 약 15~20초 지연
+                </p>
+              )}
             </div>
           </div>
 

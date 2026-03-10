@@ -57,7 +57,7 @@ const LoginPage = () => {
       }
     };
     fetchIndices();
-    const interval = setInterval(fetchIndices, 60_000); // 1분마다 갱신
+    const interval = setInterval(fetchIndices, 30_000); // 30초마다 갱신
     return () => clearInterval(interval);
   }, []);
 
@@ -317,6 +317,9 @@ const LoginPage = () => {
                     </div>
                   );
                 })}
+              <p className="text-[10px] text-gray-400 text-right mt-1.5">
+                * KIS 모의투자 API 기준, 약 15~20초 지연 시세
+              </p>
               </div>
             )}
 

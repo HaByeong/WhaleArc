@@ -194,12 +194,22 @@ const TradingChart = ({
       rsiChartRef.current = rChart;
       rsiSeriesRef.current = rsiLine;
 
+      // 차트 생성 직후 지표 데이터 적용
+      setTimeout(() => applyIndicators(), 0);
+
       const obs = new ResizeObserver((entries) => {
         for (const e of entries) rChart.applyOptions({ width: e.contentRect.width });
       });
       obs.observe(rsiContainerRef.current);
 
-      return () => { obs.disconnect(); };
+      return () => {
+        obs.disconnect();
+        if (rsiChartRef.current) {
+          rsiChartRef.current.remove();
+          rsiChartRef.current = null;
+          rsiSeriesRef.current = null;
+        }
+      };
     }
 
     if (!showRSI && rsiChartRef.current) {
@@ -207,7 +217,7 @@ const TradingChart = ({
       rsiChartRef.current = null;
       rsiSeriesRef.current = null;
     }
-  }, [showRSI]);
+  }, [showRSI, applyIndicators]);
 
   // ─── MACD 차트 생성/제거 ───────────────────────────────
   useEffect(() => {
@@ -246,12 +256,24 @@ const TradingChart = ({
       macdSignalRef.current = signalLine;
       macdHistRef.current = histSeries;
 
+      // 차트 생성 직후 지표 데이터 적용
+      setTimeout(() => applyIndicators(), 0);
+
       const obs = new ResizeObserver((entries) => {
         for (const e of entries) mChart.applyOptions({ width: e.contentRect.width });
       });
       obs.observe(macdContainerRef.current);
 
-      return () => { obs.disconnect(); };
+      return () => {
+        obs.disconnect();
+        if (macdChartRef.current) {
+          macdChartRef.current.remove();
+          macdChartRef.current = null;
+          macdLineRef.current = null;
+          macdSignalRef.current = null;
+          macdHistRef.current = null;
+        }
+      };
     }
 
     if (!showMACD && macdChartRef.current) {
@@ -261,7 +283,7 @@ const TradingChart = ({
       macdSignalRef.current = null;
       macdHistRef.current = null;
     }
-  }, [showMACD]);
+  }, [showMACD, applyIndicators]);
 
   // ─── 지표 계산 및 차트 적용 ────────────────────────────
   const applyIndicators = useCallback(() => {

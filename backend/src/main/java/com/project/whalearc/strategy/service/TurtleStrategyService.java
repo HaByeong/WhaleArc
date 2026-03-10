@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -108,7 +109,7 @@ public class TurtleStrategyService {
                 double unitWeight = (RISK_PER_TRADE / MAX_UNITS) / (SL_MUL * volatility);
                 unitWeight = Math.min(unitWeight, 0.9 / MAX_UNITS);
 
-                double buyAmount = pos.getAllocatedCash() * unitWeight;
+                double buyAmount = pos.getAllocatedCash().doubleValue() * unitWeight;
                 if (buyAmount < 1000) return; // 최소 1000원
 
                 double quantity = buyAmount / (currPrice * (1 + FEE_RATE));
@@ -118,17 +119,18 @@ public class TurtleStrategyService {
                 try {
                     orderService.createOrder(pos.getUserId(), pos.getSymbol(),
                             getSymbolName(pos.getSymbol()),
-                            Order.OrderType.BUY, Order.OrderMethod.MARKET, quantity, null);
+                            Order.OrderType.BUY, Order.OrderMethod.MARKET, BigDecimal.valueOf(quantity), null);
 
                     // Python 동일: 진입가/평단가/트레일기준 모두 브레이크아웃 레벨 사용
+                    BigDecimal entryPriceBd = BigDecimal.valueOf(entryPriceCandidate);
                     pos.setDirection(TurtlePosition.Direction.LONG);
-                    pos.setEntryPrice(entryPriceCandidate);
-                    pos.setLastEntryPrice(entryPriceCandidate);
-                    pos.setAvgPrice(entryPriceCandidate);
+                    pos.setEntryPrice(entryPriceBd);
+                    pos.setLastEntryPrice(entryPriceBd);
+                    pos.setAvgPrice(entryPriceBd);
                     pos.setUnits(1);
-                    pos.setUnitWeight(unitWeight);
-                    pos.setStopLoss(entryPriceCandidate - SL_MUL * prevATR);
-                    pos.setTrailRef(entryPriceCandidate);
+                    pos.setUnitWeight(BigDecimal.valueOf(unitWeight));
+                    pos.setStopLoss(BigDecimal.valueOf(entryPriceCandidate - SL_MUL * prevATR));
+                    pos.setTrailRef(entryPriceBd);
                     pos.setTradeCount(pos.getTradeCount() + 1);
                     pos.setUpdatedAt(Instant.now());
                     positionRepository.save(pos);
@@ -144,8 +146,8 @@ public class TurtleStrategyService {
             // ── 포지션 관리 ──
 
             // A. 피라미딩
-            if (pos.getUnits() < MAX_UNITS && currPrice > pos.getLastEntryPrice() + currATR) {
-                double buyAmount = pos.getAllocatedCash() * pos.getUnitWeight();
+            if (pos.getUnits() < MAX_UNITS && currPrice > pos.getLastEntryPrice().doubleValue() + currATR) {
+                double buyAmount = pos.getAllocatedCash().doubleValue() * pos.getUnitWeight().doubleValue();
                 double quantity = buyAmount / (currPrice * (1 + FEE_RATE));
                 quantity = Math.floor(quantity * 100000000.0) / 100000000.0;
 
@@ -153,13 +155,13 @@ public class TurtleStrategyService {
                     try {
                         orderService.createOrder(pos.getUserId(), pos.getSymbol(),
                                 getSymbolName(pos.getSymbol()),
-                                Order.OrderType.BUY, Order.OrderMethod.MARKET, quantity, null);
+                                Order.OrderType.BUY, Order.OrderMethod.MARKET, BigDecimal.valueOf(quantity), null);
 
-                        double oldCost = pos.getAvgPrice() * pos.getUnits();
+                        double oldCost = pos.getAvgPrice().doubleValue() * pos.getUnits();
                         pos.setUnits(pos.getUnits() + 1);
-                        pos.setLastEntryPrice(currPrice);
-                        pos.setAvgPrice((oldCost + currPrice) / pos.getUnits());
-                        pos.setStopLoss(currPrice - SL_MUL * currATR);
+                        pos.setLastEntryPrice(BigDecimal.valueOf(currPrice));
+                        pos.setAvgPrice(BigDecimal.valueOf((oldCost + currPrice) / pos.getUnits()));
+                        pos.setStopLoss(BigDecimal.valueOf(currPrice - SL_MUL * currATR));
                         pos.setUpdatedAt(Instant.now());
                         positionRepository.save(pos);
 
@@ -172,13 +174,13 @@ public class TurtleStrategyService {
 
             // 트레일링 스탑 업데이트
             if (pos.getTrailRef() != null) {
-                pos.setTrailRef(Math.max(pos.getTrailRef(), currPrice));
-                double trailStop = pos.getTrailRef() * (1 - TRAIL_PCT);
-                pos.setStopLoss(Math.max(pos.getStopLoss(), trailStop));
+                pos.setTrailRef(pos.getTrailRef().max(BigDecimal.valueOf(currPrice)));
+                double trailStop = pos.getTrailRef().doubleValue() * (1 - TRAIL_PCT);
+                pos.setStopLoss(pos.getStopLoss().max(BigDecimal.valueOf(trailStop)));
             }
 
             // B. 손절 체크
-            boolean stopHit = currPrice < pos.getStopLoss();
+            boolean stopHit = currPrice < pos.getStopLoss().doubleValue();
             // C. Exit Channel 이탈
             boolean exitHit = currPrice < exitLow;
 
@@ -200,7 +202,7 @@ public class TurtleStrategyService {
                 .filter(h -> h.getStockCode().equals(pos.getSymbol()))
                 .findFirst().orElse(null);
 
-        if (holding != null && holding.getQuantity() > 0.0000001) {
+        if (holding != null && holding.getQuantity().compareTo(new BigDecimal("0.0000001")) > 0) {
             try {
                 // Python 동일: 손절 시 슬리피지 적용
                 double exitPrice = "STOP".equals(reason)
@@ -212,12 +214,14 @@ public class TurtleStrategyService {
                         Order.OrderType.SELL, Order.OrderMethod.MARKET,
                         holding.getQuantity(), null);
 
-                double pnl = (exitPrice - pos.getAvgPrice()) / pos.getAvgPrice();
+                double avgPriceD = pos.getAvgPrice().doubleValue();
+                double pnl = (exitPrice - avgPriceD) / avgPriceD;
                 // Python 동일: Exit Channel 청산에서만 승수 카운트 (손절 시 미카운트)
                 if (!"STOP".equals(reason) && pnl > 0) {
                     pos.setWinCount(pos.getWinCount() + 1);
                 }
-                pos.setRealizedPnl(pos.getRealizedPnl() + pnl * pos.getUnitWeight() * pos.getUnits());
+                pos.setRealizedPnl(pos.getRealizedPnl().add(
+                        BigDecimal.valueOf(pnl * pos.getUnitWeight().doubleValue() * pos.getUnits())));
 
                 log.info("터틀 청산 [{}]: symbol={}, price={}, avgPrice={}, pnl={}%, units={}",
                         reason, pos.getSymbol(), exitPrice, pos.getAvgPrice(),
@@ -229,12 +233,12 @@ public class TurtleStrategyService {
 
         pos.setDirection(TurtlePosition.Direction.NONE);
         pos.setUnits(0);
-        pos.setEntryPrice(0);
-        pos.setLastEntryPrice(0);
-        pos.setAvgPrice(0);
-        pos.setStopLoss(0);
+        pos.setEntryPrice(BigDecimal.ZERO);
+        pos.setLastEntryPrice(BigDecimal.ZERO);
+        pos.setAvgPrice(BigDecimal.ZERO);
+        pos.setStopLoss(BigDecimal.ZERO);
         pos.setTrailRef(null);
-        pos.setUnitWeight(0);
+        pos.setUnitWeight(BigDecimal.ZERO);
         pos.setUpdatedAt(Instant.now());
         positionRepository.save(pos);
     }
@@ -264,8 +268,9 @@ public class TurtleStrategyService {
      * 항로 구매 시 터틀 포지션 초기화 (매수는 하지 않음 — 스케줄러가 시그널에 따라 진입)
      */
     public void initializePositions(String userId, String purchaseId,
-                                     List<String> targetAssets, double investmentAmount) {
-        double perAsset = investmentAmount / targetAssets.size();
+                                     List<String> targetAssets, BigDecimal investmentAmount) {
+        BigDecimal perAsset = investmentAmount.divide(
+                BigDecimal.valueOf(targetAssets.size()), 10, java.math.RoundingMode.HALF_UP);
         for (String symbol : targetAssets) {
             TurtlePosition pos = new TurtlePosition(userId, purchaseId, symbol, perAsset);
             positionRepository.save(pos);

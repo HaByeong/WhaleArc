@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -40,9 +41,9 @@ public class RankingService {
     public RankingResponseDto getRankings(String currentUserId) {
         List<Portfolio> allPortfolios = portfolioRepository.findAll();
 
-        // 수익률 기준 정렬
+        // 수익률 기준 정렬 (BigDecimal compareTo, reversed)
         List<Portfolio> sorted = allPortfolios.stream()
-                .sorted(Comparator.comparingDouble(Portfolio::getReturnRate).reversed())
+                .sorted((a, b) -> b.getReturnRate().compareTo(a.getReturnRate()))
                 .toList();
 
         // 상위 N명 + 현재 유저 포함 보장
@@ -108,13 +109,14 @@ public class RankingService {
                 }
             }
 
+            double returnRate = p.getReturnRate().doubleValue();
             rankings.add(RankingEntryDto.builder()
                     .portfolioId(p.getId())
                     .rank(rankMap.getOrDefault(p.getUserId(), sorted.size() + 1))
                     .nickname(nickname)
                     .portfolioName(email.contains("@") ? email.split("@")[0] + "의 포트폴리오" : nickname + "의 포트폴리오")
-                    .totalReturn(Math.round(p.getReturnRate() * 100.0) / 100.0)
-                    .totalValue(p.getTotalValue())
+                    .totalReturn(Math.round(returnRate * 100.0) / 100.0)
+                    .totalValue(p.getTotalValue().doubleValue())
                     .rankChange(0)
                     .isMyRanking(p.getUserId().equals(currentUserId))
                     .routeName(routeName)
@@ -185,9 +187,11 @@ public class RankingService {
         String portfolioName = email.contains("@") ? email.split("@")[0] + "의 포트폴리오" : nickname + "의 포트폴리오";
 
         int rank = calculateRank(portfolio);
-        double initialCapital = portfolio.getInitialCash() > 0 ? portfolio.getInitialCash() : 10_000_000;
-        double totalValue = portfolio.getTotalValue();
-        double totalReturn = portfolio.getReturnRate();
+        BigDecimal initialCash = portfolio.getInitialCash();
+        double initialCapital = (initialCash.compareTo(BigDecimal.ZERO) > 0)
+                ? initialCash.doubleValue() : 10_000_000;
+        double totalValue = portfolio.getTotalValue().doubleValue();
+        double totalReturn = portfolio.getReturnRate().doubleValue();
         double totalReturnAmount = totalValue - initialCapital;
 
         // 종목 수만 공개
@@ -236,9 +240,9 @@ public class RankingService {
     }
 
     private int calculateRank(Portfolio target) {
-        double targetRate = target.getReturnRate();
+        BigDecimal targetRate = target.getReturnRate();
         long higherCount = portfolioRepository.findAll().stream()
-                .filter(p -> p.getReturnRate() > targetRate)
+                .filter(p -> p.getReturnRate().compareTo(targetRate) > 0)
                 .count();
         return (int) higherCount + 1;
     }

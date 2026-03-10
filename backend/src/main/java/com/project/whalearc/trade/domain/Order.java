@@ -4,15 +4,22 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @Document(collection = "orders")
+@CompoundIndexes({
+    @CompoundIndex(name = "idx_status_method", def = "{'status': 1, 'orderMethod': 1}"),
+    @CompoundIndex(name = "idx_user_created", def = "{'userId': 1, 'createdAt': -1}")
+})
 public class Order {
 
     @Id
@@ -25,11 +32,11 @@ public class Order {
     private String stockName;
     private OrderType orderType;
     private OrderMethod orderMethod;
-    private double quantity;
-    private double price;
+    private BigDecimal quantity;
+    private BigDecimal price;
     private OrderStatus status;
-    private double filledQuantity;
-    private Double filledPrice;
+    private BigDecimal filledQuantity;
+    private BigDecimal filledPrice;
     private String assetType; // "STOCK" or "CRYPTO"
     private Instant createdAt;
     private Instant updatedAt;
@@ -40,13 +47,13 @@ public class Order {
 
     public Order(String userId, String stockCode, String stockName,
                  OrderType orderType, OrderMethod orderMethod,
-                 double quantity, double price) {
+                 BigDecimal quantity, BigDecimal price) {
         this(userId, stockCode, stockName, orderType, orderMethod, quantity, price, "CRYPTO");
     }
 
     public Order(String userId, String stockCode, String stockName,
                  OrderType orderType, OrderMethod orderMethod,
-                 double quantity, double price, String assetType) {
+                 BigDecimal quantity, BigDecimal price, String assetType) {
         this.userId = userId;
         this.stockCode = stockCode;
         this.stockName = stockName;
@@ -56,7 +63,7 @@ public class Order {
         this.price = price;
         this.assetType = assetType;
         this.status = OrderStatus.PENDING;
-        this.filledQuantity = 0.0;
+        this.filledQuantity = BigDecimal.ZERO;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
     }

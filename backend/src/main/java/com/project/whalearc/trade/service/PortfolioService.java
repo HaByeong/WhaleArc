@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -31,7 +32,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PortfolioService {
 
-    private static final double INITIAL_CASH = 10_000_000; // 1000만원
+    private static final BigDecimal INITIAL_CASH = BigDecimal.valueOf(10_000_000); // 1000만원
     private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
 
     private ReentrantLock getUserLock(String userId) {
@@ -76,30 +77,30 @@ public class PortfolioService {
 
         try {
             // 코인 시세 맵
-            Map<String, Double> cryptoPriceMap = Map.of();
+            Map<String, BigDecimal> cryptoPriceMap = Map.of();
             boolean hasCrypto = portfolio.getHoldings().stream().anyMatch(h -> !h.isStock());
             if (hasCrypto) {
                 List<MarketPriceResponse> cryptoPrices = cryptoPriceProvider.getAllKrwTickers();
                 if (!cryptoPrices.isEmpty()) {
                     cryptoPriceMap = cryptoPrices.stream()
-                            .collect(Collectors.toMap(MarketPriceResponse::getSymbol, MarketPriceResponse::getPrice, (a, b) -> a));
+                            .collect(Collectors.toMap(MarketPriceResponse::getSymbol, p -> BigDecimal.valueOf(p.getPrice()), (a, b) -> a));
                 }
             }
 
             // 주식 시세 맵 (캐시된 인기종목)
-            Map<String, Double> stockPriceMap = Map.of();
+            Map<String, BigDecimal> stockPriceMap = Map.of();
             boolean hasStock = portfolio.getHoldings().stream().anyMatch(Holding::isStock);
             if (hasStock) {
                 List<MarketPriceResponse> stockPrices = stockPriceProvider.getAllStockPrices();
                 if (!stockPrices.isEmpty()) {
                     stockPriceMap = stockPrices.stream()
-                            .collect(Collectors.toMap(MarketPriceResponse::getSymbol, MarketPriceResponse::getPrice, (a, b) -> a));
+                            .collect(Collectors.toMap(MarketPriceResponse::getSymbol, p -> BigDecimal.valueOf(p.getPrice()), (a, b) -> a));
                 }
             }
 
             for (Holding holding : portfolio.getHoldings()) {
                 if (holding.isStock()) {
-                    Double price = stockPriceMap.get(holding.getStockCode());
+                    BigDecimal price = stockPriceMap.get(holding.getStockCode());
                     if (price != null) {
                         holding.setCurrentPrice(price);
                     } else {
@@ -108,14 +109,14 @@ public class PortfolioService {
                             Map<String, String> output = kisApiClient.getStockPrice(holding.getStockCode());
                             if (output != null) {
                                 long p = Long.parseLong(output.get("stck_prpr"));
-                                if (p > 0) holding.setCurrentPrice(p);
+                                if (p > 0) holding.setCurrentPrice(BigDecimal.valueOf(p));
                             }
                         } catch (Exception e) {
                             log.debug("주식 시세 개별 조회 실패 [{}]: {}", holding.getStockCode(), e.getMessage());
                         }
                     }
                 } else {
-                    Double price = cryptoPriceMap.get(holding.getStockCode());
+                    BigDecimal price = cryptoPriceMap.get(holding.getStockCode());
                     if (price != null) {
                         holding.setCurrentPrice(price);
                     }
@@ -157,7 +158,7 @@ public class PortfolioService {
             portfolio.setCashBalance(INITIAL_CASH);
             portfolio.setInitialCash(INITIAL_CASH);
             portfolio.setHoldings(new java.util.ArrayList<>());
-            portfolio.setTurtleAllocated(0);
+            portfolio.setTurtleAllocated(BigDecimal.ZERO);
             portfolio.setRepresentativePurchaseId(null);
             portfolio = portfolioRepository.save(portfolio);
 

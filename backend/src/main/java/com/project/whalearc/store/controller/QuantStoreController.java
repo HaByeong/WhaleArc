@@ -10,6 +10,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,8 +46,8 @@ public class QuantStoreController {
         if (rawAmount == null || !(rawAmount instanceof Number)) {
             return ResponseEntity.badRequest().body(Map.of("message", "투자 금액을 입력해주세요."));
         }
-        double investmentAmount = ((Number) rawAmount).doubleValue();
-        if (investmentAmount <= 0) {
+        BigDecimal investmentAmount = BigDecimal.valueOf(((Number) rawAmount).doubleValue());
+        if (investmentAmount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "투자 금액은 0보다 커야 합니다."));
         }
         ProductPurchase purchase = storeService.purchaseProduct(userId, productId, investmentAmount);

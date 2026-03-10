@@ -38,6 +38,7 @@ dependencies {
 	testImplementation 'org.springframework.security:spring-security-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+	implementation 'me.paulschwarz:spring-dotenv:4.0.0'
 }
 
 tasks.named('test') {

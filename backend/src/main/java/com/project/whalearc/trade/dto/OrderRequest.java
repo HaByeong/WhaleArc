@@ -6,6 +6,8 @@ import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+
 @Getter
 @Setter
 public class OrderRequest {
@@ -25,9 +27,9 @@ public class OrderRequest {
     private String orderMethod;
 
     @DecimalMin(value = "0.00000001", message = "수량은 0보다 커야 합니다.")
-    private double quantity;
+    private BigDecimal quantity;
 
-    private Double price; // 지정가일 때만
+    private BigDecimal price; // 지정가일 때만
 
     private String assetType; // "STOCK" or "CRYPTO" (기본: CRYPTO)
 }

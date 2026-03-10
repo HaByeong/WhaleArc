@@ -38,8 +38,9 @@ out/
 
 ### Environment variables ###
 frontend/.env
-frontend/.env.local
-frontend/.env.production
+frontend/.env.*
+!frontend/.env.example
+backend/.env
 backend/src/main/resources/application-prod.yml
 
 ### Documentation (Private) - 팀만 보는 문서 (GitHub에 올라가지 않음) ###

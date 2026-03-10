@@ -23,14 +23,14 @@ bithumb:
 kis:
   api:
     base-url: https://openapivts.koreainvestment.com:29443
-    appkey: ${KIS_APPKEY:PSrF6zybjYoGhcnDN3UFk4hsRgOI4aGOHAiS}
-    appsecret: ${KIS_APPSECRET:3pcgVNaVWT0lrr1aVRid1exQl8kC3EFcgq4NJig5T4DbENEO6gv+hhJzckwCwgQk+9T9zqNpQuG+GbaAvNpJMgegV+ONiJesA9o3yPI1YDImnuNER6a0obxiaOeWKyNLDAdCiB4Wzd8/uAAXjWY6BFo5AiiNjdP4Q5Tc9TKfumw3YBfnHnQ=}
-    cache-ttl-ms: 30000
+    appkey: ${KIS_APPKEY:}
+    appsecret: ${KIS_APPSECRET:}
+    cache-ttl-ms: 15000
 
 logging:
   level:
     org.springframework: INFO
-    com.project.whalearc.market: DEBUG
+    com.project.whalearc: INFO
 
 spring.security:
   oauth2:

@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -75,7 +76,7 @@ public class PortfolioSnapshotScheduler {
                     Map<String, Double> priceMap = holding.isStock() ? stockPriceMap : cryptoPriceMap;
                     Double price = priceMap.get(holding.getStockCode());
                     if (price != null) {
-                        holding.setCurrentPrice(price);
+                        holding.setCurrentPrice(BigDecimal.valueOf(price));
                     }
                 }
                 snapshotRepository.save(new PortfolioSnapshot(portfolio.getUserId(), today, portfolio));

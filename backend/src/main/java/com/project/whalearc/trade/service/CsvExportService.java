@@ -7,6 +7,8 @@ import com.project.whalearc.trade.repository.TradeRecordRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.NumberFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -44,10 +46,10 @@ public class CsvExportService {
             sb.append("STOCK".equals(t.getAssetType()) ? "주식" : "코인").append(',');
             sb.append(t.getOrderType().name().equals("BUY") ? "매수" : "매도").append(',');
             sb.append(formatQty(t.getQuantity(), t.getAssetType())).append(',');
-            sb.append(csvEscape(numFmt().format(Math.round(t.getPrice())))).append(',');
-            sb.append(csvEscape(numFmt().format(Math.round(t.getTotalAmount())))).append(',');
-            sb.append(csvEscape(numFmt().format(Math.round(t.getCommission())))).append(',');
-            sb.append(csvEscape(numFmt().format(Math.round(t.getNetAmount())))).append('\n');
+            sb.append(csvEscape(numFmt().format(roundBd(t.getPrice())))).append(',');
+            sb.append(csvEscape(numFmt().format(roundBd(t.getTotalAmount())))).append(',');
+            sb.append(csvEscape(numFmt().format(roundBd(t.getCommission())))).append(',');
+            sb.append(csvEscape(numFmt().format(roundBd(t.getNetAmount())))).append('\n');
         }
 
         return sb.toString();
@@ -59,13 +61,14 @@ public class CsvExportService {
     public String generatePortfolioReportCsv(String userId) {
         Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
 
-        double initialCash = portfolio.getInitialCash() > 0 ? portfolio.getInitialCash() : 10_000_000;
-        double totalValue = portfolio.getTotalValue();
-        double totalPnl = totalValue - initialCash;
-        double returnRate = portfolio.getReturnRate();
-        double turtleAllocated = portfolio.getTurtleAllocated();
+        BigDecimal initialCash = portfolio.getInitialCash().compareTo(BigDecimal.ZERO) > 0
+                ? portfolio.getInitialCash() : BigDecimal.valueOf(10_000_000);
+        double totalValue = portfolio.getTotalValue().doubleValue();
+        double totalPnl = totalValue - initialCash.doubleValue();
+        double returnRate = portfolio.getReturnRate().doubleValue();
+        double turtleAllocated = portfolio.getTurtleAllocated().doubleValue();
         double holdingsValue = portfolio.getHoldings().stream()
-                .mapToDouble(Holding::getMarketValue).sum();
+                .mapToDouble(h -> h.getMarketValue().doubleValue()).sum();
 
         StringBuilder sb = new StringBuilder(BOM);
 
@@ -73,12 +76,12 @@ public class CsvExportService {
         sb.append("[포트폴리오 요약]\n");
         sb.append("항목,금액\n");
         sb.append("총 자산,").append(csvEscape(numFmt().format(Math.round(totalValue)))).append('\n');
-        sb.append("현금,").append(csvEscape(numFmt().format(Math.round(portfolio.getCashBalance())))).append('\n');
+        sb.append("현금,").append(csvEscape(numFmt().format(roundBd(portfolio.getCashBalance())))).append('\n');
         sb.append("보유종목 평가,").append(csvEscape(numFmt().format(Math.round(holdingsValue)))).append('\n');
         if (turtleAllocated > 0) {
             sb.append("터틀 전략 배정,").append(csvEscape(numFmt().format(Math.round(turtleAllocated)))).append('\n');
         }
-        sb.append("초기 자본,").append(csvEscape(numFmt().format(Math.round(initialCash)))).append('\n');
+        sb.append("초기 자본,").append(csvEscape(numFmt().format(roundBd(initialCash)))).append('\n');
         sb.append("총 손익,").append(csvEscape(signedNum(totalPnl))).append('\n');
         sb.append("수익률(%),").append(signedPct(returnRate)).append('\n');
 
@@ -94,11 +97,11 @@ public class CsvExportService {
             sb.append(csvEscape(h.getStockName())).append(',');
             sb.append(isStock ? "주식" : "코인").append(',');
             sb.append(formatQty(h.getQuantity(), isStock ? "STOCK" : "CRYPTO")).append(',');
-            sb.append(csvEscape(numFmt().format(Math.round(h.getAveragePrice())))).append(',');
-            sb.append(csvEscape(numFmt().format(Math.round(h.getCurrentPrice())))).append(',');
-            sb.append(csvEscape(numFmt().format(Math.round(h.getMarketValue())))).append(',');
-            sb.append(csvEscape(signedNum(h.getProfitLoss()))).append(',');
-            sb.append(signedPct(h.getReturnRate())).append('\n');
+            sb.append(csvEscape(numFmt().format(roundBd(h.getAveragePrice())))).append(',');
+            sb.append(csvEscape(numFmt().format(roundBd(h.getCurrentPrice())))).append(',');
+            sb.append(csvEscape(numFmt().format(roundBd(h.getMarketValue())))).append(',');
+            sb.append(csvEscape(signedNum(h.getProfitLoss().doubleValue()))).append(',');
+            sb.append(signedPct(h.getReturnRate().doubleValue())).append('\n');
         }
 
         return sb.toString();
@@ -112,15 +115,16 @@ public class CsvExportService {
         return value;
     }
 
-    private String formatQty(double qty, String assetType) {
+    private String formatQty(BigDecimal qty, String assetType) {
         if ("STOCK".equals(assetType)) {
-            return String.valueOf((int) qty);
+            return String.valueOf(qty.intValue());
         }
         // 코인: 소수점 이하 불필요한 0 제거
-        if (qty == Math.floor(qty)) {
-            return String.valueOf((long) qty);
-        }
-        return String.valueOf(qty);
+        return qty.stripTrailingZeros().toPlainString();
+    }
+
+    private long roundBd(BigDecimal value) {
+        return value.setScale(0, RoundingMode.HALF_UP).longValue();
     }
 
     private String signedNum(double value) {

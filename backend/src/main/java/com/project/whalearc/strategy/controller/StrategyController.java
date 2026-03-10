@@ -61,9 +61,12 @@ public class StrategyController {
     public ResponseEntity<Map<String, Object>> applyStrategy(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable String strategyId,
-            @RequestBody Map<String, Double> body) {
+            @RequestBody Map<String, Object> body) {
         String userId = jwt.getSubject();
-        double investmentAmount = body.getOrDefault("investmentAmount", 0.0);
+        Object rawAmount = body.get("investmentAmount");
+        java.math.BigDecimal investmentAmount = (rawAmount instanceof Number)
+                ? java.math.BigDecimal.valueOf(((Number) rawAmount).doubleValue())
+                : java.math.BigDecimal.ZERO;
         try {
             Strategy applied = strategyService.applyStrategy(userId, strategyId, investmentAmount);
             return ResponseEntity.ok(Map.of("data", StrategyResponse.from(applied)));

@@ -7,6 +7,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Getter
@@ -21,11 +22,11 @@ public class PortfolioSnapshot {
 
     private String userId;
     private LocalDate date;
-    private double totalValue;
-    private double cashBalance;
-    private double holdingsValue;
-    private double turtleAllocated;
-    private double returnRate;
+    private BigDecimal totalValue;
+    private BigDecimal cashBalance;
+    private BigDecimal holdingsValue;
+    private BigDecimal turtleAllocated;
+    private BigDecimal returnRate;
 
     public PortfolioSnapshot(String userId, LocalDate date, Portfolio portfolio) {
         this.userId = userId;
@@ -33,7 +34,8 @@ public class PortfolioSnapshot {
         this.totalValue = portfolio.getTotalValue();
         this.cashBalance = portfolio.getCashBalance();
         this.holdingsValue = portfolio.getHoldings().stream()
-                .mapToDouble(Holding::getMarketValue).sum();
+                .map(Holding::getMarketValue)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         this.turtleAllocated = portfolio.getTurtleAllocated();
         this.returnRate = portfolio.getReturnRate();
     }

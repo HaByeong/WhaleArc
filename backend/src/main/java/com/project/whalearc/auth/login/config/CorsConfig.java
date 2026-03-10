@@ -22,7 +22,7 @@ public class CorsConfig {
         List<String> origins = Arrays.asList(allowedOrigins.trim().split("\\s*,\\s*"));
         config.setAllowedOrigins(origins);
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(Arrays.asList("*"));
+        config.setAllowedHeaders(Arrays.asList("Content-Type", "Authorization", "X-Requested-With", "Accept"));
         config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

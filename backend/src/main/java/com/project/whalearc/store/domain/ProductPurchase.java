@@ -7,6 +7,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,8 +28,8 @@ public class ProductPurchase {
     private String productId;
 
     private String productName;
-    private double paidPrice;
-    private double investmentAmount;
+    private BigDecimal paidPrice;
+    private BigDecimal investmentAmount;
     private List<PurchasedAsset> purchasedAssets = new ArrayList<>();
     private Status status;
     private Instant purchasedAt;
@@ -42,15 +43,16 @@ public class ProductPurchase {
     @NoArgsConstructor
     public static class PurchasedAsset {
         private String code;
-        private double quantity;
-        private double purchasePrice;
+        private BigDecimal quantity;
+        private BigDecimal purchasePrice;
 
-        public PurchasedAsset(String code, double quantity) {
+        public PurchasedAsset(String code, BigDecimal quantity) {
             this.code = code;
             this.quantity = quantity;
+            this.purchasePrice = BigDecimal.ZERO;
         }
 
-        public PurchasedAsset(String code, double quantity, double purchasePrice) {
+        public PurchasedAsset(String code, BigDecimal quantity, BigDecimal purchasePrice) {
             this.code = code;
             this.quantity = quantity;
             this.purchasePrice = purchasePrice;
@@ -58,7 +60,7 @@ public class ProductPurchase {
     }
 
     public ProductPurchase(String userId, String productId, String productName,
-                           double paidPrice, double investmentAmount) {
+                           BigDecimal paidPrice, BigDecimal investmentAmount) {
         this.userId = userId;
         this.productId = productId;
         this.productName = productName;

@@ -1,5 +1,7 @@
 package com.project.whalearc.market.websocket;
 
+import java.util.Arrays;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
@@ -22,8 +24,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        String[] origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .toArray(String[]::new);
         registry.addEndpoint("/ws")
-                .setAllowedOrigins(allowedOrigins.split(","))
+                .setAllowedOrigins(origins)
                 .withSockJS();
     }
 }

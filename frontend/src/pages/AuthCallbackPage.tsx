@@ -28,7 +28,6 @@ const AuthCallbackPage = () => {
           // PKCE 플로우: authorization code를 세션으로 교환
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
-            console.error('코드 교환 에러:', error.message);
             setError(error.message);
             setTimeout(() => window.location.replace('/login'), 2000);
             return;
@@ -41,7 +40,6 @@ const AuthCallbackPage = () => {
         // implicit 플로우 폴백 (해시 프래그먼트)
         const { data, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) {
-          console.error('세션 복구 에러:', sessionError.message);
           setError(sessionError.message);
           setTimeout(() => window.location.replace('/login'), 2000);
           return;
@@ -65,7 +63,6 @@ const AuthCallbackPage = () => {
           }, 10000);
         }
       } catch (err) {
-        console.error('OAuth 콜백 처리 실패:', err);
         window.location.replace('/login');
       }
     };

@@ -21,6 +21,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -292,11 +294,11 @@ public class QuantStoreService {
         p.setCreatorName(creatorName);
         p.setCategory(category);
         p.setRiskLevel(riskLevel);
-        p.setPrice(price);
-        p.setExpectedReturn(expectedReturn);
-        p.setMaxDrawdown(maxDrawdown);
-        p.setSharpeRatio(sharpeRatio);
-        p.setWinRate(winRate);
+        p.setPrice(BigDecimal.valueOf(price));
+        p.setExpectedReturn(BigDecimal.valueOf(expectedReturn));
+        p.setMaxDrawdown(BigDecimal.valueOf(maxDrawdown));
+        p.setSharpeRatio(BigDecimal.valueOf(sharpeRatio));
+        p.setWinRate(BigDecimal.valueOf(winRate));
         p.setTotalTrades(0);
         p.setSubscribers(subscribers);
         p.setTags(tags);
@@ -342,7 +344,7 @@ public class QuantStoreService {
     /**
      * 항로 구매 + 투자 금액을 타겟 자산에 균등 분배하여 시장가 매수
      */
-    public ProductPurchase purchaseProduct(String userId, String productId, double investmentAmount) {
+    public ProductPurchase purchaseProduct(String userId, String productId, BigDecimal investmentAmount) {
         QuantProduct product = getProduct(productId);
 
         if (purchaseRepository.existsByUserIdAndProductIdAndStatus(
@@ -350,15 +352,16 @@ public class QuantStoreService {
             throw new IllegalArgumentException("이미 구매한 상품입니다.");
         }
 
-        if (investmentAmount <= 0) {
+        if (investmentAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("투자 금액은 0보다 커야 합니다.");
         }
 
         // 잔고 확인
         Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
-        if (portfolio.getCashBalance() < investmentAmount) {
+        BigDecimal investBd = investmentAmount;
+        if (portfolio.getCashBalance().compareTo(investBd) < 0) {
             throw new IllegalArgumentException("잔고가 부족합니다. 보유: " +
-                    String.format("%,.0f", portfolio.getCashBalance()) + "원");
+                    String.format("%,.0f", portfolio.getCashBalance().doubleValue()) + "원");
         }
 
         List<String> targetAssets = product.getTargetAssets();
@@ -368,19 +371,19 @@ public class QuantStoreService {
 
         // 구매 기록 저장 (공통)
         ProductPurchase purchase = new ProductPurchase(userId, productId, product.getName(),
-                product.getPrice(), investmentAmount);
+                product.getPrice(), investBd);
 
         // ── 터틀 전략: 즉시 매수하지 않고 포지션 초기화 (스케줄러가 시그널에 따라 자동매매) ──
         if (product.getStrategyType() == QuantProduct.StrategyType.TURTLE) {
             // 현금을 포트폴리오에서 차감하고, 터틀 할당금으로 이동 (totalValue 유지)
-            portfolio.setCashBalance(portfolio.getCashBalance() - investmentAmount);
-            portfolio.setTurtleAllocated(portfolio.getTurtleAllocated() + investmentAmount);
+            portfolio.setCashBalance(portfolio.getCashBalance().subtract(investBd));
+            portfolio.setTurtleAllocated(portfolio.getTurtleAllocated().add(investBd));
             portfolioService.save(portfolio);
 
             purchase.setPurchasedAssets(new ArrayList<>());
             purchase = purchaseRepository.save(purchase);
 
-            turtleStrategyService.initializePositions(userId, purchase.getId(), targetAssets, investmentAmount);
+            turtleStrategyService.initializePositions(userId, purchase.getId(), targetAssets, investBd);
             log.info("터틀 항로 구매: userId={}, investment={}, assets={}", userId, investmentAmount, targetAssets);
         } else {
             // ── 일반 전략: 균등 분배 즉시 매수 (코인 or 주식) ──
@@ -393,7 +396,7 @@ public class QuantStoreService {
             Map<String, MarketPriceResponse> priceMap = allPrices.stream()
                     .collect(Collectors.toMap(MarketPriceResponse::getSymbol, p -> p, (a, b) -> a));
 
-            double perAssetAmount = investmentAmount / targetAssets.size();
+            BigDecimal perAssetAmount = investmentAmount.divide(BigDecimal.valueOf(targetAssets.size()), 10, RoundingMode.HALF_UP);
             List<ProductPurchase.PurchasedAsset> purchasedAssets = new ArrayList<>();
 
             for (String asset : targetAssets) {
@@ -403,8 +406,9 @@ public class QuantStoreService {
                     continue;
                 }
 
-                double quantity = perAssetAmount / (priceInfo.getPrice() * 1.001);
-                if (quantity <= 0) {
+                BigDecimal priceBd = BigDecimal.valueOf(priceInfo.getPrice()).multiply(new BigDecimal("1.001"));
+                BigDecimal quantity = perAssetAmount.divide(priceBd, 10, RoundingMode.HALF_UP);
+                if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
                     log.warn("투자 금액 부족으로 스킵: asset={}, price={}, perAssetAmount={}",
                             asset, priceInfo.getPrice(), perAssetAmount);
                     continue;
@@ -412,19 +416,19 @@ public class QuantStoreService {
 
                 // 주식은 정수 단위, 코인은 소수점 8자리
                 if (isStockProduct) {
-                    quantity = Math.floor(quantity);
-                    if (quantity <= 0) {
+                    quantity = quantity.setScale(0, RoundingMode.FLOOR);
+                    if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
                         log.warn("투자 금액 부족 (1주 미만): asset={}, price={}", asset, priceInfo.getPrice());
                         continue;
                     }
                 } else {
-                    quantity = Math.floor(quantity * 100000000.0) / 100000000.0;
+                    quantity = quantity.setScale(8, RoundingMode.FLOOR);
                 }
 
                 try {
                     orderService.createOrder(userId, asset, priceInfo.getName(),
                             Order.OrderType.BUY, Order.OrderMethod.MARKET, quantity, null, assetType);
-                    purchasedAssets.add(new ProductPurchase.PurchasedAsset(asset, quantity, priceInfo.getPrice()));
+                    purchasedAssets.add(new ProductPurchase.PurchasedAsset(asset, quantity, BigDecimal.valueOf(priceInfo.getPrice())));
                     log.info("항로 자동 매수: asset={}, qty={}, price={}, type={}", asset, quantity, priceInfo.getPrice(), assetType);
                 } catch (Exception e) {
                     log.warn("항로 자동 매수 실패: asset={}, reason={}", asset, e.getMessage());
@@ -436,9 +440,9 @@ public class QuantStoreService {
             }
 
             // 실제 투자된 금액으로 갱신 (일부 자산 매수 실패 시 요청 금액과 다를 수 있음)
-            double actualInvestment = purchasedAssets.stream()
-                    .mapToDouble(pa -> pa.getPurchasePrice() * pa.getQuantity())
-                    .sum();
+            BigDecimal actualInvestment = purchasedAssets.stream()
+                    .map(pa -> pa.getPurchasePrice().multiply(pa.getQuantity()))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
             purchase.setInvestmentAmount(actualInvestment);
             purchase.setPurchasedAssets(purchasedAssets);
             purchase = purchaseRepository.save(purchase);
@@ -479,9 +483,9 @@ public class QuantStoreService {
             // 터틀: 포지션 청산 + 할당 현금 반환
             turtleStrategyService.closeAllPositions(purchase.getId());
             Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
-            double allocated = purchase.getInvestmentAmount();
-            portfolio.setTurtleAllocated(Math.max(0, portfolio.getTurtleAllocated() - allocated));
-            portfolio.setCashBalance(portfolio.getCashBalance() + allocated);
+            BigDecimal allocated = purchase.getInvestmentAmount();
+            portfolio.setTurtleAllocated(portfolio.getTurtleAllocated().subtract(allocated).max(BigDecimal.ZERO));
+            portfolio.setCashBalance(portfolio.getCashBalance().add(allocated));
             portfolioService.save(portfolio);
         } else {
             // 일반: 매수한 자산들을 항로 매수 수량만큼만 매도
@@ -496,8 +500,8 @@ public class QuantStoreService {
                         .findFirst()
                         .orElse(null);
 
-                if (holding != null && holding.getQuantity() > 0) {
-                    double sellQty = Math.min(pa.getQuantity(), holding.getQuantity());
+                if (holding != null && holding.getQuantity().compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal sellQty = pa.getQuantity().min(holding.getQuantity());
                     try {
                         orderService.createOrder(userId, pa.getCode(), holding.getStockName(),
                                 Order.OrderType.SELL, Order.OrderMethod.MARKET,
@@ -576,7 +580,7 @@ public class QuantStoreService {
                                                            Map<String, MarketPriceResponse> priceMap) {
         // 레거시 데이터(purchasePrice=0) 폴백용: 포트폴리오의 Holding 평균단가 사용
         Portfolio portfolio = portfolioService.getOrCreatePortfolio(purchase.getUserId());
-        Map<String, Double> holdingAvgPrices = portfolio.getHoldings().stream()
+        Map<String, BigDecimal> holdingAvgPrices = portfolio.getHoldings().stream()
                 .collect(Collectors.toMap(Holding::getStockCode, Holding::getAveragePrice, (a, b) -> a));
 
         List<PurchasePerformanceDto.AssetPerformance> assetPerfs = new ArrayList<>();
@@ -586,14 +590,15 @@ public class QuantStoreService {
         for (ProductPurchase.PurchasedAsset pa : purchase.getPurchasedAssets()) {
             MarketPriceResponse mp = priceMap.get(pa.getCode());
             double currentPrice = mp != null ? mp.getPrice() : 0;
-            double buyPrice = pa.getPurchasePrice();
+            double buyPrice = pa.getPurchasePrice().doubleValue();
             // 레거시 데이터: purchasePrice가 0이면 Holding 평균단가로 폴백
             if (buyPrice <= 0) {
-                buyPrice = holdingAvgPrices.getOrDefault(pa.getCode(), 0.0);
+                buyPrice = holdingAvgPrices.getOrDefault(pa.getCode(), BigDecimal.ZERO).doubleValue();
             }
 
-            double cost = buyPrice * pa.getQuantity();
-            double current = currentPrice * pa.getQuantity();
+            double qty = pa.getQuantity().doubleValue();
+            double cost = buyPrice * qty;
+            double current = currentPrice * qty;
             double pnl = current - cost;
             double returnRate = cost > 0 ? (pnl / cost) * 100 : 0;
 
@@ -603,7 +608,7 @@ public class QuantStoreService {
             assetPerfs.add(PurchasePerformanceDto.AssetPerformance.builder()
                     .code(pa.getCode())
                     .name(mp != null ? mp.getName() : pa.getCode())
-                    .quantity(pa.getQuantity())
+                    .quantity(qty)
                     .purchasePrice(buyPrice)
                     .currentPrice(currentPrice)
                     .pnl(pnl)
@@ -618,7 +623,7 @@ public class QuantStoreService {
                 .purchaseId(purchase.getId())
                 .productName(purchase.getProductName())
                 .strategyType("SIMPLE")
-                .investmentAmount(purchase.getInvestmentAmount())
+                .investmentAmount(purchase.getInvestmentAmount().doubleValue())
                 .totalCurrentValue(totalCurrent)
                 .totalPnl(totalPnl)
                 .totalReturnRate(totalReturn)
@@ -641,42 +646,45 @@ public class QuantStoreService {
             double currentPrice = mp != null ? mp.getPrice() : 0;
 
             double unrealized = 0;
-            if (pos.getDirection() == TurtlePosition.Direction.LONG && pos.getAvgPrice() > 0) {
-                unrealized = pos.getAllocatedCash() * pos.getUnitWeight() * pos.getUnits()
-                        * ((currentPrice - pos.getAvgPrice()) / pos.getAvgPrice());
+            double avgPriceD = pos.getAvgPrice().doubleValue();
+            if (pos.getDirection() == TurtlePosition.Direction.LONG && avgPriceD > 0) {
+                unrealized = pos.getAllocatedCash().doubleValue() * pos.getUnitWeight().doubleValue() * pos.getUnits()
+                        * ((currentPrice - avgPriceD) / avgPriceD);
             }
 
-            totalRealized += pos.getRealizedPnl();
+            double realizedD = pos.getRealizedPnl().doubleValue();
+            totalRealized += realizedD;
             totalUnrealized += unrealized;
             totalTrades += pos.getTradeCount();
             totalWins += pos.getWinCount();
 
+            double allocatedD = pos.getAllocatedCash().doubleValue();
             assetPerfs.add(PurchasePerformanceDto.AssetPerformance.builder()
                     .code(pos.getSymbol())
                     .name(mp != null ? mp.getName() : pos.getSymbol())
                     .quantity(pos.getUnits())
-                    .purchasePrice(pos.getAvgPrice())
+                    .purchasePrice(avgPriceD)
                     .currentPrice(currentPrice)
-                    .pnl(pos.getRealizedPnl() + unrealized)
-                    .returnRate(pos.getAllocatedCash() > 0
-                            ? ((pos.getRealizedPnl() + unrealized) / pos.getAllocatedCash()) * 100 : 0)
+                    .pnl(realizedD + unrealized)
+                    .returnRate(allocatedD > 0
+                            ? ((realizedD + unrealized) / allocatedD) * 100 : 0)
                     .direction(pos.getDirection().name())
-                    .realizedPnl(pos.getRealizedPnl())
+                    .realizedPnl(realizedD)
                     .tradeCount(pos.getTradeCount())
                     .winCount(pos.getWinCount())
                     .build());
         }
 
         double totalPnl = totalRealized + totalUnrealized;
-        double totalReturn = purchase.getInvestmentAmount() > 0
-                ? (totalPnl / purchase.getInvestmentAmount()) * 100 : 0;
+        double investD = purchase.getInvestmentAmount().doubleValue();
+        double totalReturn = investD > 0 ? (totalPnl / investD) * 100 : 0;
 
         return PurchasePerformanceDto.builder()
                 .purchaseId(purchase.getId())
                 .productName(purchase.getProductName())
                 .strategyType("TURTLE")
-                .investmentAmount(purchase.getInvestmentAmount())
-                .totalCurrentValue(purchase.getInvestmentAmount() + totalPnl)
+                .investmentAmount(investD)
+                .totalCurrentValue(investD + totalPnl)
                 .totalPnl(totalPnl)
                 .totalReturnRate(totalReturn)
                 .assets(assetPerfs)

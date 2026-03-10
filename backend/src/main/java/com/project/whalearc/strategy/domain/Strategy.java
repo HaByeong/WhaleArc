@@ -34,6 +34,7 @@ public class Strategy {
     private Map<String, String> targetAssetNames = new HashMap<>(); // 자산코드 → 자산명 매핑
     private String assetType;       // CRYPTO, STOCK, MIXED
     private String strategyLogic;   // 전략 로직 설명
+    @Indexed
     private boolean applied;        // 포트폴리오에 적용 여부
     private int appliedSuccessCount; // 적용 시 매수 성공 자산 수
     private int appliedTotalCount;   // 적용 시 전체 대상 자산 수

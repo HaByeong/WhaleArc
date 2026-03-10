@@ -5,8 +5,10 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
@@ -23,33 +25,35 @@ public class TurtlePosition {
     @Id
     private String id;
 
+    @Indexed
     private String userId;
     private String purchaseId;
     private String symbol;
 
     /** 포지션 방향 */
+    @Indexed
     private Direction direction = Direction.NONE;
 
     /** 첫 진입가 */
-    private double entryPrice;
+    private BigDecimal entryPrice;
     /** 마지막 진입가 (피라미딩 기준) */
-    private double lastEntryPrice;
+    private BigDecimal lastEntryPrice;
     /** 평균 단가 */
-    private double avgPrice;
+    private BigDecimal avgPrice;
     /** 보유 유닛 수 (피라미딩) */
     private int units;
     /** 유닛당 배분 비중 */
-    private double unitWeight;
+    private BigDecimal unitWeight;
     /** 손절 라인 */
-    private double stopLoss;
+    private BigDecimal stopLoss;
     /** 트레일링 기준가 */
-    private Double trailRef;
+    private BigDecimal trailRef;
 
     /** 이 심볼에 할당된 투자금 (현금) */
-    private double allocatedCash;
+    private BigDecimal allocatedCash;
 
     /** 누적 실현 손익 */
-    private double realizedPnl;
+    private BigDecimal realizedPnl;
     private int tradeCount;
     private int winCount;
 
@@ -60,14 +64,14 @@ public class TurtlePosition {
         NONE, LONG
     }
 
-    public TurtlePosition(String userId, String purchaseId, String symbol, double allocatedCash) {
+    public TurtlePosition(String userId, String purchaseId, String symbol, BigDecimal allocatedCash) {
         this.userId = userId;
         this.purchaseId = purchaseId;
         this.symbol = symbol;
         this.allocatedCash = allocatedCash;
         this.direction = Direction.NONE;
         this.units = 0;
-        this.realizedPnl = 0;
+        this.realizedPnl = BigDecimal.ZERO;
         this.tradeCount = 0;
         this.winCount = 0;
         this.createdAt = Instant.now();

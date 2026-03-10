@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,8 +59,8 @@ public class StrategyService {
                     for (var holding : portfolio.getHoldings()) {
                         if (holding.getStockCode() == null) continue;
                         if (targetAssets.contains(holding.getStockCode())) {
-                            double avgPrice = Math.max(0, holding.getAveragePrice());
-                            double investedValue = avgPrice * holding.getQuantity();
+                            BigDecimal avgPrice = holding.getAveragePrice().max(BigDecimal.ZERO);
+                            double investedValue = avgPrice.multiply(holding.getQuantity()).doubleValue();
                             totalInvestment += investedValue;
                             purchasedAssets.add(new ProductPurchase.PurchasedAsset(
                                     holding.getStockCode(), holding.getQuantity(), avgPrice));
@@ -69,7 +70,7 @@ public class StrategyService {
 
                 ProductPurchase purchase = new ProductPurchase(
                         strategy.getUserId(), productId,
-                        "[전략] " + strategy.getName(), 0, totalInvestment);
+                        "[전략] " + strategy.getName(), BigDecimal.ZERO, BigDecimal.valueOf(totalInvestment));
                 purchase.setPurchasedAssets(purchasedAssets);
                 purchaseRepository.save(purchase);
                 migrated++;
@@ -140,7 +141,7 @@ public class StrategyService {
     /**
      * 전략을 포트폴리오에 적용: 투자 금액을 타겟 자산에 균등 분배하여 시장가 매수
      */
-    public Strategy applyStrategy(String userId, String strategyId, double investmentAmount) {
+    public Strategy applyStrategy(String userId, String strategyId, BigDecimal investmentAmount) {
         Strategy strategy = strategyRepository.findById(strategyId)
                 .orElseThrow(() -> new IllegalArgumentException("전략을 찾을 수 없습니다."));
 
@@ -157,14 +158,14 @@ public class StrategyService {
             throw new IllegalArgumentException("투자 대상 자산이 설정되지 않았습니다.");
         }
 
-        if (investmentAmount <= 0) {
+        if (investmentAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("투자 금액은 0보다 커야 합니다.");
         }
 
         Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
-        if (portfolio.getCashBalance() < investmentAmount) {
+        if (portfolio.getCashBalance().compareTo(investmentAmount) < 0) {
             throw new IllegalArgumentException("잔고가 부족합니다. 보유: " +
-                    String.format("%,.0f", portfolio.getCashBalance()) + "원");
+                    String.format("%,.0f", portfolio.getCashBalance().doubleValue()) + "원");
         }
 
         // 자산 유형 판단
@@ -181,7 +182,7 @@ public class StrategyService {
             stockPriceProvider.getAllStockPrices().forEach(p -> priceMap.put(p.getSymbol(), p));
         }
 
-        double perAssetAmount = investmentAmount / targetAssets.size();
+        BigDecimal perAssetAmount = investmentAmount.divide(BigDecimal.valueOf(targetAssets.size()), 10, java.math.RoundingMode.HALF_UP);
         int successCount = 0;
         List<String> failedAssets = new ArrayList<>();
         List<ProductPurchase.PurchasedAsset> purchasedAssets = new ArrayList<>();
@@ -206,8 +207,9 @@ public class StrategyService {
                 continue;
             }
 
-            double quantity = perAssetAmount / (priceInfo.getPrice() * 1.001);
-            if (quantity <= 0) {
+            BigDecimal priceBd = BigDecimal.valueOf(priceInfo.getPrice()).multiply(new BigDecimal("1.001"));
+            BigDecimal quantity = perAssetAmount.divide(priceBd, 10, java.math.RoundingMode.HALF_UP);
+            if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
                 failedAssets.add(asset + "(수량 계산 불가)");
                 continue;
             }
@@ -216,20 +218,20 @@ public class StrategyService {
             String orderAssetType = isStock ? "STOCK" : "CRYPTO";
 
             if (isStock) {
-                quantity = Math.floor(quantity);
-                if (quantity <= 0) {
+                quantity = quantity.setScale(0, java.math.RoundingMode.FLOOR);
+                if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
                     log.warn("투자 금액 부족 (1주 미만): asset={}, price={}", asset, priceInfo.getPrice());
                     failedAssets.add(asset + "(1주 미만)");
                     continue;
                 }
             } else {
-                quantity = Math.floor(quantity * 100000000.0) / 100000000.0;
+                quantity = quantity.setScale(8, java.math.RoundingMode.FLOOR);
             }
 
             try {
                 orderService.createOrder(userId, asset, priceInfo.getName(),
                         Order.OrderType.BUY, Order.OrderMethod.MARKET, quantity, null, orderAssetType);
-                purchasedAssets.add(new ProductPurchase.PurchasedAsset(asset, quantity, priceInfo.getPrice()));
+                purchasedAssets.add(new ProductPurchase.PurchasedAsset(asset, quantity, BigDecimal.valueOf(priceInfo.getPrice())));
                 successCount++;
                 log.info("전략 적용 매수: strategy={}, asset={}, qty={}, price={}",
                         strategy.getName(), asset, quantity, priceInfo.getPrice());
@@ -244,14 +246,14 @@ public class StrategyService {
         }
 
         // 실제 투자된 금액 계산 (매수 성공한 자산들의 price * quantity 합산)
-        double actualInvestment = purchasedAssets.stream()
-                .mapToDouble(pa -> pa.getPurchasePrice() * pa.getQuantity())
-                .sum();
+        BigDecimal actualInvestment = purchasedAssets.stream()
+                .map(pa -> pa.getPurchasePrice().multiply(pa.getQuantity()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // ProductPurchase 레코드 생성 → 포트폴리오 "항해 중인 항로"에 표시
         ProductPurchase purchase = new ProductPurchase(
                 userId, "strategy_" + strategyId,
-                "[전략] " + strategy.getName(), 0, actualInvestment);
+                "[전략] " + strategy.getName(), BigDecimal.ZERO, actualInvestment);
         purchase.setPurchasedAssets(purchasedAssets);
         purchaseRepository.save(purchase);
 

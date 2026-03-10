@@ -45,7 +45,7 @@ public class PortfolioController {
             ProductPurchase purchase = purchaseRepository.findById(purchaseId).orElse(null);
             if (purchase == null || !purchase.getUserId().equals(userId)
                     || purchase.getStatus() != ProductPurchase.Status.ACTIVE) {
-                return ApiResponse.ok(null); // 잘못된 purchaseId는 무시
+                return ApiResponse.error("유효하지 않은 항로입니다");
             }
         }
 

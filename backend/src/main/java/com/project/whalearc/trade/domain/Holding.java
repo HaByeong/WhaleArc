@@ -4,6 +4,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -11,16 +14,16 @@ public class Holding {
 
     private String stockCode;
     private String stockName;
-    private double quantity;
-    private double averagePrice;
-    private double currentPrice;
+    private BigDecimal quantity;
+    private BigDecimal averagePrice;
+    private BigDecimal currentPrice;
     private String assetType; // "STOCK" or "CRYPTO" (null → CRYPTO for backward compat)
 
-    public Holding(String stockCode, String stockName, double quantity, double averagePrice) {
+    public Holding(String stockCode, String stockName, BigDecimal quantity, BigDecimal averagePrice) {
         this(stockCode, stockName, quantity, averagePrice, "CRYPTO");
     }
 
-    public Holding(String stockCode, String stockName, double quantity, double averagePrice, String assetType) {
+    public Holding(String stockCode, String stockName, BigDecimal quantity, BigDecimal averagePrice, String assetType) {
         this.stockCode = stockCode;
         this.stockName = stockName;
         this.quantity = quantity;
@@ -34,16 +37,18 @@ public class Holding {
         return "STOCK".equals(assetType);
     }
 
-    public double getMarketValue() {
-        return currentPrice * quantity;
+    public BigDecimal getMarketValue() {
+        return currentPrice.multiply(quantity);
     }
 
-    public double getProfitLoss() {
-        return (currentPrice - averagePrice) * quantity;
+    public BigDecimal getProfitLoss() {
+        return currentPrice.subtract(averagePrice).multiply(quantity);
     }
 
-    public double getReturnRate() {
-        if (averagePrice == 0) return 0;
-        return ((currentPrice - averagePrice) / averagePrice) * 100;
+    public BigDecimal getReturnRate() {
+        if (averagePrice.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;
+        return currentPrice.subtract(averagePrice)
+                .divide(averagePrice, 10, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100));
     }
 }

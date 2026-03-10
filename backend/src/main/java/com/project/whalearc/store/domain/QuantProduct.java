@@ -4,8 +4,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +16,7 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @Document(collection = "quant_products")
+@CompoundIndex(name = "idx_active_category", def = "{'active': 1, 'category': 1, 'subscribers': -1}")
 public class QuantProduct {
 
     @Id
@@ -26,11 +29,11 @@ public class QuantProduct {
 
     private Category category;
     private RiskLevel riskLevel;
-    private double price;
-    private double expectedReturn;
-    private double maxDrawdown;
-    private double sharpeRatio;
-    private double winRate;
+    private BigDecimal price;
+    private BigDecimal expectedReturn;
+    private BigDecimal maxDrawdown;
+    private BigDecimal sharpeRatio;
+    private BigDecimal winRate;
     private int totalTrades;
     private int subscribers;
 

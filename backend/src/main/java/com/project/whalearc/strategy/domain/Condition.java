@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -12,7 +14,7 @@ import lombok.Setter;
 public class Condition {
     private String indicator;
     private Operator operator;
-    private double value;
+    private BigDecimal value;
     private Logic logic;
 
     public enum Operator { GT, LT, EQ, GTE, LTE }

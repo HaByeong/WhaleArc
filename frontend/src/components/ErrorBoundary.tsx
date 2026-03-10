@@ -30,8 +30,8 @@ class ErrorBoundary extends Component<Props, State> {
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {
+    // 프로덕션에서는 로깅 서비스로 전송
   }
 
   render() {

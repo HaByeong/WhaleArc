@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -42,31 +44,31 @@ public class OrderService {
      */
     public Order createOrder(String userId, String stockCode, String stockName,
                              Order.OrderType orderType, Order.OrderMethod orderMethod,
-                             double quantity, Double limitPrice) {
+                             BigDecimal quantity, BigDecimal limitPrice) {
         return createOrder(userId, stockCode, stockName, orderType, orderMethod, quantity, limitPrice, "CRYPTO");
     }
 
     public Order createOrder(String userId, String stockCode, String stockName,
                              Order.OrderType orderType, Order.OrderMethod orderMethod,
-                             double quantity, Double limitPrice, String assetType) {
+                             BigDecimal quantity, BigDecimal limitPrice, String assetType) {
 
-        if (quantity <= 0) {
+        if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("수량은 0보다 커야 합니다.");
         }
-        if (orderMethod == Order.OrderMethod.LIMIT && (limitPrice == null || limitPrice <= 0)) {
+        if (orderMethod == Order.OrderMethod.LIMIT && (limitPrice == null || limitPrice.compareTo(BigDecimal.ZERO) <= 0)) {
             throw new IllegalArgumentException("지정가 주문은 가격을 입력해야 합니다.");
         }
         // 주식은 정수 단위만 거래 가능
-        if ("STOCK".equals(assetType) && quantity != Math.floor(quantity)) {
+        if ("STOCK".equals(assetType) && quantity.stripTrailingZeros().scale() > 0) {
             throw new IllegalArgumentException("주식은 1주 단위로만 거래할 수 있습니다.");
         }
 
         ReentrantLock lock = getUserLock(userId);
         lock.lock();
         try {
-            double executionPrice = getExecutionPrice(stockCode, orderMethod, limitPrice, assetType);
+            BigDecimal executionPrice = getExecutionPrice(stockCode, orderMethod, limitPrice, assetType);
 
-            if (executionPrice <= 0) {
+            if (executionPrice.compareTo(BigDecimal.ZERO) <= 0) {
                 throw new IllegalArgumentException("유효하지 않은 체결 가격입니다: " + stockCode);
             }
 
@@ -92,22 +94,22 @@ public class OrderService {
      * 매수/매도 사전 검증
      */
     private void validateOrder(Order.OrderType orderType, String stockCode, String stockName,
-                                double quantity, double executionPrice, Portfolio portfolio) {
+                                BigDecimal quantity, BigDecimal executionPrice, Portfolio portfolio) {
         if (orderType == Order.OrderType.BUY) {
-            double totalCost = executionPrice * quantity * 1.001; // 수수료 0.1% 포함
-            if (portfolio.getCashBalance() < totalCost) {
+            BigDecimal totalCost = executionPrice.multiply(quantity).multiply(new BigDecimal("1.001")); // 수수료 0.1% 포함
+            if (portfolio.getCashBalance().compareTo(totalCost) < 0) {
                 throw new IllegalArgumentException("잔고가 부족합니다. 필요: " +
-                        String.format("%,.0f", totalCost) + "원, 보유: " +
-                        String.format("%,.0f", portfolio.getCashBalance()) + "원");
+                        String.format("%,.0f", totalCost.doubleValue()) + "원, 보유: " +
+                        String.format("%,.0f", portfolio.getCashBalance().doubleValue()) + "원");
             }
         } else {
             Holding holding = portfolio.getHoldings().stream()
                     .filter(h -> h.getStockCode().equals(stockCode))
                     .findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("보유하지 않은 종목입니다: " + stockName));
-            if (holding.getQuantity() < quantity - 0.0000001) {
+            if (holding.getQuantity().compareTo(quantity.subtract(new BigDecimal("0.0000001"))) < 0) {
                 throw new IllegalArgumentException("보유 수량이 부족합니다. 보유: " +
-                        String.format("%.8g", holding.getQuantity()) + "개, 요청: " + String.format("%.8g", quantity) + "개");
+                        holding.getQuantity().toPlainString() + "개, 요청: " + quantity.toPlainString() + "개");
             }
         }
     }
@@ -115,7 +117,7 @@ public class OrderService {
     /**
      * 주문 체결 처리
      */
-    private void executeOrder(Order order, Portfolio portfolio, double executionPrice) {
+    private void executeOrder(Order order, Portfolio portfolio, BigDecimal executionPrice) {
         // 체결 기록 생성
         TradeRecord trade = new TradeRecord(order.getUserId(), order, executionPrice);
         tradeRecordRepository.save(trade);
@@ -129,35 +131,35 @@ public class OrderService {
 
         // 포트폴리오 업데이트
         if (order.getOrderType() == Order.OrderType.BUY) {
-            double newBalance = portfolio.getCashBalance() - trade.getNetAmount();
-            if (newBalance < 0) {
+            BigDecimal newBalance = portfolio.getCashBalance().subtract(trade.getNetAmount());
+            if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
                 throw new IllegalStateException("체결 후 잔고가 음수가 됩니다. 주문을 처리할 수 없습니다.");
             }
             portfolio.setCashBalance(newBalance);
             addOrUpdateHolding(portfolio, order.getStockCode(), order.getStockName(),
                     order.getQuantity(), executionPrice, order.getAssetType());
         } else {
-            portfolio.setCashBalance(portfolio.getCashBalance() + trade.getNetAmount());
+            portfolio.setCashBalance(portfolio.getCashBalance().add(trade.getNetAmount()));
             reduceHolding(portfolio, order.getStockCode(), order.getQuantity());
         }
 
         portfolioService.save(portfolio);
         log.info("체결 완료: userId={}, stock={}, type={}, qty={}, price={}",
                 order.getUserId(), order.getStockCode(), order.getOrderType(),
-                order.getQuantity(), String.format("%.0f", executionPrice));
+                order.getQuantity(), executionPrice.toPlainString());
     }
 
     private void addOrUpdateHolding(Portfolio portfolio, String stockCode, String stockName,
-                                     double quantity, double price, String assetType) {
+                                     BigDecimal quantity, BigDecimal price, String assetType) {
         Holding existing = portfolio.getHoldings().stream()
                 .filter(h -> h.getStockCode().equals(stockCode))
                 .findFirst()
                 .orElse(null);
 
         if (existing != null) {
-            double totalCost = existing.getAveragePrice() * existing.getQuantity() + price * quantity;
-            double totalQty = existing.getQuantity() + quantity;
-            existing.setAveragePrice(totalCost / totalQty);
+            BigDecimal totalCost = existing.getAveragePrice().multiply(existing.getQuantity()).add(price.multiply(quantity));
+            BigDecimal totalQty = existing.getQuantity().add(quantity);
+            existing.setAveragePrice(totalCost.divide(totalQty, 10, RoundingMode.HALF_UP));
             existing.setQuantity(totalQty);
             existing.setCurrentPrice(price);
         } else {
@@ -165,15 +167,15 @@ public class OrderService {
         }
     }
 
-    private void reduceHolding(Portfolio portfolio, String stockCode, double quantity) {
+    private void reduceHolding(Portfolio portfolio, String stockCode, BigDecimal quantity) {
         Holding holding = portfolio.getHoldings().stream()
                 .filter(h -> h.getStockCode().equals(stockCode))
                 .findFirst()
                 .orElse(null);
 
         if (holding != null) {
-            double remaining = holding.getQuantity() - quantity;
-            if (remaining <= 0.0000001) {
+            BigDecimal remaining = holding.getQuantity().subtract(quantity);
+            if (remaining.compareTo(new BigDecimal("0.0000001")) <= 0) {
                 portfolio.getHoldings().removeIf(h -> h.getStockCode().equals(stockCode));
             } else {
                 holding.setQuantity(remaining);
@@ -184,7 +186,7 @@ public class OrderService {
     /**
      * 실행 가격 결정 (시장가: 현재가 조회, 지정가: 유저 입력값)
      */
-    private double getExecutionPrice(String stockCode, Order.OrderMethod method, Double limitPrice, String assetType) {
+    private BigDecimal getExecutionPrice(String stockCode, Order.OrderMethod method, BigDecimal limitPrice, String assetType) {
         if (method == Order.OrderMethod.LIMIT && limitPrice != null) {
             return limitPrice;
         }
@@ -201,17 +203,17 @@ public class OrderService {
         return prices.stream()
                 .filter(p -> p.getSymbol().equals(stockCode))
                 .findFirst()
-                .map(MarketPriceResponse::getPrice)
+                .map(p -> BigDecimal.valueOf(p.getPrice()))
                 .orElseThrow(() -> new IllegalArgumentException("해당 종목의 시세를 찾을 수 없습니다: " + stockCode));
     }
 
     /** 주식 현재가 조회 (KIS API) */
-    private double getStockCurrentPrice(String stockCode) {
+    private BigDecimal getStockCurrentPrice(String stockCode) {
         // 인기 종목 캐시에서 먼저 조회
         List<MarketPriceResponse> cached = stockPriceProvider.getAllStockPrices();
         for (MarketPriceResponse p : cached) {
             if (p.getSymbol().equals(stockCode)) {
-                return p.getPrice();
+                return BigDecimal.valueOf(p.getPrice());
             }
         }
         // 캐시에 없으면 개별 조회
@@ -224,7 +226,7 @@ public class OrderService {
         if (price <= 0) {
             throw new IllegalStateException("유효하지 않은 주식 시세입니다: " + stockCode);
         }
-        return price;
+        return BigDecimal.valueOf(price);
     }
 
     public List<Order> getOrders(String userId) {
@@ -239,7 +241,7 @@ public class OrderService {
      * 지정가 주문 자동 체결 (스케줄러에서 호출)
      * 현재 시장가가 지정가 조건을 만족하면 체결 처리
      */
-    public boolean tryExecuteLimitOrder(Order order, double currentMarketPrice) {
+    public boolean tryExecuteLimitOrder(Order order, BigDecimal currentMarketPrice) {
         if (order.getStatus() != Order.OrderStatus.PENDING
                 || order.getOrderMethod() != Order.OrderMethod.LIMIT) {
             return false;
@@ -247,8 +249,8 @@ public class OrderService {
 
         // 매수: 시장가가 지정가 이하일 때 체결
         // 매도: 시장가가 지정가 이상일 때 체결
-        boolean shouldExecute = (order.getOrderType() == Order.OrderType.BUY && currentMarketPrice <= order.getPrice())
-                || (order.getOrderType() == Order.OrderType.SELL && currentMarketPrice >= order.getPrice());
+        boolean shouldExecute = (order.getOrderType() == Order.OrderType.BUY && currentMarketPrice.compareTo(order.getPrice()) <= 0)
+                || (order.getOrderType() == Order.OrderType.SELL && currentMarketPrice.compareTo(order.getPrice()) >= 0);
 
         if (!shouldExecute) return false;
 
@@ -271,7 +273,7 @@ public class OrderService {
 
             executeOrder(fresh, portfolio, fresh.getPrice());
             log.info("지정가 주문 자동 체결: orderId={}, stock={}, price={}",
-                    fresh.getId(), fresh.getStockCode(), String.format("%.0f", fresh.getPrice()));
+                    fresh.getId(), fresh.getStockCode(), fresh.getPrice().toPlainString());
             return true;
         } finally {
             lock.unlock();

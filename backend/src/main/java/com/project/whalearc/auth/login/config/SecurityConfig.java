@@ -1,6 +1,7 @@
 package com.project.whalearc.auth.login.config;
 
 import com.project.whalearc.auth.filter.UserSyncFilter;
+import com.project.whalearc.common.filter.RateLimitingFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +21,7 @@ import org.springframework.security.web.authentication.www.BasicAuthenticationFi
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private final RateLimitingFilter rateLimitingFilter;
     private final UserSyncFilter userSyncFilter;
 
     @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")
@@ -46,7 +48,8 @@ public class SecurityConfig {
                                 .jwtAuthenticationConverter(supabaseJwtConverter())
                         )
                 )
-                // UserSyncFilter는 JWT 인증 이후에 실행되어야 함
+                // RateLimitingFilter → JWT 인증 → UserSyncFilter 순서
+                .addFilterBefore(rateLimitingFilter, BasicAuthenticationFilter.class)
                 .addFilterAfter(userSyncFilter, BasicAuthenticationFilter.class);
         return http.build();
     }

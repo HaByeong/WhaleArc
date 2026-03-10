@@ -7,6 +7,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,36 +24,39 @@ public class Portfolio {
     @Indexed(unique = true)
     private String userId; // supabaseId
 
-    private double cashBalance;
+    private BigDecimal cashBalance;
 
-    private double initialCash; // 초기 자산 (DB에 저장)
+    private BigDecimal initialCash; // 초기 자산 (DB에 저장)
 
     private List<Holding> holdings = new ArrayList<>();
 
     /** 터틀 전략에 할당된 현금 (cashBalance에서 차감되었지만 자산으로 포함) */
-    private double turtleAllocated;
+    private BigDecimal turtleAllocated;
 
     /** 대표 항로 구매 ID (투자 현황에 공개) */
     private String representativePurchaseId;
 
-    public Portfolio(String userId, double cashBalance) {
+    public Portfolio(String userId, BigDecimal cashBalance) {
         this.userId = userId;
         this.cashBalance = cashBalance;
         this.initialCash = cashBalance;
-        this.turtleAllocated = 0;
+        this.turtleAllocated = BigDecimal.ZERO;
     }
 
-    public double getTotalValue() {
-        double holdingsValue = holdings.stream()
-                .mapToDouble(Holding::getMarketValue)
-                .sum();
-        return cashBalance + holdingsValue + turtleAllocated;
+    public BigDecimal getTotalValue() {
+        BigDecimal holdingsValue = holdings.stream()
+                .map(Holding::getMarketValue)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return cashBalance.add(holdingsValue).add(turtleAllocated);
     }
 
-    public double getReturnRate() {
-        double initial = (initialCash > 0) ? initialCash : 10_000_000;
-        double current = getTotalValue();
-        if (initial == 0) return 0;
-        return ((current - initial) / initial) * 100;
+    public BigDecimal getReturnRate() {
+        BigDecimal initial = (initialCash.compareTo(BigDecimal.ZERO) > 0)
+                ? initialCash : BigDecimal.valueOf(10_000_000);
+        BigDecimal current = getTotalValue();
+        if (initial.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;
+        return current.subtract(initial)
+                .divide(initial, 10, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100));
     }
 }

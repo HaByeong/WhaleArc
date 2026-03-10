@@ -30,7 +30,7 @@ public class OrderController {
 
         // 지정가 주문 시 가격 필수 검증
         if ("LIMIT".equals(request.getOrderMethod())) {
-            if (request.getPrice() == null || request.getPrice() <= 0) {
+            if (request.getPrice() == null || request.getPrice().compareTo(java.math.BigDecimal.ZERO) <= 0) {
                 return ResponseEntity.badRequest()
                         .body(ApiResponse.error("지정가 주문은 가격을 입력해야 합니다."));
             }

@@ -2,6 +2,7 @@ package com.project.whalearc.market.controller;
 
 import com.project.whalearc.market.domain.AssetType;
 import com.project.whalearc.market.dto.CandlestickResponse;
+import com.project.whalearc.market.dto.IndicatorResponse;
 import com.project.whalearc.market.dto.IndexPriceResponse;
 import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.*;
@@ -161,6 +162,89 @@ public class MarketController {
         }
 
         return ResponseEntity.ok(indices);
+    }
+
+    /**
+     * 기술적 지표 조회
+     * indicators 파라미터 형식: "RSI:14,MACD:12:26:9,MA:20,MA:60,BOLLINGER:20:2"
+     * 콜론 뒤 숫자를 생략하면 기본값 적용 (RSI:14, MACD:12:26:9, MA:20, BOLLINGER:20:2)
+     */
+    @GetMapping("/indicators/{symbol}")
+    public ResponseEntity<List<IndicatorResponse>> getIndicators(
+            @PathVariable String symbol,
+            @RequestParam(defaultValue = "10m") String interval,
+            @RequestParam(required = false) String assetType,
+            @RequestParam String indicators
+    ) {
+        try {
+            List<CandlestickResponse> candles = candlestickService.getCandlesticks(symbol, interval, assetType);
+            if (candles.isEmpty()) {
+                return ResponseEntity.ok(List.of());
+            }
+
+            double[] closes = candles.stream().mapToDouble(CandlestickResponse::getClose).toArray();
+
+            List<IndicatorResponse> results = new ArrayList<>();
+
+            for (String token : indicators.split(",")) {
+                String[] parts = token.trim().split(":");
+                String type = parts[0].toUpperCase();
+
+                switch (type) {
+                    case "RSI" -> {
+                        int period = parts.length > 1 ? Integer.parseInt(parts[1]) : 14;
+                        double[] values = IndicatorCalculator.rsi(closes, period);
+                        results.add(new IndicatorResponse("RSI",
+                                Map.of("values", values),
+                                Map.of("period", period)));
+                    }
+                    case "MACD" -> {
+                        int fast = parts.length > 1 ? Integer.parseInt(parts[1]) : 12;
+                        int slow = parts.length > 2 ? Integer.parseInt(parts[2]) : 26;
+                        int sig = parts.length > 3 ? Integer.parseInt(parts[3]) : 9;
+                        IndicatorCalculator.MACDResult macd = IndicatorCalculator.macd(closes, fast, slow, sig);
+                        results.add(new IndicatorResponse("MACD",
+                                Map.of("macd", macd.getMacdLine(),
+                                        "signal", macd.getSignalLine(),
+                                        "histogram", macd.getHistogram()),
+                                Map.of("fast", fast, "slow", slow, "signal", sig)));
+                    }
+                    case "MA" -> {
+                        int period = parts.length > 1 ? Integer.parseInt(parts[1]) : 20;
+                        double[] values = IndicatorCalculator.sma(closes, period);
+                        results.add(new IndicatorResponse("MA",
+                                Map.of("values", values),
+                                Map.of("period", period)));
+                    }
+                    case "EMA" -> {
+                        int period = parts.length > 1 ? Integer.parseInt(parts[1]) : 20;
+                        double[] values = IndicatorCalculator.ema(closes, period);
+                        results.add(new IndicatorResponse("EMA",
+                                Map.of("values", values),
+                                Map.of("period", period)));
+                    }
+                    case "BOLLINGER", "BOLLINGER_BANDS" -> {
+                        int period = parts.length > 1 ? Integer.parseInt(parts[1]) : 20;
+                        double stdDev = parts.length > 2 ? Double.parseDouble(parts[2]) : 2.0;
+                        IndicatorCalculator.BollingerResult bb = IndicatorCalculator.bollingerBands(closes, period, stdDev);
+                        results.add(new IndicatorResponse("BOLLINGER",
+                                Map.of("upper", bb.getUpper(),
+                                        "middle", bb.getMiddle(),
+                                        "lower", bb.getLower()),
+                                Map.of("period", period, "stdDev", stdDev)));
+                    }
+                    default -> log.warn("지원하지 않는 지표 타입: {}", type);
+                }
+            }
+
+            return ResponseEntity.ok(results);
+        } catch (NumberFormatException e) {
+            log.warn("지표 파라미터 파싱 오류: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(List.of());
+        } catch (Exception e) {
+            log.error("지표 조회 실패 [{}/{}]: {}", symbol, interval, e.getMessage());
+            return ResponseEntity.internalServerError().body(List.of());
+        }
     }
 
     /** 캐시 상태 확인 (디버그/모니터링용) */

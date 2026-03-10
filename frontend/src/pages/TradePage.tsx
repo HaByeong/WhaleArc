@@ -54,6 +54,7 @@ const TradePage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'chart' | 'orders' | 'trades' | 'holdings'>('chart');
+  const [activeIndicators, setActiveIndicators] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -671,12 +672,44 @@ const TradePage = () => {
                   <div className="p-4">
                     {/* 차트 탭 */}
                     {activeTab === 'chart' && (
-                      <TradingChart
-                        symbol={liveSelectedStock.stockCode}
-                        price={liveSelectedStock.currentPrice}
-                        changeRate={liveSelectedStock.changeRate}
-                        assetType={isSelectedStock ? 'STOCK' : undefined}
-                      />
+                      <>
+                        {/* 지표 토글 */}
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          {[
+                            { key: 'MA5', label: 'MA5', color: '#f59e0b' },
+                            { key: 'MA20', label: 'MA20', color: '#3b82f6' },
+                            { key: 'MA60', label: 'MA60', color: '#a855f7' },
+                            { key: 'BOLLINGER', label: '볼린저', color: '#6366f1' },
+                            { key: 'RSI', label: 'RSI', color: '#8b5cf6' },
+                            { key: 'MACD', label: 'MACD', color: '#3b82f6' },
+                          ].map(ind => {
+                            const isActive = activeIndicators.includes(ind.key);
+                            return (
+                              <button
+                                key={ind.key}
+                                onClick={() => setActiveIndicators(prev =>
+                                  prev.includes(ind.key) ? prev.filter(k => k !== ind.key) : [...prev, ind.key]
+                                )}
+                                className={`px-2.5 py-1 text-[11px] font-semibold rounded-md border transition-all ${
+                                  isActive
+                                    ? 'text-white shadow-sm'
+                                    : 'text-gray-400 border-gray-200 hover:border-gray-300 hover:text-gray-500'
+                                }`}
+                                style={isActive ? { backgroundColor: ind.color, borderColor: ind.color } : {}}
+                              >
+                                {ind.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <TradingChart
+                          symbol={liveSelectedStock.stockCode}
+                          price={liveSelectedStock.currentPrice}
+                          changeRate={liveSelectedStock.changeRate}
+                          assetType={isSelectedStock ? 'STOCK' : undefined}
+                          activeIndicators={activeIndicators}
+                        />
+                      </>
                     )}
 
                     {/* 주문 내역 */}

@@ -1,15 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   createChart,
   CandlestickSeries,
   HistogramSeries,
+  LineSeries,
   type IChartApi,
   type ISeriesApi,
   type CandlestickData,
   type HistogramData,
+  type LineData,
   type Time,
 } from 'lightweight-charts';
 import { marketService, type Candlestick } from '../services/marketService';
+import {
+  sma, ema, rsi, macd, bollingerBands,
+  type IndicatorConfig,
+  INDICATOR_COLORS,
+} from '../utils/indicators';
 
 interface TradingChartProps {
   symbol: string;
@@ -17,6 +24,7 @@ interface TradingChartProps {
   changeRate: number;
   className?: string;
   assetType?: 'STOCK' | 'CRYPTO';
+  activeIndicators?: string[];
 }
 
 const INTERVALS = [
@@ -27,6 +35,18 @@ const INTERVALS = [
   { label: '24시간', value: '24h' },
 ];
 
+/** 지표 설정값 해석 */
+const INDICATOR_CONFIGS: Record<string, IndicatorConfig> = {
+  'MA5': { type: 'MA', period: 5, maType: 'SMA' },
+  'MA20': { type: 'MA', period: 20, maType: 'SMA' },
+  'MA60': { type: 'MA', period: 60, maType: 'SMA' },
+  'EMA12': { type: 'MA', period: 12, maType: 'EMA' },
+  'EMA26': { type: 'MA', period: 26, maType: 'EMA' },
+  'RSI': { type: 'RSI', period: 14 },
+  'MACD': { type: 'MACD', fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 },
+  'BOLLINGER': { type: 'BOLLINGER', period: 20, stdDev: 2 },
+};
+
 /** 가격대에 따라 소수점 정밀도 결정 */
 const getPriceFormat = (p: number, type?: string) => {
   if (type === 'STOCK') return { type: 'price' as const, precision: 0, minMove: 1 };
@@ -36,18 +56,40 @@ const getPriceFormat = (p: number, type?: string) => {
   return { type: 'price' as const, precision: 4, minMove: 0.0001 };
 };
 
-const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: TradingChartProps) => {
+const TradingChart = ({
+  symbol, price, changeRate, className = '', assetType,
+  activeIndicators = [],
+}: TradingChartProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const rsiContainerRef = useRef<HTMLDivElement>(null);
+  const macdContainerRef = useRef<HTMLDivElement>(null);
+
   const chartRef = useRef<IChartApi | null>(null);
+  const rsiChartRef = useRef<IChartApi | null>(null);
+  const macdChartRef = useRef<IChartApi | null>(null);
+
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+
+  // 오버레이 시리즈 참조 (MA, 볼린저)
+  const overlaySeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
+  // RSI/MACD 시리즈 참조
+  const rsiSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const macdLineRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const macdSignalRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+
   const dataRef = useRef<CandlestickData<Time>[]>([]);
+  const rawCandlesRef = useRef<Candlestick[]>([]);
   const prevSymbolRef = useRef('');
   const prevIntervalRef = useRef('');
   const [interval, setInterval] = useState('10m');
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
-  // 차트 생성
+  const showRSI = activeIndicators.includes('RSI');
+  const showMACD = activeIndicators.includes('MACD');
+
+  // ─── 메인 차트 생성 ────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -78,18 +120,11 @@ const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: 
       },
       crosshair: {
         mode: 0,
-        horzLine: {
-          color: 'rgba(107, 114, 128, 0.2)',
-          labelBackgroundColor: '#374151',
-        },
-        vertLine: {
-          color: 'rgba(107, 114, 128, 0.2)',
-          labelBackgroundColor: '#374151',
-        },
+        horzLine: { color: 'rgba(107, 114, 128, 0.2)', labelBackgroundColor: '#374151' },
+        vertLine: { color: 'rgba(107, 114, 128, 0.2)', labelBackgroundColor: '#374151' },
       },
     });
 
-    // 캔들스틱 시리즈
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#ef4444',
       downColor: '#3b82f6',
@@ -105,7 +140,6 @@ const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: 
       priceFormat: getPriceFormat(price, assetType),
     });
 
-    // 거래량 시리즈
     const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
       priceScaleId: 'volume',
@@ -132,8 +166,207 @@ const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: 
       chartRef.current = null;
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
+      overlaySeriesRef.current.clear();
     };
   }, []);
+
+  // ─── RSI 차트 생성/제거 ────────────────────────────────
+  useEffect(() => {
+    if (showRSI && rsiContainerRef.current && !rsiChartRef.current) {
+      const rChart = createChart(rsiContainerRef.current, {
+        layout: { background: { color: '#ffffff' }, textColor: '#6b7280', fontFamily: "'Pretendard', sans-serif", fontSize: 10, attributionLogo: false },
+        grid: { vertLines: { color: '#f9fafb' }, horzLines: { color: '#f3f4f6' } },
+        width: rsiContainerRef.current.clientWidth,
+        height: 100,
+        timeScale: { visible: false },
+        rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.1, bottom: 0.1 } },
+        crosshair: { mode: 0 },
+      });
+
+      const rsiLine = rChart.addSeries(LineSeries, {
+        color: INDICATOR_COLORS['RSI'],
+        lineWidth: 1,
+        priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
+        lastValueVisible: true,
+        crosshairMarkerVisible: false,
+      });
+
+      rsiChartRef.current = rChart;
+      rsiSeriesRef.current = rsiLine;
+
+      const obs = new ResizeObserver((entries) => {
+        for (const e of entries) rChart.applyOptions({ width: e.contentRect.width });
+      });
+      obs.observe(rsiContainerRef.current);
+
+      return () => { obs.disconnect(); };
+    }
+
+    if (!showRSI && rsiChartRef.current) {
+      rsiChartRef.current.remove();
+      rsiChartRef.current = null;
+      rsiSeriesRef.current = null;
+    }
+  }, [showRSI]);
+
+  // ─── MACD 차트 생성/제거 ───────────────────────────────
+  useEffect(() => {
+    if (showMACD && macdContainerRef.current && !macdChartRef.current) {
+      const mChart = createChart(macdContainerRef.current, {
+        layout: { background: { color: '#ffffff' }, textColor: '#6b7280', fontFamily: "'Pretendard', sans-serif", fontSize: 10, attributionLogo: false },
+        grid: { vertLines: { color: '#f9fafb' }, horzLines: { color: '#f3f4f6' } },
+        width: macdContainerRef.current.clientWidth,
+        height: 100,
+        timeScale: { visible: false },
+        rightPriceScale: { borderVisible: false },
+        crosshair: { mode: 0 },
+      });
+
+      const macdLine = mChart.addSeries(LineSeries, {
+        color: INDICATOR_COLORS['MACD'],
+        lineWidth: 1,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      });
+
+      const signalLine = mChart.addSeries(LineSeries, {
+        color: INDICATOR_COLORS['MACD_SIGNAL'],
+        lineWidth: 1,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      });
+
+      const histSeries = mChart.addSeries(HistogramSeries, {
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      });
+
+      macdChartRef.current = mChart;
+      macdLineRef.current = macdLine;
+      macdSignalRef.current = signalLine;
+      macdHistRef.current = histSeries;
+
+      const obs = new ResizeObserver((entries) => {
+        for (const e of entries) mChart.applyOptions({ width: e.contentRect.width });
+      });
+      obs.observe(macdContainerRef.current);
+
+      return () => { obs.disconnect(); };
+    }
+
+    if (!showMACD && macdChartRef.current) {
+      macdChartRef.current.remove();
+      macdChartRef.current = null;
+      macdLineRef.current = null;
+      macdSignalRef.current = null;
+      macdHistRef.current = null;
+    }
+  }, [showMACD]);
+
+  // ─── 지표 계산 및 차트 적용 ────────────────────────────
+  const applyIndicators = useCallback(() => {
+    const chart = chartRef.current;
+    if (!chart || rawCandlesRef.current.length === 0) return;
+
+    const candles = rawCandlesRef.current;
+    const closes = candles.map(c => c.close);
+    const times = candles.map(c => c.time as Time);
+
+    // 기존 오버레이 시리즈 제거
+    overlaySeriesRef.current.forEach((series) => {
+      try { chart.removeSeries(series); } catch { /* ignore */ }
+    });
+    overlaySeriesRef.current.clear();
+
+    // MA 오버레이
+    for (const key of activeIndicators) {
+      const config = INDICATOR_CONFIGS[key];
+      if (!config || config.type !== 'MA') continue;
+
+      const values = config.maType === 'EMA' ? ema(closes, config.period) : sma(closes, config.period);
+      const lineData: LineData<Time>[] = [];
+      for (let i = 0; i < values.length; i++) {
+        if (!isNaN(values[i])) lineData.push({ time: times[i], value: values[i] });
+      }
+
+      const series = chart.addSeries(LineSeries, {
+        color: INDICATOR_COLORS[key] || '#9ca3af',
+        lineWidth: 1,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+        priceLineVisible: false,
+      });
+      series.setData(lineData);
+      overlaySeriesRef.current.set(key, series);
+    }
+
+    // 볼린저 밴드 오버레이
+    if (activeIndicators.includes('BOLLINGER')) {
+      const bb = bollingerBands(closes, 20, 2);
+      const bands = [
+        { key: 'BOLLINGER_UPPER', data: bb.upper },
+        { key: 'BOLLINGER_MIDDLE', data: bb.middle },
+        { key: 'BOLLINGER_LOWER', data: bb.lower },
+      ];
+
+      for (const band of bands) {
+        const lineData: LineData<Time>[] = [];
+        for (let i = 0; i < band.data.length; i++) {
+          if (!isNaN(band.data[i])) lineData.push({ time: times[i], value: band.data[i] });
+        }
+
+        const series = chart.addSeries(LineSeries, {
+          color: INDICATOR_COLORS[band.key] || '#6366f1',
+          lineWidth: band.key === 'BOLLINGER_MIDDLE' ? 1 : 1,
+          lineStyle: band.key === 'BOLLINGER_MIDDLE' ? 2 : 0, // 중간선 점선
+          lastValueVisible: false,
+          crosshairMarkerVisible: false,
+          priceLineVisible: false,
+        });
+        series.setData(lineData);
+        overlaySeriesRef.current.set(band.key, series);
+      }
+    }
+
+    // RSI 서브차트
+    if (showRSI && rsiSeriesRef.current) {
+      const rsiResult = rsi(closes, 14);
+      const rsiData: LineData<Time>[] = [];
+      for (let i = 0; i < rsiResult.values.length; i++) {
+        if (!isNaN(rsiResult.values[i])) rsiData.push({ time: times[i], value: rsiResult.values[i] });
+      }
+      rsiSeriesRef.current.setData(rsiData);
+    }
+
+    // MACD 서브차트
+    if (showMACD && macdLineRef.current && macdSignalRef.current && macdHistRef.current) {
+      const macdResult = macd(closes, 12, 26, 9);
+      const macdData: LineData<Time>[] = [];
+      const signalData: LineData<Time>[] = [];
+      const histData: HistogramData<Time>[] = [];
+
+      for (let i = 0; i < macdResult.macd.length; i++) {
+        if (!isNaN(macdResult.macd[i])) macdData.push({ time: times[i], value: macdResult.macd[i] });
+        if (!isNaN(macdResult.signal[i])) signalData.push({ time: times[i], value: macdResult.signal[i] });
+        if (!isNaN(macdResult.histogram[i])) {
+          histData.push({
+            time: times[i],
+            value: macdResult.histogram[i],
+            color: macdResult.histogram[i] >= 0 ? 'rgba(239, 68, 68, 0.5)' : 'rgba(59, 130, 246, 0.5)',
+          });
+        }
+      }
+
+      macdLineRef.current.setData(macdData);
+      macdSignalRef.current.setData(signalData);
+      macdHistRef.current.setData(histData);
+    }
+  }, [activeIndicators, showRSI, showMACD]);
+
+  // 지표 변경 시 재적용
+  useEffect(() => {
+    if (historyLoaded) applyIndicators();
+  }, [activeIndicators, historyLoaded, applyIndicators]);
 
   // 종목 변경 시 가격 정밀도 업데이트
   useEffect(() => {
@@ -142,12 +375,13 @@ const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: 
     }
   }, [symbol, price, assetType]);
 
-  // 캔들 데이터 로드
+  // ─── 캔들 데이터 로드 ──────────────────────────────────
   useEffect(() => {
     if (prevSymbolRef.current === symbol && prevIntervalRef.current === interval) return;
     prevSymbolRef.current = symbol;
     prevIntervalRef.current = interval;
     dataRef.current = [];
+    rawCandlesRef.current = [];
     setHistoryLoaded(false);
     if (candleSeriesRef.current) candleSeriesRef.current.setData([]);
     if (volumeSeriesRef.current) volumeSeriesRef.current.setData([]);
@@ -156,13 +390,14 @@ const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: 
       .then((candles: Candlestick[]) => {
         if (!candleSeriesRef.current || prevSymbolRef.current !== symbol) return;
 
-        // 중복 시간 제거 + 정렬
         const seen = new Set<number>();
         const uniqueCandles = candles.filter(c => {
           if (seen.has(c.time)) return false;
           seen.add(c.time);
           return true;
         });
+
+        rawCandlesRef.current = uniqueCandles;
 
         const candleData: CandlestickData<Time>[] = uniqueCandles.map(c => ({
           time: c.time as Time,
@@ -182,7 +417,6 @@ const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: 
         candleSeriesRef.current!.setData(candleData);
         volumeSeriesRef.current!.setData(volumeData);
 
-        // 최근 100개 캔들만 보이도록 범위 설정
         if (candleData.length > 100) {
           const from = candleData[candleData.length - 100].time;
           const to = candleData[candleData.length - 1].time;
@@ -195,42 +429,27 @@ const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: 
       .catch(() => setHistoryLoaded(true));
   }, [symbol, interval, assetType]);
 
-  // 실시간 가격 업데이트
+  // ─── 실시간 가격 업데이트 ──────────────────────────────
   useEffect(() => {
     if (!candleSeriesRef.current || !historyLoaded || !price || price === 0) return;
     const now = Math.floor(Date.now() / 1000) as Time;
     const lastCandle = dataRef.current[dataRef.current.length - 1];
 
     if (lastCandle && (lastCandle.time as number) > (now as number)) {
-      // 시간 역전 방지
       const forcedTime = ((lastCandle.time as number) + 1) as Time;
-      const updatedCandle: CandlestickData<Time> = {
-        time: forcedTime,
-        open: price,
-        high: price,
-        low: price,
-        close: price,
-      };
+      const updatedCandle: CandlestickData<Time> = { time: forcedTime, open: price, high: price, low: price, close: price };
       dataRef.current.push(updatedCandle);
       candleSeriesRef.current.update(updatedCandle);
       return;
     }
 
     if (lastCandle && lastCandle.time === now) {
-      // 같은 시간 → 캔들 업데이트
       lastCandle.high = Math.max(lastCandle.high, price);
       lastCandle.low = Math.min(lastCandle.low, price);
       lastCandle.close = price;
       candleSeriesRef.current.update(lastCandle);
     } else {
-      // 새 캔들
-      const newCandle: CandlestickData<Time> = {
-        time: now,
-        open: price,
-        high: price,
-        low: price,
-        close: price,
-      };
+      const newCandle: CandlestickData<Time> = { time: now, open: price, high: price, low: price, close: price };
       dataRef.current.push(newCandle);
       candleSeriesRef.current.update(newCandle);
     }
@@ -270,10 +489,42 @@ const TradingChart = ({ symbol, price, changeRate, className = '', assetType }: 
         )}
       </div>
 
-      {/* 차트 영역 */}
+      {/* 메인 차트 */}
       <div className="relative">
         <div ref={containerRef} className="rounded-lg overflow-hidden border border-gray-100" />
       </div>
+
+      {/* RSI 서브차트 */}
+      {showRSI && (
+        <div className="mt-1">
+          <div className="flex items-center justify-between px-1 mb-0.5">
+            <span className="text-[10px] font-semibold text-gray-400">RSI (14)</span>
+            <div className="flex gap-3 text-[9px] text-gray-300">
+              <span>과매수 70</span>
+              <span>과매도 30</span>
+            </div>
+          </div>
+          <div ref={rsiContainerRef} className="rounded-lg overflow-hidden border border-gray-100" />
+        </div>
+      )}
+
+      {/* MACD 서브차트 */}
+      {showMACD && (
+        <div className="mt-1">
+          <div className="flex items-center gap-3 px-1 mb-0.5">
+            <span className="text-[10px] font-semibold text-gray-400">MACD (12, 26, 9)</span>
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-0.5 bg-blue-500 rounded" />
+              <span className="text-[9px] text-gray-300">MACD</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-0.5 bg-red-500 rounded" />
+              <span className="text-[9px] text-gray-300">Signal</span>
+            </div>
+          </div>
+          <div ref={macdContainerRef} className="rounded-lg overflow-hidden border border-gray-100" />
+        </div>
+      )}
     </div>
   );
 };

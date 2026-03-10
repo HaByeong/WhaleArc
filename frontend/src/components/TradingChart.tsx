@@ -348,7 +348,7 @@ const TradingChart = ({
 
     // ─ 일목균형표 오버레이
     if (activeIndicators.includes('ICHIMOKU')) {
-      const ichi = ichimoku(highs, lows);
+      const ichi = ichimoku(highs, lows, closes);
       addOverlay('ICHIMOKU_TENKAN', ichi.tenkan, { color: INDICATOR_COLORS['ICHIMOKU_TENKAN'] });
       addOverlay('ICHIMOKU_KIJUN', ichi.kijun, { color: INDICATOR_COLORS['ICHIMOKU_KIJUN'] });
       addOverlay('ICHIMOKU_SENKOU_A', ichi.senkouA, { color: INDICATOR_COLORS['ICHIMOKU_SENKOU_A'], lineStyle: 2 });

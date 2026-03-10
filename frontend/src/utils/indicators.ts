@@ -403,7 +403,7 @@ export interface IchimokuResult {
 }
 
 export function ichimoku(
-  highs: number[], lows: number[],
+  highs: number[], lows: number[], closes: number[],
   tenkanP = 9, kijunP = 26, senkouBP = 52
 ): IchimokuResult {
   const len = highs.length;
@@ -438,9 +438,9 @@ export function ichimoku(
   for (let i = senkouBP - 1; i < len; i++)
     senkouB[i] = midpoint(i - senkouBP + 1, senkouBP);
 
-  // 후행스팬 = 현재 종가를 26봉 앞에 표시 (데이터 범위 내에서)
+  // 후행스팬 = 현재 종가를 26봉 뒤로 이동
   for (let i = kijunP; i < len; i++)
-    chikou[i - kijunP] = highs[i]; // close 근사 (high 사용)
+    chikou[i - kijunP] = closes[i];
 
   return { tenkan, kijun, senkouA, senkouB, chikou };
 }

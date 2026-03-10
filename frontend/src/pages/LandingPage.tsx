@@ -29,6 +29,7 @@ const LandingPage = () => {
             <Link to="/" className="flex items-center space-x-2">
               <WhaleTailLogo size={40} />
               <span className="text-xl ml-1 whalearc-text">WHALEARC</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-400 text-white">BETA</span>
             </Link>
             
             {session ? (

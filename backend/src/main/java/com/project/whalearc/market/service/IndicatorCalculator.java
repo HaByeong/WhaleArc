@@ -390,6 +390,76 @@ public final class IndicatorCalculator {
         return result;
     }
 
+    // ── Ichimoku (일목균형표) ──
+
+    /**
+     * Ichimoku Cloud (일목균형표)
+     * - tenkan (전환선): (최고 + 최저) / 2 over tenkanPeriod
+     * - kijun (기준선): (최고 + 최저) / 2 over kijunPeriod
+     * - senkouA (선행스팬A): (tenkan + kijun) / 2, kijunPeriod만큼 앞으로 이동
+     * - senkouB (선행스팬B): (최고 + 최저) / 2 over senkouBPeriod, kijunPeriod만큼 앞으로 이동
+     * - chikou (후행스팬): 종가를 kijunPeriod만큼 뒤로 이동
+     */
+    public static IchimokuResult ichimoku(double[] highs, double[] lows, double[] closes,
+                                           int tenkanPeriod, int kijunPeriod, int senkouBPeriod) {
+        int len = closes.length;
+        double[] tenkan = new double[len];
+        double[] kijun = new double[len];
+        double[] senkouA = new double[len];
+        double[] senkouB = new double[len];
+        double[] chikou = new double[len];
+        Arrays.fill(tenkan, Double.NaN);
+        Arrays.fill(kijun, Double.NaN);
+        Arrays.fill(senkouA, Double.NaN);
+        Arrays.fill(senkouB, Double.NaN);
+        Arrays.fill(chikou, Double.NaN);
+
+        // 전환선
+        for (int i = tenkanPeriod - 1; i < len; i++) {
+            double hh = Double.NEGATIVE_INFINITY, ll = Double.POSITIVE_INFINITY;
+            for (int j = i - tenkanPeriod + 1; j <= i; j++) {
+                hh = Math.max(hh, highs[j]);
+                ll = Math.min(ll, lows[j]);
+            }
+            tenkan[i] = (hh + ll) / 2.0;
+        }
+
+        // 기준선
+        for (int i = kijunPeriod - 1; i < len; i++) {
+            double hh = Double.NEGATIVE_INFINITY, ll = Double.POSITIVE_INFINITY;
+            for (int j = i - kijunPeriod + 1; j <= i; j++) {
+                hh = Math.max(hh, highs[j]);
+                ll = Math.min(ll, lows[j]);
+            }
+            kijun[i] = (hh + ll) / 2.0;
+        }
+
+        // 선행스팬A: (전환선 + 기준선) / 2 — kijunPeriod 앞으로 이동 (현재 데이터 범위 내만)
+        for (int i = kijunPeriod - 1; i < len; i++) {
+            if (!Double.isNaN(tenkan[i]) && !Double.isNaN(kijun[i])) {
+                int target = i; // 실제로는 i + kijunPeriod이지만 배열 범위 내에서만
+                senkouA[target] = (tenkan[i] + kijun[i]) / 2.0;
+            }
+        }
+
+        // 선행스팬B: senkouBPeriod 기간의 (최고+최저)/2
+        for (int i = senkouBPeriod - 1; i < len; i++) {
+            double hh = Double.NEGATIVE_INFINITY, ll = Double.POSITIVE_INFINITY;
+            for (int j = i - senkouBPeriod + 1; j <= i; j++) {
+                hh = Math.max(hh, highs[j]);
+                ll = Math.min(ll, lows[j]);
+            }
+            senkouB[i] = (hh + ll) / 2.0;
+        }
+
+        // 후행스팬: 종가를 kijunPeriod만큼 뒤로
+        for (int i = 0; i < len - kijunPeriod; i++) {
+            chikou[i] = closes[i + kijunPeriod];
+        }
+
+        return new IchimokuResult(tenkan, kijun, senkouA, senkouB, chikou);
+    }
+
     // ── 결과 DTO ──
 
     @Getter
@@ -413,5 +483,15 @@ public final class IndicatorCalculator {
     public static class StochasticResult {
         private final double[] k;
         private final double[] d;
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public static class IchimokuResult {
+        private final double[] tenkan;
+        private final double[] kijun;
+        private final double[] senkouA;
+        private final double[] senkouB;
+        private final double[] chikou;
     }
 }

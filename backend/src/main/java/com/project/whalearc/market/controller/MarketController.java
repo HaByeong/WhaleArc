@@ -170,7 +170,7 @@ public class MarketController {
      * 콜론 뒤 숫자를 생략하면 기본값 적용 (RSI:14, MACD:12:26:9, MA:20, BOLLINGER:20:2)
      */
     @GetMapping("/indicators/{symbol}")
-    public ResponseEntity<List<IndicatorResponse>> getIndicators(
+    public ResponseEntity<?> getIndicators(
             @PathVariable String symbol,
             @RequestParam(defaultValue = "10m") String interval,
             @RequestParam(required = false) String assetType,
@@ -285,11 +285,42 @@ public class MarketController {
                                 Map.of("values", values),
                                 Map.of("af", af, "maxAf", maxAf)));
                     }
+                    case "ICHIMOKU" -> {
+                        int tenkan = parts.length > 1 ? Integer.parseInt(parts[1]) : 9;
+                        int kijun = parts.length > 2 ? Integer.parseInt(parts[2]) : 26;
+                        int senkouB = parts.length > 3 ? Integer.parseInt(parts[3]) : 52;
+                        IndicatorCalculator.IchimokuResult ich = IndicatorCalculator.ichimoku(highs, lows, closes, tenkan, kijun, senkouB);
+                        results.add(new IndicatorResponse("ICHIMOKU",
+                                Map.of("tenkan", ich.getTenkan(),
+                                        "kijun", ich.getKijun(),
+                                        "senkouA", ich.getSenkouA(),
+                                        "senkouB", ich.getSenkouB(),
+                                        "chikou", ich.getChikou()),
+                                Map.of("tenkan", tenkan, "kijun", kijun, "senkouB", senkouB)));
+                    }
                     default -> log.warn("지원하지 않는 지표 타입: {}", type);
                 }
             }
 
-            return ResponseEntity.ok(results);
+            // NaN → null 변환 (JSON 직렬화 호환)
+            List<Map<String, Object>> sanitized = new ArrayList<>();
+            for (IndicatorResponse ir : results) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("type", ir.getType());
+                Map<String, List<Double>> cleanData = new LinkedHashMap<>();
+                for (var e : ir.getData().entrySet()) {
+                    List<Double> vals = new ArrayList<>();
+                    for (double v : e.getValue()) {
+                        vals.add(Double.isNaN(v) ? null : v);
+                    }
+                    cleanData.put(e.getKey(), vals);
+                }
+                entry.put("data", cleanData);
+                entry.put("parameters", ir.getParameters());
+                sanitized.add(entry);
+            }
+
+            return ResponseEntity.ok(sanitized);
         } catch (NumberFormatException e) {
             log.warn("지표 파라미터 파싱 오류: {}", e.getMessage());
             return ResponseEntity.badRequest().body(List.of());

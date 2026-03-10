@@ -1,8 +1,11 @@
 package com.project.whalearc.strategy.controller;
 
 import com.project.whalearc.strategy.domain.Strategy;
+import com.project.whalearc.strategy.dto.BacktestRequest;
+import com.project.whalearc.strategy.dto.BacktestResponse;
 import com.project.whalearc.strategy.dto.StrategyRequest;
 import com.project.whalearc.strategy.dto.StrategyResponse;
+import com.project.whalearc.strategy.service.BacktestService;
 import com.project.whalearc.strategy.service.StrategyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +22,7 @@ import java.util.Map;
 public class StrategyController {
 
     private final StrategyService strategyService;
+    private final BacktestService backtestService;
 
     @GetMapping
     public ResponseEntity<Map<String, Object>> getStrategies(@AuthenticationPrincipal Jwt jwt) {
@@ -55,6 +59,20 @@ public class StrategyController {
         String userId = jwt.getSubject();
         strategyService.deleteStrategy(userId, strategyId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/backtest")
+    public ResponseEntity<?> runBacktest(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody BacktestRequest request) {
+        try {
+            BacktestResponse result = backtestService.runBacktest(request);
+            return ResponseEntity.ok(Map.of("data", result));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", "백테스팅 실행 중 오류: " + e.getMessage()));
+        }
     }
 
     @PostMapping("/{strategyId}/apply")

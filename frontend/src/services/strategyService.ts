@@ -37,6 +37,14 @@ export interface BacktestRequest {
   startDate: string;
   endDate: string;
   initialCapital: number;
+  stopLossPercent?: number;
+  takeProfitPercent?: number;
+  trailingStopPercent?: number;
+  slippagePercent?: number;
+  positionSizing?: string;
+  positionValue?: number;
+  commissionRate?: number;
+  assetType?: string;
 }
 
 export interface BacktestResult {
@@ -59,11 +67,52 @@ export interface BacktestResult {
   losingTrades: number;
   dailyReturns: DailyReturn[];
   equityCurve: EquityPoint[];
+  trades?: BacktestTrade[];
+  buyHoldReturnRate?: number;
+  buyHoldCurve?: EquityPoint[];
+  // 고급 지표
+  profitFactor?: number;
+  sortinoRatio?: number;
+  cagr?: number;
+  avgWin?: number;
+  avgLoss?: number;
+  avgWinRate?: number;
+  avgLossRate?: number;
+  maxConsecutiveWins?: number;
+  maxConsecutiveLosses?: number;
+  avgHoldingDays?: number;
+  maxDrawdownDuration?: number;
+  recoveryFactor?: number;
+  payoffRatio?: number;
+  // 차트 데이터
+  drawdownCurve?: EquityPoint[];
+  priceData?: PricePoint[];
+}
+
+export interface BacktestTrade {
+  date: string;
+  type: 'BUY' | 'SELL';
+  price: number;
+  quantity: number;
+  pnl: number;
+  pnlPercent?: number;
+  reason: string;
+  holdingDays?: number;
+  balance?: number;
+}
+
+export interface PricePoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
 }
 
 export interface DailyReturn {
   date: string;
-  return: number;
+  dailyReturn: number;
   cumulativeReturn: number;
   portfolioValue: number;
 }
@@ -77,6 +126,18 @@ export interface IndicatorData {
   date: string;
   price: number;
   value: number;
+  // 복합 지표 추가 필드
+  value2?: number;  // MACD signal, Bollinger upper, Stochastic D, Ichimoku kijun
+  value3?: number;  // MACD histogram, Bollinger lower, Ichimoku senkouA
+  value4?: number;  // Ichimoku senkouB
+  value5?: number;  // Ichimoku chikou
+}
+
+// 백엔드 지표 응답 원본
+interface IndicatorRawResponse {
+  type: string;
+  data: Record<string, number[]>;
+  parameters: Record<string, number>;
 }
 
 // API 서비스
@@ -128,21 +189,56 @@ export const strategyService = {
     return response.data.data;
   },
 
-  // 기술적 지표 데이터 조회
+  // 기술적 지표 데이터 조회 (캔들스틱 + 지표 API 병렬 호출)
   getIndicatorData: async (
     stockCode: string,
     indicatorType: string,
-    startDate: string,
-    endDate: string
+    assetType?: string,
   ): Promise<IndicatorData[]> => {
-    const response = await apiClient.get(`/api/indicators/${stockCode}`, {
-      params: {
-        type: indicatorType,
-        startDate,
-        endDate,
-      },
-    });
-    return response.data.data;
+    const interval = assetType === 'STOCK' ? '1d' : '24h';
+    const params: Record<string, string> = { interval, indicators: indicatorType };
+    if (assetType) params.assetType = assetType;
+
+    const [candleRes, indicatorRes] = await Promise.all([
+      apiClient.get(`/api/market/candlestick/${stockCode}`, { params: { interval, assetType } }),
+      apiClient.get(`/api/market/indicators/${stockCode}`, { params }),
+    ]);
+
+    const candles: { time: number; close: number }[] = candleRes.data;
+    const indicators: IndicatorRawResponse[] = indicatorRes.data;
+    const ind = indicators[0];
+    if (!ind || candles.length === 0) return [];
+
+    return candles.map((c, i) => {
+      const date = new Date(c.time * 1000).toISOString().split('T')[0];
+      const price = c.close;
+      const entry: IndicatorData = { date, price, value: 0 };
+
+      // 지표 타입별 데이터 매핑
+      const d = ind.data;
+      if (ind.type === 'MACD') {
+        entry.value = d.macd?.[i] ?? NaN;
+        entry.value2 = d.signal?.[i] ?? NaN;
+        entry.value3 = d.histogram?.[i] ?? NaN;
+      } else if (ind.type === 'BOLLINGER') {
+        entry.value = d.middle?.[i] ?? NaN;
+        entry.value2 = d.upper?.[i] ?? NaN;
+        entry.value3 = d.lower?.[i] ?? NaN;
+      } else if (ind.type === 'STOCHASTIC') {
+        entry.value = d.k?.[i] ?? NaN;
+        entry.value2 = d.d?.[i] ?? NaN;
+      } else if (ind.type === 'ICHIMOKU') {
+        entry.value = d.tenkan?.[i] ?? NaN;
+        entry.value2 = d.kijun?.[i] ?? NaN;
+        entry.value3 = d.senkouA?.[i] ?? NaN;
+        entry.value4 = d.senkouB?.[i] ?? NaN;
+        entry.value5 = d.chikou?.[i] ?? NaN;
+      } else {
+        entry.value = d.values?.[i] ?? NaN;
+      }
+
+      return entry;
+    }).filter(e => !isNaN(e.value));
   },
 };
 

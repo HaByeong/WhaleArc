@@ -14,7 +14,6 @@ import org.springframework.web.client.RestTemplate;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -60,7 +59,7 @@ public class CandlestickService {
         return getCryptoCandlesticks(symbol, interval);
     }
 
-    /** 국내주식 일봉 (KIS API) */
+    /** 국내주식 일봉 (KIS API) — 최대 2년치 데이터를 3개월 단위로 반복 조회 */
     private List<CandlestickResponse> getStockCandlesticks(String stockCode) {
         if (!kisApiClient.isConfigured()) {
             return List.of();
@@ -68,32 +67,53 @@ public class CandlestickService {
 
         try {
             DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
-            String endDate = LocalDate.now().format(fmt);
-            String startDate = LocalDate.now().minusMonths(3).format(fmt);
+            LocalDate now = LocalDate.now();
+            List<CandlestickResponse> allResults = new ArrayList<>();
 
-            List<Map<String, String>> candles = kisApiClient.getStockDailyCandles(stockCode, startDate, endDate);
-            if (candles == null || candles.isEmpty()) return List.of();
+            // 3개월 단위로 최대 2년(8구간) 반복 조회
+            for (int i = 0; i < 8; i++) {
+                LocalDate chunkEnd = now.minusMonths(3L * i);
+                LocalDate chunkStart = now.minusMonths(3L * (i + 1)).plusDays(1);
 
-            List<CandlestickResponse> result = new ArrayList<>();
-            for (Map<String, String> c : candles) {
-                String dateStr = c.get("stck_bsop_date"); // YYYYMMDD
-                if (dateStr == null || dateStr.isEmpty()) continue;
+                List<Map<String, String>> candles = kisApiClient.getStockDailyCandles(
+                        stockCode, chunkStart.format(fmt), chunkEnd.format(fmt));
 
-                LocalDate date = LocalDate.parse(dateStr, fmt);
-                long time = date.atStartOfDay().toEpochSecond(java.time.ZoneOffset.of("+09:00"));
-                double open = parseDouble(c.get("stck_oprc"));
-                double high = parseDouble(c.get("stck_hgpr"));
-                double low = parseDouble(c.get("stck_lwpr"));
-                double close = parseDouble(c.get("stck_clpr"));
-                double volume = parseDouble(c.get("acml_vol"));
+                if (candles == null || candles.isEmpty()) break;
 
-                result.add(new CandlestickResponse(time, open, high, low, close, volume));
+                for (Map<String, String> c : candles) {
+                    String dateStr = c.get("stck_bsop_date");
+                    if (dateStr == null || dateStr.isEmpty()) continue;
+
+                    LocalDate date = LocalDate.parse(dateStr, fmt);
+                    long time = date.atStartOfDay().toEpochSecond(java.time.ZoneOffset.of("+09:00"));
+                    double open = parseDouble(c.get("stck_oprc"));
+                    double high = parseDouble(c.get("stck_hgpr"));
+                    double low = parseDouble(c.get("stck_lwpr"));
+                    double close = parseDouble(c.get("stck_clpr"));
+                    double volume = parseDouble(c.get("acml_vol"));
+
+                    allResults.add(new CandlestickResponse(time, open, high, low, close, volume));
+                }
+
+                // KIS API 호출 간격 제한 준수 (초당 제한 방지)
+                if (i < 7) {
+                    try { Thread.sleep(200); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                }
             }
 
-            // KIS API는 최신순 → 오래된순으로 정렬
-            Collections.reverse(result);
-            log.debug("주식 일봉 {}개 조회: {}", result.size(), stockCode);
-            return result;
+            // 시간순 정렬 + 중복 제거
+            allResults.sort(java.util.Comparator.comparingLong(CandlestickResponse::getTime));
+            List<CandlestickResponse> deduped = new ArrayList<>();
+            long prevTime = -1;
+            for (CandlestickResponse cr : allResults) {
+                if (cr.getTime() != prevTime) {
+                    deduped.add(cr);
+                    prevTime = cr.getTime();
+                }
+            }
+
+            log.info("주식 일봉 {}개 조회 (최대 2년): {}", deduped.size(), stockCode);
+            return deduped;
         } catch (Exception e) {
             log.error("주식 캔들스틱 조회 실패 [{}]: {}", stockCode, e.getMessage());
             return List.of();

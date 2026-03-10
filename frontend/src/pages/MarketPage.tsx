@@ -74,6 +74,25 @@ const MarketPage = () => {
 
   useEffect(() => {
     loadData();
+
+    // 주식 탭: 30초마다 시세 갱신 (코인은 WebSocket 사용)
+    if (assetType === 'STOCK') {
+      const interval = setInterval(async () => {
+        try {
+          const prices = await marketService.getPrices('STOCK');
+          setAssetList(prices);
+          // 선택된 종목도 갱신
+          setSelectedAsset(prev => {
+            if (!prev) return prev;
+            const updated = prices.find(p => p.symbol === prev.symbol);
+            return updated || prev;
+          });
+        } catch {
+          // 갱신 실패 시 기존 데이터 유지
+        }
+      }, 30_000);
+      return () => clearInterval(interval);
+    }
   }, [assetType]);
 
   // 실시간 데이터로 목록 병합

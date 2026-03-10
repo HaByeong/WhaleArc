@@ -61,8 +61,8 @@ const ErrorMessage = ({
 
       <div className="relative z-10">
         {/* 고래 이미지 */}
-        <div className="w-16 h-16 mx-auto mb-4 opacity-60">
-          <img src={whale} alt="" className="w-full h-full object-contain" />
+        <div className="w-16 h-16 mx-auto mb-4 opacity-60 flex items-center justify-center text-3xl">
+          <img src={whale} alt="" className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; e.currentTarget.parentElement!.textContent = '🐋'; }} />
         </div>
 
         <p className={`${style.titleColor} text-sm font-bold tracking-wide mb-1`}>{title}</p>

@@ -4,6 +4,7 @@ import com.project.whalearc.notification.domain.Notification;
 import com.project.whalearc.notification.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -35,7 +36,7 @@ public class NotificationService {
     }
 
     public List<Notification> getNotifications(String userId) {
-        return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, 50));
     }
 
     public long getUnreadCount(String userId) {
@@ -53,12 +54,12 @@ public class NotificationService {
     }
 
     public void markAllAsRead(String userId) {
-        List<Notification> notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
-        notifications.stream()
+        List<Notification> unread = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId)
+                .stream()
                 .filter(n -> !n.isRead())
-                .forEach(n -> {
-                    n.setRead(true);
-                    notificationRepository.save(n);
-                });
+                .toList();
+        if (unread.isEmpty()) return;
+        unread.forEach(n -> n.setRead(true));
+        notificationRepository.saveAll(unread);
     }
 }

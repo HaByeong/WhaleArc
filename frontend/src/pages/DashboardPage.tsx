@@ -453,9 +453,9 @@ const DashboardPage = () => {
         </div>
 
         {/* 하단: 관심 종목 + 빠른 액션 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* 관심 종목 */}
-          <div className="lg:col-span-2 card">
+          <div className="md:col-span-2 lg:col-span-2 card">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-whale-dark">관심 종목</h2>
               <button

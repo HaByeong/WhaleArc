@@ -41,4 +41,10 @@ public class BacktestRequest {
 
     // 수수료율
     private Double commissionRate;      // 수수료율 % (예: 0.1 → 0.1%, 기본값 0.1%)
+
+    // 매매 방향
+    private String tradeDirection;      // LONG_ONLY(기본), SHORT_ONLY, LONG_SHORT
+
+    // 다중 포지션 (분할매수)
+    private Integer maxPositions;       // 최대 동시 포지션 수 (기본: 1)
 }

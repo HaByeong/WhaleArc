@@ -66,7 +66,8 @@ public class StrategyController {
             @AuthenticationPrincipal Jwt jwt,
             @RequestBody BacktestRequest request) {
         try {
-            BacktestResponse result = backtestService.runBacktest(request);
+            String userId = jwt.getSubject();
+            BacktestResponse result = backtestService.runBacktest(request, userId);
             return ResponseEntity.ok(Map.of("data", result));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

@@ -21,9 +21,13 @@ public class RankingController {
     private final RankingService rankingService;
 
     @GetMapping
-    public ApiResponse<RankingResponseDto> getRankings(@AuthenticationPrincipal Jwt jwt) {
+    public ApiResponse<RankingResponseDto> getRankings(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = "all") String type,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         String userId = jwt.getSubject();
-        return ApiResponse.ok(rankingService.getRankings(userId));
+        return ApiResponse.ok(rankingService.getRankings(userId, type, page, size));
     }
 
     @GetMapping("/me")

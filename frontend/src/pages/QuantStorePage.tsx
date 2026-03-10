@@ -410,7 +410,7 @@ const QuantStorePage = () => {
               </div>
 
               {/* 항로 성과 */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="text-center p-3 bg-red-50 rounded-xl">
                   <div className="text-xs text-gray-500 mb-1">기대 수익률</div>
                   <div className={`text-lg font-bold ${selectedProduct.expectedReturn >= 0 ? 'text-red-600' : 'text-blue-600'}`}>

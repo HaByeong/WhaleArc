@@ -4,6 +4,8 @@ import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.CryptoPriceProvider;
 import com.project.whalearc.market.service.StockMasterService;
 import com.project.whalearc.market.service.StockPriceProvider;
+import com.project.whalearc.notification.domain.Notification;
+import com.project.whalearc.notification.service.NotificationService;
 import com.project.whalearc.store.domain.ProductPurchase;
 import com.project.whalearc.store.repository.ProductPurchaseRepository;
 import com.project.whalearc.strategy.domain.Strategy;
@@ -36,6 +38,7 @@ public class StrategyService {
     private final StockPriceProvider stockPriceProvider;
     private final StockMasterService stockMasterService;
     private final PortfolioService portfolioService;
+    private final NotificationService notificationService;
 
     /**
      * 서버 시작 시: applied=true인 전략 중 ProductPurchase가 없는 경우 자동 생성 (마이그레이션)
@@ -231,7 +234,7 @@ public class StrategyService {
             try {
                 orderService.createOrder(userId, asset, priceInfo.getName(),
                         Order.OrderType.BUY, Order.OrderMethod.MARKET, quantity, null, orderAssetType);
-                purchasedAssets.add(new ProductPurchase.PurchasedAsset(asset, quantity, BigDecimal.valueOf(priceInfo.getPrice())));
+                purchasedAssets.add(new ProductPurchase.PurchasedAsset(asset, quantity, priceBd));
                 successCount++;
                 log.info("전략 적용 매수: strategy={}, asset={}, qty={}, price={}",
                         strategy.getName(), asset, quantity, priceInfo.getPrice());
@@ -261,7 +264,18 @@ public class StrategyService {
         strategy.setAppliedSuccessCount(successCount);
         strategy.setAppliedTotalCount(targetAssets.size());
         strategy.setUpdatedAt(Instant.now());
-        return strategyRepository.save(strategy);
+        Strategy saved = strategyRepository.save(strategy);
+
+        // 전략 적용 알림
+        notificationService.createNotification(
+                userId,
+                Notification.NotificationType.STRATEGY_EXECUTED,
+                "항로 적용 완료",
+                "'" + strategy.getName() + "' 항로가 적용되었습니다. ("
+                        + successCount + "/" + targetAssets.size() + "개 종목 매수 성공)"
+        );
+
+        return saved;
     }
 
     /**
@@ -291,6 +305,16 @@ public class StrategyService {
         strategy.setAppliedSuccessCount(0);
         strategy.setAppliedTotalCount(0);
         strategy.setUpdatedAt(Instant.now());
-        return strategyRepository.save(strategy);
+        Strategy saved = strategyRepository.save(strategy);
+
+        // 전략 해제 알림
+        notificationService.createNotification(
+                userId,
+                Notification.NotificationType.STRATEGY_EXECUTED,
+                "항로 해제 완료",
+                "'" + strategy.getName() + "' 항로가 해제되었습니다."
+        );
+
+        return saved;
     }
 }

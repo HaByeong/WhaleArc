@@ -1,6 +1,7 @@
 package com.project.whalearc.strategy.service;
 
 import com.project.whalearc.market.dto.CandlestickResponse;
+import com.project.whalearc.market.service.BacktestDataProvider;
 import com.project.whalearc.market.service.CandlestickService;
 import com.project.whalearc.market.service.IndicatorCalculator;
 import com.project.whalearc.strategy.domain.Condition;
@@ -26,15 +27,14 @@ public class BacktestService {
 
     private final StrategyRepository strategyRepository;
     private final CandlestickService candlestickService;
+    private final BacktestDataProvider backtestDataProvider;
 
     private static final double DEFAULT_COMMISSION_RATE = 0.001; // 0.1%
     private static final ZoneOffset KST = ZoneOffset.of("+09:00");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    public BacktestResponse runBacktest(BacktestRequest request) {
-        if (request.getInitialCapital() <= 0) {
-            throw new IllegalArgumentException("초기 자본금은 0보다 커야 합니다.");
-        }
+    public BacktestResponse runBacktest(BacktestRequest request, String userId) {
+        validateRequest(request);
 
         // 전략 or 직접 조건 분기
         String strategyName;
@@ -46,6 +46,10 @@ public class BacktestService {
         if (request.getStrategyId() != null && !request.getStrategyId().isEmpty()) {
             Strategy strategy = strategyRepository.findById(request.getStrategyId())
                     .orElseThrow(() -> new IllegalArgumentException("전략을 찾을 수 없습니다."));
+            // 소유권 검증: 본인 전략만 백테스트 가능
+            if (!strategy.getUserId().equals(userId)) {
+                throw new IllegalArgumentException("해당 전략에 대한 권한이 없습니다.");
+            }
             strategyName = strategy.getName();
             strategyId = strategy.getId();
             indicators = strategy.getIndicators();
@@ -70,10 +74,16 @@ public class BacktestService {
             assetType = request.getStockCode().matches("\\d{6}") ? "STOCK" : "CRYPTO";
         }
 
-        // 캔들스틱 데이터 조회
-        String interval = "STOCK".equals(assetType) ? "1d" : "24h";
-        List<CandlestickResponse> allCandles = candlestickService.getCandlesticks(
-                request.getStockCode(), interval, assetType);
+        // 캔들스틱 데이터 조회 (Yahoo Finance / Binance 우선, 실패 시 기존 소스 폴백)
+        List<CandlestickResponse> allCandles = backtestDataProvider.getBacktestCandles(
+                request.getStockCode(), assetType, request.getStartDate(), request.getEndDate());
+
+        if (allCandles == null || allCandles.isEmpty()) {
+            log.info("백테스트 데이터 폴백: 기존 CandlestickService 사용 ({})", request.getStockCode());
+            String interval = "STOCK".equals(assetType) ? "1d" : "24h";
+            allCandles = candlestickService.getCandlesticks(
+                    request.getStockCode(), interval, assetType);
+        }
 
         if (allCandles == null || allCandles.isEmpty()) {
             throw new IllegalArgumentException("캔들스틱 데이터를 가져올 수 없습니다: " + request.getStockCode());
@@ -112,6 +122,58 @@ public class BacktestService {
 
         return simulate(strategyId, strategyName, entryConditions, exitConditions,
                 candles, indicatorValues, globalOffset, request, assetType);
+    }
+
+    // ── 입력 검증 ─────────────────────────────────────────────────────────
+
+    private void validateRequest(BacktestRequest request) {
+        if (request.getInitialCapital() <= 0) {
+            throw new IllegalArgumentException("초기 자본금은 0보다 커야 합니다.");
+        }
+        if (request.getInitialCapital() > 100_000_000_000L) {
+            throw new IllegalArgumentException("초기 자본금은 1,000억원 이하로 설정해주세요.");
+        }
+        if (request.getStockCode() == null || request.getStockCode().isBlank()) {
+            throw new IllegalArgumentException("종목 코드를 입력해주세요.");
+        }
+        if (request.getStartDate() == null || request.getEndDate() == null) {
+            throw new IllegalArgumentException("시작일과 종료일을 입력해주세요.");
+        }
+
+        LocalDate start, end;
+        try {
+            start = LocalDate.parse(request.getStartDate());
+            end = LocalDate.parse(request.getEndDate());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("날짜 형식이 올바르지 않습니다. (yyyy-MM-dd)");
+        }
+
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException("시작일이 종료일보다 늦을 수 없습니다.");
+        }
+        if (end.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("종료일은 오늘 이후로 설정할 수 없습니다.");
+        }
+        if (start.isBefore(LocalDate.of(2000, 1, 1))) {
+            throw new IllegalArgumentException("시작일은 2000년 이후로 설정해주세요.");
+        }
+
+        // 리스크 파라미터 범위 검증
+        if (request.getStopLossPercent() != null && (request.getStopLossPercent() <= 0 || request.getStopLossPercent() > 100)) {
+            throw new IllegalArgumentException("손절 비율은 0~100% 사이로 설정해주세요.");
+        }
+        if (request.getTakeProfitPercent() != null && (request.getTakeProfitPercent() <= 0 || request.getTakeProfitPercent() > 1000)) {
+            throw new IllegalArgumentException("익절 비율은 0~1000% 사이로 설정해주세요.");
+        }
+        if (request.getSlippagePercent() != null && (request.getSlippagePercent() < 0 || request.getSlippagePercent() > 10)) {
+            throw new IllegalArgumentException("슬리피지는 0~10% 사이로 설정해주세요.");
+        }
+        if (request.getCommissionRate() != null && (request.getCommissionRate() < 0 || request.getCommissionRate() > 10)) {
+            throw new IllegalArgumentException("수수료율은 0~10% 사이로 설정해주세요.");
+        }
+        if (request.getMaxPositions() != null && (request.getMaxPositions() < 1 || request.getMaxPositions() > 20)) {
+            throw new IllegalArgumentException("최대 포지션 수는 1~20 사이로 설정해주세요.");
+        }
     }
 
     // ── 지표 계산 ─────────────────────────────────────────────────────────
@@ -192,11 +254,15 @@ public class BacktestService {
             }
             case "MA", "SMA" -> {
                 int period = getParam(params, "period", 20);
-                result.put("MA", IndicatorCalculator.sma(closes, period));
+                double[] sma = IndicatorCalculator.sma(closes, period);
+                result.put("MA", sma);            // 기본 키 (마지막 계산 값)
+                result.put("MA_" + period, sma);   // 기간별 키 (다중 기간 지원)
             }
             case "EMA" -> {
                 int period = getParam(params, "period", 20);
-                result.put("EMA", IndicatorCalculator.ema(closes, period));
+                double[] ema = IndicatorCalculator.ema(closes, period);
+                result.put("EMA", ema);            // 기본 키
+                result.put("EMA_" + period, ema);  // 기간별 키
             }
             case "BOLLINGER_BANDS" -> {
                 int period = getParam(params, "period", 20);
@@ -207,7 +273,9 @@ public class BacktestService {
                 result.put("BOLLINGER_LOWER", bb.getLower());
 
                 double[] pctB = new double[closes.length];
+                Arrays.fill(pctB, Double.NaN);
                 for (int j = 0; j < closes.length; j++) {
+                    if (Double.isNaN(bb.getUpper()[j]) || Double.isNaN(bb.getLower()[j])) continue;
                     double range = bb.getUpper()[j] - bb.getLower()[j];
                     pctB[j] = range > 0 ? (closes[j] - bb.getLower()[j]) / range : 0.5;
                 }
@@ -243,14 +311,25 @@ public class BacktestService {
      */
     private void ensureIndicatorCalculated(String key, double[] closes, double[] highs,
                                             double[] lows, double[] volumes, Map<String, double[]> result) {
+        // 이미 해당 키가 존재하면 스킵
+        if (result.containsKey(key)) return;
+
         if ("RSI".equals(key) && !result.containsKey("RSI")) {
             calculateIndicator("RSI", Map.of(), closes, highs, lows, volumes, result);
         } else if (key.startsWith("MACD") && !result.containsKey("MACD")) {
             calculateIndicator("MACD", Map.of(), closes, highs, lows, volumes, result);
         } else if (("MA".equals(key) || "SMA".equals(key)) && !result.containsKey("MA")) {
             calculateIndicator("MA", Map.of(), closes, highs, lows, volumes, result);
+        } else if (key.startsWith("MA_") && key.matches("MA_\\d+")) {
+            // MA_20, MA_50 등 기간별 키 → 해당 기간으로 계산
+            int period = Integer.parseInt(key.substring(3));
+            calculateIndicator("MA", Map.of("period", (Number) period), closes, highs, lows, volumes, result);
         } else if ("EMA".equals(key) && !result.containsKey("EMA")) {
             calculateIndicator("EMA", Map.of(), closes, highs, lows, volumes, result);
+        } else if (key.startsWith("EMA_") && key.matches("EMA_\\d+")) {
+            // EMA_12, EMA_26 등 기간별 키
+            int period = Integer.parseInt(key.substring(4));
+            calculateIndicator("EMA", Map.of("period", (Number) period), closes, highs, lows, volumes, result);
         } else if ((key.startsWith("BOLLINGER") || "PCT_B".equals(key) || "BB_PCT_B".equals(key)) && !result.containsKey("BOLLINGER_UPPER")) {
             calculateIndicator("BOLLINGER_BANDS", Map.of(), closes, highs, lows, volumes, result);
         } else if ((key.startsWith("STOCH") || "STOCH_K".equals(key) || "STOCH_D".equals(key)) && !result.containsKey("STOCH_K")) {
@@ -266,6 +345,9 @@ public class BacktestService {
         }
     }
 
+    // ── 포지션 엔트리 ──
+    private record PosEntry(double execPrice, double quantity, double cost, int dayIndex) {}
+
     // ── 시뮬레이션 ─────────────────────────────────────────────────────────
 
     private BacktestResponse simulate(String strategyId, String strategyName,
@@ -276,12 +358,18 @@ public class BacktestService {
 
         double initialCapital = request.getInitialCapital();
         double cash = initialCapital;
-        double position = 0;
-        double entryPrice = 0;
-        double entryCost = 0; // 매수 시 실제 지출 금액 (수수료 포함)
-        int entryDayIndex = 0;
         double peakEquity = initialCapital;
-        double highSinceEntry = 0; // 트레일링 스탑용: 진입 이후 최고가
+
+        // 다중 포지션 추적 (signed: long=양수, short=음수)
+        List<PosEntry> posEntries = new ArrayList<>();
+        String currentDir = "NONE"; // LONG, SHORT, NONE
+        double highSinceEntry = 0;           // 롱 트레일링 스탑: 진입 후 최고가
+        double lowSinceEntry = Double.MAX_VALUE; // 숏 트레일링 스탑: 진입 후 최저가
+        int firstEntryDayIndex = 0;
+
+        // 매매 방향 & 다중 포지션
+        String tradeDir = request.getTradeDirection() != null ? request.getTradeDirection() : "LONG_ONLY";
+        int maxPos = request.getMaxPositions() != null ? Math.max(request.getMaxPositions(), 1) : 1;
 
         // 리스크 파라미터 (null-safe)
         double stopLoss = request.getStopLossPercent() != null ? request.getStopLossPercent() : 0;
@@ -308,12 +396,9 @@ public class BacktestService {
         List<Double> lossRates = new ArrayList<>();
         List<Integer> holdingDaysList = new ArrayList<>();
 
-        // 연승/연패 계산용
         int currentStreak = 0;
         int maxWinStreak = 0;
         int maxLossStreak = 0;
-
-        // 최대 낙폭 지속 기간
         int drawdownStart = -1;
         int maxDrawdownDuration = 0;
 
@@ -324,131 +409,178 @@ public class BacktestService {
             String date = Instant.ofEpochSecond(candle.getTime())
                     .atZone(KST).toLocalDate().format(DATE_FMT);
 
-            // 가격 데이터 기록
             priceData.add(BacktestResponse.PricePointDto.builder()
-                    .date(date)
-                    .open(candle.getOpen())
-                    .high(candle.getHigh())
-                    .low(candle.getLow())
-                    .close(candle.getClose())
-                    .volume(candle.getVolume())
+                    .date(date).open(candle.getOpen()).high(candle.getHigh())
+                    .low(candle.getLow()).close(candle.getClose()).volume(candle.getVolume())
                     .build());
 
-            double equity = cash + position * price;
+            double totalQty = posEntries.stream().mapToDouble(PosEntry::quantity).sum();
+            double totalCost = posEntries.stream().mapToDouble(PosEntry::cost).sum();
+            boolean hasPosition = !posEntries.isEmpty();
 
-            // ── 트레일링 스탑: 고점 추적 ──
+            // ── 자산 가치 계산 ──
+            // LONG: cash + qty * price, SHORT: cash - qty * price + shortEntryValue
+            double equity;
+            if ("LONG".equals(currentDir)) {
+                equity = cash + totalQty * price;
+            } else if ("SHORT".equals(currentDir)) {
+                double shortEntryValue = posEntries.stream()
+                        .mapToDouble(e -> e.quantity * e.execPrice).sum();
+                equity = cash - totalQty * price + shortEntryValue;
+            } else {
+                equity = cash;
+            }
+
+            // ── 가중 평균 진입가 ──
+            double avgPrice = hasPosition
+                    ? posEntries.stream().mapToDouble(e -> e.execPrice * e.quantity).sum() / totalQty
+                    : 0;
+
+            // ── 트레일링 스탑 ──
             boolean trailingStopHit = false;
-            if (position > 0) {
+            if (hasPosition && "LONG".equals(currentDir)) {
                 if (price > highSinceEntry) highSinceEntry = price;
                 if (trailingStop > 0 && highSinceEntry > 0) {
-                    double dropFromHigh = (highSinceEntry - price) / highSinceEntry * 100;
-                    if (dropFromHigh >= trailingStop) trailingStopHit = true;
+                    double drop = (highSinceEntry - price) / highSinceEntry * 100;
+                    if (drop >= trailingStop) trailingStopHit = true;
+                }
+            } else if (hasPosition && "SHORT".equals(currentDir)) {
+                if (price < lowSinceEntry) lowSinceEntry = price;
+                if (trailingStop > 0 && lowSinceEntry > 0 && lowSinceEntry < Double.MAX_VALUE) {
+                    double rise = (price - lowSinceEntry) / lowSinceEntry * 100;
+                    if (rise >= trailingStop) trailingStopHit = true;
                 }
             }
 
-            // ── 손절/익절 체크 (조건 평가보다 우선) ──
+            // ── 손절/익절 ──
             boolean stopLossHit = false;
             boolean takeProfitHit = false;
-            if (position > 0 && entryPrice > 0) {
-                double unrealizedPct = (price - entryPrice) / entryPrice * 100;
+            if (hasPosition && avgPrice > 0) {
+                double unrealizedPct = "LONG".equals(currentDir)
+                        ? (price - avgPrice) / avgPrice * 100
+                        : (avgPrice - price) / avgPrice * 100; // SHORT: 가격 하락 = 이익
                 if (stopLoss > 0 && unrealizedPct <= -stopLoss) stopLossHit = true;
                 if (takeProfit > 0 && unrealizedPct >= takeProfit) takeProfitHit = true;
             }
 
-            // ── 진입/청산 조건 평가 ──
-            boolean riskExit = stopLossHit || takeProfitHit || trailingStopHit;
-            boolean entrySignal = position == 0 && !riskExit
+            // ── 조건 평가 ──
+            boolean riskExit = hasPosition && (stopLossHit || takeProfitHit || trailingStopHit);
+            boolean canAddPosition = !hasPosition || posEntries.size() < maxPos;
+            boolean entrySignal = !riskExit && canAddPosition
                     && evaluateConditions(entryConditions, indicatorValues, gi, price);
-            boolean exitSignal = position > 0 && !riskExit
+            boolean exitSignal = hasPosition && !riskExit
                     && evaluateConditions(exitConditions, indicatorValues, gi, price);
 
             // ── 매매 실행 ──
-            if (riskExit) {
-                // 손절/익절 실행
-                double execPrice = price * (1 - slippage); // 슬리피지 (매도)
-                double sellProceeds = position * execPrice * (1 - commissionRate);
-                double pnl = sellProceeds - entryCost; // 매수 수수료 포함 순손익
-                double pnlPct = entryCost > 0 ? (sellProceeds - entryCost) / entryCost * 100 : 0;
-                int holdDays = i - entryDayIndex;
-                cash += sellProceeds;
 
+            // 1) 리스크 청산
+            if (riskExit) {
                 String reason = stopLossHit
                         ? String.format("손절 (%.1f%%)", -stopLoss)
                         : trailingStopHit
-                        ? String.format("트레일링 스탑 (고점 대비 -%.1f%%)", trailingStop)
+                        ? String.format("트레일링 스탑 (-%.1f%%)", trailingStop)
                         : String.format("익절 (+%.1f%%)", takeProfit);
-
-                recordSell(trades, date, execPrice, position, pnl, pnlPct, reason, holdDays, cash);
-                if (pnl > 0) {
-                    profitableTrades++;
-                    winAmounts.add(pnl);
-                    winRates.add(pnlPct);
-                    currentStreak = currentStreak >= 0 ? currentStreak + 1 : 1;
-                } else {
-                    losingTrades++;
-                    lossAmounts.add(Math.abs(pnl));
-                    lossRates.add(Math.abs(pnlPct));
-                    currentStreak = currentStreak <= 0 ? currentStreak - 1 : -1;
-                }
-                holdingDaysList.add(holdDays);
-                if (currentStreak > maxWinStreak) maxWinStreak = currentStreak;
-                if (-currentStreak > maxLossStreak) maxLossStreak = -currentStreak;
-
-                position = 0;
-                entryPrice = 0;
+                int[] streaks = {currentStreak, maxWinStreak, maxLossStreak};
+                int[] tradeCounts = {profitableTrades, losingTrades};
+                cash = executeCloseAll(trades, posEntries, currentDir, price, slippage, commissionRate,
+                        date, i, reason, cash,
+                        winAmounts, lossAmounts, winRates, lossRates, holdingDaysList,
+                        streaks, tradeCounts);
+                currentStreak = streaks[0]; maxWinStreak = streaks[1]; maxLossStreak = streaks[2];
+                profitableTrades = tradeCounts[0]; losingTrades = tradeCounts[1];
+                posEntries.clear();
+                currentDir = "NONE";
                 highSinceEntry = 0;
+                lowSinceEntry = Double.MAX_VALUE;
+
+            // 2) 진입 신호
             } else if (entrySignal && price > 0) {
-                // 매수: 포지션 사이징 적용
-                double allocAmount = calculateAllocation(cash, positionSizing, positionValue);
-                double execPrice = price * (1 + slippage); // 슬리피지 (매수)
-                double buyAmount = allocAmount * (1 - commissionRate);
-                position = buyAmount / execPrice;
-                double commission = allocAmount * commissionRate;
-                cash -= allocAmount;
-                entryPrice = execPrice;
-                entryCost = allocAmount; // 매수 총비용 (수수료 포함)
-                entryDayIndex = i;
-                highSinceEntry = price; // 트레일링 스탑 초기화
-
-                trades.add(BacktestResponse.TradeDto.builder()
-                        .date(date).type("BUY").price(execPrice)
-                        .quantity(position).pnl(-commission).pnlPercent(0)
-                        .reason("진입 조건 충족").holdingDays(0)
-                        .balance(Math.round(cash + position * price))
-                        .build());
-            } else if (exitSignal) {
-                double execPrice = price * (1 - slippage);
-                double sellProceeds = position * execPrice * (1 - commissionRate);
-                double pnl = sellProceeds - entryCost; // 매수 수수료 포함 순손익
-                double pnlPct = entryCost > 0 ? (sellProceeds - entryCost) / entryCost * 100 : 0;
-                int holdDays = i - entryDayIndex;
-                cash += sellProceeds;
-
-                recordSell(trades, date, execPrice, position, pnl, pnlPct, "청산 조건 충족", holdDays, cash);
-                if (pnl > 0) {
-                    profitableTrades++;
-                    winAmounts.add(pnl);
-                    winRates.add(pnlPct);
-                    currentStreak = currentStreak >= 0 ? currentStreak + 1 : 1;
+                if ("SHORT_ONLY".equals(tradeDir)) {
+                    // SHORT_ONLY: 진입 = 숏 오픈
+                    if (!hasPosition || ("SHORT".equals(currentDir) && posEntries.size() < maxPos)) {
+                        cash = openPosition(trades, posEntries, "SHORT", price, slippage, commissionRate,
+                                positionSizing, positionValue, cash, date, i);
+                        if (posEntries.size() == 1) {
+                            currentDir = "SHORT";
+                            lowSinceEntry = price;
+                            firstEntryDayIndex = i;
+                        }
+                    }
                 } else {
-                    losingTrades++;
-                    lossAmounts.add(Math.abs(pnl));
-                    lossRates.add(Math.abs(pnlPct));
-                    currentStreak = currentStreak <= 0 ? currentStreak - 1 : -1;
+                    // LONG_ONLY / LONG_SHORT: 진입 = 롱 오픈
+                    if ("SHORT".equals(currentDir) && "LONG_SHORT".equals(tradeDir)) {
+                        // 숏 포지션 청산 후 롱 전환
+                        int[] streaks = {currentStreak, maxWinStreak, maxLossStreak};
+                        int[] tradeCounts = {profitableTrades, losingTrades};
+                        cash = executeCloseAll(trades, posEntries, currentDir, price, slippage, commissionRate,
+                                date, i, "방향 전환 (숏→롱)", cash,
+                                winAmounts, lossAmounts, winRates, lossRates, holdingDaysList,
+                                streaks, tradeCounts);
+                        currentStreak = streaks[0]; maxWinStreak = streaks[1]; maxLossStreak = streaks[2];
+                        profitableTrades = tradeCounts[0]; losingTrades = tradeCounts[1];
+                        posEntries.clear();
+                        currentDir = "NONE";
+                    }
+                    if (!hasPosition || posEntries.isEmpty() || ("LONG".equals(currentDir) && posEntries.size() < maxPos)) {
+                        cash = openPosition(trades, posEntries, "LONG", price, slippage, commissionRate,
+                                positionSizing, positionValue, cash, date, i);
+                        if (currentDir.equals("NONE")) {
+                            currentDir = "LONG";
+                            highSinceEntry = price;
+                            firstEntryDayIndex = i;
+                        }
+                    }
                 }
-                holdingDaysList.add(holdDays);
-                if (currentStreak > maxWinStreak) maxWinStreak = currentStreak;
-                if (-currentStreak > maxLossStreak) maxLossStreak = -currentStreak;
 
-                position = 0;
-                entryPrice = 0;
-                highSinceEntry = 0;
+            // 3) 청산 신호
+            } else if (exitSignal) {
+                if ("LONG_SHORT".equals(tradeDir) && "LONG".equals(currentDir)) {
+                    // 롱 청산 + 숏 진입
+                    int[] streaks = {currentStreak, maxWinStreak, maxLossStreak};
+                    int[] tradeCounts = {profitableTrades, losingTrades};
+                    cash = executeCloseAll(trades, posEntries, currentDir, price, slippage, commissionRate,
+                            date, i, "청산 조건 충족", cash,
+                            winAmounts, lossAmounts, winRates, lossRates, holdingDaysList,
+                            streaks, tradeCounts);
+                    currentStreak = streaks[0]; maxWinStreak = streaks[1]; maxLossStreak = streaks[2];
+                    profitableTrades = tradeCounts[0]; losingTrades = tradeCounts[1];
+                    posEntries.clear();
+                    currentDir = "NONE";
+                    // 숏 오픈
+                    cash = openPosition(trades, posEntries, "SHORT", price, slippage, commissionRate,
+                            positionSizing, positionValue, cash, date, i);
+                    currentDir = "SHORT";
+                    lowSinceEntry = price;
+                    firstEntryDayIndex = i;
+                } else {
+                    // 일반 청산
+                    int[] streaks = {currentStreak, maxWinStreak, maxLossStreak};
+                    int[] tradeCounts = {profitableTrades, losingTrades};
+                    cash = executeCloseAll(trades, posEntries, currentDir, price, slippage, commissionRate,
+                            date, i, "청산 조건 충족", cash,
+                            winAmounts, lossAmounts, winRates, lossRates, holdingDaysList,
+                            streaks, tradeCounts);
+                    currentStreak = streaks[0]; maxWinStreak = streaks[1]; maxLossStreak = streaks[2];
+                    profitableTrades = tradeCounts[0]; losingTrades = tradeCounts[1];
+                    posEntries.clear();
+                    currentDir = "NONE";
+                    highSinceEntry = 0;
+                    lowSinceEntry = Double.MAX_VALUE;
+                }
             }
 
-            // 자산가치 재계산
-            equity = cash + position * price;
+            // ── 자산가치 재계산 ──
+            totalQty = posEntries.stream().mapToDouble(PosEntry::quantity).sum();
+            if ("LONG".equals(currentDir)) {
+                equity = cash + totalQty * price;
+            } else if ("SHORT".equals(currentDir)) {
+                double sev = posEntries.stream().mapToDouble(e -> e.quantity * e.execPrice).sum();
+                equity = cash - totalQty * price + sev;
+            } else {
+                equity = cash;
+            }
 
-            // 최대 낙폭 & 지속기간
+            // ── 최대 낙폭 & 지속기간 ──
             if (equity >= peakEquity) {
                 peakEquity = equity;
                 if (drawdownStart >= 0) {
@@ -462,7 +594,6 @@ public class BacktestService {
             double drawdown = peakEquity > 0 ? (peakEquity - equity) / peakEquity * 100 : 0;
             if (drawdown > maxDrawdown) maxDrawdown = drawdown;
 
-            // 드로다운 커브
             drawdownCurve.add(BacktestResponse.EquityPointDto.builder()
                     .date(date).value(Math.round(-drawdown * 100.0) / 100.0).build());
 
@@ -485,33 +616,22 @@ public class BacktestService {
             if (duration > maxDrawdownDuration) maxDrawdownDuration = duration;
         }
 
-        // 강제 청산
-        if (position > 0 && !candles.isEmpty()) {
+        // ── 강제 청산 ──
+        if (!posEntries.isEmpty() && !candles.isEmpty()) {
             double lastPrice = candles.get(candles.size() - 1).getClose();
-            double execPrice = lastPrice * (1 - slippage);
-            double sellProceeds = position * execPrice * (1 - commissionRate);
-            double pnl = sellProceeds - entryCost; // 매수 수수료 포함 순손익
-            double pnlPct = entryCost > 0 ? (sellProceeds - entryCost) / entryCost * 100 : 0;
-            int holdDays = candles.size() - 1 - entryDayIndex;
-            cash += sellProceeds;
-
             String lastDate = Instant.ofEpochSecond(candles.get(candles.size() - 1).getTime())
                     .atZone(KST).toLocalDate().format(DATE_FMT);
+            int lastIdx = candles.size() - 1;
 
-            recordSell(trades, lastDate, execPrice, position, pnl, pnlPct,
-                    "백테스트 종료 (강제 청산)", holdDays, cash);
-            if (pnl > 0) {
-                profitableTrades++; winAmounts.add(pnl); winRates.add(pnlPct);
-                currentStreak = currentStreak >= 0 ? currentStreak + 1 : 1;
-            } else {
-                losingTrades++; lossAmounts.add(Math.abs(pnl)); lossRates.add(Math.abs(pnlPct));
-                currentStreak = currentStreak <= 0 ? currentStreak - 1 : -1;
-            }
-            holdingDaysList.add(holdDays);
-            if (currentStreak > maxWinStreak) maxWinStreak = currentStreak;
-            if (-currentStreak > maxLossStreak) maxLossStreak = -currentStreak;
-
-            position = 0;
+            int[] streaks = {currentStreak, maxWinStreak, maxLossStreak};
+            int[] tradeCounts = {profitableTrades, losingTrades};
+            cash = executeCloseAll(trades, posEntries, currentDir, lastPrice, slippage, commissionRate,
+                    lastDate, lastIdx, "백테스트 종료 (강제 청산)", cash,
+                    winAmounts, lossAmounts, winRates, lossRates, holdingDaysList,
+                    streaks, tradeCounts);
+            currentStreak = streaks[0]; maxWinStreak = streaks[1]; maxLossStreak = streaks[2];
+            profitableTrades = tradeCounts[0]; losingTrades = tradeCounts[1];
+            posEntries.clear();
 
             // 마지막 equity/daily 갱신
             double finalEquity = cash;
@@ -567,8 +687,9 @@ public class BacktestService {
                 ? (Math.pow(cagrRatio, 1.0 / years) - 1) * 100
                 : totalReturnRate;
 
-        // Recovery Factor
-        double recoveryFactor = maxDrawdown > 0 ? totalReturnRate / maxDrawdown : 0;
+        // Recovery Factor (드로다운 없이 수익이면 최대값 표시)
+        double recoveryFactor = maxDrawdown > 0 ? totalReturnRate / maxDrawdown
+                : (totalReturnRate > 0 ? 999.99 : 0);
 
         // Buy & Hold 벤치마크
         double firstPrice = candles.get(0).getClose();
@@ -576,11 +697,59 @@ public class BacktestService {
         List<BacktestResponse.EquityPointDto> buyHoldCurve = new ArrayList<>();
         for (CandlestickResponse c : candles) {
             String d = Instant.ofEpochSecond(c.getTime()).atZone(KST).toLocalDate().format(DATE_FMT);
+            double bhValue = buyHoldQuantity * c.getClose();
             buyHoldCurve.add(BacktestResponse.EquityPointDto.builder()
-                    .date(d).value(Math.round(buyHoldQuantity * c.getClose())).build());
+                    .date(d).value(Math.round(bhValue)).build());
         }
         double buyHoldFinal = buyHoldQuantity * candles.get(candles.size() - 1).getClose();
         double buyHoldReturnRate = (buyHoldFinal - initialCapital) / initialCapital * 100;
+
+        // 지표 요약 (조건이 왜 트리거되지 않았는지 디버깅용)
+        Map<String, BacktestResponse.IndicatorSummaryDto> indicatorSummary = new HashMap<>();
+        Set<String> summaryKeys = new HashSet<>();
+        if (entryConditions != null) entryConditions.forEach(c -> { if (c.getIndicator() != null) summaryKeys.add(c.getIndicator().toUpperCase()); });
+        if (exitConditions != null) exitConditions.forEach(c -> { if (c.getIndicator() != null) summaryKeys.add(c.getIndicator().toUpperCase()); });
+
+        for (String key : summaryKeys) {
+            // 크로스오버 키는 건너뜀 (개별 지표로 분해됨)
+            if (key.contains("_CROSS_") || key.contains("_CROSSUNDER_")) continue;
+
+            String mappedKey = switch (key) {
+                case "PRICE", "CLOSE" -> "PRICE";
+                case "SIGNAL" -> "MACD_SIGNAL";
+                case "HISTOGRAM" -> "MACD_HISTOGRAM";
+                case "SMA" -> "MA";
+                case "BB_UPPER" -> "BOLLINGER_UPPER";
+                case "BB_MIDDLE" -> "BOLLINGER_MIDDLE";
+                case "BB_LOWER" -> "BOLLINGER_LOWER";
+                case "BB_PCT_B", "PCT_B" -> "BOLLINGER_PCT_B";
+                case "STOCHASTIC_K" -> "STOCH_K";
+                case "STOCHASTIC_D" -> "STOCH_D";
+                default -> key;
+            };
+
+            double[] vals = indicatorValues.get(mappedKey);
+            if (vals == null) continue;
+
+            double min = Double.MAX_VALUE, max = -Double.MAX_VALUE, sum = 0;
+            int count = 0;
+            double last = Double.NaN;
+            for (int i = globalOffset; i < globalOffset + candles.size(); i++) {
+                if (i < vals.length && !Double.isNaN(vals[i])) {
+                    if (vals[i] < min) min = vals[i];
+                    if (vals[i] > max) max = vals[i];
+                    sum += vals[i];
+                    count++;
+                    last = vals[i];
+                }
+            }
+            if (count > 0) {
+                indicatorSummary.put(key, BacktestResponse.IndicatorSummaryDto.builder()
+                        .min(round2(min)).max(round2(max))
+                        .avg(round2(sum / count)).last(round2(last))
+                        .build());
+            }
+        }
 
         return BacktestResponse.builder()
                 .id("backtest-" + UUID.randomUUID().toString().substring(0, 8))
@@ -623,19 +792,111 @@ public class BacktestService {
                 // 차트 데이터
                 .drawdownCurve(drawdownCurve)
                 .priceData(priceData)
+                .indicatorSummary(indicatorSummary)
                 .build();
     }
 
-    // ── 매도 기록 ──
-    private void recordSell(List<BacktestResponse.TradeDto> trades, String date,
-                             double price, double quantity, double pnl, double pnlPct,
-                             String reason, int holdDays, double balance) {
+    // ── 포지션 오픈 (롱/숏 공통) ──
+    private double openPosition(List<BacktestResponse.TradeDto> trades, List<PosEntry> entries,
+                                  String direction, double price, double slippage, double commissionRate,
+                                  String sizingType, double sizingValue, double cash,
+                                  String date, int dayIndex) {
+        double allocAmount = calculateAllocation(cash, sizingType, sizingValue);
+        if (allocAmount <= 0) return cash;
+
+        if ("LONG".equals(direction)) {
+            double execPrice = price * (1 + slippage);
+            double commission = allocAmount * commissionRate;
+            double qty = (allocAmount - commission) / execPrice;
+            cash -= allocAmount;
+            entries.add(new PosEntry(execPrice, qty, allocAmount, dayIndex));
+            trades.add(BacktestResponse.TradeDto.builder()
+                    .date(date).type("BUY").price(execPrice).quantity(qty)
+                    .pnl(-commission).pnlPercent(0).reason("진입 조건 충족 (롱)").holdingDays(0)
+                    .balance(Math.round(cash + qty * price))
+                    .build());
+        } else {
+            // SHORT: 빌려서 매도 → 현금 유입, 부채(수량) 발생
+            double execPrice = price * (1 - slippage);
+            double commission = allocAmount * commissionRate;
+            double qty = (allocAmount - commission) / execPrice;
+            // 숏 진입 시 매도 대금은 즉시 받지만, 마진으로 allocAmount 를 잡아둠
+            cash -= allocAmount; // 마진 차감 (보증금)
+            entries.add(new PosEntry(execPrice, qty, allocAmount, dayIndex));
+            trades.add(BacktestResponse.TradeDto.builder()
+                    .date(date).type("SHORT").price(execPrice).quantity(qty)
+                    .pnl(-commission).pnlPercent(0).reason("진입 조건 충족 (숏)").holdingDays(0)
+                    .balance(Math.round(cash + qty * execPrice))
+                    .build());
+        }
+        return cash;
+    }
+
+    // ── 전체 포지션 청산 ──
+    private double executeCloseAll(List<BacktestResponse.TradeDto> trades, List<PosEntry> entries,
+                                     String direction, double price, double slippage, double commissionRate,
+                                     String date, int dayIndex, String reason, double cash,
+                                     List<Double> winAmounts, List<Double> lossAmounts,
+                                     List<Double> winRates, List<Double> lossRates,
+                                     List<Integer> holdingDaysList,
+                                     int[] streaks, int[] tradeCounts) {
+        if (entries.isEmpty()) return cash;
+
+        double totalQty = entries.stream().mapToDouble(PosEntry::quantity).sum();
+        double totalCost = entries.stream().mapToDouble(PosEntry::cost).sum();
+        // 가중평균 보유기간 (각 포지션의 수량 비중 반영)
+        int holdDays = (int) Math.round(entries.stream()
+                .mapToDouble(e -> (double)(dayIndex - e.dayIndex) * e.quantity)
+                .sum() / totalQty);
+
+        double pnl;
+        double closeExecPrice;
+        String tradeType;
+
+        if ("LONG".equals(direction)) {
+            closeExecPrice = price * (1 - slippage);
+            double sellProceeds = totalQty * closeExecPrice * (1 - commissionRate);
+            pnl = sellProceeds - totalCost;
+            cash += sellProceeds;
+            tradeType = "SELL";
+        } else {
+            // SHORT 커버: 주식 매수하여 반환
+            closeExecPrice = price * (1 + slippage);
+            double shortEntryValue = entries.stream().mapToDouble(e -> e.quantity * e.execPrice).sum();
+            double exitCommission = totalQty * closeExecPrice * commissionRate;
+            // 숏 PnL = (진입가 - 청산가) × 수량 - 청산 수수료 (진입 수수료는 이미 qty에 반영됨)
+            pnl = shortEntryValue - totalQty * closeExecPrice - exitCommission;
+            cash += totalCost + pnl; // 마진 반환 + 손익
+            tradeType = "COVER";
+        }
+
+        double pnlPct = totalCost > 0 ? pnl / totalCost * 100 : 0;
+
         trades.add(BacktestResponse.TradeDto.builder()
-                .date(date).type("SELL").price(price)
-                .quantity(quantity).pnl(pnl).pnlPercent(round2(pnlPct))
+                .date(date).type(tradeType).price(closeExecPrice)
+                .quantity(totalQty).pnl(pnl).pnlPercent(round2(pnlPct))
                 .reason(reason).holdingDays(holdDays)
-                .balance(Math.round(balance))
+                .balance(Math.round(cash))
                 .build());
+
+        // 통계 업데이트 (streaks[0]=current, [1]=maxWin, [2]=maxLoss, tradeCounts[0]=profitable, [1]=losing)
+        if (pnl > 0) {
+            tradeCounts[0]++;
+            winAmounts.add(pnl);
+            winRates.add(pnlPct);
+            streaks[0] = streaks[0] >= 0 ? streaks[0] + 1 : 1;
+        } else if (pnl < 0) {
+            tradeCounts[1]++;
+            lossAmounts.add(Math.abs(pnl));
+            lossRates.add(Math.abs(pnlPct));
+            streaks[0] = streaks[0] <= 0 ? streaks[0] - 1 : -1;
+        }
+        // pnl == 0 (본전 거래)은 승/패 어느 쪽에도 포함하지 않음, 연승/연패 스트릭도 유지
+        holdingDaysList.add(holdDays);
+        if (streaks[0] > streaks[1]) streaks[1] = streaks[0];
+        if (-streaks[0] > streaks[2]) streaks[2] = -streaks[0];
+
+        return cash;
     }
 
     // ── 포지션 사이징 ──
@@ -671,6 +932,14 @@ public class BacktestService {
                 // NaN이면 조건 불충족으로 처리 (AND: false 전파, OR: 무시)
                 boolean nanResult = false;
                 if (accumulated == null) accumulated = nanResult;
+                else accumulated = cond.getLogic() == Condition.Logic.AND ? false : accumulated;
+                continue;
+            }
+
+            // value 또는 operator가 null이면 조건 불충족 처리 (크로스오버가 아닌데 값이 없는 경우)
+            if (cond.getValue() == null || cond.getOperator() == null) {
+                boolean nullResult = false;
+                if (accumulated == null) accumulated = nullResult;
                 else accumulated = cond.getLogic() == Condition.Logic.AND ? false : accumulated;
                 continue;
             }

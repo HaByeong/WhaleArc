@@ -18,4 +18,7 @@ public interface PortfolioSnapshotRepository extends MongoRepository<PortfolioSn
 
     List<PortfolioSnapshot> findByUserIdOrderByDateAsc(String userId);
     void deleteByUserId(String userId);
+
+    /** 특정 날짜의 모든 유저 스냅샷 조회 (기간별 랭킹 계산용) */
+    List<PortfolioSnapshot> findByDate(LocalDate date);
 }

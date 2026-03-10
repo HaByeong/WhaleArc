@@ -3,7 +3,7 @@ import apiClient from '../utils/api';
 export interface Notification {
   id: string;
   userId: string;
-  type: 'LIMIT_ORDER_FILLED' | 'STRATEGY_EXECUTED';
+  type: 'LIMIT_ORDER_FILLED' | 'MARKET_ORDER_FILLED' | 'STRATEGY_EXECUTED' | 'TURTLE_TRADE';
   title: string;
   message: string;
   read: boolean;

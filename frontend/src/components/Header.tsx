@@ -144,7 +144,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
 
                       {/* 알림 드롭다운 */}
                       {showNotifPanel && (
-                        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+                        <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
                           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
                             <span className="text-sm font-bold text-gray-800">알림</span>
                             {unreadCount > 0 && (

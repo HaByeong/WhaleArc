@@ -29,6 +29,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     private static final int DEFAULT_LIMIT = 120;
     private static final int TRADE_LIMIT = 30;
     private static final int REFRESH_LIMIT = 10;
+    private static final int BACKTEST_LIMIT = 5;   // 백테스트: 분당 5회 (무거운 연산)
     private static final long WINDOW_MS = 60_000;
 
     @Override
@@ -57,6 +58,9 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         } else if (path.startsWith("/api/market/prices/refresh")) {
             limit = REFRESH_LIMIT;
             key = clientIp + ":refresh";
+        } else if (path.startsWith("/api/strategies/backtest") && "POST".equals(method)) {
+            limit = BACKTEST_LIMIT;
+            key = clientIp + ":backtest";
         }
 
         RequestCounter counter = requestCounters.computeIfAbsent(key, k -> new RequestCounter());

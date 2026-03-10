@@ -28,9 +28,18 @@ export function useNotifications(enabled = true) {
         // 새로 추가된 알림만 토스트로 표시
         const newCount = count - prevUnreadRef.current;
         const newNotifs = all.filter(n => !n.read).slice(0, newCount);
+        const toastType = (type: string): ToastItem['type'] => {
+          switch (type) {
+            case 'LIMIT_ORDER_FILLED':
+            case 'MARKET_ORDER_FILLED': return 'success';
+            case 'TURTLE_TRADE': return 'warning';
+            case 'STRATEGY_EXECUTED': return 'info';
+            default: return 'info';
+          }
+        };
         const newToasts: ToastItem[] = newNotifs.map(n => ({
           id: n.id,
-          type: n.type === 'LIMIT_ORDER_FILLED' ? 'success' : 'info',
+          type: toastType(n.type),
           title: n.title,
           message: n.message,
           duration: 7000,

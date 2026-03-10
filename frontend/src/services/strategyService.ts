@@ -20,7 +20,7 @@ export interface Strategy {
 }
 
 export interface Indicator {
-  type: 'RSI' | 'MACD' | 'MA' | 'BOLLINGER_BANDS';
+  type: 'RSI' | 'MACD' | 'MA' | 'EMA' | 'BOLLINGER_BANDS' | 'STOCHASTIC' | 'ATR' | 'CCI' | 'WILLIAMS_R' | 'OBV';
   parameters: Record<string, number>;
 }
 
@@ -32,8 +32,9 @@ export interface Condition {
 }
 
 export interface BacktestRequest {
-  strategyId: string;
+  strategyId?: string;
   stockCode: string;
+  stockName?: string;
   startDate: string;
   endDate: string;
   initialCapital: number;
@@ -45,6 +46,13 @@ export interface BacktestRequest {
   positionValue?: number;
   commissionRate?: number;
   assetType?: string;
+  // 매매 방향 & 다중 포지션
+  tradeDirection?: 'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT';
+  maxPositions?: number;
+  // 종목 분석 모드: 직접 조건 입력
+  indicators?: Indicator[];
+  entryConditions?: Condition[];
+  exitConditions?: Condition[];
 }
 
 export interface BacktestResult {
@@ -87,11 +95,13 @@ export interface BacktestResult {
   // 차트 데이터
   drawdownCurve?: EquityPoint[];
   priceData?: PricePoint[];
+  // 지표 요약 (0-trade 디버깅용)
+  indicatorSummary?: Record<string, { min: number; max: number; avg: number; last: number }>;
 }
 
 export interface BacktestTrade {
   date: string;
-  type: 'BUY' | 'SELL';
+  type: 'BUY' | 'SELL' | 'SHORT' | 'COVER';
   price: number;
   quantity: number;
   pnl: number;

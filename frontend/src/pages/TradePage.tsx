@@ -459,10 +459,10 @@ const TradePage = () => {
       )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6">
 
           {/* ━━━ 좌측: 종목 목록 (3칸) ━━━ */}
-          <div className="lg:col-span-3 space-y-4">
+          <div className="md:col-span-1 lg:col-span-3 space-y-4">
             {/* 가상화폐/주식 탭 */}
             <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
               <button
@@ -588,7 +588,7 @@ const TradePage = () => {
           </div>
 
           {/* ━━━ 중앙: 차트 + 탭 내용 (5칸) ━━━ */}
-          <div className="lg:col-span-5 space-y-4">
+          <div className="md:col-span-1 lg:col-span-5 space-y-4">
             {liveSelectedStock && (
               <>
                 {/* 종목 헤더 */}
@@ -802,7 +802,7 @@ const TradePage = () => {
           </div>
 
           {/* ━━━ 우측: 주문 폼 + 포트폴리오 (4칸) ━━━ */}
-          <div className="lg:col-span-4 space-y-4">
+          <div className="md:col-span-2 lg:col-span-4 space-y-4">
             {liveSelectedStock && (
               <div className="bg-white rounded-xl shadow-lg p-5">
                 {/* 매수/매도 토글 */}

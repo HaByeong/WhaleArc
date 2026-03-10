@@ -4,6 +4,8 @@ import com.project.whalearc.market.dto.CandlestickResponse;
 import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.CandlestickService;
 import com.project.whalearc.market.service.CryptoPriceProvider;
+import com.project.whalearc.notification.domain.Notification;
+import com.project.whalearc.notification.service.NotificationService;
 import com.project.whalearc.strategy.domain.TurtlePosition;
 import com.project.whalearc.strategy.repository.TurtlePositionRepository;
 import com.project.whalearc.trade.domain.Holding;
@@ -47,6 +49,7 @@ public class TurtleStrategyService {
     private final TurtlePositionRepository positionRepository;
     private final OrderService orderService;
     private final PortfolioService portfolioService;
+    private final NotificationService notificationService;
 
     // ── 전략 파라미터 (최적화된 A3 기준) ──
     private static final int ENTRY_PERIOD = 100;   // 100시간 진입 채널
@@ -137,6 +140,14 @@ public class TurtleStrategyService {
 
                     log.info("터틀 진입: userId={}, symbol={}, entryPrice={}, qty={}, ADX={}",
                             pos.getUserId(), pos.getSymbol(), entryPriceCandidate, quantity, prevADX);
+
+                    notificationService.createNotificationWithMeta(
+                            pos.getUserId(),
+                            Notification.NotificationType.TURTLE_TRADE,
+                            "터틀 매수 진입",
+                            pos.getSymbol() + " " + String.format("%,.0f", entryPriceCandidate) + "원에 진입했습니다.",
+                            Map.of("symbol", pos.getSymbol(), "action", "ENTRY", "price", String.valueOf(entryPriceCandidate))
+                    );
                 } catch (Exception e) {
                     log.warn("터틀 진입 실패: symbol={}, reason={}", pos.getSymbol(), e.getMessage());
                 }
@@ -226,6 +237,17 @@ public class TurtleStrategyService {
                 log.info("터틀 청산 [{}]: symbol={}, price={}, avgPrice={}, pnl={}%, units={}",
                         reason, pos.getSymbol(), exitPrice, pos.getAvgPrice(),
                         String.format("%.2f", pnl * 100), pos.getUnits());
+
+                String reasonLabel = "STOP".equals(reason) ? "손절" : "채널 이탈";
+                String pnlStr = String.format("%+.2f%%", pnl * 100);
+                notificationService.createNotificationWithMeta(
+                        pos.getUserId(),
+                        Notification.NotificationType.TURTLE_TRADE,
+                        "터틀 청산 (" + reasonLabel + ")",
+                        pos.getSymbol() + " 전량 청산 완료. 수익률 " + pnlStr,
+                        Map.of("symbol", pos.getSymbol(), "action", "EXIT", "reason", reason,
+                               "pnl", String.format("%.2f", pnl * 100))
+                );
             } catch (Exception e) {
                 log.warn("터틀 청산 실패: symbol={}, reason={}", pos.getSymbol(), e.getMessage());
             }

@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Builder
@@ -54,6 +55,9 @@ public class BacktestResponse {
     // 가격 데이터 (매매 마커용)
     private List<PricePointDto> priceData;
 
+    // 지표 요약 (0-trade 디버깅용: 지표명 → {min, max, avg, last})
+    private Map<String, IndicatorSummaryDto> indicatorSummary;
+
     @Getter
     @Builder
     public static class DailyReturnDto {
@@ -93,5 +97,14 @@ public class BacktestResponse {
         private double low;
         private double close;
         private double volume;
+    }
+
+    @Getter
+    @Builder
+    public static class IndicatorSummaryDto {
+        private double min;
+        private double max;
+        private double avg;
+        private double last;
     }
 }

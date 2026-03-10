@@ -110,7 +110,7 @@ public class OrderService {
                     .filter(h -> h.getStockCode().equals(stockCode))
                     .findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("보유하지 않은 종목입니다: " + stockName));
-            if (holding.getQuantity().compareTo(quantity.subtract(new BigDecimal("0.0000001"))) < 0) {
+            if (holding.getQuantity().compareTo(quantity) < 0) {
                 throw new IllegalArgumentException("보유 수량이 부족합니다. 보유: " +
                         holding.getQuantity().toPlainString() + "개, 요청: " + quantity.toPlainString() + "개");
             }
@@ -150,6 +150,21 @@ public class OrderService {
         log.info("체결 완료: userId={}, stock={}, type={}, qty={}, price={}",
                 order.getUserId(), order.getStockCode(), order.getOrderType(),
                 order.getQuantity(), executionPrice.toPlainString());
+
+        // 시장가 주문 체결 알림
+        if (order.getOrderMethod() == Order.OrderMethod.MARKET) {
+            String typeLabel = order.getOrderType() == Order.OrderType.BUY ? "매수" : "매도";
+            String priceStr = executionPrice.setScale(0, RoundingMode.HALF_UP).toPlainString();
+            notificationService.createNotificationWithMeta(
+                    order.getUserId(),
+                    Notification.NotificationType.MARKET_ORDER_FILLED,
+                    typeLabel + " 체결 완료",
+                    order.getStockName() + " " + order.getQuantity().stripTrailingZeros().toPlainString()
+                            + "주를 " + priceStr + "원에 " + typeLabel + "했습니다.",
+                    Map.of("orderId", order.getId(), "stockCode", order.getStockCode(),
+                           "assetType", order.getAssetType() != null ? order.getAssetType() : "CRYPTO")
+            );
+        }
     }
 
     private void addOrUpdateHolding(Portfolio portfolio, String stockCode, String stockName,
@@ -270,7 +285,16 @@ public class OrderService {
                 validateOrder(fresh.getOrderType(), fresh.getStockCode(), fresh.getStockName(),
                         fresh.getQuantity(), fresh.getPrice(), portfolio);
             } catch (IllegalArgumentException e) {
-                log.warn("지정가 주문 자동 체결 검증 실패 [{}]: {}", fresh.getId(), e.getMessage());
+                log.warn("지정가 주문 자동 체결 검증 실패 → 자동 취소 [{}]: {}", fresh.getId(), e.getMessage());
+                fresh.setStatus(Order.OrderStatus.CANCELLED);
+                orderRepository.save(fresh);
+                notificationService.createNotificationWithMeta(
+                        fresh.getUserId(),
+                        Notification.NotificationType.LIMIT_ORDER_FILLED,
+                        "지정가 주문 자동 취소",
+                        fresh.getStockName() + " " + fresh.getOrderType().name() + " 주문이 " + e.getMessage() + " 사유로 자동 취소되었습니다.",
+                        Map.of("orderId", fresh.getId(), "stockCode", fresh.getStockCode(), "reason", e.getMessage())
+                );
                 return false;
             }
 

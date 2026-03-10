@@ -3,6 +3,7 @@ import Header from '../components/Header';
 import {
   strategyService,
   type Strategy,
+  type BacktestRequest,
   type BacktestResult,
   type IndicatorData,
   type Indicator,
@@ -60,11 +61,17 @@ const StrategyPage = () => {
   const [applyAmount, setApplyAmount] = useState('1000000');
   const [isApplying, setIsApplying] = useState(false);
 
+  // 백테스팅 가이드
+  const [showBacktestGuide, setShowBacktestGuide] = useState(false);
+
   // 백테스팅 폼 상태
   const [backtestMode, setBacktestMode] = useState<'strategy' | 'stock'>('strategy');
   const [backtestStockCode, setBacktestStockCode] = useState('');
-  const [backtestStartDate, setBacktestStartDate] = useState('');
-  const [backtestEndDate, setBacktestEndDate] = useState('');
+  const [backtestStartDate, setBacktestStartDate] = useState(() => {
+    const d = new Date(); d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [backtestEndDate, setBacktestEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [backtestInitialCapital, setBacktestInitialCapital] = useState('10000000');
 
   // 리스크 관리
@@ -75,6 +82,8 @@ const StrategyPage = () => {
   const [commissionRate, setCommissionRate] = useState('0.1');
   const [positionSizing, setPositionSizing] = useState('ALL_IN');
   const [positionValue, setPositionValue] = useState('');
+  const [tradeDirection, setTradeDirection] = useState<'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT'>('LONG_ONLY');
+  const [maxPositions, setMaxPositions] = useState('1');
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
 
   // 종목 분석 모드 조건
@@ -507,6 +516,13 @@ const StrategyPage = () => {
       return;
     }
 
+    if (backtestMode === 'strategy' && selectedStrategy
+        && (!selectedStrategy.entryConditions || selectedStrategy.entryConditions.length === 0)
+        && (!selectedStrategy.exitConditions || selectedStrategy.exitConditions.length === 0)) {
+      alert('선택한 항로에 진입/청산 조건이 설정되어 있지 않습니다.\n항로 관리에서 조건을 먼저 추가해주세요.');
+      return;
+    }
+
     if (!backtestStockCode || !backtestStartDate || !backtestEndDate) {
       alert('종목, 시작일, 종료일을 모두 입력해주세요.');
       return;
@@ -527,7 +543,7 @@ const StrategyPage = () => {
     setBacktestResult(null);
 
     try {
-      const request: any = {
+      const request: BacktestRequest = {
         stockCode: backtestStockCode,
         stockName: backtestStockName || backtestStockCode,
         startDate: backtestStartDate,
@@ -546,20 +562,72 @@ const StrategyPage = () => {
         request.positionSizing = positionSizing;
         if (positionValue) request.positionValue = parseFloat(positionValue);
       }
+      if (tradeDirection !== 'LONG_ONLY') request.tradeDirection = tradeDirection;
+      if (parseInt(maxPositions) > 1) request.maxPositions = parseInt(maxPositions);
 
       if (backtestMode === 'strategy') {
         request.strategyId = selectedStrategy!.id;
       } else {
         request.entryConditions = directEntryConditions;
         request.exitConditions = directExitConditions;
+
+        // 조건에서 사용된 지표를 자동 추론하여 indicators 배열 생성
+        const usedIndicators = new Set<string>();
+        const allConds = [...directEntryConditions, ...directExitConditions];
+        for (const c of allConds) {
+          const ind = c.indicator?.toUpperCase() || '';
+          // 크로스오버 키 분해
+          if (ind.includes('_CROSSUNDER_')) {
+            ind.split('_CROSSUNDER_').forEach(p => usedIndicators.add(p));
+          } else if (ind.includes('_CROSS_')) {
+            ind.split('_CROSS_').forEach(p => usedIndicators.add(p));
+          } else if (ind !== 'PRICE' && ind !== 'CLOSE') {
+            usedIndicators.add(ind);
+          }
+        }
+        // 지표 키 → Indicator 타입 매핑
+        const keyToType: Record<string, { type: string; params: Record<string, number> }> = {
+          RSI: { type: 'RSI', params: { period: 14 } },
+          MACD: { type: 'MACD', params: { fast: 12, slow: 26, signal: 9 } },
+          MACD_SIGNAL: { type: 'MACD', params: { fast: 12, slow: 26, signal: 9 } },
+          MACD_HISTOGRAM: { type: 'MACD', params: { fast: 12, slow: 26, signal: 9 } },
+          MA: { type: 'MA', params: { period: 20 } },
+          SMA: { type: 'MA', params: { period: 20 } },
+          EMA: { type: 'EMA', params: { period: 20 } },
+          BOLLINGER_UPPER: { type: 'BOLLINGER_BANDS', params: { period: 20, stdDev: 2 } },
+          BOLLINGER_MIDDLE: { type: 'BOLLINGER_BANDS', params: { period: 20, stdDev: 2 } },
+          BOLLINGER_LOWER: { type: 'BOLLINGER_BANDS', params: { period: 20, stdDev: 2 } },
+          BOLLINGER_PCT_B: { type: 'BOLLINGER_BANDS', params: { period: 20, stdDev: 2 } },
+          STOCH_K: { type: 'STOCHASTIC', params: { kPeriod: 14, dPeriod: 3 } },
+          STOCH_D: { type: 'STOCHASTIC', params: { kPeriod: 14, dPeriod: 3 } },
+          ATR: { type: 'ATR', params: { period: 14 } },
+          CCI: { type: 'CCI', params: { period: 20 } },
+          WILLIAMS_R: { type: 'WILLIAMS_R', params: { period: 14 } },
+          OBV: { type: 'OBV', params: {} },
+        };
+        const addedTypes = new Set<string>();
+        const indicators: any[] = [];
+        for (const key of usedIndicators) {
+          const mapping = keyToType[key];
+          if (mapping && !addedTypes.has(mapping.type)) {
+            addedTypes.add(mapping.type);
+            indicators.push({ type: mapping.type, parameters: mapping.params });
+          }
+        }
+        if (indicators.length > 0) {
+          request.indicators = indicators;
+        }
       }
 
       const result = await strategyService.runBacktest(request);
       setBacktestResult(result);
     } catch (error: any) {
-      const rawMsg = error.response?.data?.error || error.message || '';
+      const status = error.response?.status;
+      const rawMsg = error.response?.data?.error || error.response?.data?.message || error.message || '';
       let msg = rawMsg;
-      if (rawMsg.includes('캔들스틱 데이터를 가져올 수 없습니다')) {
+      if (status === 429) {
+        msg = '요청이 너무 많습니다.\n잠시 후 다시 시도해주세요. (분당 5회 제한)';
+      } else if (rawMsg.includes('캔들스틱 데이터를 가져올 수 없습니다')) {
         msg = `${backtestStockName || backtestStockCode}의 시세 데이터를 불러올 수 없습니다.\n\n• 종목코드가 올바른지 확인해주세요\n• 상장폐지/거래정지 종목은 조회가 안 됩니다`;
       } else if (rawMsg.includes('충분한 데이터가 없습니다')) {
         msg = `선택한 기간(${backtestStartDate} ~ ${backtestEndDate})에 데이터가 부족합니다.\n\n• 시작일을 더 최근으로 조정해보세요\n• 신규 상장 종목은 상장일 이후부터 가능합니다`;
@@ -699,7 +767,7 @@ const StrategyPage = () => {
         {/* 전략 관리 탭 */}
         {activeTab === 'strategies' && (
           <div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* 전략 목록 */}
               <div className="card">
                 <div className="flex justify-between items-center mb-4">
@@ -1138,7 +1206,13 @@ const StrategyPage = () => {
                               RSI: { period: 14 },
                               MACD: { fast: 12, slow: 26, signal: 9 },
                               MA: { period: 20 },
+                              EMA: { period: 20 },
                               BOLLINGER_BANDS: { period: 20, stdDev: 2 },
+                              STOCHASTIC: { kPeriod: 14, dPeriod: 3 },
+                              ATR: { period: 14 },
+                              CCI: { period: 20 },
+                              WILLIAMS_R: { period: 14 },
+                              OBV: {},
                             };
                             if (!newIndicators.some(ind => ind.type === type)) {
                               setNewIndicators([...newIndicators, { type, parameters: defaults[type] || {} }]);
@@ -1146,11 +1220,22 @@ const StrategyPage = () => {
                           }}
                         >
                           <option value="">+ 지표 추가</option>
-                          {(['RSI', 'MACD', 'MA', 'BOLLINGER_BANDS'] as const)
-                            .filter(t => !newIndicators.some(ind => ind.type === t))
-                            .map(t => (
+                          {([
+                            ['RSI', 'RSI (상대강도지수)'],
+                            ['MACD', 'MACD'],
+                            ['MA', '이동평균선 (MA)'],
+                            ['EMA', '지수이동평균 (EMA)'],
+                            ['BOLLINGER_BANDS', '볼린저 밴드'],
+                            ['STOCHASTIC', '스토캐스틱'],
+                            ['ATR', 'ATR (평균진폭)'],
+                            ['CCI', 'CCI (상품채널지수)'],
+                            ['WILLIAMS_R', 'Williams %R'],
+                            ['OBV', 'OBV (거래량)'],
+                          ] as const)
+                            .filter(([t]) => !newIndicators.some(ind => ind.type === t))
+                            .map(([t, label]) => (
                               <option key={t} value={t}>
-                                {t === 'RSI' ? 'RSI (상대강도지수)' : t === 'MACD' ? 'MACD' : t === 'MA' ? '이동평균선 (MA)' : '볼린저 밴드'}
+                                {label}
                               </option>
                             ))}
                         </select>
@@ -1187,7 +1272,9 @@ const StrategyPage = () => {
                       {newEntryConditions.length === 0 && (
                         <p className="text-xs text-gray-400">조건을 추가하면 백테스팅 시 자동으로 매수 시점을 판단합니다</p>
                       )}
-                      {newEntryConditions.map((cond, idx) => (
+                      {newEntryConditions.map((cond, idx) => {
+                        const isCross = cond.indicator.includes('_CROSS_') || cond.indicator.includes('_CROSSUNDER_');
+                        return (
                         <div key={idx} className="flex items-center gap-2 mb-2">
                           {idx > 0 && (
                             <select
@@ -1204,7 +1291,7 @@ const StrategyPage = () => {
                             </select>
                           )}
                           <select
-                            className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white flex-1"
+                            className={`text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white ${isCross ? 'flex-[2]' : 'flex-1'}`}
                             value={cond.indicator}
                             onChange={(e) => {
                               const updated = [...newEntryConditions];
@@ -1212,16 +1299,32 @@ const StrategyPage = () => {
                               setNewEntryConditions(updated);
                             }}
                           >
-                            <option value="PRICE">가격</option>
+                            <option value="PRICE">현재가</option>
                             <option value="RSI">RSI</option>
                             <option value="MACD">MACD</option>
                             <option value="MACD_SIGNAL">MACD 시그널</option>
                             <option value="MACD_HISTOGRAM">MACD 히스토그램</option>
                             <option value="MA">이동평균 (MA)</option>
+                            <option value="EMA">지수이동평균 (EMA)</option>
                             <option value="BOLLINGER_UPPER">볼린저 상단</option>
                             <option value="BOLLINGER_MIDDLE">볼린저 중간</option>
                             <option value="BOLLINGER_LOWER">볼린저 하단</option>
+                            <option value="BOLLINGER_PCT_B">볼린저 %B</option>
+                            <option value="STOCH_K">스토캐스틱 %K</option>
+                            <option value="STOCH_D">스토캐스틱 %D</option>
+                            <option value="ATR">ATR</option>
+                            <option value="CCI">CCI</option>
+                            <option value="WILLIAMS_R">Williams %R</option>
+                            <option value="OBV">OBV</option>
+                            <option value="MACD_CROSS_MACD_SIGNAL">MACD 골든크로스</option>
+                            <option value="MACD_CROSSUNDER_MACD_SIGNAL">MACD 데드크로스</option>
+                            <option value="STOCH_K_CROSS_STOCH_D">스토캐스틱 골든크로스</option>
+                            <option value="STOCH_K_CROSSUNDER_STOCH_D">스토캐스틱 데드크로스</option>
+                            <option value="EMA_CROSS_MA">EMA ↑ SMA 크로스</option>
+                            <option value="EMA_CROSSUNDER_MA">EMA ↓ SMA 크로스</option>
                           </select>
+                          {!isCross && (
+                          <>
                           <select
                             className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white w-16"
                             value={cond.operator}
@@ -1247,13 +1350,16 @@ const StrategyPage = () => {
                               setNewEntryConditions(updated);
                             }}
                           />
+                          </>
+                          )}
                           <button
                             type="button"
                             onClick={() => setNewEntryConditions(newEntryConditions.filter((_, i) => i !== idx))}
                             className="text-gray-300 hover:text-red-500 text-sm"
                           >x</button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {/* 청산 조건 */}
@@ -1269,7 +1375,9 @@ const StrategyPage = () => {
                       {newExitConditions.length === 0 && (
                         <p className="text-xs text-gray-400">조건을 추가하면 백테스팅 시 자동으로 매도 시점을 판단합니다</p>
                       )}
-                      {newExitConditions.map((cond, idx) => (
+                      {newExitConditions.map((cond, idx) => {
+                        const isCross = cond.indicator.includes('_CROSS_') || cond.indicator.includes('_CROSSUNDER_');
+                        return (
                         <div key={idx} className="flex items-center gap-2 mb-2">
                           {idx > 0 && (
                             <select
@@ -1286,7 +1394,7 @@ const StrategyPage = () => {
                             </select>
                           )}
                           <select
-                            className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white flex-1"
+                            className={`text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white ${isCross ? 'flex-[2]' : 'flex-1'}`}
                             value={cond.indicator}
                             onChange={(e) => {
                               const updated = [...newExitConditions];
@@ -1294,16 +1402,32 @@ const StrategyPage = () => {
                               setNewExitConditions(updated);
                             }}
                           >
-                            <option value="PRICE">가격</option>
+                            <option value="PRICE">현재가</option>
                             <option value="RSI">RSI</option>
                             <option value="MACD">MACD</option>
                             <option value="MACD_SIGNAL">MACD 시그널</option>
                             <option value="MACD_HISTOGRAM">MACD 히스토그램</option>
                             <option value="MA">이동평균 (MA)</option>
+                            <option value="EMA">지수이동평균 (EMA)</option>
                             <option value="BOLLINGER_UPPER">볼린저 상단</option>
                             <option value="BOLLINGER_MIDDLE">볼린저 중간</option>
                             <option value="BOLLINGER_LOWER">볼린저 하단</option>
+                            <option value="BOLLINGER_PCT_B">볼린저 %B</option>
+                            <option value="STOCH_K">스토캐스틱 %K</option>
+                            <option value="STOCH_D">스토캐스틱 %D</option>
+                            <option value="ATR">ATR</option>
+                            <option value="CCI">CCI</option>
+                            <option value="WILLIAMS_R">Williams %R</option>
+                            <option value="OBV">OBV</option>
+                            <option value="MACD_CROSS_MACD_SIGNAL">MACD 골든크로스</option>
+                            <option value="MACD_CROSSUNDER_MACD_SIGNAL">MACD 데드크로스</option>
+                            <option value="STOCH_K_CROSS_STOCH_D">스토캐스틱 골든크로스</option>
+                            <option value="STOCH_K_CROSSUNDER_STOCH_D">스토캐스틱 데드크로스</option>
+                            <option value="EMA_CROSS_MA">EMA ↑ SMA 크로스</option>
+                            <option value="EMA_CROSSUNDER_MA">EMA ↓ SMA 크로스</option>
                           </select>
+                          {!isCross && (
+                          <>
                           <select
                             className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white w-16"
                             value={cond.operator}
@@ -1329,13 +1453,16 @@ const StrategyPage = () => {
                               setNewExitConditions(updated);
                             }}
                           />
+                          </>
+                          )}
                           <button
                             type="button"
                             onClick={() => setNewExitConditions(newExitConditions.filter((_, i) => i !== idx))}
                             className="text-gray-300 hover:text-red-500 text-sm"
                           >x</button>
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
 
                     {/* 프리셋 버튼 */}
@@ -1365,10 +1492,8 @@ const StrategyPage = () => {
                             type="button"
                             onClick={() => {
                               setNewIndicators([{ type: 'BOLLINGER_BANDS', parameters: { period: 20, stdDev: 2 } }]);
-                              setNewEntryConditions([{ indicator: 'PRICE', operator: 'LT', value: 0, logic: 'AND' }]);
-                              setNewExitConditions([{ indicator: 'PRICE', operator: 'GT', value: 0, logic: 'AND' }]);
-                              // 볼린저는 값이 동적이므로 힌트 표시
-                              alert('볼린저 밴드 전략:\n매수 조건의 값을 볼린저 하단 근처 가격으로,\n매도 조건의 값을 볼린저 상단 근처 가격으로 설정하세요.\n\n또는 RSI와 조합하여 사용하면 더 효과적입니다.');
+                              setNewEntryConditions([{ indicator: 'BOLLINGER_PCT_B', operator: 'LT', value: 0, logic: 'AND' }]);
+                              setNewExitConditions([{ indicator: 'BOLLINGER_PCT_B', operator: 'GT', value: 1, logic: 'AND' }]);
                             }}
                             className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-medium hover:bg-indigo-100 border border-indigo-200"
                           >볼린저 밴드 반전</button>
@@ -1477,8 +1602,22 @@ const StrategyPage = () => {
                   </svg>
                 </div>
                 <div className="flex-1">
-                  <h2 className="text-xl font-bold text-slate-800">백테스팅</h2>
-                  <p className="text-sm text-slate-500">전략의 과거 성과를 시뮬레이션합니다</p>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-slate-800">백테스팅</h2>
+                    <button
+                      onClick={() => setShowBacktestGuide(!showBacktestGuide)}
+                      className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-300 border ${showBacktestGuide ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-200' : 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600 border-blue-200 hover:shadow-md hover:shadow-blue-100 hover:border-blue-300'}`}
+                    >
+                      <img src="/whales/narwhal.png" alt="" className="w-9 h-9 object-contain animate-narwhal-swim" />
+                      {showBacktestGuide ? '가이드 닫기' : '처음이라면?'}
+                      {!showBacktestGuide && (
+                        <svg className="w-3.5 h-3.5 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-sm text-slate-500">항로(전략)가 과거 바다에서 어떤 성과를 냈는지 확인해보세요</p>
                 </div>
                 <div className="flex bg-white rounded-xl border border-slate-200 p-1">
                   <button
@@ -1496,6 +1635,123 @@ const StrategyPage = () => {
                 </div>
               </div>
 
+              {/* 초보자 가이드 */}
+              {showBacktestGuide && (
+                <div className="mb-5 bg-gradient-to-br from-blue-50 via-indigo-50 to-sky-50 border border-blue-200/60 rounded-2xl p-6 shadow-sm">
+                  {/* 헤더 */}
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                      <img src="/whales/narwhal.png" alt="" className="w-10 h-10 object-contain drop-shadow-md" />
+                      <div>
+                        <h3 className="text-base font-bold text-blue-800">백테스팅 가이드</h3>
+                        <p className="text-[11px] text-blue-500">처음이어도 괜찮아요, 하나씩 알려드릴게요!</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setShowBacktestGuide(false)} className="w-7 h-7 rounded-full bg-white/80 text-slate-400 hover:text-slate-600 hover:bg-white flex items-center justify-center text-lg leading-none shadow-sm transition-colors">&times;</button>
+                  </div>
+
+                  {/* 백테스팅이란 */}
+                  <div className="bg-white/60 rounded-xl p-4 mb-4 border border-blue-100/50">
+                    <p className="text-xs text-blue-700 leading-relaxed">
+                      <b>백테스팅</b>은 내가 만든 매매 전략이 과거에 실제로 작동했는지 시뮬레이션하는 것입니다.
+                      예를 들어 "RSI가 30 이하면 매수, 70 이상이면 매도"라는 조건을 설정하면,
+                      과거 데이터에서 그 조건대로 거래했을 때 수익이 났는지 확인할 수 있습니다.
+                    </p>
+                  </div>
+
+                  {/* 사용법 + 고급 설정 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                    <div className="bg-white/60 rounded-xl p-4 border border-emerald-100/50">
+                      <div className="text-xs font-bold text-emerald-700 mb-2.5 flex items-center gap-2">
+                        <img src="/whales/dolphin.png" alt="" className="w-7 h-7 object-contain drop-shadow-sm" />
+                        사용법
+                      </div>
+                      <ol className="text-[11px] text-slate-600 space-y-1.5 list-decimal list-inside">
+                        <li><b>항로 백테스트</b> — 이미 만든 전략을 선택해서 테스트</li>
+                        <li><b>종목 분석</b> — 프리셋(RSI, MACD 등)을 선택하면 바로 테스트</li>
+                        <li>종목과 기간을 선택하고 <b>백테스트 실행</b> 클릭</li>
+                      </ol>
+                    </div>
+                    <div className="bg-white/60 rounded-xl p-4 border border-blue-100/50">
+                      <div className="text-xs font-bold text-blue-700 mb-2.5 flex items-center gap-2">
+                        <img src="/whales/blue-whale.png" alt="" className="w-7 h-7 object-contain drop-shadow-sm" />
+                        고급 설정 설명
+                      </div>
+                      <ul className="text-[11px] text-slate-600 space-y-1.5">
+                        <li><b>손절(Stop Loss)</b> — 일정 % 손실 시 자동 매도</li>
+                        <li><b>익절(Take Profit)</b> — 일정 % 수익 시 자동 매도</li>
+                        <li><b>트레일링 스탑</b> — 최고점 대비 하락 시 매도</li>
+                        <li><b>슬리피지</b> — 실제 체결가와의 차이 (현실 반영용)</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* 기술적 지표 용어 */}
+                  <div className="bg-white/60 rounded-xl p-4 mb-4 border border-violet-100/50">
+                    <div className="text-xs font-bold text-violet-700 mb-3 flex items-center gap-2">
+                      <img src="/whales/orca.png" alt="" className="w-7 h-7 object-contain drop-shadow-sm" />
+                      매매 조건 지표 용어
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-[11px] text-slate-600">
+                      <div><b>RSI</b> — 과매수/과매도 판단 (0~100, 30↓매수 70↑매도)</div>
+                      <div><b>MACD</b> — 추세 방향과 강도 (양수=상승, 음수=하락)</div>
+                      <div><b>MACD 시그널</b> — MACD의 이동평균 (교차 시 매매 신호)</div>
+                      <div><b>MACD 히스토그램</b> — MACD - 시그널 (추세 강도)</div>
+                      <div><b>이동평균(MA)</b> — N일 평균가 (추세 방향 확인)</div>
+                      <div><b>지수이동평균(EMA)</b> — 최근 가격에 가중치를 둔 평균</div>
+                      <div><b>볼린저 상단/하단</b> — 가격 변동 범위의 위/아래 경계</div>
+                      <div><b>볼린저 %B</b> — 볼린저 밴드 내 위치 (0~1, 0↓과매도)</div>
+                      <div><b>스토캐스틱 %K</b> — 최근 가격 위치 (0~100, 빠른 신호)</div>
+                      <div><b>스토캐스틱 %D</b> — %K의 이동평균 (느린 신호, 확인용)</div>
+                      <div><b>ATR</b> — 평균 변동폭 (높으면 변동성 큼)</div>
+                      <div><b>CCI</b> — 평균 가격 대비 편차 (+100↑과매수 -100↓과매도)</div>
+                      <div><b>Williams %R</b> — 과매수/과매도 (-20↑과매수 -80↓과매도)</div>
+                      <div><b>OBV</b> — 거래량 누적 (가격과 함께 오르면 상승 확인)</div>
+                      <div><b>현재가</b> — 현재 코인 가격 그 자체</div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-violet-100/80">
+                      <div className="text-[10px] font-semibold text-violet-600 mb-1.5">크로스 (교차) 신호</div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 text-[11px] text-slate-600">
+                        <div><b>MACD 골든크로스</b> — MACD가 시그널 위로 교차 (매수)</div>
+                        <div><b>MACD 데드크로스</b> — MACD가 시그널 아래로 교차 (매도)</div>
+                        <div><b>스토캐스틱 골든크로스</b> — %K가 %D 위로 교차 (매수)</div>
+                        <div><b>스토캐스틱 데드크로스</b> — %K가 %D 아래로 교차 (매도)</div>
+                        <div><b>EMA ↑ SMA 크로스</b> — 단기가 장기 위로 (상승 전환)</div>
+                        <div><b>EMA ↓ SMA 크로스</b> — 단기가 장기 아래로 (하락 전환)</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-violet-100/80 flex items-center gap-2">
+                      <img src="/whales/spotted-dolphin.png" alt="" className="w-5 h-5 object-contain" />
+                      <p className="text-[11px] text-violet-600">
+                        각 지표의 자세한 설명과 활용법은 상단 <b className="text-violet-700">"기술적 지표"</b> 탭에서 확인할 수 있어요!
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 결과 지표 해석 */}
+                  <div className="bg-white/60 rounded-xl p-4 border border-indigo-100/50">
+                    <div className="text-xs font-bold text-indigo-700 mb-3 flex items-center gap-2">
+                      <img src="/whales/beluga.png" alt="" className="w-7 h-7 object-contain drop-shadow-sm" />
+                      결과 지표 해석
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 text-[11px] text-slate-600">
+                      <div><b>총 수익률</b> — 전체 기간 동안의 수익/손실 %</div>
+                      <div><b>CAGR</b> — 연평균 복합 성장률 (연 환산 수익률)</div>
+                      <div><b>MDD(최대 낙폭)</b> — 최고점 대비 가장 큰 하락 폭</div>
+                      <div><b>샤프 비율</b> — 위험 대비 수익 (1 이상이면 양호)</div>
+                      <div><b>소르티노 비율</b> — 하락 위험만 고려한 수익 비율</div>
+                      <div><b>승률</b> — 수익 거래 수 / 전체 거래 수</div>
+                      <div><b>Profit Factor</b> — 총 이익 / 총 손실 (1.5+ 양호)</div>
+                      <div><b>Payoff Ratio</b> — 평균 이익 / 평균 손실</div>
+                      <div><b>회복 비율</b> — 수익률 / MDD (높을수록 좋음)</div>
+                      <div><b>Buy & Hold 대비</b> — 그냥 사서 들고 있었을 때 대비 성과</div>
+                      <div><b>OUTPERFORM</b> — Buy & Hold보다 수익률이 높음</div>
+                      <div><b>UNDERPERFORM</b> — Buy & Hold보다 수익률이 낮음</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* 모드별 상단 영역 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
                 {backtestMode === 'strategy' ? (
@@ -1507,6 +1763,11 @@ const StrategyPage = () => {
                       onChange={(e) => {
                         const strategy = strategies.find((s) => s.id === e.target.value);
                         setSelectedStrategy(strategy || null);
+                        // 항로 변경 시 종목 초기화
+                        setBacktestStockCode('');
+                        setBacktestStockName('');
+                        setBacktestSearchQuery('');
+                        setBacktestAssetType('CRYPTO');
                       }}
                       className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                     >
@@ -1673,74 +1934,172 @@ const StrategyPage = () => {
                   </div>
                 )}
 
-                {/* 종목 검색 (공통) */}
+                {/* 종목 선택 */}
                 <div className="relative">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">종목 검색</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={backtestSearchQuery}
-                      onChange={(e) => handleBacktestSearch(e.target.value)}
-                      onFocus={() => { if (backtestSearchResults.length > 0) setShowBacktestDropdown(true); }}
-                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all pr-10"
-                      placeholder="종목명 또는 코드 (예: BTC, 삼성전자)"
-                    />
-                    {isBacktestSearching && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  {/* 항로 모드: 항로에 포함된 종목 목록 우선 표시 */}
+                  {backtestMode === 'strategy' && selectedStrategy && selectedStrategy.targetAssets && selectedStrategy.targetAssets.length > 0 ? (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                        테스트 종목 선택
+                      </label>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {selectedStrategy.targetAssets.map((assetCode) => {
+                          const assetName = selectedStrategy.targetAssetNames?.[assetCode] || assetCode;
+                          const isStock = /^\d{6}$/.test(assetCode);
+                          const isSelected = backtestStockCode === assetCode;
+                          return (
+                            <button
+                              key={assetCode}
+                              type="button"
+                              onClick={() => {
+                                handleBacktestStockSelect(assetCode, assetName, isStock ? 'STOCK' : 'CRYPTO');
+                              }}
+                              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 ${
+                                isSelected
+                                  ? 'border-blue-400 bg-blue-50 text-blue-700 ring-1 ring-blue-200'
+                                  : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-slate-50'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${isStock ? 'bg-indigo-500' : 'bg-emerald-500'}`} />
+                              {assetName}
+                              {assetName !== assetCode && <span className="text-slate-400">({assetCode})</span>}
+                            </button>
+                          );
+                        })}
                       </div>
-                    )}
-                    {!isBacktestSearching && backtestStockCode && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                  {backtestStockCode && (
-                    <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-lg border border-slate-200 text-xs">
-                      <span className={`w-2 h-2 rounded-full ${backtestAssetType === 'STOCK' ? 'bg-indigo-500' : 'bg-emerald-500'}`} />
-                      <span className="font-medium text-slate-700">{backtestStockName}</span>
-                      <span className="text-slate-400">{backtestStockCode}</span>
-                      <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${backtestAssetType === 'STOCK' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                        {backtestAssetType === 'STOCK' ? '주식' : '코인'}
-                      </span>
-                    </div>
-                  )}
-                  {showBacktestDropdown && backtestSearchResults.length > 0 && (
-                    <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                      {backtestSearchResults.map((r) => (
-                        <button
-                          key={`${r.market}-${r.code}`}
-                          type="button"
-                          onClick={() => handleBacktestStockSelect(r.code, r.name, r.market)}
-                          className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-sm flex items-center justify-between transition-colors first:rounded-t-xl last:rounded-b-xl"
-                        >
-                          <span className="font-medium text-slate-800">{r.name} <span className="text-slate-400 text-xs">({r.code})</span></span>
-                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                            {r.market === 'STOCK' ? '주식' : '코인'}
+                      {/* 항로에 없는 종목을 검색으로 선택한 경우 뱃지 표시 */}
+                      {backtestStockCode && !selectedStrategy.targetAssets.includes(backtestStockCode) && (
+                        <div className="mb-3 inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-lg border border-slate-200 text-xs">
+                          <span className={`w-2 h-2 rounded-full ${backtestAssetType === 'STOCK' ? 'bg-indigo-500' : 'bg-emerald-500'}`} />
+                          <span className="font-medium text-slate-700">{backtestStockName}</span>
+                          <span className="text-slate-400">{backtestStockCode}</span>
+                          <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${backtestAssetType === 'STOCK' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                            {backtestAssetType === 'STOCK' ? '주식' : '코인'}
                           </span>
-                        </button>
-                      ))}
+                        </div>
+                      )}
+                      {/* 다른 종목 검색 (접이식) */}
+                      <details className="group">
+                        <summary className="text-xs text-slate-400 hover:text-blue-500 cursor-pointer transition-colors">
+                          다른 종목으로 테스트하기
+                        </summary>
+                        <div className="mt-2 relative">
+                          <input
+                            type="text"
+                            value={backtestSearchQuery}
+                            onChange={(e) => handleBacktestSearch(e.target.value)}
+                            onFocus={() => { if (backtestSearchResults.length > 0) setShowBacktestDropdown(true); }}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all pr-10"
+                            placeholder="종목명 또는 코드 (예: BTC, 삼성전자)"
+                          />
+                          {isBacktestSearching && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                            </div>
+                          )}
+                          {showBacktestDropdown && backtestSearchResults.length > 0 && (
+                            <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                              {backtestSearchResults.map((r) => (
+                                <button
+                                  key={`${r.market}-${r.code}`}
+                                  type="button"
+                                  onClick={() => handleBacktestStockSelect(r.code, r.name, r.market)}
+                                  className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-sm flex items-center justify-between transition-colors first:rounded-t-xl last:rounded-b-xl"
+                                >
+                                  <span className="font-medium text-slate-800">{r.name} <span className="text-slate-400 text-xs">({r.code})</span></span>
+                                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                    {r.market === 'STOCK' ? '주식' : '코인'}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    </div>
+                  ) : (
+                    /* 종목 분석 모드 또는 항로에 종목 없을 때: 기존 종목 검색 */
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">종목 검색</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={backtestSearchQuery}
+                          onChange={(e) => handleBacktestSearch(e.target.value)}
+                          onFocus={() => { if (backtestSearchResults.length > 0) setShowBacktestDropdown(true); }}
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all pr-10"
+                          placeholder="종목명 또는 코드 (예: BTC, 삼성전자)"
+                        />
+                        {isBacktestSearching && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                          </div>
+                        )}
+                        {!isBacktestSearching && backtestStockCode && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                      {backtestStockCode && (
+                        <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-lg border border-slate-200 text-xs">
+                          <span className={`w-2 h-2 rounded-full ${backtestAssetType === 'STOCK' ? 'bg-indigo-500' : 'bg-emerald-500'}`} />
+                          <span className="font-medium text-slate-700">{backtestStockName}</span>
+                          <span className="text-slate-400">{backtestStockCode}</span>
+                          <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${backtestAssetType === 'STOCK' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                            {backtestAssetType === 'STOCK' ? '주식' : '코인'}
+                          </span>
+                        </div>
+                      )}
+                      {showBacktestDropdown && backtestSearchResults.length > 0 && (
+                        <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                          {backtestSearchResults.map((r) => (
+                            <button
+                              key={`${r.market}-${r.code}`}
+                              type="button"
+                              onClick={() => handleBacktestStockSelect(r.code, r.name, r.market)}
+                              className="w-full text-left px-4 py-2.5 hover:bg-blue-50 text-sm flex items-center justify-between transition-colors first:rounded-t-xl last:rounded-b-xl"
+                            >
+                              <span className="font-medium text-slate-800">{r.name} <span className="text-slate-400 text-xs">({r.code})</span></span>
+                              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                {r.market === 'STOCK' ? '주식' : '코인'}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
 
               {/* 날짜 + 자본 */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">시작일</label>
-                  <input type="date" value={backtestStartDate} onChange={(e) => setBacktestStartDate(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" />
+                  <div className="relative">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <input type="date" value={backtestStartDate} onChange={(e) => setBacktestStartDate(e.target.value)}
+                      max={backtestEndDate || undefined}
+                      className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all appearance-none" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">종료일</label>
-                  <input type="date" value={backtestEndDate} onChange={(e) => setBacktestEndDate(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" />
+                  <div className="relative">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <input type="date" value={backtestEndDate} onChange={(e) => setBacktestEndDate(e.target.value)}
+                      min={backtestStartDate || undefined} max={new Date().toISOString().slice(0, 10)}
+                      className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all appearance-none" />
+                  </div>
                 </div>
-                <div>
+                <div className="sm:col-span-2 md:col-span-1">
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">초기 투자금</label>
                   <input type="number" value={backtestInitialCapital} onChange={(e) => setBacktestInitialCapital(e.target.value)}
                     className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" placeholder="10,000,000" />
@@ -1781,8 +2140,27 @@ const StrategyPage = () => {
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs" placeholder="0.1" step="0.05" min="0" />
                       </div>
                     </div>
-                    {/* 수수료 & 포지션 사이징 */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {/* 매매 방향 & 다중 포지션 */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">매매 방향</label>
+                        <select value={tradeDirection} onChange={(e) => setTradeDirection(e.target.value as any)}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs">
+                          <option value="LONG_ONLY">롱 (매수만)</option>
+                          <option value="SHORT_ONLY">숏 (공매도만)</option>
+                          <option value="LONG_SHORT">롱+숏 (양방향)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">최대 포지션 수</label>
+                        <select value={maxPositions} onChange={(e) => setMaxPositions(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs">
+                          <option value="1">1 (단일)</option>
+                          <option value="2">2 (분할매수)</option>
+                          <option value="3">3</option>
+                          <option value="5">5</option>
+                        </select>
+                      </div>
                       <div>
                         <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">수수료율 (%)</label>
                         <input type="number" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)}
@@ -1797,7 +2175,9 @@ const StrategyPage = () => {
                           <option value="FIXED_AMOUNT">고정 금액</option>
                         </select>
                       </div>
-                      {positionSizing !== 'ALL_IN' && (
+                    </div>
+                    {positionSizing !== 'ALL_IN' && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
                           <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">
                             {positionSizing === 'PERCENT' ? '투자 비율 (%)' : '투자 금액 (원)'}
@@ -1806,8 +2186,8 @@ const StrategyPage = () => {
                             className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs"
                             placeholder={positionSizing === 'PERCENT' ? '50' : '5000000'} min="0" />
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1866,41 +2246,82 @@ const StrategyPage = () => {
 
                   {/* 핵심 KPI 6개 */}
                   <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-5">
-                    <div className={`p-3 rounded-xl border ${backtestResult.totalReturnRate >= 0 ? 'bg-red-50/70 border-red-100' : 'bg-blue-50/70 border-blue-100'}`}>
+                    <div title="전체 기간 동안의 총 수익/손실 비율" className={`p-3 rounded-xl border cursor-help ${backtestResult.totalReturnRate >= 0 ? 'bg-red-50/70 border-red-100' : 'bg-blue-50/70 border-blue-100'}`}>
                       <div className="text-[10px] font-medium text-slate-500 mb-1">총 수익률</div>
                       <div className={`text-xl font-bold tracking-tight ${backtestResult.totalReturnRate >= 0 ? 'text-red-600' : 'text-blue-600'}`}>
                         {formatPercent(backtestResult.totalReturnRate)}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">{formatCurrency(backtestResult.totalReturn)}</div>
                     </div>
-                    <div className="p-3 rounded-xl border bg-slate-50/70 border-slate-100">
+                    <div title="백테스트 종료 시점의 총 자산 가치" className="p-3 rounded-xl border bg-slate-50/70 border-slate-100 cursor-help">
                       <div className="text-[10px] font-medium text-slate-500 mb-1">최종 자산</div>
                       <div className="text-xl font-bold text-slate-800 tracking-tight">{formatCurrency(backtestResult.finalValue)}</div>
                       <div className="text-[10px] text-slate-400 mt-0.5">초기 {formatCurrency(backtestResult.initialCapital)}</div>
                     </div>
-                    <div className="p-3 rounded-xl border bg-purple-50/70 border-purple-100">
+                    <div title="연평균 복합 성장률 (Compound Annual Growth Rate)&#10;1년으로 환산했을 때의 수익률입니다" className="p-3 rounded-xl border bg-purple-50/70 border-purple-100 cursor-help">
                       <div className="text-[10px] font-medium text-slate-500 mb-1">CAGR</div>
                       <div className={`text-xl font-bold tracking-tight ${(backtestResult.cagr ?? 0) >= 0 ? 'text-purple-600' : 'text-blue-600'}`}>
                         {formatPercent(backtestResult.cagr ?? 0)}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">연평균 성장률</div>
                     </div>
-                    <div className="p-3 rounded-xl border bg-amber-50/70 border-amber-100">
+                    <div title="위험 대비 수익 비율 (Sharpe Ratio)&#10;높을수록 같은 위험에서 더 많은 수익&#10;1 이상 = 양호 / 2 이상 = 우수" className="p-3 rounded-xl border bg-amber-50/70 border-amber-100 cursor-help">
                       <div className="text-[10px] font-medium text-slate-500 mb-1">샤프 비율</div>
                       <div className="text-xl font-bold text-slate-800 tracking-tight">{backtestResult.sharpeRatio.toFixed(2)}</div>
                       <div className="text-[10px] text-slate-400 mt-0.5">{backtestResult.sharpeRatio >= 1 ? '양호' : backtestResult.sharpeRatio >= 0.5 ? '보통' : '주의'}</div>
                     </div>
-                    <div className="p-3 rounded-xl border bg-orange-50/70 border-orange-100">
+                    <div title="Maximum Drawdown (최대 낙폭)&#10;최고점 대비 가장 크게 떨어진 폭&#10;작을수록 안정적인 전략입니다" className="p-3 rounded-xl border bg-orange-50/70 border-orange-100 cursor-help">
                       <div className="text-[10px] font-medium text-slate-500 mb-1">최대 낙폭</div>
-                      <div className="text-xl font-bold text-orange-600 tracking-tight">{formatPercent(backtestResult.maxDrawdown)}</div>
+                      <div className="text-xl font-bold text-orange-600 tracking-tight">{backtestResult.maxDrawdown === 0 ? '0.00%' : `${backtestResult.maxDrawdown.toFixed(2)}%`}</div>
                       <div className="text-[10px] text-slate-400 mt-0.5">MDD</div>
                     </div>
-                    <div className="p-3 rounded-xl border bg-emerald-50/70 border-emerald-100">
+                    <div title="수익 난 거래 수 / 전체 거래 수&#10;승률이 낮아도 평균 이익이 크면 전략이 유효할 수 있습니다" className="p-3 rounded-xl border bg-emerald-50/70 border-emerald-100 cursor-help">
                       <div className="text-[10px] font-medium text-slate-500 mb-1">승률</div>
                       <div className="text-xl font-bold text-emerald-600 tracking-tight">{backtestResult.winRate.toFixed(1)}%</div>
                       <div className="text-[10px] text-slate-400 mt-0.5">{backtestResult.totalTrades}회 거래</div>
                     </div>
                   </div>
+
+                  {/* 0-trade 경고 배너 */}
+                  {backtestResult.totalTrades === 0 && (
+                    <div className="mb-5 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                      <div className="flex items-start gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div>
+                          <div className="font-semibold text-amber-800 text-sm mb-1">거래가 발생하지 않았습니다</div>
+                          <div className="text-xs text-amber-700 space-y-1">
+                            <p>선택한 기간 동안 진입 조건이 한 번도 충족되지 않았습니다. 다음을 확인해보세요:</p>
+                            <ul className="list-disc list-inside ml-1 space-y-0.5">
+                              <li>진입 조건의 지표 기준값이 너무 극단적이지 않은지 (예: RSI &lt; 30은 강한 상승장에서 잘 발생하지 않음)</li>
+                              <li>지표 종류와 비교 대상이 올바른지 (예: 볼린저 %B는 0~1 범위)</li>
+                              <li>다른 기간이나 종목으로 테스트해보기</li>
+                            </ul>
+                          </div>
+                          {/* 지표 범위 요약 */}
+                          {backtestResult.indicatorSummary && Object.keys(backtestResult.indicatorSummary).length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-amber-200">
+                              <div className="text-xs font-semibold text-amber-800 mb-2">기간 내 지표 범위</div>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                {Object.entries(backtestResult.indicatorSummary).map(([key, summary]: [string, any]) => (
+                                  <div key={key} className="bg-white/60 rounded-lg px-2.5 py-1.5 border border-amber-100">
+                                    <div className="text-[10px] font-bold text-amber-900">{key}</div>
+                                    <div className="text-[10px] text-amber-700">
+                                      최소 <b>{summary.min?.toLocaleString()}</b> ~ 최대 <b>{summary.max?.toLocaleString()}</b>
+                                    </div>
+                                    <div className="text-[10px] text-amber-600">
+                                      평균 {summary.avg?.toLocaleString()} · 마지막 {summary.last?.toLocaleString()}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Buy & Hold 비교 바 */}
                   {backtestResult.buyHoldReturnRate !== undefined && (
@@ -1935,7 +2356,11 @@ const StrategyPage = () => {
                       { label: '평균 보유', value: `${(backtestResult.avgHoldingDays ?? 0).toFixed(1)}일`, sub: '거래당' },
                       { label: 'MDD 지속', value: `${backtestResult.maxDrawdownDuration ?? 0}일`, sub: '최대 낙폭 기간' },
                       { label: '회복 비율', value: (backtestResult.recoveryFactor ?? 0).toFixed(2), sub: '수익/MDD' },
-                      { label: '총 수수료', value: formatCurrency(Math.round(backtestResult.initialCapital * (parseFloat(commissionRate || '0.1') / 100) * (backtestResult.totalTrades * 2))), sub: `${backtestResult.totalTrades * 2}회 (${commissionRate || '0.1'}%)` },
+                      { label: '총 수수료(추정)', value: formatCurrency(Math.round(
+                        (backtestResult.trades || [])
+                          .filter(t => t.type === 'BUY')
+                          .reduce((sum, t) => sum + Math.abs(t.pnl), 0) * 2
+                      )), sub: `${backtestResult.totalTrades * 2}회 (${commissionRate || '0.1'}%)` },
                       { label: '거래 기간', value: `${backtestResult.equityCurve?.length ?? 0}일`, sub: `${backtestResult.startDate} ~` },
                     ].map((item, i) => (
                       <div key={i} className="p-2.5 rounded-lg bg-slate-50/70 border border-slate-100 text-center">
@@ -1951,17 +2376,22 @@ const StrategyPage = () => {
                 {backtestResult.priceData && backtestResult.priceData.length > 0 && (
                   <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
                     <h3 className="text-lg font-bold text-slate-800 mb-1">가격 차트 & 매매 포인트</h3>
-                    <p className="text-xs text-slate-400 mb-4">빨간 삼각형 = 매수 / 파란 삼각형 = 매도</p>
+                    <p className="text-xs text-slate-400 mb-4">빨강 = 매수(롱) / 파랑 = 매도 / 보라 = 숏진입 / 남색 = 숏청산</p>
                     <ResponsiveContainer width="100%" height={400}>
                       <ComposedChart data={(() => {
                         const tradeMap = new Map<string, { type: string; price: number }>();
                         (backtestResult.trades || []).forEach(t => tradeMap.set(t.date, { type: t.type, price: t.price }));
-                        return backtestResult.priceData!.map(p => ({
-                          date: p.date,
-                          close: p.close,
-                          buySignal: tradeMap.get(p.date)?.type === 'BUY' ? p.close * 0.97 : null,
-                          sellSignal: tradeMap.get(p.date)?.type === 'SELL' ? p.close * 1.03 : null,
-                        }));
+                        return backtestResult.priceData!.map(p => {
+                          const t = tradeMap.get(p.date);
+                          return {
+                            date: p.date,
+                            close: p.close,
+                            buySignal: t?.type === 'BUY' ? p.close * 0.97 : null,
+                            sellSignal: t?.type === 'SELL' ? p.close * 1.03 : null,
+                            shortSignal: t?.type === 'SHORT' ? p.close * 1.03 : null,
+                            coverSignal: t?.type === 'COVER' ? p.close * 0.97 : null,
+                          };
+                        });
                       })()}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.substring(5)} />
@@ -1969,11 +2399,13 @@ const StrategyPage = () => {
                           tickFormatter={(v: number) => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : `${v}`} />
                         <Tooltip formatter={(value: number, name: string) => [
                           formatCurrency(value),
-                          name === 'buySignal' ? '매수' : name === 'sellSignal' ? '매도' : '종가'
+                          name === 'buySignal' ? '매수' : name === 'sellSignal' ? '매도' : name === 'shortSignal' ? '숏진입' : name === 'coverSignal' ? '숏청산' : '종가'
                         ]} labelFormatter={(label) => `${label}`} />
                         <Line type="monotone" dataKey="close" stroke="#64748b" strokeWidth={1.5} dot={false} name="종가" />
                         <Line type="monotone" dataKey="buySignal" stroke="none" dot={{ r: 5, fill: '#ef4444', stroke: '#ef4444' }} name="매수" legendType="triangle" />
                         <Line type="monotone" dataKey="sellSignal" stroke="none" dot={{ r: 5, fill: '#3b82f6', stroke: '#3b82f6' }} name="매도" legendType="triangle" />
+                        <Line type="monotone" dataKey="shortSignal" stroke="none" dot={{ r: 5, fill: '#8b5cf6', stroke: '#8b5cf6' }} name="숏진입" legendType="triangle" />
+                        <Line type="monotone" dataKey="coverSignal" stroke="none" dot={{ r: 5, fill: '#6366f1', stroke: '#6366f1' }} name="숏청산" legendType="triangle" />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -2025,13 +2457,13 @@ const StrategyPage = () => {
                       <AreaChart data={backtestResult.drawdownCurve}>
                         <defs>
                           <linearGradient id="colorDD" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0} />
+                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0.3} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.substring(5)} />
-                        <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${v.toFixed(1)}%`} />
+                        <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${v.toFixed(1)}%`} domain={['dataMin', 0]} />
                         <Tooltip formatter={(value: number) => [`${value.toFixed(2)}%`, '드로다운']} labelFormatter={(label) => `${label}`} />
                         <ReferenceLine y={0} stroke="#94a3b8" />
                         <Area type="monotone" dataKey="value" stroke="#ef4444" fillOpacity={1} fill="url(#colorDD)" strokeWidth={1.5} />
@@ -2059,9 +2491,45 @@ const StrategyPage = () => {
 
                 {/* 거래 내역 테이블 */}
                 {backtestResult.trades && backtestResult.trades.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">거래 내역 ({backtestResult.trades.length}건)</h3>
-                    <div className="overflow-x-auto">
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-sm">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-4">거래 내역 ({backtestResult.trades.length}건)</h3>
+                    {/* 모바일: 카드 레이아웃 */}
+                    <div className="sm:hidden space-y-2">
+                      {backtestResult.trades!.map((trade, idx) => {
+                        const isEntry = trade.type === 'BUY' || trade.type === 'SHORT';
+                        const isExit = trade.type === 'SELL' || trade.type === 'COVER';
+                        return (
+                          <div key={idx} className="border border-slate-100 rounded-xl p-3 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] text-slate-500 font-mono">{trade.date}</span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                trade.type === 'BUY' ? 'bg-red-50 text-red-600'
+                                : trade.type === 'SHORT' ? 'bg-purple-50 text-purple-600'
+                                : trade.type === 'COVER' ? 'bg-indigo-50 text-indigo-600'
+                                : 'bg-blue-50 text-blue-600'
+                              }`}>
+                                {trade.type === 'BUY' ? '매수' : trade.type === 'SHORT' ? '숏진입' : trade.type === 'COVER' ? '숏청산' : '매도'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-slate-500">가격</span>
+                              <span className="font-mono text-slate-700">{formatCurrency(trade.price)}</span>
+                            </div>
+                            {isExit && (
+                              <div className="flex justify-between text-xs">
+                                <span className="text-slate-500">손익</span>
+                                <span className={`font-bold ${trade.pnl >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                                  {formatCurrency(Math.round(trade.pnl))} ({(trade.pnlPercent ?? 0) >= 0 ? '+' : ''}{(trade.pnlPercent ?? 0).toFixed(2)}%)
+                                </span>
+                              </div>
+                            )}
+                            {trade.reason && <div className="text-[10px] text-slate-400 truncate">{trade.reason}</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* 데스크톱: 테이블 레이아웃 */}
+                    <div className="hidden sm:block overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b-2 border-slate-200">
@@ -2071,9 +2539,9 @@ const StrategyPage = () => {
                             <th className="text-right py-2.5 px-2 font-semibold text-slate-600">수량</th>
                             <th className="text-right py-2.5 px-2 font-semibold text-slate-600">손익</th>
                             <th className="text-right py-2.5 px-2 font-semibold text-slate-600">수익률</th>
-                            <th className="text-right py-2.5 px-2 font-semibold text-slate-600">보유일</th>
-                            <th className="text-right py-2.5 px-2 font-semibold text-slate-600">잔고</th>
-                            <th className="text-left py-2.5 px-2 font-semibold text-slate-600">사유</th>
+                            <th className="text-right py-2.5 px-2 font-semibold text-slate-600 hidden md:table-cell">보유일</th>
+                            <th className="text-right py-2.5 px-2 font-semibold text-slate-600 hidden lg:table-cell">잔고</th>
+                            <th className="text-left py-2.5 px-2 font-semibold text-slate-600 hidden lg:table-cell">사유</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2081,21 +2549,34 @@ const StrategyPage = () => {
                             <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                               <td className="py-2 px-2 text-slate-600 font-mono">{trade.date}</td>
                               <td className="py-2 px-2 text-center">
-                                <span className={`inline-block w-12 text-center px-1.5 py-0.5 rounded text-[10px] font-bold ${trade.type === 'BUY' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
-                                  {trade.type === 'BUY' ? '매수' : '매도'}
+                                <span className={`inline-block w-14 text-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  trade.type === 'BUY' ? 'bg-red-50 text-red-600'
+                                  : trade.type === 'SHORT' ? 'bg-purple-50 text-purple-600'
+                                  : trade.type === 'COVER' ? 'bg-indigo-50 text-indigo-600'
+                                  : 'bg-blue-50 text-blue-600'
+                                }`}>
+                                  {trade.type === 'BUY' ? '매수' : trade.type === 'SHORT' ? '숏진입' : trade.type === 'COVER' ? '숏청산' : '매도'}
                                 </span>
                               </td>
                               <td className="py-2 px-2 text-right text-slate-700 font-mono">{formatCurrency(trade.price)}</td>
                               <td className="py-2 px-2 text-right text-slate-600 font-mono">{trade.quantity < 1 ? trade.quantity.toFixed(6) : Math.floor(trade.quantity).toLocaleString()}</td>
-                              <td className={`py-2 px-2 text-right font-bold font-mono ${trade.type === 'BUY' ? 'text-slate-300' : trade.pnl >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                                {trade.type === 'SELL' ? formatCurrency(Math.round(trade.pnl)) : '-'}
-                              </td>
-                              <td className={`py-2 px-2 text-right font-bold ${trade.type === 'BUY' ? 'text-slate-300' : (trade.pnlPercent ?? 0) >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                                {trade.type === 'SELL' ? `${(trade.pnlPercent ?? 0) >= 0 ? '+' : ''}${(trade.pnlPercent ?? 0).toFixed(2)}%` : '-'}
-                              </td>
-                              <td className="py-2 px-2 text-right text-slate-500">{trade.type === 'SELL' ? `${trade.holdingDays ?? 0}일` : '-'}</td>
-                              <td className="py-2 px-2 text-right text-slate-600 font-mono">{trade.balance ? formatCurrency(trade.balance) : '-'}</td>
-                              <td className="py-2 px-2 text-slate-400 max-w-[120px] truncate">{trade.reason}</td>
+                              {(() => {
+                                const isEntry = trade.type === 'BUY' || trade.type === 'SHORT';
+                                const isExit = trade.type === 'SELL' || trade.type === 'COVER';
+                                return (
+                                  <>
+                                    <td className={`py-2 px-2 text-right font-bold font-mono ${isEntry ? 'text-slate-300' : trade.pnl >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                                      {isExit ? formatCurrency(Math.round(trade.pnl)) : '-'}
+                                    </td>
+                                    <td className={`py-2 px-2 text-right font-bold ${isEntry ? 'text-slate-300' : (trade.pnlPercent ?? 0) >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                                      {isExit ? `${(trade.pnlPercent ?? 0) >= 0 ? '+' : ''}${(trade.pnlPercent ?? 0).toFixed(2)}%` : '-'}
+                                    </td>
+                                    <td className="py-2 px-2 text-right text-slate-500 hidden md:table-cell">{isExit ? `${trade.holdingDays ?? 0}일` : '-'}</td>
+                                  </>
+                                );
+                              })()}
+                              <td className="py-2 px-2 text-right text-slate-600 font-mono hidden lg:table-cell">{trade.balance ? formatCurrency(trade.balance) : '-'}</td>
+                              <td className="py-2 px-2 text-slate-400 max-w-[120px] truncate hidden lg:table-cell">{trade.reason}</td>
                             </tr>
                           ))}
                         </tbody>

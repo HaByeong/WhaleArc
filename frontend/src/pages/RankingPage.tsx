@@ -15,6 +15,7 @@ const RankingPage = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedRanking, setSelectedRanking] = useState<RankingEntry | null>(null);
+  const [serverStats, setServerStats] = useState({ totalInvestors: 0, avgReturn: 0, positiveCount: 0, negativeCount: 0 });
   const pageSize = 20;
 
   const rankingTypeRef = useRef(rankingType);
@@ -41,8 +42,15 @@ const RankingPage = () => {
       });
 
       if (response.data?.data) {
-        setRankings(response.data.data.rankings || []);
-        setTotalPages(Math.ceil((response.data.data.totalCount || 0) / pageSize));
+        const data = response.data.data;
+        setRankings(data.rankings || []);
+        setTotalPages(data.totalPages || Math.ceil((data.totalCount || 0) / pageSize));
+        setServerStats({
+          totalInvestors: data.totalCount || 0,
+          avgReturn: data.avgReturn || 0,
+          positiveCount: data.positiveCount || 0,
+          negativeCount: data.negativeCount || 0,
+        });
       } else {
         setRankings([]);
         setTotalPages(1);
@@ -70,13 +78,8 @@ const RankingPage = () => {
     return `${sign}${value.toFixed(2)}%`;
   };
 
-  // 통계 요약
-  const stats = {
-    totalInvestors: rankings.length,
-    avgReturn: rankings.length > 0 ? rankings.reduce((acc, r) => acc + r.totalReturn, 0) / rankings.length : 0,
-    positiveCount: rankings.filter(r => r.totalReturn > 0).length,
-    negativeCount: rankings.filter(r => r.totalReturn < 0).length,
-  };
+  // 서버에서 전체 기준으로 계산된 통계 사용
+  const stats = serverStats;
 
   const strategyLabel = (type: string | null | undefined) => {
     if (!type) return '일반';
@@ -95,7 +98,7 @@ const RankingPage = () => {
             투자 현황
           </h1>
           <p className="text-gray-500 mt-2 text-base">
-            WhaleArc 투자자들의 대표 항로 수익률을 확인해보세요. 클릭하면 전략 정보를 볼 수 있습니다.
+            WhaleArc 투자자들의 수익률을 확인해보세요. 클릭하면 전략 정보를 볼 수 있습니다.
           </p>
         </div>
 

@@ -87,6 +87,12 @@ public class KisApiClient {
             return token;
         } catch (Exception e) {
             log.error("KIS API 토큰 발급 실패: {}", e.getMessage());
+            // 이전 토큰이 완전 만료 전이면 재사용 (갱신 마진 60초 이내)
+            String existing = accessToken.get();
+            if (existing != null && System.currentTimeMillis() < tokenExpiresAt) {
+                log.warn("KIS API 이전 토큰 재사용 (만료까지 {}초)", (tokenExpiresAt - System.currentTimeMillis()) / 1000);
+                return existing;
+            }
             throw new RuntimeException("KIS 토큰 발급 실패", e);
         }
     }

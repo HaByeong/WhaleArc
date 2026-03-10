@@ -22,6 +22,8 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -30,6 +32,11 @@ import java.util.stream.Collectors;
 public class PortfolioService {
 
     private static final double INITIAL_CASH = 10_000_000; // 1000만원
+    private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
+
+    private ReentrantLock getUserLock(String userId) {
+        return userLocks.computeIfAbsent(userId, k -> new ReentrantLock());
+    }
 
     private final PortfolioRepository portfolioRepository;
     private final CryptoPriceProvider cryptoPriceProvider;
@@ -47,12 +54,18 @@ public class PortfolioService {
      * 보유 종목의 currentPrice를 빗썸 실시간 가격으로 갱신
      */
     public Portfolio getOrCreatePortfolio(String userId) {
-        Portfolio portfolio = portfolioRepository.findByUserId(userId)
-                .orElseGet(() -> portfolioRepository.save(new Portfolio(userId, INITIAL_CASH)));
+        ReentrantLock lock = getUserLock(userId);
+        lock.lock();
+        try {
+            Portfolio portfolio = portfolioRepository.findByUserId(userId)
+                    .orElseGet(() -> portfolioRepository.save(new Portfolio(userId, INITIAL_CASH)));
 
-        updateHoldingPrices(portfolio);
-        ensureTodaySnapshot(portfolio);
-        return portfolio;
+            updateHoldingPrices(portfolio);
+            ensureTodaySnapshot(portfolio);
+            return portfolio;
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -135,6 +148,8 @@ public class PortfolioService {
      * 모의투자 완전 초기화: 포트폴리오, 주문, 거래, 구매, 터틀 포지션, 스냅샷, 전략 적용상태 전부 리셋
      */
     public Portfolio resetPortfolio(String userId) {
+        ReentrantLock lock = getUserLock(userId);
+        lock.lock();
         try {
             // 1. 포트폴리오 먼저 초기화 (실패 시 다른 데이터 보존)
             Portfolio portfolio = portfolioRepository.findByUserId(userId)
@@ -172,6 +187,8 @@ public class PortfolioService {
         } catch (Exception e) {
             log.error("모의투자 초기화 중 오류 발생: userId={}, error={}", userId, e.getMessage());
             throw new RuntimeException("초기화 중 오류가 발생했습니다. 다시 시도해주세요.", e);
+        } finally {
+            lock.unlock();
         }
     }
 }

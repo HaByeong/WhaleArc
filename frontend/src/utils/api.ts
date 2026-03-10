@@ -36,6 +36,7 @@ apiClient.interceptors.response.use(
       }
       // 콜백 페이지에서는 리다이렉트하지 않음
       if (!window.location.pathname.startsWith('/auth/')) {
+        await supabase.auth.signOut().catch(() => {});
         window.location.href = '/login';
       }
     }

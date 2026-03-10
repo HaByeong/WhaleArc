@@ -27,7 +27,7 @@ public class BithumbWebSocketClient {
     private final RealtimePriceHolder priceHolder;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private WebSocket webSocket;
+    private volatile WebSocket webSocket;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private int reconnectAttempts = 0;
     private volatile boolean running = true;

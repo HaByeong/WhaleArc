@@ -58,11 +58,11 @@ const AuthCallbackPage = () => {
             }
           });
 
-          // 5초 타임아웃
+          // 10초 타임아웃 (느린 네트워크 대응)
           setTimeout(() => {
             subscription.unsubscribe();
             window.location.replace('/login');
-          }, 5000);
+          }, 10000);
         }
       } catch (err) {
         console.error('OAuth 콜백 처리 실패:', err);

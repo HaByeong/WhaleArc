@@ -35,19 +35,52 @@ public class RankingService {
     private final QuantProductRepository productRepository;
     private final QuantStoreService quantStoreService;
 
+    private static final int MAX_RANKING_SIZE = 100;
+
     public RankingResponseDto getRankings(String currentUserId) {
         List<Portfolio> allPortfolios = portfolioRepository.findAll();
 
-        Map<String, User> userMap = userRepository.findAll().stream()
-                .collect(Collectors.toMap(User::getSupabaseId, u -> u, (a, b) -> a));
-
+        // 수익률 기준 정렬
         List<Portfolio> sorted = allPortfolios.stream()
                 .sorted(Comparator.comparingDouble(Portfolio::getReturnRate).reversed())
                 .toList();
 
-        List<RankingEntryDto> rankings = new ArrayList<>();
+        // 상위 N명 + 현재 유저 포함 보장
+        List<Portfolio> displayList;
+        if (sorted.size() <= MAX_RANKING_SIZE) {
+            displayList = sorted;
+        } else {
+            Set<String> topUserIds = sorted.stream()
+                    .limit(MAX_RANKING_SIZE)
+                    .map(Portfolio::getUserId)
+                    .collect(Collectors.toSet());
+            // 현재 유저가 Top N 밖이면 추가
+            if (!topUserIds.contains(currentUserId)) {
+                displayList = new ArrayList<>(sorted.subList(0, MAX_RANKING_SIZE));
+                sorted.stream()
+                        .filter(p -> p.getUserId().equals(currentUserId))
+                        .findFirst()
+                        .ifPresent(displayList::add);
+            } else {
+                displayList = sorted.subList(0, MAX_RANKING_SIZE);
+            }
+        }
+
+        // 표시 대상 유저 정보만 조회
+        Set<String> displayUserIds = displayList.stream()
+                .map(Portfolio::getUserId)
+                .collect(Collectors.toSet());
+        Map<String, User> userMap = userRepository.findAllBySupabaseIdIn(displayUserIds).stream()
+                .collect(Collectors.toMap(User::getSupabaseId, u -> u, (a, b) -> a));
+
+        // 전체 순위 맵 (정렬된 전체 목록 기준)
+        Map<String, Integer> rankMap = new HashMap<>();
         for (int i = 0; i < sorted.size(); i++) {
-            Portfolio p = sorted.get(i);
+            rankMap.put(sorted.get(i).getUserId(), i + 1);
+        }
+
+        List<RankingEntryDto> rankings = new ArrayList<>();
+        for (Portfolio p : displayList) {
             User user = userMap.get(p.getUserId());
             String nickname = (user != null && user.getName() != null) ? user.getName() : "익명";
             String email = (user != null && user.getEmail() != null) ? user.getEmail() : "";
@@ -77,7 +110,7 @@ public class RankingService {
 
             rankings.add(RankingEntryDto.builder()
                     .portfolioId(p.getId())
-                    .rank(i + 1)
+                    .rank(rankMap.getOrDefault(p.getUserId(), sorted.size() + 1))
                     .nickname(nickname)
                     .portfolioName(email.contains("@") ? email.split("@")[0] + "의 포트폴리오" : nickname + "의 포트폴리오")
                     .totalReturn(Math.round(p.getReturnRate() * 100.0) / 100.0)
@@ -94,7 +127,7 @@ public class RankingService {
         return RankingResponseDto.builder()
                 .rankingType("all")
                 .snapshotDate(LocalDate.now().toString())
-                .totalCount(rankings.size())
+                .totalCount(sorted.size())
                 .rankings(rankings)
                 .build();
     }
@@ -203,11 +236,10 @@ public class RankingService {
     }
 
     private int calculateRank(Portfolio target) {
-        List<Portfolio> all = new ArrayList<>(portfolioRepository.findAll());
-        all.sort(Comparator.comparingDouble(Portfolio::getReturnRate).reversed());
-        for (int i = 0; i < all.size(); i++) {
-            if (all.get(i).getId().equals(target.getId())) return i + 1;
-        }
-        return all.size() + 1;
+        double targetRate = target.getReturnRate();
+        long higherCount = portfolioRepository.findAll().stream()
+                .filter(p -> p.getReturnRate() > targetRate)
+                .count();
+        return (int) higherCount + 1;
     }
 }

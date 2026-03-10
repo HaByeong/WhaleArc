@@ -105,7 +105,7 @@ export const RISK_COLORS: Record<RiskLevel, string> = {
   HIGH: 'text-red-600 bg-red-50',
 };
 
-// 심볼 코드 → 한글 이름 매핑 (빗썸 상장 주요 코인)
+// 심볼 코드 → 한글 이름 매핑 (빗썸 상장 주요 가상화폐)
 export const CRYPTO_NAMES: Record<string, string> = {
   BTC: '비트코인', ETH: '이더리움', XRP: '리플', SOL: '솔라나',
   DOGE: '도지코인', ADA: '에이다', AVAX: '아발란체', LINK: '체인링크',
@@ -151,7 +151,7 @@ export const cryptoDisplayName = (code: string): string => {
   return code;
 };
 
-/** 주식/코인 통합: 심볼 코드를 한글명으로 변환 */
+/** 주식/가상화폐 통합: 심볼 코드를 한글명으로 변환 */
 export const assetDisplayName = (code: string, assetType?: string): string => {
   if (assetType === 'STOCK') {
     return STOCK_NAMES[code] || code;

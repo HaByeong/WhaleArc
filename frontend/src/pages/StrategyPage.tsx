@@ -170,7 +170,7 @@ const StrategyPage = () => {
     const query = assetSearchQuery.toLowerCase();
     let assets: { code: string; name: string }[] = [];
 
-    // 코인: 기존 목록에서 필터
+    // 가상화폐: 기존 목록에서 필터
     if (newAssetType === 'CRYPTO' || newAssetType === 'MIXED') {
       let cryptoAssets = stockList.map(s => ({ code: s.stockCode, name: s.stockName }));
       if (query) {
@@ -459,7 +459,7 @@ const StrategyPage = () => {
   };
 
   const assetTypeLabel = (type: string) => {
-    if (type === 'CRYPTO') return '코인';
+    if (type === 'CRYPTO') return '가상화폐';
     if (type === 'STOCK') return '주식';
     return '혼합';
   };
@@ -856,7 +856,7 @@ const StrategyPage = () => {
                       value={assetSearchQuery}
                       onChange={(e) => handleAssetSearchChange(e.target.value)}
                       className="input-field"
-                      placeholder={newAssetType === 'CRYPTO' ? '코인 검색 (BTC, ETH...)' : newAssetType === 'STOCK' ? '종목명 또는 종목코드로 검색 (전체 KRX)' : '자산 검색 (코인 + 전체 KRX 주식)'}
+                      placeholder={newAssetType === 'CRYPTO' ? '가상화폐 검색 (BTC, ETH...)' : newAssetType === 'STOCK' ? '종목명 또는 종목코드로 검색 (전체 KRX)' : '자산 검색 (가상화폐 + 전체 KRX 주식)'}
                     />
                     {/* 자산 목록 */}
                     <div className="mt-1 text-xs text-gray-400 flex justify-between">

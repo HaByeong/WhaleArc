@@ -33,7 +33,7 @@ public class LimitOrderScheduler {
         List<Order> pendingOrders = orderService.getPendingLimitOrders();
         if (pendingOrders.isEmpty()) return;
 
-        // 코인 시세
+        // 가상화폐 시세
         Map<String, Double> cryptoPriceMap = Map.of();
         boolean hasCrypto = pendingOrders.stream().anyMatch(o -> !o.isStock());
         if (hasCrypto) {

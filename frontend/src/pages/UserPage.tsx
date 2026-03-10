@@ -276,7 +276,7 @@ const UserPage = () => {
               {/* 관심 종목 */}
               <div className="card">
                 <h2 className="text-lg font-bold text-whale-dark mb-3">관심 종목</h2>
-                <p className="text-sm text-gray-500 mb-4">관심 있는 코인을 선택하거나 직접 입력하세요 (최대 20개)</p>
+                <p className="text-sm text-gray-500 mb-4">관심 있는 가상화폐를 선택하거나 직접 입력하세요 (최대 20개)</p>
 
                 {/* 인기 종목 빠른 선택 */}
                 <div className="flex flex-wrap gap-2 mb-4">

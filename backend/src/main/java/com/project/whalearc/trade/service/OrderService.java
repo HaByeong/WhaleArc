@@ -195,7 +195,7 @@ public class OrderService {
             return getStockCurrentPrice(stockCode);
         }
 
-        // 코인: 빗썸 현재가
+        // 가상화폐: 빗썸 현재가
         List<MarketPriceResponse> prices = cryptoPriceProvider.getAllKrwTickers();
         if (prices.isEmpty()) {
             throw new IllegalStateException("시세 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.");

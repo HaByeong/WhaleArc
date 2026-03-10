@@ -43,7 +43,7 @@ public class CsvExportService {
             sb.append(KST_FMT.format(t.getExecutedAt())).append(',');
             sb.append(t.getStockCode()).append(',');
             sb.append(csvEscape(t.getStockName())).append(',');
-            sb.append("STOCK".equals(t.getAssetType()) ? "주식" : "코인").append(',');
+            sb.append("STOCK".equals(t.getAssetType()) ? "주식" : "가상화폐").append(',');
             sb.append(t.getOrderType().name().equals("BUY") ? "매수" : "매도").append(',');
             sb.append(formatQty(t.getQuantity(), t.getAssetType())).append(',');
             sb.append(csvEscape(numFmt().format(roundBd(t.getPrice())))).append(',');
@@ -95,7 +95,7 @@ public class CsvExportService {
             boolean isStock = h.isStock();
             sb.append(h.getStockCode()).append(',');
             sb.append(csvEscape(h.getStockName())).append(',');
-            sb.append(isStock ? "주식" : "코인").append(',');
+            sb.append(isStock ? "주식" : "가상화폐").append(',');
             sb.append(formatQty(h.getQuantity(), isStock ? "STOCK" : "CRYPTO")).append(',');
             sb.append(csvEscape(numFmt().format(roundBd(h.getAveragePrice())))).append(',');
             sb.append(csvEscape(numFmt().format(roundBd(h.getCurrentPrice())))).append(',');
@@ -119,7 +119,7 @@ public class CsvExportService {
         if ("STOCK".equals(assetType)) {
             return String.valueOf(qty.intValue());
         }
-        // 코인: 소수점 이하 불필요한 0 제거
+        // 가상화폐: 소수점 이하 불필요한 0 제거
         return qty.stripTrailingZeros().toPlainString();
     }
 

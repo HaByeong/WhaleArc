@@ -70,13 +70,13 @@ public class PortfolioService {
     }
 
     /**
-     * 보유 종목의 현재가를 갱신 (코인: 빗썸, 주식: KIS API)
+     * 보유 종목의 현재가를 갱신 (가상화폐: 빗썸, 주식: KIS API)
      */
     private void updateHoldingPrices(Portfolio portfolio) {
         if (portfolio.getHoldings().isEmpty()) return;
 
         try {
-            // 코인 시세 맵
+            // 가상화폐 시세 맵
             Map<String, BigDecimal> cryptoPriceMap = Map.of();
             boolean hasCrypto = portfolio.getHoldings().stream().anyMatch(h -> !h.isStock());
             if (hasCrypto) {

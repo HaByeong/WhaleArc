@@ -335,14 +335,14 @@ const DashboardPage = () => {
                 ) : null;
               })()}
 
-              {/* 코인 섹션 */}
+              {/* 가상화폐 섹션 */}
               {(() => {
                 const cryptoHoldings = portfolio.holdings.filter(h => h.assetType !== 'STOCK');
                 return cryptoHoldings.length > 0 ? (
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
-                      <img src="/whales/wild-cat-whale.png" alt="코인" className="w-5 h-5 object-contain" />
-                      <span className="text-sm font-bold text-emerald-600">코인</span>
+                      <img src="/whales/wild-cat-whale.png" alt="가상화폐" className="w-5 h-5 object-contain" />
+                      <span className="text-sm font-bold text-emerald-600">가상화폐</span>
                       <span className="text-xs text-gray-400">{cryptoHoldings.length}종목</span>
                     </div>
                     <div className="space-y-2">
@@ -564,7 +564,7 @@ const DashboardPage = () => {
                               const stockCount = portfolio.holdings.filter(h => h.assetType === 'STOCK').length;
                               const cryptoCount = portfolio.holdings.length - stockCount;
                               if (stockCount > 0 && cryptoCount > 0) {
-                                return <span className="text-xs font-normal text-gray-400 ml-1">(주식 {stockCount} · 코인 {cryptoCount})</span>;
+                                return <span className="text-xs font-normal text-gray-400 ml-1">(주식 {stockCount} · 가상화폐 {cryptoCount})</span>;
                               }
                               return null;
                             })()}

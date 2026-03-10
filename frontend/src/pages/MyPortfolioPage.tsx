@@ -147,7 +147,7 @@ const MyPortfolioPage = () => {
   const totalPnl = totalValue - initialCash;
   const returnRate = portfolio.returnRate;
 
-  // 주식/코인 구분 헬퍼
+  // 주식/가상화폐 구분 헬퍼
   const holdingName = (h: { stockCode: string; stockName: string; assetType?: string }) =>
     h.assetType === 'STOCK' ? h.stockName : (CRYPTO_NAMES[h.stockCode] || h.stockName || h.stockCode);
 
@@ -466,14 +466,14 @@ const MyPortfolioPage = () => {
                         ) : null;
                       })()}
 
-                      {/* 코인 섹션 */}
+                      {/* 가상화폐 섹션 */}
                       {(() => {
                         const cryptoHoldings = portfolio.holdings.filter(h => h.assetType !== 'STOCK');
                         return cryptoHoldings.length > 0 ? (
                           <div>
                             <div className="flex items-center gap-1.5 mb-3 px-1">
-                              <img src="/whales/wild-cat-whale.png" alt="코인" className="w-5 h-5 object-contain" />
-                              <span className="text-sm font-bold text-emerald-600">코인</span>
+                              <img src="/whales/wild-cat-whale.png" alt="가상화폐" className="w-5 h-5 object-contain" />
+                              <span className="text-sm font-bold text-emerald-600">가상화폐</span>
                               <span className="text-xs text-gray-400">{cryptoHoldings.length}종목</span>
                             </div>
                             <div className="space-y-3">

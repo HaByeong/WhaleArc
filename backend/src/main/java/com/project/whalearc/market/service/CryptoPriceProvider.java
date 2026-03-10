@@ -37,7 +37,7 @@ public class CryptoPriceProvider {
     private volatile List<MarketPriceResponse> cachedPrices = List.of();
     private final AtomicLong lastFetchTime = new AtomicLong(0);
 
-    // 주요 코인 한글명 매핑
+    // 주요 가상화폐 한글명 매핑
     private static final Map<String, String> COIN_NAMES = Map.ofEntries(
             Map.entry("BTC", "비트코인"), Map.entry("ETH", "이더리움"),
             Map.entry("XRP", "리플"), Map.entry("SOL", "솔라나"),
@@ -179,19 +179,19 @@ public class CryptoPriceProvider {
                 dto.setPrice(closingPrice);
                 dto.setChange(change);
                 dto.setChangeRate(changeRate);
-                // units_traded_24H는 코인 단위 → KRW 환산 거래대금
+                // units_traded_24H는 가상화폐 단위 → KRW 환산 거래대금
                 double coinVolume = parseDoubleSafe(ticker.getOrDefault("units_traded_24H", "0"));
                 dto.setVolume((long) (coinVolume * closingPrice));
                 dto.setMarket("BITHUMB_KRW");
 
                 result.add(dto);
             } catch (Exception e) {
-                log.debug("코인 파싱 실패 [{}]: {}", symbol, e.getMessage());
+                log.debug("가상화폐 파싱 실패 [{}]: {}", symbol, e.getMessage());
             }
         }
 
         result.sort(Comparator.comparingLong(MarketPriceResponse::getVolume).reversed());
-        log.debug("빗썸 시세 {}개 코인 조회 완료", result.size());
+        log.debug("빗썸 시세 {}개 가상화폐 조회 완료", result.size());
         return result;
     }
 

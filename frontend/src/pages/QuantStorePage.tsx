@@ -252,7 +252,7 @@ const QuantStorePage = () => {
                       {product.assetType === 'STOCK' ? (
                         <span className="px-2 py-1 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-600">주식</span>
                       ) : (
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-600">코인</span>
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-600">가상화폐</span>
                       )}
                     </div>
                     <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${RISK_COLORS[product.riskLevel]}`}>

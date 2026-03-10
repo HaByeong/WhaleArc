@@ -86,7 +86,7 @@ public class QuantStoreService {
                         "주간 리밸런싱: BTC 60% / ETH 30% / 현금 10%"),
 
                 createProduct("모멘텀 스코어 전략",
-                        "최근 7일/30일/90일 수익률을 가중 합산한 모멘텀 스코어 상위 5개 코인에 동일 비중 투자. 강한 상승세 코인에 집중합니다.",
+                        "최근 7일/30일/90일 수익률을 가중 합산한 모멘텀 스코어 상위 5개 가상화폐에 동일 비중 투자. 강한 상승세 가상화폐에 집중합니다.",
                         "WhaleArc", QuantProduct.Category.MOMENTUM, QuantProduct.RiskLevel.MEDIUM,
                         0, 28.7, -15.4, 1.68, 61.5, 0,
                         List.of("모멘텀", "상대강도", "포트폴리오", "무료"), List.of("BTC", "ETH", "SOL", "AVAX", "LINK"),
@@ -133,7 +133,7 @@ public class QuantStoreService {
                         "조건: 주가 > MA(150) > MA(200), 52주 고가 대비 -25% 이내 / 매수: VCP 수축 후 돌파 / 손절: -8%",
                         "STOCK"),
 
-                // ── 코인 추가 항로 ──
+                // ── 가상화폐 추가 항로 ──
                 createProduct("MACD 다이버전스",
                         "Gerald Appel이 1979년 개발한 MACD 지표의 다이버전스(괴리) 신호를 활용합니다. "
                         + "가격은 저점을 낮추는데 MACD는 저점을 높이는 상승 다이버전스 시 매수, "
@@ -386,7 +386,7 @@ public class QuantStoreService {
             turtleStrategyService.initializePositions(userId, purchase.getId(), targetAssets, investBd);
             log.info("터틀 항로 구매: userId={}, investment={}, assets={}", userId, investmentAmount, targetAssets);
         } else {
-            // ── 일반 전략: 균등 분배 즉시 매수 (코인 or 주식) ──
+            // ── 일반 전략: 균등 분배 즉시 매수 (가상화폐 or 주식) ──
             boolean isStockProduct = product.isStock();
             String assetType = isStockProduct ? "STOCK" : "CRYPTO";
 
@@ -414,7 +414,7 @@ public class QuantStoreService {
                     continue;
                 }
 
-                // 주식은 정수 단위, 코인은 소수점 8자리
+                // 주식은 정수 단위, 가상화폐는 소수점 8자리
                 if (isStockProduct) {
                     quantity = quantity.setScale(0, RoundingMode.FLOOR);
                     if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
@@ -555,7 +555,7 @@ public class QuantStoreService {
 
         if (activePurchases.isEmpty()) return List.of();
 
-        // 현재가 한번에 조회 (코인 + 주식)
+        // 현재가 한번에 조회 (가상화폐 + 주식)
         Map<String, MarketPriceResponse> priceMap = new java.util.HashMap<>();
         cryptoPriceProvider.getAllKrwTickers().forEach(p -> priceMap.put(p.getSymbol(), p));
         stockPriceProvider.getAllStockPrices().forEach(p -> priceMap.put(p.getSymbol(), p));

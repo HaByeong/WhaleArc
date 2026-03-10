@@ -44,7 +44,7 @@ public class CandlestickService {
 
     /**
      * 캔들스틱 조회 — 암호화폐 or 주식
-     * @param symbol 코인 심볼(BTC 등) 또는 주식 종목코드(005930 등)
+     * @param symbol 가상화폐 심볼(BTC 등) 또는 주식 종목코드(005930 등)
      * @param interval 차트 간격
      * @param assetType "STOCK" 또는 null(=CRYPTO)
      */

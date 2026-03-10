@@ -16,7 +16,7 @@ import {
 import { CRYPTO_NAMES, formatQuantity } from '../services/quantStoreService';
 import TradingChart from '../components/TradingChart';
 
-/* ─── 인기 코인 (종목 목록 상단 고정) ─── */
+/* ─── 인기 가상화폐 (종목 목록 상단 고정) ─── */
 const POPULAR_COINS = ['BTC', 'ETH', 'XRP', 'SOL', 'DOGE', 'ADA', 'AVAX', 'LINK', 'DOT', 'MATIC'];
 const COMMISSION_RATE = 0.001; // 0.1% (백엔드와 동일)
 
@@ -68,10 +68,10 @@ const TradePage = () => {
   const selectedStockRef = useRef<StockPrice | null>(null);
   selectedStockRef.current = selectedStock;
 
-  // WebSocket 실시간 가격 (코인만)
+  // WebSocket 실시간 가격 (가상화폐만)
   const { prices: realtimePrices } = useRealtimePrice({ enabled: marketTab === 'CRYPTO' });
 
-  // 실시간 가격을 종목 목록에 병합 (코인만)
+  // 실시간 가격을 종목 목록에 병합 (가상화폐만)
   const mergedStockList = useMemo(() => {
     if (marketTab === 'STOCK') return krxStockList;
     if (realtimePrices.size === 0) return stockList;
@@ -400,7 +400,7 @@ const TradePage = () => {
     return s.stockCode.toLowerCase().includes(q) || name.includes(q);
   });
 
-  // 인기 코인을 상단에 정렬 (코인만)
+  // 인기 가상화폐를 상단에 정렬 (가상화폐만)
   const sortedStocks = [...filteredStocks].sort((a, b) => {
     if (marketTab === 'CRYPTO') {
       const aPopular = POPULAR_COINS.indexOf(a.stockCode);
@@ -463,7 +463,7 @@ const TradePage = () => {
 
           {/* ━━━ 좌측: 종목 목록 (3칸) ━━━ */}
           <div className="lg:col-span-3 space-y-4">
-            {/* 코인/주식 탭 */}
+            {/* 가상화폐/주식 탭 */}
             <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
               <button
                 onClick={() => setMarketTab('CRYPTO')}
@@ -473,7 +473,7 @@ const TradePage = () => {
                     : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
-                코인
+                가상화폐
               </button>
               <button
                 onClick={() => setMarketTab('STOCK')}
@@ -496,7 +496,7 @@ const TradePage = () => {
                 type="text"
                 value={searchQuery}
                 onChange={e => marketTab === 'STOCK' ? handleStockSearch(e.target.value) : setSearchQuery(e.target.value)}
-                placeholder={marketTab === 'CRYPTO' ? '코인 검색 (이름/코드)' : '주식 검색 (이름/코드)'}
+                placeholder={marketTab === 'CRYPTO' ? '가상화폐 검색 (이름/코드)' : '주식 검색 (이름/코드)'}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-whale-light/50 focus:border-whale-light"
               />
               {searchQuery && (
@@ -534,7 +534,7 @@ const TradePage = () => {
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               <div className="px-4 py-3 bg-gradient-to-r from-whale-dark to-whale-light">
                 <div className="flex items-center justify-between text-white">
-                  <span className="text-sm font-semibold">{marketTab === 'CRYPTO' ? '코인' : '주식'}</span>
+                  <span className="text-sm font-semibold">{marketTab === 'CRYPTO' ? '가상화폐' : '주식'}</span>
                   <span className="text-xs opacity-80">{sortedStocks.length}개</span>
                 </div>
               </div>

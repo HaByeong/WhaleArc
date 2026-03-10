@@ -126,7 +126,7 @@ const mapMarketToStockPrice = (item: {
 
 // API 서비스
 export const tradeService = {
-  // 실시간 가격 조회 (빗썸 코인)
+  // 실시간 가격 조회 (빗썸 가상화폐)
   getStockPrice: async (stockCode: string): Promise<StockPrice> => {
     const response = await apiClient.get('/api/market/prices', {
       params: { type: 'CRYPTO' },
@@ -137,7 +137,7 @@ export const tradeService = {
     return mapMarketToStockPrice(found);
   },
 
-  // 종목 목록 조회 (빗썸 코인)
+  // 종목 목록 조회 (빗썸 가상화폐)
   getStockList: async (): Promise<StockPrice[]> => {
     const response = await apiClient.get('/api/market/prices', {
       params: { type: 'CRYPTO' },

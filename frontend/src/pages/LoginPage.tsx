@@ -107,8 +107,8 @@ const LoginPage = () => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
         </svg>
       ),
-      title: '주식 + 코인 통합',
-      desc: 'KRX 전종목과 빗썸 코인을 한 포트폴리오에서',
+      title: '주식 + 가상화폐 통합',
+      desc: 'KRX 전종목과 빗썸 가상화폐를 한 포트폴리오에서',
       color: 'bg-emerald-50 text-emerald-600',
     },
     {

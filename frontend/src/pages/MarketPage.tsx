@@ -67,7 +67,7 @@ const MarketPage = () => {
     }
   };
 
-  // 실시간 WebSocket 구독 (코인 탭일 때만)
+  // 실시간 WebSocket 구독 (가상화폐 탭일 때만)
   const { prices: realtimePrices, connected, tickCount } = useRealtimePrice({
     enabled: assetType === 'CRYPTO',
   });
@@ -75,7 +75,7 @@ const MarketPage = () => {
   useEffect(() => {
     loadData();
 
-    // 주식 탭: 10초마다 시세 갱신 (코인은 WebSocket 사용)
+    // 주식 탭: 10초마다 시세 갱신 (가상화폐는 WebSocket 사용)
     if (assetType === 'STOCK') {
       const interval = setInterval(async () => {
         try {
@@ -204,7 +204,7 @@ const MarketPage = () => {
               </div>
             )}
           </div>
-          <p className="text-gray-600 mb-3">주식/코인 시세를 한 곳에서 확인하세요</p>
+          <p className="text-gray-600 mb-3">주식/가상화폐 시세를 한 곳에서 확인하세요</p>
           <div className="flex space-x-3">
             <button
               type="button"
@@ -226,7 +226,7 @@ const MarketPage = () => {
               }`}
               onClick={() => { setAssetType('CRYPTO'); setSelectedAsset(null); setChartType('area'); }}
             >
-              코인 (빗썸)
+              가상화폐 (빗썸)
             </button>
           </div>
         </div>

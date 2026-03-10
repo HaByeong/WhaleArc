@@ -41,7 +41,7 @@ public class PortfolioSnapshotScheduler {
         LocalDate today = LocalDate.now(KST);
         List<Portfolio> all = portfolioRepository.findAll();
 
-        // 시세 1회 조회 (코인 + 주식)
+        // 시세 1회 조회 (가상화폐 + 주식)
         Map<String, Double> cryptoPriceMap = Map.of();
         Map<String, Double> stockPriceMap = Map.of();
         try {
@@ -52,7 +52,7 @@ public class PortfolioSnapshotScheduler {
                             MarketPriceResponse::getPrice,
                             (a, b) -> a));
         } catch (Exception e) {
-            log.warn("스냅샷용 코인 시세 조회 실패: {}", e.getMessage());
+            log.warn("스냅샷용 가상화폐 시세 조회 실패: {}", e.getMessage());
         }
         try {
             List<MarketPriceResponse> stockPrices = stockPriceProvider.getAllStockPrices();

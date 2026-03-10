@@ -18,7 +18,7 @@ public class RealtimePriceHolder {
 
     private final SimpMessagingTemplate messagingTemplate;
 
-    // 코인별 최신 실시간 가격 보관
+    // 가상화폐별 최신 실시간 가격 보관
     private final ConcurrentHashMap<String, RealtimeTick> latestTicks = new ConcurrentHashMap<>();
 
     private static final Map<String, String> COIN_NAMES = Map.ofEntries(
@@ -50,7 +50,7 @@ public class RealtimePriceHolder {
             double prevPrice = parseDoubleSafe(prevClosePrice);
             double change = price - prevPrice;
             double changeRate = parseDoubleSafe(chgRate);
-            // volume은 코인 단위 → KRW 환산 거래대금으로 변환
+            // volume은 가상화폐 단위 → KRW 환산 거래대금으로 변환
             double coinVolume = parseDoubleSafe(volume);
             long vol = (long) (coinVolume * price);
 
@@ -59,7 +59,7 @@ public class RealtimePriceHolder {
             );
             latestTicks.put(coin, tick);
 
-            // 개별 코인 틱을 STOMP로 브로드캐스트
+            // 개별 가상화폐 틱을 STOMP로 브로드캐스트
             MarketPriceResponse dto = toDto(coin, tick);
             messagingTemplate.convertAndSend("/topic/ticker/" + coin, dto);
             messagingTemplate.convertAndSend("/topic/ticker", dto);

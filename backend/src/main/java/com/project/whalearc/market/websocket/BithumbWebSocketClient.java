@@ -104,7 +104,7 @@ public class BithumbWebSocketClient {
     }
 
     private void subscribe(WebSocket ws) {
-        // 빗썸 WebSocket ticker 구독 (주요 코인)
+        // 빗썸 WebSocket ticker 구독 (주요 가상화폐)
         String subscribeMsg = """
                 {"type":"ticker","symbols":[
                 "BTC_KRW","ETH_KRW","XRP_KRW","SOL_KRW","DOGE_KRW",

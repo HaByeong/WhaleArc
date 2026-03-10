@@ -46,6 +46,9 @@ const Header = ({ showNav = false }: HeaderProps) => {
               >
                 WHALEARC
               </span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${showNav ? 'text-whale-light border-whale-light' : 'text-white/80 border-white/40'}`}>
+                BETA
+              </span>
             </div>
           </Link>
           

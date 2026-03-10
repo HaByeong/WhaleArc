@@ -161,7 +161,7 @@ const PortfolioDetailPage = () => {
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   <img src="/whales/wild-cat-whale.png" alt="" className="w-5 h-5 object-contain" />
-                  <span className="text-gray-600">코인</span>
+                  <span className="text-gray-600">가상화폐</span>
                 </div>
                 <span className="font-semibold text-emerald-600">{portfolio.cryptoCount}종목</span>
               </div>

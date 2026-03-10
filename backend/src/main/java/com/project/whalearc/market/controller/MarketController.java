@@ -183,6 +183,9 @@ public class MarketController {
             }
 
             double[] closes = candles.stream().mapToDouble(CandlestickResponse::getClose).toArray();
+            double[] highs = candles.stream().mapToDouble(CandlestickResponse::getHigh).toArray();
+            double[] lows = candles.stream().mapToDouble(CandlestickResponse::getLow).toArray();
+            double[] volumes = candles.stream().mapToDouble(CandlestickResponse::getVolume).toArray();
 
             List<IndicatorResponse> results = new ArrayList<>();
 
@@ -232,6 +235,55 @@ public class MarketController {
                                         "middle", bb.getMiddle(),
                                         "lower", bb.getLower()),
                                 Map.of("period", period, "stdDev", stdDev)));
+                    }
+                    case "STOCHASTIC" -> {
+                        int kPeriod = parts.length > 1 ? Integer.parseInt(parts[1]) : 14;
+                        int dPeriod = parts.length > 2 ? Integer.parseInt(parts[2]) : 3;
+                        IndicatorCalculator.StochasticResult stoch = IndicatorCalculator.stochastic(highs, lows, closes, kPeriod, dPeriod);
+                        results.add(new IndicatorResponse("STOCHASTIC",
+                                Map.of("k", stoch.getK(), "d", stoch.getD()),
+                                Map.of("kPeriod", kPeriod, "dPeriod", dPeriod)));
+                    }
+                    case "ATR" -> {
+                        int period = parts.length > 1 ? Integer.parseInt(parts[1]) : 14;
+                        double[] values = IndicatorCalculator.atr(highs, lows, closes, period);
+                        results.add(new IndicatorResponse("ATR",
+                                Map.of("values", values),
+                                Map.of("period", period)));
+                    }
+                    case "OBV" -> {
+                        double[] values = IndicatorCalculator.obv(closes, volumes);
+                        results.add(new IndicatorResponse("OBV",
+                                Map.of("values", values),
+                                Map.of()));
+                    }
+                    case "VWAP" -> {
+                        double[] values = IndicatorCalculator.vwap(highs, lows, closes, volumes);
+                        results.add(new IndicatorResponse("VWAP",
+                                Map.of("values", values),
+                                Map.of()));
+                    }
+                    case "WILLIAMS_R", "WILLIAMS" -> {
+                        int period = parts.length > 1 ? Integer.parseInt(parts[1]) : 14;
+                        double[] values = IndicatorCalculator.williamsR(highs, lows, closes, period);
+                        results.add(new IndicatorResponse("WILLIAMS_R",
+                                Map.of("values", values),
+                                Map.of("period", period)));
+                    }
+                    case "CCI" -> {
+                        int period = parts.length > 1 ? Integer.parseInt(parts[1]) : 20;
+                        double[] values = IndicatorCalculator.cci(highs, lows, closes, period);
+                        results.add(new IndicatorResponse("CCI",
+                                Map.of("values", values),
+                                Map.of("period", period)));
+                    }
+                    case "PARABOLIC_SAR", "PSAR" -> {
+                        double af = parts.length > 1 ? Double.parseDouble(parts[1]) : 0.02;
+                        double maxAf = parts.length > 2 ? Double.parseDouble(parts[2]) : 0.2;
+                        double[] values = IndicatorCalculator.parabolicSAR(highs, lows, af, maxAf);
+                        results.add(new IndicatorResponse("PARABOLIC_SAR",
+                                Map.of("values", values),
+                                Map.of("af", af, "maxAf", maxAf)));
                     }
                     default -> log.warn("지원하지 않는 지표 타입: {}", type);
                 }

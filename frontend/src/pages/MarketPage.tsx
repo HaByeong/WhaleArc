@@ -31,16 +31,7 @@ const MarketPage = () => {
       return;
     }
 
-    // 이미 리스트에 있는지 로컬 필터로 충분한지 확인
-    const localMatch = assetList.filter(a =>
-      a.name.toLowerCase().includes(keyword.toLowerCase()) || a.symbol.includes(keyword)
-    );
-    if (localMatch.length > 0) {
-      setSearchResults([]);
-      return;
-    }
-
-    // 서버 검색 (300ms debounce)
+    // 항상 서버 검색 수행 (전체 KRX 종목 대상)
     searchTimerRef.current = setTimeout(async () => {
       setSearchLoading(true);
       try {
@@ -241,7 +232,7 @@ const MarketPage = () => {
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder={assetType === 'STOCK' ? '종목명 또는 코드 검색 (전 종목)...' : '종목명 또는 코드 검색...'}
+                    placeholder={assetType === 'STOCK' ? '전체 KOSPI/KOSDAQ 종목 검색...' : '가상화폐 검색 (이름/코드)...'}
                     value={filterText}
                     onChange={(e) => assetType === 'STOCK' ? handleStockSearch(e.target.value) : setFilterText(e.target.value)}
                     className="input-field"

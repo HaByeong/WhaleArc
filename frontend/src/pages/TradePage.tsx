@@ -497,7 +497,7 @@ const TradePage = () => {
                 type="text"
                 value={searchQuery}
                 onChange={e => marketTab === 'STOCK' ? handleStockSearch(e.target.value) : setSearchQuery(e.target.value)}
-                placeholder={marketTab === 'CRYPTO' ? '가상화폐 검색 (이름/코드)' : '주식 검색 (이름/코드)'}
+                placeholder={marketTab === 'CRYPTO' ? '가상화폐 검색 (비트코인, ETH...)' : '전체 KOSPI/KOSDAQ 종목 검색...'}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-whale-light/50 focus:border-whale-light"
               />
               {searchQuery && (
@@ -674,33 +674,57 @@ const TradePage = () => {
                     {activeTab === 'chart' && (
                       <>
                         {/* 지표 토글 */}
-                        <div className="flex flex-wrap gap-1.5 mb-3">
+                        <div className="space-y-1.5 mb-3">
                           {[
-                            { key: 'MA5', label: 'MA5', color: '#f59e0b' },
-                            { key: 'MA20', label: 'MA20', color: '#3b82f6' },
-                            { key: 'MA60', label: 'MA60', color: '#a855f7' },
-                            { key: 'BOLLINGER', label: '볼린저', color: '#6366f1' },
-                            { key: 'RSI', label: 'RSI', color: '#8b5cf6' },
-                            { key: 'MACD', label: 'MACD', color: '#3b82f6' },
-                          ].map(ind => {
-                            const isActive = activeIndicators.includes(ind.key);
-                            return (
-                              <button
-                                key={ind.key}
-                                onClick={() => setActiveIndicators(prev =>
-                                  prev.includes(ind.key) ? prev.filter(k => k !== ind.key) : [...prev, ind.key]
-                                )}
-                                className={`px-2.5 py-1 text-[11px] font-semibold rounded-md border transition-all ${
-                                  isActive
-                                    ? 'text-white shadow-sm'
-                                    : 'text-gray-400 border-gray-200 hover:border-gray-300 hover:text-gray-500'
-                                }`}
-                                style={isActive ? { backgroundColor: ind.color, borderColor: ind.color } : {}}
-                              >
-                                {ind.label}
-                              </button>
-                            );
-                          })}
+                            { group: '이동평균', items: [
+                              { key: 'MA5', label: 'MA5', color: '#f59e0b' },
+                              { key: 'MA20', label: 'MA20', color: '#3b82f6' },
+                              { key: 'MA60', label: 'MA60', color: '#a855f7' },
+                              { key: 'EMA', label: 'EMA20', color: '#10b981' },
+                            ]},
+                            { group: '추세/밴드', items: [
+                              { key: 'BOLLINGER', label: '볼린저', color: '#6366f1' },
+                              { key: 'VWAP', label: 'VWAP', color: '#ec4899' },
+                              { key: 'ICHIMOKU', label: '일목', color: '#ef4444' },
+                              { key: 'PARABOLIC_SAR', label: 'P.SAR', color: '#8b5cf6' },
+                            ]},
+                            { group: '오실레이터', items: [
+                              { key: 'RSI', label: 'RSI', color: '#8b5cf6' },
+                              { key: 'MACD', label: 'MACD', color: '#3b82f6' },
+                              { key: 'STOCHASTIC', label: '스토캐스틱', color: '#3b82f6' },
+                              { key: 'WILLIAMS_R', label: 'W%R', color: '#14b8a6' },
+                              { key: 'CCI', label: 'CCI', color: '#f59e0b' },
+                            ]},
+                            { group: '거래량/변동성', items: [
+                              { key: 'OBV', label: 'OBV', color: '#06b6d4' },
+                              { key: 'ATR', label: 'ATR', color: '#f97316' },
+                            ]},
+                          ].map(group => (
+                            <div key={group.group} className="flex items-center gap-1.5">
+                              <span className="text-[9px] text-gray-300 font-medium w-14 flex-shrink-0">{group.group}</span>
+                              <div className="flex flex-wrap gap-1">
+                                {group.items.map(ind => {
+                                  const isActive = activeIndicators.includes(ind.key);
+                                  return (
+                                    <button
+                                      key={ind.key}
+                                      onClick={() => setActiveIndicators(prev =>
+                                        prev.includes(ind.key) ? prev.filter(k => k !== ind.key) : [...prev, ind.key]
+                                      )}
+                                      className={`px-2 py-0.5 text-[10px] font-semibold rounded border transition-all ${
+                                        isActive
+                                          ? 'text-white shadow-sm'
+                                          : 'text-gray-400 border-gray-200 hover:border-gray-300 hover:text-gray-500'
+                                      }`}
+                                      style={isActive ? { backgroundColor: ind.color, borderColor: ind.color } : {}}
+                                    >
+                                      {ind.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                         <TradingChart
                           symbol={liveSelectedStock.stockCode}

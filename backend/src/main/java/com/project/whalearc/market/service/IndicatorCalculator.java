@@ -219,6 +219,177 @@ public final class IndicatorCalculator {
         return new BollingerResult(upper, middle, lower);
     }
 
+    // ── Stochastic Oscillator ──
+
+    public static StochasticResult stochastic(double[] highs, double[] lows, double[] closes, int kPeriod, int dPeriod) {
+        int len = closes.length;
+        double[] k = new double[len];
+        double[] d = new double[len];
+        Arrays.fill(k, Double.NaN);
+        Arrays.fill(d, Double.NaN);
+
+        for (int i = kPeriod - 1; i < len; i++) {
+            double hh = Double.NEGATIVE_INFINITY, ll = Double.POSITIVE_INFINITY;
+            for (int j = i - kPeriod + 1; j <= i; j++) {
+                hh = Math.max(hh, highs[j]);
+                ll = Math.min(ll, lows[j]);
+            }
+            k[i] = hh == ll ? 50.0 : ((closes[i] - ll) / (hh - ll)) * 100.0;
+        }
+
+        for (int i = kPeriod - 1 + dPeriod - 1; i < len; i++) {
+            double sum = 0; int cnt = 0;
+            for (int j = i - dPeriod + 1; j <= i; j++) {
+                if (!Double.isNaN(k[j])) { sum += k[j]; cnt++; }
+            }
+            if (cnt == dPeriod) d[i] = sum / dPeriod;
+        }
+
+        return new StochasticResult(k, d);
+    }
+
+    // ── ATR (Average True Range) ──
+
+    public static double[] atr(double[] highs, double[] lows, double[] closes, int period) {
+        int len = closes.length;
+        double[] result = new double[len];
+        Arrays.fill(result, Double.NaN);
+        if (len < 2) return result;
+
+        double[] tr = new double[len];
+        tr[0] = highs[0] - lows[0];
+        for (int i = 1; i < len; i++) {
+            tr[i] = Math.max(highs[i] - lows[i],
+                    Math.max(Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1])));
+        }
+
+        if (len < period) return result;
+        double sum = 0;
+        for (int i = 0; i < period; i++) sum += tr[i];
+        result[period - 1] = sum / period;
+
+        for (int i = period; i < len; i++) {
+            result[i] = (result[i - 1] * (period - 1) + tr[i]) / period;
+        }
+        return result;
+    }
+
+    // ── OBV (On Balance Volume) ──
+
+    public static double[] obv(double[] closes, double[] volumes) {
+        int len = closes.length;
+        double[] result = new double[len];
+        Arrays.fill(result, Double.NaN);
+        if (len == 0) return result;
+
+        result[0] = volumes[0];
+        for (int i = 1; i < len; i++) {
+            if (closes[i] > closes[i - 1]) result[i] = result[i - 1] + volumes[i];
+            else if (closes[i] < closes[i - 1]) result[i] = result[i - 1] - volumes[i];
+            else result[i] = result[i - 1];
+        }
+        return result;
+    }
+
+    // ── VWAP ──
+
+    public static double[] vwap(double[] highs, double[] lows, double[] closes, double[] volumes) {
+        int len = closes.length;
+        double[] result = new double[len];
+        Arrays.fill(result, Double.NaN);
+        if (len == 0) return result;
+
+        double cumTPV = 0, cumVol = 0;
+        for (int i = 0; i < len; i++) {
+            double tp = (highs[i] + lows[i] + closes[i]) / 3.0;
+            cumTPV += tp * volumes[i];
+            cumVol += volumes[i];
+            result[i] = cumVol == 0 ? tp : cumTPV / cumVol;
+        }
+        return result;
+    }
+
+    // ── Williams %R ──
+
+    public static double[] williamsR(double[] highs, double[] lows, double[] closes, int period) {
+        int len = closes.length;
+        double[] result = new double[len];
+        Arrays.fill(result, Double.NaN);
+
+        for (int i = period - 1; i < len; i++) {
+            double hh = Double.NEGATIVE_INFINITY, ll = Double.POSITIVE_INFINITY;
+            for (int j = i - period + 1; j <= i; j++) {
+                hh = Math.max(hh, highs[j]);
+                ll = Math.min(ll, lows[j]);
+            }
+            result[i] = hh == ll ? -50.0 : ((hh - closes[i]) / (hh - ll)) * -100.0;
+        }
+        return result;
+    }
+
+    // ── CCI (Commodity Channel Index) ──
+
+    public static double[] cci(double[] highs, double[] lows, double[] closes, int period) {
+        int len = closes.length;
+        double[] result = new double[len];
+        Arrays.fill(result, Double.NaN);
+
+        double[] tp = new double[len];
+        for (int i = 0; i < len; i++) tp[i] = (highs[i] + lows[i] + closes[i]) / 3.0;
+
+        for (int i = period - 1; i < len; i++) {
+            double sum = 0;
+            for (int j = i - period + 1; j <= i; j++) sum += tp[j];
+            double mean = sum / period;
+
+            double mdSum = 0;
+            for (int j = i - period + 1; j <= i; j++) mdSum += Math.abs(tp[j] - mean);
+            double md = mdSum / period;
+
+            result[i] = md == 0 ? 0 : (tp[i] - mean) / (0.015 * md);
+        }
+        return result;
+    }
+
+    // ── Parabolic SAR ──
+
+    public static double[] parabolicSAR(double[] highs, double[] lows, double af, double maxAf) {
+        int len = highs.length;
+        double[] result = new double[len];
+        Arrays.fill(result, Double.NaN);
+        if (len < 2) return result;
+
+        boolean isUp = highs[1] > highs[0];
+        double sar = isUp ? lows[0] : highs[0];
+        double ep = isUp ? highs[1] : lows[1];
+        double curAf = af;
+        result[0] = sar;
+
+        for (int i = 1; i < len; i++) {
+            sar = sar + curAf * (ep - sar);
+
+            if (isUp) {
+                sar = Math.min(sar, lows[Math.max(0, i - 1)]);
+                if (i >= 2) sar = Math.min(sar, lows[i - 2]);
+                if (sar > lows[i]) {
+                    isUp = false; sar = ep; ep = lows[i]; curAf = af;
+                } else if (highs[i] > ep) {
+                    ep = highs[i]; curAf = Math.min(curAf + af, maxAf);
+                }
+            } else {
+                sar = Math.max(sar, highs[Math.max(0, i - 1)]);
+                if (i >= 2) sar = Math.max(sar, highs[i - 2]);
+                if (sar < highs[i]) {
+                    isUp = true; sar = ep; ep = highs[i]; curAf = af;
+                } else if (lows[i] < ep) {
+                    ep = lows[i]; curAf = Math.min(curAf + af, maxAf);
+                }
+            }
+            result[i] = sar;
+        }
+        return result;
+    }
+
     // ── 결과 DTO ──
 
     @Getter
@@ -235,5 +406,12 @@ public final class IndicatorCalculator {
         private final double[] upper;
         private final double[] middle;
         private final double[] lower;
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public static class StochasticResult {
+        private final double[] k;
+        private final double[] d;
     }
 }

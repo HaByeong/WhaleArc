@@ -14,6 +14,7 @@ import {
 import { marketService, type Candlestick } from '../services/marketService';
 import {
   sma, ema, rsi, macd, bollingerBands,
+  stochastic, atr, obv, vwap, williamsR, cci, parabolicSAR, ichimoku,
   type IndicatorConfig,
   INDICATOR_COLORS,
 } from '../utils/indicators';
@@ -40,11 +41,32 @@ const INDICATOR_CONFIGS: Record<string, IndicatorConfig> = {
   'MA5': { type: 'MA', period: 5, maType: 'SMA' },
   'MA20': { type: 'MA', period: 20, maType: 'SMA' },
   'MA60': { type: 'MA', period: 60, maType: 'SMA' },
-  'EMA12': { type: 'MA', period: 12, maType: 'EMA' },
-  'EMA26': { type: 'MA', period: 26, maType: 'EMA' },
+  'EMA': { type: 'MA', period: 20, maType: 'EMA' },
   'RSI': { type: 'RSI', period: 14 },
   'MACD': { type: 'MACD', fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 },
   'BOLLINGER': { type: 'BOLLINGER', period: 20, stdDev: 2 },
+  'STOCHASTIC': { type: 'STOCHASTIC', kPeriod: 14, dPeriod: 3 },
+  'ATR': { type: 'ATR', period: 14 },
+  'OBV': { type: 'OBV' },
+  'VWAP': { type: 'VWAP' },
+  'WILLIAMS_R': { type: 'WILLIAMS_R', period: 14 },
+  'CCI': { type: 'CCI', period: 20 },
+  'PARABOLIC_SAR': { type: 'PARABOLIC_SAR', af: 0.02, maxAf: 0.2 },
+  'ICHIMOKU': { type: 'ICHIMOKU', tenkan: 9, kijun: 26, senkouB: 52 },
+};
+
+/** 서브차트 지표 목록 */
+const SUB_CHART_KEYS = ['RSI', 'MACD', 'STOCHASTIC', 'ATR', 'OBV', 'WILLIAMS_R', 'CCI'] as const;
+
+/** 서브차트 라벨 정보 */
+const SUB_CHART_LABELS: Record<string, { label: string; guide?: string[] }> = {
+  RSI: { label: 'RSI (14)', guide: ['과매수 70', '과매도 30'] },
+  MACD: { label: 'MACD (12, 26, 9)' },
+  STOCHASTIC: { label: 'Stochastic (14, 3)', guide: ['과매수 80', '과매도 20'] },
+  ATR: { label: 'ATR (14)' },
+  OBV: { label: 'OBV' },
+  WILLIAMS_R: { label: 'Williams %R (14)', guide: ['과매수 -20', '과매도 -80'] },
+  CCI: { label: 'CCI (20)', guide: ['+100', '-100'] },
 };
 
 /** 가격대에 따라 소수점 정밀도 결정 */
@@ -56,28 +78,27 @@ const getPriceFormat = (p: number, type?: string) => {
   return { type: 'price' as const, precision: 4, minMove: 0.0001 };
 };
 
+interface SubChartInfo {
+  chart: IChartApi;
+  series: Map<string, ISeriesApi<'Line' | 'Histogram'>>;
+  obs: ResizeObserver;
+}
+
 const TradingChart = ({
   symbol, price, changeRate, className = '', assetType,
   activeIndicators = [],
 }: TradingChartProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const rsiContainerRef = useRef<HTMLDivElement>(null);
-  const macdContainerRef = useRef<HTMLDivElement>(null);
-
   const chartRef = useRef<IChartApi | null>(null);
-  const rsiChartRef = useRef<IChartApi | null>(null);
-  const macdChartRef = useRef<IChartApi | null>(null);
-
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
 
-  // 오버레이 시리즈 참조 (MA, 볼린저)
+  // 오버레이 시리즈 참조 (MA, 볼린저, VWAP, Ichimoku, Parabolic SAR)
   const overlaySeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
-  // RSI/MACD 시리즈 참조
-  const rsiSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
-  const macdLineRef = useRef<ISeriesApi<'Line'> | null>(null);
-  const macdSignalRef = useRef<ISeriesApi<'Line'> | null>(null);
-  const macdHistRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+
+  // 제네릭 서브차트 시스템
+  const subContainersRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const subChartsRef = useRef<Map<string, SubChartInfo>>(new Map());
 
   const dataRef = useRef<CandlestickData<Time>[]>([]);
   const rawCandlesRef = useRef<Candlestick[]>([]);
@@ -86,8 +107,10 @@ const TradingChart = ({
   const [interval, setInterval] = useState('10m');
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
-  const showRSI = activeIndicators.includes('RSI');
-  const showMACD = activeIndicators.includes('MACD');
+  // 활성 서브차트 목록
+  const activeSubCharts = activeIndicators.filter(k =>
+    (SUB_CHART_KEYS as readonly string[]).includes(k)
+  );
 
   // ─── 메인 차트 생성 ────────────────────────────────────
   useEffect(() => {
@@ -170,120 +193,88 @@ const TradingChart = ({
     };
   }, []);
 
-  // ─── RSI 차트 생성/제거 ────────────────────────────────
+  // ─── 서브차트 생성/제거 (제네릭) ──────────────────────
   useEffect(() => {
-    if (showRSI && rsiContainerRef.current && !rsiChartRef.current) {
-      const rChart = createChart(rsiContainerRef.current, {
+    const currentKeys = new Set(activeSubCharts);
+
+    // 비활성 서브차트 제거
+    for (const [key, info] of subChartsRef.current.entries()) {
+      if (!currentKeys.has(key)) {
+        info.obs.disconnect();
+        info.chart.remove();
+        subChartsRef.current.delete(key);
+      }
+    }
+
+    // 새 서브차트 생성
+    for (const key of activeSubCharts) {
+      if (subChartsRef.current.has(key)) continue;
+      const container = subContainersRef.current.get(key);
+      if (!container) continue;
+
+      const subChart = createChart(container, {
         layout: { background: { color: '#ffffff' }, textColor: '#6b7280', fontFamily: "'Pretendard', sans-serif", fontSize: 10, attributionLogo: false },
         grid: { vertLines: { color: '#f9fafb' }, horzLines: { color: '#f3f4f6' } },
-        width: rsiContainerRef.current.clientWidth,
+        width: container.clientWidth,
         height: 100,
         timeScale: { visible: false },
         rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.1, bottom: 0.1 } },
         crosshair: { mode: 0 },
       });
 
-      const rsiLine = rChart.addSeries(LineSeries, {
-        color: INDICATOR_COLORS['RSI'],
-        lineWidth: 1,
-        priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
-        lastValueVisible: true,
-        crosshairMarkerVisible: false,
+      const series = new Map<string, ISeriesApi<'Line' | 'Histogram'>>();
+      const lineOpts = { lineWidth: 1 as const, lastValueVisible: false, crosshairMarkerVisible: false };
+
+      switch (key) {
+        case 'RSI':
+          series.set('main', subChart.addSeries(LineSeries, { ...lineOpts, color: INDICATOR_COLORS['RSI'], lastValueVisible: true }));
+          break;
+        case 'STOCHASTIC':
+          series.set('k', subChart.addSeries(LineSeries, { ...lineOpts, color: INDICATOR_COLORS['STOCHASTIC_K'] }));
+          series.set('d', subChart.addSeries(LineSeries, { ...lineOpts, color: INDICATOR_COLORS['STOCHASTIC_D'] }));
+          break;
+        case 'WILLIAMS_R':
+          series.set('main', subChart.addSeries(LineSeries, { ...lineOpts, color: INDICATOR_COLORS['WILLIAMS_R'], lastValueVisible: true }));
+          break;
+        case 'CCI':
+          series.set('main', subChart.addSeries(LineSeries, { ...lineOpts, color: INDICATOR_COLORS['CCI'], lastValueVisible: true }));
+          break;
+        case 'ATR':
+          series.set('main', subChart.addSeries(LineSeries, { ...lineOpts, color: INDICATOR_COLORS['ATR'], lastValueVisible: true }));
+          break;
+        case 'OBV':
+          series.set('main', subChart.addSeries(LineSeries, { ...lineOpts, color: INDICATOR_COLORS['OBV'], lastValueVisible: true }));
+          break;
+        case 'MACD':
+          series.set('macd', subChart.addSeries(LineSeries, { ...lineOpts, color: INDICATOR_COLORS['MACD'] }));
+          series.set('signal', subChart.addSeries(LineSeries, { ...lineOpts, color: INDICATOR_COLORS['MACD_SIGNAL'] }));
+          series.set('histogram', subChart.addSeries(HistogramSeries, { ...lineOpts, lastValueVisible: false }));
+          break;
+      }
+
+      const obs = new ResizeObserver(entries => {
+        for (const e of entries) subChart.applyOptions({ width: e.contentRect.width });
       });
+      obs.observe(container);
 
-      rsiChartRef.current = rChart;
-      rsiSeriesRef.current = rsiLine;
-
-      // 차트 생성 직후 지표 데이터 적용
-      setTimeout(() => applyIndicators(), 0);
-
-      const obs = new ResizeObserver((entries) => {
-        for (const e of entries) rChart.applyOptions({ width: e.contentRect.width });
-      });
-      obs.observe(rsiContainerRef.current);
-
-      return () => {
-        obs.disconnect();
-        if (rsiChartRef.current) {
-          rsiChartRef.current.remove();
-          rsiChartRef.current = null;
-          rsiSeriesRef.current = null;
-        }
-      };
+      subChartsRef.current.set(key, { chart: subChart, series, obs });
     }
 
-    if (!showRSI && rsiChartRef.current) {
-      rsiChartRef.current.remove();
-      rsiChartRef.current = null;
-      rsiSeriesRef.current = null;
-    }
-  }, [showRSI, applyIndicators]);
+    // 새 차트에 데이터 적용
+    setTimeout(() => applyIndicators(), 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSubCharts.join(',')]);
 
-  // ─── MACD 차트 생성/제거 ───────────────────────────────
+  // 언마운트 시 서브차트 전체 정리
   useEffect(() => {
-    if (showMACD && macdContainerRef.current && !macdChartRef.current) {
-      const mChart = createChart(macdContainerRef.current, {
-        layout: { background: { color: '#ffffff' }, textColor: '#6b7280', fontFamily: "'Pretendard', sans-serif", fontSize: 10, attributionLogo: false },
-        grid: { vertLines: { color: '#f9fafb' }, horzLines: { color: '#f3f4f6' } },
-        width: macdContainerRef.current.clientWidth,
-        height: 100,
-        timeScale: { visible: false },
-        rightPriceScale: { borderVisible: false },
-        crosshair: { mode: 0 },
-      });
-
-      const macdLine = mChart.addSeries(LineSeries, {
-        color: INDICATOR_COLORS['MACD'],
-        lineWidth: 1,
-        lastValueVisible: false,
-        crosshairMarkerVisible: false,
-      });
-
-      const signalLine = mChart.addSeries(LineSeries, {
-        color: INDICATOR_COLORS['MACD_SIGNAL'],
-        lineWidth: 1,
-        lastValueVisible: false,
-        crosshairMarkerVisible: false,
-      });
-
-      const histSeries = mChart.addSeries(HistogramSeries, {
-        lastValueVisible: false,
-        crosshairMarkerVisible: false,
-      });
-
-      macdChartRef.current = mChart;
-      macdLineRef.current = macdLine;
-      macdSignalRef.current = signalLine;
-      macdHistRef.current = histSeries;
-
-      // 차트 생성 직후 지표 데이터 적용
-      setTimeout(() => applyIndicators(), 0);
-
-      const obs = new ResizeObserver((entries) => {
-        for (const e of entries) mChart.applyOptions({ width: e.contentRect.width });
-      });
-      obs.observe(macdContainerRef.current);
-
-      return () => {
-        obs.disconnect();
-        if (macdChartRef.current) {
-          macdChartRef.current.remove();
-          macdChartRef.current = null;
-          macdLineRef.current = null;
-          macdSignalRef.current = null;
-          macdHistRef.current = null;
-        }
-      };
-    }
-
-    if (!showMACD && macdChartRef.current) {
-      macdChartRef.current.remove();
-      macdChartRef.current = null;
-      macdLineRef.current = null;
-      macdSignalRef.current = null;
-      macdHistRef.current = null;
-    }
-  }, [showMACD, applyIndicators]);
+    return () => {
+      for (const [, info] of subChartsRef.current.entries()) {
+        info.obs.disconnect();
+        info.chart.remove();
+      }
+      subChartsRef.current.clear();
+    };
+  }, []);
 
   // ─── 지표 계산 및 차트 적용 ────────────────────────────
   const applyIndicators = useCallback(() => {
@@ -292,98 +283,137 @@ const TradingChart = ({
 
     const candles = rawCandlesRef.current;
     const closes = candles.map(c => c.close);
+    const highs = candles.map(c => c.high);
+    const lows = candles.map(c => c.low);
+    const volumes = candles.map(c => c.volume);
     const times = candles.map(c => c.time as Time);
 
-    // 기존 오버레이 시리즈 제거
+    // ─ 기존 오버레이 시리즈 제거
     overlaySeriesRef.current.forEach((series) => {
       try { chart.removeSeries(series); } catch { /* ignore */ }
     });
     overlaySeriesRef.current.clear();
 
-    // MA 오버레이
-    for (const key of activeIndicators) {
-      const config = INDICATOR_CONFIGS[key];
-      if (!config || config.type !== 'MA') continue;
-
-      const values = config.maType === 'EMA' ? ema(closes, config.period) : sma(closes, config.period);
-      const lineData: LineData<Time>[] = [];
+    // 유틸: 값 배열 → LineData
+    const toLineData = (values: number[]): LineData<Time>[] => {
+      const data: LineData<Time>[] = [];
       for (let i = 0; i < values.length; i++) {
-        if (!isNaN(values[i])) lineData.push({ time: times[i], value: values[i] });
+        if (!isNaN(values[i])) data.push({ time: times[i], value: values[i] });
       }
+      return data;
+    };
 
+    const addOverlay = (key: string, values: number[], opts?: Record<string, unknown>) => {
+      const lineData = toLineData(values);
+      if (lineData.length === 0) return;
       const series = chart.addSeries(LineSeries, {
         color: INDICATOR_COLORS[key] || '#9ca3af',
-        lineWidth: 1,
+        lineWidth: 1 as const,
         lastValueVisible: false,
         crosshairMarkerVisible: false,
         priceLineVisible: false,
+        ...opts,
       });
       series.setData(lineData);
       overlaySeriesRef.current.set(key, series);
+    };
+
+    // ─ MA 오버레이
+    for (const key of activeIndicators) {
+      const config = INDICATOR_CONFIGS[key];
+      if (!config || config.type !== 'MA') continue;
+      const values = config.maType === 'EMA' ? ema(closes, config.period) : sma(closes, config.period);
+      addOverlay(key, values);
     }
 
-    // 볼린저 밴드 오버레이
+    // ─ 볼린저 밴드 오버레이
     if (activeIndicators.includes('BOLLINGER')) {
       const bb = bollingerBands(closes, 20, 2);
-      const bands = [
-        { key: 'BOLLINGER_UPPER', data: bb.upper },
-        { key: 'BOLLINGER_MIDDLE', data: bb.middle },
-        { key: 'BOLLINGER_LOWER', data: bb.lower },
-      ];
+      addOverlay('BOLLINGER_UPPER', bb.upper);
+      addOverlay('BOLLINGER_MIDDLE', bb.middle, { lineStyle: 2 });
+      addOverlay('BOLLINGER_LOWER', bb.lower);
+    }
 
-      for (const band of bands) {
-        const lineData: LineData<Time>[] = [];
-        for (let i = 0; i < band.data.length; i++) {
-          if (!isNaN(band.data[i])) lineData.push({ time: times[i], value: band.data[i] });
+    // ─ VWAP 오버레이
+    if (activeIndicators.includes('VWAP')) {
+      const v = vwap(highs, lows, closes, volumes);
+      addOverlay('VWAP', v.values, { color: INDICATOR_COLORS['VWAP'], lineWidth: 2 as const });
+    }
+
+    // ─ Parabolic SAR 오버레이
+    if (activeIndicators.includes('PARABOLIC_SAR')) {
+      const sar = parabolicSAR(highs, lows);
+      addOverlay('PARABOLIC_SAR', sar.values, { color: INDICATOR_COLORS['PARABOLIC_SAR'], lineStyle: 3 });
+    }
+
+    // ─ 일목균형표 오버레이
+    if (activeIndicators.includes('ICHIMOKU')) {
+      const ichi = ichimoku(highs, lows);
+      addOverlay('ICHIMOKU_TENKAN', ichi.tenkan, { color: INDICATOR_COLORS['ICHIMOKU_TENKAN'] });
+      addOverlay('ICHIMOKU_KIJUN', ichi.kijun, { color: INDICATOR_COLORS['ICHIMOKU_KIJUN'] });
+      addOverlay('ICHIMOKU_SENKOU_A', ichi.senkouA, { color: INDICATOR_COLORS['ICHIMOKU_SENKOU_A'], lineStyle: 2 });
+      addOverlay('ICHIMOKU_SENKOU_B', ichi.senkouB, { color: INDICATOR_COLORS['ICHIMOKU_SENKOU_B'], lineStyle: 2 });
+      addOverlay('ICHIMOKU_CHIKOU', ichi.chikou, { color: INDICATOR_COLORS['ICHIMOKU_CHIKOU'], lineStyle: 1 });
+    }
+
+    // ─ 서브차트 데이터 적용
+    for (const key of activeSubCharts) {
+      const info = subChartsRef.current.get(key);
+      if (!info) continue;
+
+      switch (key) {
+        case 'RSI': {
+          const r = rsi(closes, 14);
+          info.series.get('main')?.setData(toLineData(r.values));
+          break;
         }
+        case 'STOCHASTIC': {
+          const s = stochastic(highs, lows, closes, 14, 3);
+          info.series.get('k')?.setData(toLineData(s.k));
+          info.series.get('d')?.setData(toLineData(s.d));
+          break;
+        }
+        case 'WILLIAMS_R': {
+          const w = williamsR(highs, lows, closes, 14);
+          info.series.get('main')?.setData(toLineData(w.values));
+          break;
+        }
+        case 'CCI': {
+          const c = cci(highs, lows, closes, 20);
+          info.series.get('main')?.setData(toLineData(c.values));
+          break;
+        }
+        case 'ATR': {
+          const a = atr(highs, lows, closes, 14);
+          info.series.get('main')?.setData(toLineData(a.values));
+          break;
+        }
+        case 'OBV': {
+          const o = obv(closes, volumes);
+          info.series.get('main')?.setData(toLineData(o.values));
+          break;
+        }
+        case 'MACD': {
+          const m = macd(closes, 12, 26, 9);
+          info.series.get('macd')?.setData(toLineData(m.macd));
+          info.series.get('signal')?.setData(toLineData(m.signal));
 
-        const series = chart.addSeries(LineSeries, {
-          color: INDICATOR_COLORS[band.key] || '#6366f1',
-          lineWidth: band.key === 'BOLLINGER_MIDDLE' ? 1 : 1,
-          lineStyle: band.key === 'BOLLINGER_MIDDLE' ? 2 : 0, // 중간선 점선
-          lastValueVisible: false,
-          crosshairMarkerVisible: false,
-          priceLineVisible: false,
-        });
-        series.setData(lineData);
-        overlaySeriesRef.current.set(band.key, series);
-      }
-    }
-
-    // RSI 서브차트
-    if (showRSI && rsiSeriesRef.current) {
-      const rsiResult = rsi(closes, 14);
-      const rsiData: LineData<Time>[] = [];
-      for (let i = 0; i < rsiResult.values.length; i++) {
-        if (!isNaN(rsiResult.values[i])) rsiData.push({ time: times[i], value: rsiResult.values[i] });
-      }
-      rsiSeriesRef.current.setData(rsiData);
-    }
-
-    // MACD 서브차트
-    if (showMACD && macdLineRef.current && macdSignalRef.current && macdHistRef.current) {
-      const macdResult = macd(closes, 12, 26, 9);
-      const macdData: LineData<Time>[] = [];
-      const signalData: LineData<Time>[] = [];
-      const histData: HistogramData<Time>[] = [];
-
-      for (let i = 0; i < macdResult.macd.length; i++) {
-        if (!isNaN(macdResult.macd[i])) macdData.push({ time: times[i], value: macdResult.macd[i] });
-        if (!isNaN(macdResult.signal[i])) signalData.push({ time: times[i], value: macdResult.signal[i] });
-        if (!isNaN(macdResult.histogram[i])) {
-          histData.push({
-            time: times[i],
-            value: macdResult.histogram[i],
-            color: macdResult.histogram[i] >= 0 ? 'rgba(239, 68, 68, 0.5)' : 'rgba(59, 130, 246, 0.5)',
-          });
+          const histData: HistogramData<Time>[] = [];
+          for (let i = 0; i < m.histogram.length; i++) {
+            if (!isNaN(m.histogram[i])) {
+              histData.push({
+                time: times[i],
+                value: m.histogram[i],
+                color: m.histogram[i] >= 0 ? 'rgba(239, 68, 68, 0.5)' : 'rgba(59, 130, 246, 0.5)',
+              });
+            }
+          }
+          info.series.get('histogram')?.setData(histData);
+          break;
         }
       }
-
-      macdLineRef.current.setData(macdData);
-      macdSignalRef.current.setData(signalData);
-      macdHistRef.current.setData(histData);
     }
-  }, [activeIndicators, showRSI, showMACD]);
+  }, [activeIndicators, activeSubCharts]);
 
   // 지표 변경 시 재적용
   useEffect(() => {
@@ -516,37 +546,55 @@ const TradingChart = ({
         <div ref={containerRef} className="rounded-lg overflow-hidden border border-gray-100" />
       </div>
 
-      {/* RSI 서브차트 */}
-      {showRSI && (
-        <div className="mt-1">
-          <div className="flex items-center justify-between px-1 mb-0.5">
-            <span className="text-[10px] font-semibold text-gray-400">RSI (14)</span>
-            <div className="flex gap-3 text-[9px] text-gray-300">
-              <span>과매수 70</span>
-              <span>과매도 30</span>
+      {/* 서브차트 (제네릭 렌더링) */}
+      {activeSubCharts.map(key => {
+        const meta = SUB_CHART_LABELS[key];
+        return (
+          <div key={key} className="mt-1">
+            <div className="flex items-center justify-between px-1 mb-0.5">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-semibold text-gray-400">{meta?.label ?? key}</span>
+                {key === 'MACD' && (
+                  <>
+                    <div className="flex items-center gap-1">
+                      <span className="w-2 h-0.5 bg-blue-500 rounded" />
+                      <span className="text-[9px] text-gray-300">MACD</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-2 h-0.5 bg-red-500 rounded" />
+                      <span className="text-[9px] text-gray-300">Signal</span>
+                    </div>
+                  </>
+                )}
+                {key === 'STOCHASTIC' && (
+                  <>
+                    <div className="flex items-center gap-1">
+                      <span className="w-2 h-0.5 bg-blue-500 rounded" />
+                      <span className="text-[9px] text-gray-300">%K</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-2 h-0.5 bg-red-500 rounded" />
+                      <span className="text-[9px] text-gray-300">%D</span>
+                    </div>
+                  </>
+                )}
+              </div>
+              {meta?.guide && (
+                <div className="flex gap-3 text-[9px] text-gray-300">
+                  {meta.guide.map(g => <span key={g}>{g}</span>)}
+                </div>
+              )}
             </div>
+            <div
+              ref={el => {
+                if (el) subContainersRef.current.set(key, el);
+                else subContainersRef.current.delete(key);
+              }}
+              className="rounded-lg overflow-hidden border border-gray-100"
+            />
           </div>
-          <div ref={rsiContainerRef} className="rounded-lg overflow-hidden border border-gray-100" />
-        </div>
-      )}
-
-      {/* MACD 서브차트 */}
-      {showMACD && (
-        <div className="mt-1">
-          <div className="flex items-center gap-3 px-1 mb-0.5">
-            <span className="text-[10px] font-semibold text-gray-400">MACD (12, 26, 9)</span>
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-0.5 bg-blue-500 rounded" />
-              <span className="text-[9px] text-gray-300">MACD</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-0.5 bg-red-500 rounded" />
-              <span className="text-[9px] text-gray-300">Signal</span>
-            </div>
-          </div>
-          <div ref={macdContainerRef} className="rounded-lg overflow-hidden border border-gray-100" />
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 };

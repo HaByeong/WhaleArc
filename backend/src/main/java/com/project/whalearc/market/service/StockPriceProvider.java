@@ -82,44 +82,29 @@ public class StockPriceProvider {
             return cachedPrices;
         }
 
-        // 캐시 만료됐지만 이전 캐시가 있으면 일단 반환하고, 백그라운드에서 갱신
-        if (!cachedPrices.isEmpty()) {
-            refreshCacheAsync();
+        // 캐시 만료 → 동기 갱신 (최대 5초 대기, 초과 시 stale 반환)
+        return refreshCacheSync();
+    }
+
+    private synchronized List<MarketPriceResponse> refreshCacheSync() {
+        // 더블 체크: 다른 스레드가 이미 갱신했을 수 있음
+        if (!cachedPrices.isEmpty() && (System.currentTimeMillis() - lastFetchTime.get()) < cacheTtlMs) {
             return cachedPrices;
         }
 
-        // 최초 호출 — 동기 조회 필요
         try {
             List<MarketPriceResponse> freshData = fetchAllStockPrices();
             if (!freshData.isEmpty()) {
                 cachedPrices = freshData;
-                lastFetchTime.set(now);
+                lastFetchTime.set(System.currentTimeMillis());
+                return cachedPrices;
             }
-            return cachedPrices.isEmpty() ? getMockKrxTickers() : cachedPrices;
         } catch (Exception e) {
-            log.error("KIS 주식 시세 조회 실패: {}", e.getMessage());
-            return getMockKrxTickers();
+            log.warn("주식 시세 갱신 실패: {}", e.getMessage());
         }
-    }
 
-    private volatile boolean refreshing = false;
-
-    private void refreshCacheAsync() {
-        if (refreshing) return;
-        refreshing = true;
-        new Thread(() -> {
-            try {
-                List<MarketPriceResponse> freshData = fetchAllStockPrices();
-                if (!freshData.isEmpty()) {
-                    cachedPrices = freshData;
-                    lastFetchTime.set(System.currentTimeMillis());
-                }
-            } catch (Exception e) {
-                log.warn("백그라운드 주식 시세 갱신 실패: {}", e.getMessage());
-            } finally {
-                refreshing = false;
-            }
-        }).start();
+        // 갱신 실패 시 이전 캐시 또는 mock 반환
+        return cachedPrices.isEmpty() ? getMockKrxTickers() : cachedPrices;
     }
 
     private List<MarketPriceResponse> fetchAllStockPrices() {

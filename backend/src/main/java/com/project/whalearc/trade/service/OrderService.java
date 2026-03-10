@@ -286,7 +286,7 @@ public class OrderService {
                     fresh.getStockName() + " " + fresh.getQuantity().toPlainString() + "개 "
                             + (fresh.getOrderType() == Order.OrderType.BUY ? "매수" : "매도")
                             + " 체결 (" + fresh.getFilledPrice().toPlainString() + "원)",
-                    Map.of("orderId", fresh.getId(), "stockCode", fresh.getStockCode())
+                    Map.of("orderId", fresh.getId(), "stockCode", fresh.getStockCode(), "assetType", fresh.getAssetType())
             );
 
             return true;

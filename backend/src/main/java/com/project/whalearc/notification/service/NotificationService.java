@@ -54,10 +54,7 @@ public class NotificationService {
     }
 
     public void markAllAsRead(String userId) {
-        List<Notification> unread = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId)
-                .stream()
-                .filter(n -> !n.isRead())
-                .toList();
+        List<Notification> unread = notificationRepository.findByUserIdAndReadFalse(userId);
         if (unread.isEmpty()) return;
         unread.forEach(n -> n.setRead(true));
         notificationRepository.saveAll(unread);

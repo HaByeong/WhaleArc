@@ -150,7 +150,7 @@ const RankingPage = () => {
         {loading && <LoadingSpinner fullScreen={false} message="투자 현황을 불러오는 중..." />}
 
         {error && !loading && (
-          <ErrorMessage message={error} onRetry={loadRankings} />
+          <ErrorMessage message={error} onRetry={loadRankings} variant="error" />
         )}
 
         {/* 투자자 리스트 */}

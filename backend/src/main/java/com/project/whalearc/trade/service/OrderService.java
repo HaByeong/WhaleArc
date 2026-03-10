@@ -4,6 +4,8 @@ import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.CryptoPriceProvider;
 import com.project.whalearc.market.service.KisApiClient;
 import com.project.whalearc.market.service.StockPriceProvider;
+import com.project.whalearc.notification.domain.Notification;
+import com.project.whalearc.notification.service.NotificationService;
 import com.project.whalearc.trade.domain.*;
 import com.project.whalearc.trade.repository.OrderRepository;
 import com.project.whalearc.trade.repository.TradeRecordRepository;
@@ -30,6 +32,7 @@ public class OrderService {
     private final CryptoPriceProvider cryptoPriceProvider;
     private final StockPriceProvider stockPriceProvider;
     private final KisApiClient kisApiClient;
+    private final NotificationService notificationService;
 
     // 유저별 동시 주문 방지 락
     private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
@@ -274,6 +277,18 @@ public class OrderService {
             executeOrder(fresh, portfolio, fresh.getPrice());
             log.info("지정가 주문 자동 체결: orderId={}, stock={}, price={}",
                     fresh.getId(), fresh.getStockCode(), fresh.getPrice().toPlainString());
+
+            // 지정가 주문 체결 알림
+            notificationService.createNotificationWithMeta(
+                    fresh.getUserId(),
+                    Notification.NotificationType.LIMIT_ORDER_FILLED,
+                    "지정가 주문 체결",
+                    fresh.getStockName() + " " + fresh.getQuantity().toPlainString() + "개 "
+                            + (fresh.getOrderType() == Order.OrderType.BUY ? "매수" : "매도")
+                            + " 체결 (" + fresh.getFilledPrice().toPlainString() + "원)",
+                    Map.of("orderId", fresh.getId(), "stockCode", fresh.getStockCode())
+            );
+
             return true;
         } finally {
             lock.unlock();

@@ -151,7 +151,7 @@ const UserPage = () => {
       <div className="min-h-screen bg-gray-50">
         <Header showNav />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ErrorMessage message={error} onRetry={() => window.location.reload()} />
+          <ErrorMessage message={error} onRetry={() => window.location.reload()} variant="offline" />
         </div>
       </div>
     );

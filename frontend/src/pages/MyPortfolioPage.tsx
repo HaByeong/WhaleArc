@@ -122,7 +122,7 @@ const MyPortfolioPage = () => {
       <div className="min-h-screen bg-gray-50">
         <Header showNav />
         <div className="max-w-7xl mx-auto px-4 py-8">
-          <ErrorMessage message={error} onRetry={() => loadPortfolio()} />
+          <ErrorMessage message={error} onRetry={() => loadPortfolio()} variant="error" />
         </div>
       </div>
     );
@@ -132,7 +132,7 @@ const MyPortfolioPage = () => {
       <div className="min-h-screen bg-gray-50">
         <Header showNav />
         <div className="max-w-7xl mx-auto px-4 py-8">
-          <ErrorMessage message="포트폴리오를 찾을 수 없습니다." />
+          <ErrorMessage message="포트폴리오를 찾을 수 없습니다." variant="empty" />
         </div>
       </div>
     );

@@ -9,7 +9,6 @@ import { userService } from '../services/userService';
 import { useAuth } from '../contexts/AuthContext';
 import { usePolling } from '../hooks/usePolling';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
-
 const DashboardPage = () => {
   const navigate = useNavigate();
   const { user, profileName } = useAuth();
@@ -23,6 +22,7 @@ const DashboardPage = () => {
 
   // 실시간 WebSocket 시세
   const { prices: realtimePrices } = useRealtimePrice({ enabled: true });
+
 
   // 관심 종목에 실시간 시세 병합
   const liveWatchlist = useMemo(() => {
@@ -174,7 +174,7 @@ const DashboardPage = () => {
       <div className="min-h-screen bg-gray-50">
         <Header showNav={true} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ErrorMessage message={error} onRetry={loadData} />
+          <ErrorMessage message={error} onRetry={loadData} variant="error" />
         </div>
       </div>
     );

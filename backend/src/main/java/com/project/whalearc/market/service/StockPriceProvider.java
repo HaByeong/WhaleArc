@@ -23,7 +23,7 @@ public class StockPriceProvider {
 
     private final KisApiClient kisApiClient;
 
-    @Value("${kis.api.cache-ttl-ms:30000}")
+    @Value("${kis.api.cache-ttl-ms:15000}")
     private long cacheTtlMs;
 
     // 캐시

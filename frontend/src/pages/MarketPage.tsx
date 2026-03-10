@@ -75,7 +75,7 @@ const MarketPage = () => {
   useEffect(() => {
     loadData();
 
-    // 주식 탭: 30초마다 시세 갱신 (코인은 WebSocket 사용)
+    // 주식 탭: 10초마다 시세 갱신 (코인은 WebSocket 사용)
     if (assetType === 'STOCK') {
       const interval = setInterval(async () => {
         try {
@@ -90,7 +90,7 @@ const MarketPage = () => {
         } catch {
           // 갱신 실패 시 기존 데이터 유지
         }
-      }, 30_000);
+      }, 10_000);
       return () => clearInterval(interval);
     }
   }, [assetType]);

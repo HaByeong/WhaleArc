@@ -207,7 +207,7 @@ const TradePage = () => {
     } catch { /* ignore */ }
   }, [marketTab]);
 
-  usePolling(pollStockPrices, 30000);
+  usePolling(pollStockPrices, 10000);
 
   /* ─── 종목 선택 ─── */
   const handleStockSelect = (stock: StockPrice) => {

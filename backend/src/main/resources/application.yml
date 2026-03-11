@@ -22,7 +22,7 @@ bithumb:
 # 한국투자증권 KIS API 설정 (모의투자)
 kis:
   api:
-    base-url: https://openapivts.koreainvestment.com:29443
+    base-url: https://openapi.koreainvestment.com:9443
     appkey: ${KIS_APPKEY:}
     appsecret: ${KIS_APPSECRET:}
     cache-ttl-ms: 15000

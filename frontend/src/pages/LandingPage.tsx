@@ -156,18 +156,18 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-whale-dark mb-4">
-              핵심 기능
+              이런 것들을 할 수 있어요
             </h2>
             <p className="text-gray-600 text-lg">
-              WhaleArc의 강력한 기능들을 경험해보세요
+              WhaleArc와 함께 항해를 시작해보세요
             </p>
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               {
-                title: '실시간 시세',
-                desc: '실시간 시세 데이터를 한눈에 확인',
+                title: '바다 한눈에 보기',
+                desc: '실시간 시세 흐름을 한눈에 확인',
                 icon: (
                   <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 18l6-6 4 4 8-8" strokeWidth={2.5} />

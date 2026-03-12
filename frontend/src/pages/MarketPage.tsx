@@ -185,7 +185,7 @@ const MarketPage = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
           <div className="flex items-center justify-between flex-wrap gap-3 mb-2">
-            <h1 className="text-3xl md:text-4xl font-bold text-whale-dark">시장 현황</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-whale-dark">시장 현황</h1>
             {assetType === 'CRYPTO' && (
               <div className="flex items-center space-x-2">
                 <span className={`inline-block w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />

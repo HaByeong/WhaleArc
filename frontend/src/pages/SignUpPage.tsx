@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { authService } from '../services/authService';
+import { validateNickname } from '../utils/nicknameFilter';
 
 const SignUpPage = () => {
   const navigate = useNavigate();
@@ -15,6 +16,12 @@ const SignUpPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const nicknameCheck = validateNickname(name);
+    if (!nicknameCheck.valid) {
+      setError(nicknameCheck.message);
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError('비밀번호가 일치하지 않습니다.');

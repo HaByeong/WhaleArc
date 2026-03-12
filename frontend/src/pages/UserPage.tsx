@@ -10,6 +10,7 @@ import {
   type ExperienceLevel,
 } from '../services/userService';
 import { useAuth } from '../contexts/AuthContext';
+import { validateNickname } from '../utils/nicknameFilter';
 
 const INVESTMENT_STYLES: { value: InvestmentStyle; label: string; whale: string; desc: string; color: string; selectedBg: string; img: string }[] = [
   { value: 'AGGRESSIVE', label: '범고래', whale: 'Orca', desc: '바다의 최상위 포식자처럼, 과감한 공격으로 높은 수익을 노립니다', color: 'border-red-400', selectedBg: 'bg-gradient-to-r from-red-50 to-orange-50', img: '/whales/orca.png' },
@@ -80,6 +81,13 @@ const UserPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile || saving) return;
+
+    // 닉네임 금칙어 검사
+    const nicknameCheck = validateNickname(editName);
+    if (!nicknameCheck.valid) {
+      setSaveMessage({ type: 'error', text: nicknameCheck.message });
+      return;
+    }
 
     // 온보딩 모드에서는 투자 성향 필수
     if (isOnboarding && !investmentStyle) {

@@ -13,6 +13,12 @@ interface IndexData {
   changeRate: number;
 }
 
+// 인앱 브라우저 감지
+const isInAppBrowser = (): boolean => {
+  const ua = navigator.userAgent || navigator.vendor || '';
+  return /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line|Twitter|Snapchat|everytimeApp/i.test(ua);
+};
+
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,6 +27,7 @@ const LoginPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [indices, setIndices] = useState<IndexData[]>([]);
+  const [isInApp] = useState(isInAppBrowser);
   const navigate = useNavigate();
   const location = useLocation();
   const { session } = useAuth();
@@ -145,6 +152,15 @@ const LoginPage = () => {
               <h2 className="text-2xl font-bold text-whale-dark">다시 만나서 반가워요</h2>
               <p className="text-gray-400 text-sm mt-1">계정에 로그인하고 항해를 이어가세요</p>
             </div>
+
+            {/* 인앱 브라우저 경고 */}
+            {isInApp && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 text-sm text-amber-800">
+                <div className="font-semibold mb-1">외부 브라우저에서 열어주세요</div>
+                <p>현재 인앱 브라우저(네이버, 카카오톡 등)에서는 Google 로그인이 제한됩니다.</p>
+                <p className="mt-1">우측 상단 <strong>⋮</strong> 메뉴 → <strong>"기본 브라우저로 열기"</strong>를 눌러주세요.</p>
+              </div>
+            )}
 
             {/* OAuth 로그인 버튼 */}
             <div className="space-y-3 mb-6">

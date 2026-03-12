@@ -743,17 +743,17 @@ const StrategyPage = () => {
       <Header showNav={true} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-whale-dark mb-8">전략 분석 및 백테스팅</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-whale-dark mb-6 sm:mb-8">전략 분석 및 백테스팅</h1>
 
         {/* 탭 메뉴 */}
-        <div className="flex space-x-4 border-b border-gray-200 mb-6" role="tablist">
+        <div className="flex space-x-2 sm:space-x-4 border-b border-gray-200 mb-6 overflow-x-auto" role="tablist">
           {(['strategies', 'backtest', 'indicators'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               role="tab"
               aria-selected={activeTab === tab}
-              className={`pb-3 px-4 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-t-lg min-h-[44px] ${
+              className={`pb-3 px-2 sm:px-4 text-sm sm:text-base font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-t-lg min-h-[44px] whitespace-nowrap ${
                 activeTab === tab
                   ? 'text-whale-light border-b-2 border-whale-light'
                   : 'text-gray-500 hover:text-whale-light'
@@ -1595,40 +1595,42 @@ const StrategyPage = () => {
           <div className="space-y-6">
             <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl border border-slate-200 p-6 md:p-8">
               {/* 모드 토글 */}
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white text-lg shrink-0">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-bold text-slate-800">백테스팅</h2>
-                    <button
-                      onClick={() => setShowBacktestGuide(!showBacktestGuide)}
-                      className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-300 border ${showBacktestGuide ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-200' : 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600 border-blue-200 hover:shadow-md hover:shadow-blue-100 hover:border-blue-300'}`}
-                    >
-                      <img src="/whales/narwhal.png" alt="" className="w-9 h-9 object-contain animate-narwhal-swim" />
-                      {showBacktestGuide ? '가이드 닫기' : '처음이라면?'}
-                      {!showBacktestGuide && (
-                        <svg className="w-3.5 h-3.5 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      )}
-                    </button>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white text-lg shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
                   </div>
-                  <p className="text-sm text-slate-500">항로(전략)가 과거 바다에서 어떤 성과를 냈는지 확인해보세요</p>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg sm:text-xl font-bold text-slate-800">백테스팅</h2>
+                      <button
+                        onClick={() => setShowBacktestGuide(!showBacktestGuide)}
+                        className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-300 border ${showBacktestGuide ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-200' : 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600 border-blue-200 hover:shadow-md hover:shadow-blue-100 hover:border-blue-300'}`}
+                      >
+                        <img src="/whales/narwhal.png" alt="" className="w-7 h-7 sm:w-9 sm:h-9 object-contain animate-narwhal-swim" />
+                        {showBacktestGuide ? '가이드 닫기' : '처음이라면?'}
+                        {!showBacktestGuide && (
+                          <svg className="w-3.5 h-3.5 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-500 mt-0.5">항로(전략)가 과거 바다에서 어떤 성과를 냈는지 확인해보세요</p>
+                  </div>
                 </div>
-                <div className="flex bg-white rounded-xl border border-slate-200 p-1">
+                <div className="flex bg-white rounded-xl border border-slate-200 p-1 self-start sm:self-auto shrink-0">
                   <button
                     onClick={() => setBacktestMode('strategy')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${backtestMode === 'strategy' ? 'bg-blue-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${backtestMode === 'strategy' ? 'bg-blue-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   >
                     항로 백테스트
                   </button>
                   <button
                     onClick={() => setBacktestMode('stock')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${backtestMode === 'stock' ? 'bg-blue-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${backtestMode === 'stock' ? 'bg-blue-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   >
                     종목 분석
                   </button>

@@ -1637,22 +1637,22 @@ const StrategyPage = () => {
 
               {/* 초보자 가이드 */}
               {showBacktestGuide && (
-                <div className="mb-5 bg-gradient-to-br from-blue-50 via-indigo-50 to-sky-50 border border-blue-200/60 rounded-2xl p-6 shadow-sm">
+                <div className="mb-5 bg-gradient-to-br from-blue-50 via-indigo-50 to-sky-50 border border-blue-200/60 rounded-2xl p-4 sm:p-6 shadow-sm">
                   {/* 헤더 */}
-                  <div className="flex items-center justify-between mb-5">
-                    <div className="flex items-center gap-3">
-                      <img src="/whales/narwhal.png" alt="" className="w-10 h-10 object-contain drop-shadow-md" />
+                  <div className="flex items-center justify-between mb-4 sm:mb-5">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <img src="/whales/narwhal.png" alt="" className="w-8 h-8 sm:w-10 sm:h-10 object-contain drop-shadow-md" />
                       <div>
-                        <h3 className="text-base font-bold text-blue-800">백테스팅 가이드</h3>
-                        <p className="text-[11px] text-blue-500">처음이어도 괜찮아요, 하나씩 알려드릴게요!</p>
+                        <h3 className="text-sm sm:text-base font-bold text-blue-800">백테스팅 가이드</h3>
+                        <p className="text-[10px] sm:text-[11px] text-blue-500">처음이어도 괜찮아요, 하나씩 알려드릴게요!</p>
                       </div>
                     </div>
                     <button onClick={() => setShowBacktestGuide(false)} className="w-7 h-7 rounded-full bg-white/80 text-slate-400 hover:text-slate-600 hover:bg-white flex items-center justify-center text-lg leading-none shadow-sm transition-colors">&times;</button>
                   </div>
 
                   {/* 백테스팅이란 */}
-                  <div className="bg-white/60 rounded-xl p-4 mb-4 border border-blue-100/50">
-                    <p className="text-xs text-blue-700 leading-relaxed">
+                  <div className="bg-white/60 rounded-xl p-3 sm:p-4 mb-3 sm:mb-4 border border-blue-100/50">
+                    <p className="text-[11px] sm:text-xs text-blue-700 leading-relaxed">
                       <b>백테스팅</b>은 내가 만든 매매 전략이 과거에 실제로 작동했는지 시뮬레이션하는 것입니다.
                       예를 들어 "RSI가 30 이하면 매수, 70 이상이면 매도"라는 조건을 설정하면,
                       과거 데이터에서 그 조건대로 거래했을 때 수익이 났는지 확인할 수 있습니다.
@@ -1660,10 +1660,10 @@ const StrategyPage = () => {
                   </div>
 
                   {/* 사용법 + 고급 설정 */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                    <div className="bg-white/60 rounded-xl p-4 border border-emerald-100/50">
-                      <div className="text-xs font-bold text-emerald-700 mb-2.5 flex items-center gap-2">
-                        <img src="/whales/dolphin.png" alt="" className="w-7 h-7 object-contain drop-shadow-sm" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 sm:mb-4">
+                    <div className="bg-white/60 rounded-xl p-3 sm:p-4 border border-emerald-100/50">
+                      <div className="text-xs font-bold text-emerald-700 mb-2 sm:mb-2.5 flex items-center gap-2">
+                        <img src="/whales/dolphin.png" alt="" className="w-6 h-6 sm:w-7 sm:h-7 object-contain drop-shadow-sm" />
                         사용법
                       </div>
                       <ol className="text-[11px] text-slate-600 space-y-1.5 list-decimal list-inside">
@@ -1672,9 +1672,9 @@ const StrategyPage = () => {
                         <li>종목과 기간을 선택하고 <b>백테스트 실행</b> 클릭</li>
                       </ol>
                     </div>
-                    <div className="bg-white/60 rounded-xl p-4 border border-blue-100/50">
-                      <div className="text-xs font-bold text-blue-700 mb-2.5 flex items-center gap-2">
-                        <img src="/whales/blue-whale.png" alt="" className="w-7 h-7 object-contain drop-shadow-sm" />
+                    <div className="bg-white/60 rounded-xl p-3 sm:p-4 border border-blue-100/50">
+                      <div className="text-xs font-bold text-blue-700 mb-2 sm:mb-2.5 flex items-center gap-2">
+                        <img src="/whales/blue-whale.png" alt="" className="w-6 h-6 sm:w-7 sm:h-7 object-contain drop-shadow-sm" />
                         고급 설정 설명
                       </div>
                       <ul className="text-[11px] text-slate-600 space-y-1.5">
@@ -1687,12 +1687,12 @@ const StrategyPage = () => {
                   </div>
 
                   {/* 기술적 지표 용어 */}
-                  <div className="bg-white/60 rounded-xl p-4 mb-4 border border-violet-100/50">
-                    <div className="text-xs font-bold text-violet-700 mb-3 flex items-center gap-2">
-                      <img src="/whales/orca.png" alt="" className="w-7 h-7 object-contain drop-shadow-sm" />
+                  <div className="bg-white/60 rounded-xl p-3 sm:p-4 mb-3 sm:mb-4 border border-violet-100/50">
+                    <div className="text-xs font-bold text-violet-700 mb-2 sm:mb-3 flex items-center gap-2">
+                      <img src="/whales/orca.png" alt="" className="w-6 h-6 sm:w-7 sm:h-7 object-contain drop-shadow-sm" />
                       매매 조건 지표 용어
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-[11px] text-slate-600">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 sm:gap-y-2 text-[11px] text-slate-600">
                       <div><b>RSI</b> — 과매수/과매도 판단 (0~100, 30↓매수 70↑매도)</div>
                       <div><b>MACD</b> — 추세 방향과 강도 (양수=상승, 음수=하락)</div>
                       <div><b>MACD 시그널</b> — MACD의 이동평균 (교차 시 매매 신호)</div>
@@ -1711,7 +1711,7 @@ const StrategyPage = () => {
                     </div>
                     <div className="mt-3 pt-3 border-t border-violet-100/80">
                       <div className="text-[10px] font-semibold text-violet-600 mb-1.5">크로스 (교차) 신호</div>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 text-[11px] text-slate-600">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 text-[11px] text-slate-600">
                         <div><b>MACD 골든크로스</b> — MACD가 시그널 위로 교차 (매수)</div>
                         <div><b>MACD 데드크로스</b> — MACD가 시그널 아래로 교차 (매도)</div>
                         <div><b>스토캐스틱 골든크로스</b> — %K가 %D 위로 교차 (매수)</div>
@@ -1729,12 +1729,12 @@ const StrategyPage = () => {
                   </div>
 
                   {/* 결과 지표 해석 */}
-                  <div className="bg-white/60 rounded-xl p-4 border border-indigo-100/50">
-                    <div className="text-xs font-bold text-indigo-700 mb-3 flex items-center gap-2">
-                      <img src="/whales/beluga.png" alt="" className="w-7 h-7 object-contain drop-shadow-sm" />
+                  <div className="bg-white/60 rounded-xl p-3 sm:p-4 border border-indigo-100/50">
+                    <div className="text-xs font-bold text-indigo-700 mb-2 sm:mb-3 flex items-center gap-2">
+                      <img src="/whales/beluga.png" alt="" className="w-6 h-6 sm:w-7 sm:h-7 object-contain drop-shadow-sm" />
                       결과 지표 해석
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 text-[11px] text-slate-600">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 text-[11px] text-slate-600">
                       <div><b>총 수익률</b> — 전체 기간 동안의 수익/손실 %</div>
                       <div><b>CAGR</b> — 연평균 복합 성장률 (연 환산 수익률)</div>
                       <div><b>MDD(최대 낙폭)</b> — 최고점 대비 가장 큰 하락 폭</div>
@@ -1821,9 +1821,9 @@ const StrategyPage = () => {
                           {directEntryConditions.map((c, i) => {
                             const isCross = c.indicator.includes('_CROSS_') || c.indicator.includes('_CROSSUNDER_');
                             return (
-                            <div key={i} className="flex items-center gap-1.5 bg-white rounded-lg border border-slate-200 p-2">
+                            <div key={i} className="flex flex-wrap items-center gap-1.5 bg-white rounded-lg border border-slate-200 p-2">
                               <select value={c.indicator} onChange={(e) => updateDirectCondition('entry', i, 'indicator', e.target.value)}
-                                className={`${isCross ? 'flex-1' : 'flex-1'} text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white`}>
+                                className="flex-1 min-w-[120px] text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
                                 <option value="RSI">RSI</option>
                                 <option value="MACD">MACD</option>
                                 <option value="MACD_SIGNAL">MACD 시그널</option>
@@ -1850,14 +1850,14 @@ const StrategyPage = () => {
                               {!isCross && (
                                 <>
                                   <select value={c.operator} onChange={(e) => updateDirectCondition('entry', i, 'operator', e.target.value)}
-                                    className="w-14 text-xs border border-slate-200 rounded-lg px-1 py-1.5 bg-white text-center">
+                                    className="w-14 sm:w-16 text-xs border border-slate-200 rounded-lg px-1 py-1.5 bg-white text-center">
                                     <option value="GT">&gt;</option>
                                     <option value="LT">&lt;</option>
                                     <option value="GTE">&ge;</option>
                                     <option value="LTE">&le;</option>
                                   </select>
                                   <input type="number" value={c.value} onChange={(e) => updateDirectCondition('entry', i, 'value', parseFloat(e.target.value) || 0)}
-                                    className="w-16 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-right" />
+                                    className="w-16 sm:w-20 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-right" />
                                 </>
                               )}
                               {isCross && <span className="text-[10px] text-emerald-600 font-medium px-2">발생 시</span>}
@@ -1881,9 +1881,9 @@ const StrategyPage = () => {
                           {directExitConditions.map((c, i) => {
                             const isCross = c.indicator.includes('_CROSS_') || c.indicator.includes('_CROSSUNDER_');
                             return (
-                            <div key={i} className="flex items-center gap-1.5 bg-white rounded-lg border border-slate-200 p-2">
+                            <div key={i} className="flex flex-wrap items-center gap-1.5 bg-white rounded-lg border border-slate-200 p-2">
                               <select value={c.indicator} onChange={(e) => updateDirectCondition('exit', i, 'indicator', e.target.value)}
-                                className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
+                                className="flex-1 min-w-[120px] text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
                                 <option value="RSI">RSI</option>
                                 <option value="MACD">MACD</option>
                                 <option value="MACD_SIGNAL">MACD 시그널</option>
@@ -1910,14 +1910,14 @@ const StrategyPage = () => {
                               {!isCross && (
                                 <>
                                   <select value={c.operator} onChange={(e) => updateDirectCondition('exit', i, 'operator', e.target.value)}
-                                    className="w-14 text-xs border border-slate-200 rounded-lg px-1 py-1.5 bg-white text-center">
+                                    className="w-14 sm:w-16 text-xs border border-slate-200 rounded-lg px-1 py-1.5 bg-white text-center">
                                     <option value="GT">&gt;</option>
                                     <option value="LT">&lt;</option>
                                     <option value="GTE">&ge;</option>
                                     <option value="LTE">&le;</option>
                                   </select>
                                   <input type="number" value={c.value} onChange={(e) => updateDirectCondition('exit', i, 'value', parseFloat(e.target.value) || 0)}
-                                    className="w-16 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-right" />
+                                    className="w-16 sm:w-20 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-right" />
                                 </>
                               )}
                               {isCross && <span className="text-[10px] text-emerald-600 font-medium px-2">발생 시</span>}
@@ -2118,7 +2118,7 @@ const StrategyPage = () => {
                 {showAdvancedSettings && (
                   <div className="mt-3 space-y-3 p-4 bg-slate-50/50 rounded-xl border border-slate-100">
                     {/* 리스크 관리 */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                       <div>
                         <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">손절 (%)</label>
                         <input type="number" value={stopLossPercent} onChange={(e) => setStopLossPercent(e.target.value)}
@@ -2141,7 +2141,7 @@ const StrategyPage = () => {
                       </div>
                     </div>
                     {/* 매매 방향 & 다중 포지션 */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                       <div>
                         <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">매매 방향</label>
                         <select value={tradeDirection} onChange={(e) => setTradeDirection(e.target.value as any)}
@@ -2177,7 +2177,7 @@ const StrategyPage = () => {
                       </div>
                     </div>
                     {positionSizing !== 'ALL_IN' && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
                           <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">
                             {positionSizing === 'PERCENT' ? '투자 비율 (%)' : '투자 금액 (원)'}
@@ -2217,10 +2217,10 @@ const StrategyPage = () => {
             {backtestResult && (
               <div className="space-y-6">
                 {/* 결과 헤더 + 핵심 KPI */}
-                <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-sm">
-                  <div className="flex items-center justify-between mb-6">
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 md:p-8 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg ${backtestResult.totalReturnRate >= 0 ? 'bg-gradient-to-br from-red-400 to-rose-600' : 'bg-gradient-to-br from-blue-400 to-indigo-600'}`}>
+                      <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white text-lg shrink-0 ${backtestResult.totalReturnRate >= 0 ? 'bg-gradient-to-br from-red-400 to-rose-600' : 'bg-gradient-to-br from-blue-400 to-indigo-600'}`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           {backtestResult.totalReturnRate >= 0
                             ? <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -2229,8 +2229,8 @@ const StrategyPage = () => {
                         </svg>
                       </div>
                       <div>
-                        <h2 className="text-xl font-bold text-slate-800">백테스팅 결과</h2>
-                        <div className="text-sm text-slate-500">{backtestResult.stockName || backtestResult.stockCode} · {backtestResult.startDate} ~ {backtestResult.endDate}</div>
+                        <h2 className="text-base sm:text-xl font-bold text-slate-800">백테스팅 결과</h2>
+                        <div className="text-xs sm:text-sm text-slate-500">{backtestResult.stockName || backtestResult.stockCode} · {backtestResult.startDate} ~ {backtestResult.endDate}</div>
                       </div>
                     </div>
                     {backtestResult.buyHoldReturnRate !== undefined && (() => {
@@ -2245,39 +2245,39 @@ const StrategyPage = () => {
                   </div>
 
                   {/* 핵심 KPI 6개 */}
-                  <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-5">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mb-5">
                     <div title="전체 기간 동안의 총 수익/손실 비율" className={`p-3 rounded-xl border cursor-help ${backtestResult.totalReturnRate >= 0 ? 'bg-red-50/70 border-red-100' : 'bg-blue-50/70 border-blue-100'}`}>
                       <div className="text-[10px] font-medium text-slate-500 mb-1">총 수익률</div>
-                      <div className={`text-xl font-bold tracking-tight ${backtestResult.totalReturnRate >= 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                      <div className={`text-lg sm:text-xl font-bold tracking-tight ${backtestResult.totalReturnRate >= 0 ? 'text-red-600' : 'text-blue-600'}`}>
                         {formatPercent(backtestResult.totalReturnRate)}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">{formatCurrency(backtestResult.totalReturn)}</div>
                     </div>
                     <div title="백테스트 종료 시점의 총 자산 가치" className="p-3 rounded-xl border bg-slate-50/70 border-slate-100 cursor-help">
                       <div className="text-[10px] font-medium text-slate-500 mb-1">최종 자산</div>
-                      <div className="text-xl font-bold text-slate-800 tracking-tight">{formatCurrency(backtestResult.finalValue)}</div>
+                      <div className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">{formatCurrency(backtestResult.finalValue)}</div>
                       <div className="text-[10px] text-slate-400 mt-0.5">초기 {formatCurrency(backtestResult.initialCapital)}</div>
                     </div>
                     <div title="연평균 복합 성장률 (Compound Annual Growth Rate)&#10;1년으로 환산했을 때의 수익률입니다" className="p-3 rounded-xl border bg-purple-50/70 border-purple-100 cursor-help">
                       <div className="text-[10px] font-medium text-slate-500 mb-1">CAGR</div>
-                      <div className={`text-xl font-bold tracking-tight ${(backtestResult.cagr ?? 0) >= 0 ? 'text-purple-600' : 'text-blue-600'}`}>
+                      <div className={`text-lg sm:text-xl font-bold tracking-tight ${(backtestResult.cagr ?? 0) >= 0 ? 'text-purple-600' : 'text-blue-600'}`}>
                         {formatPercent(backtestResult.cagr ?? 0)}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">연평균 성장률</div>
                     </div>
                     <div title="위험 대비 수익 비율 (Sharpe Ratio)&#10;높을수록 같은 위험에서 더 많은 수익&#10;1 이상 = 양호 / 2 이상 = 우수" className="p-3 rounded-xl border bg-amber-50/70 border-amber-100 cursor-help">
                       <div className="text-[10px] font-medium text-slate-500 mb-1">샤프 비율</div>
-                      <div className="text-xl font-bold text-slate-800 tracking-tight">{backtestResult.sharpeRatio.toFixed(2)}</div>
+                      <div className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">{backtestResult.sharpeRatio.toFixed(2)}</div>
                       <div className="text-[10px] text-slate-400 mt-0.5">{backtestResult.sharpeRatio >= 1 ? '양호' : backtestResult.sharpeRatio >= 0.5 ? '보통' : '주의'}</div>
                     </div>
                     <div title="Maximum Drawdown (최대 낙폭)&#10;최고점 대비 가장 크게 떨어진 폭&#10;작을수록 안정적인 전략입니다" className="p-3 rounded-xl border bg-orange-50/70 border-orange-100 cursor-help">
                       <div className="text-[10px] font-medium text-slate-500 mb-1">최대 낙폭</div>
-                      <div className="text-xl font-bold text-orange-600 tracking-tight">{backtestResult.maxDrawdown === 0 ? '0.00%' : `${backtestResult.maxDrawdown.toFixed(2)}%`}</div>
+                      <div className="text-lg sm:text-xl font-bold text-orange-600 tracking-tight">{backtestResult.maxDrawdown === 0 ? '0.00%' : `${backtestResult.maxDrawdown.toFixed(2)}%`}</div>
                       <div className="text-[10px] text-slate-400 mt-0.5">MDD</div>
                     </div>
                     <div title="수익 난 거래 수 / 전체 거래 수&#10;승률이 낮아도 평균 이익이 크면 전략이 유효할 수 있습니다" className="p-3 rounded-xl border bg-emerald-50/70 border-emerald-100 cursor-help">
                       <div className="text-[10px] font-medium text-slate-500 mb-1">승률</div>
-                      <div className="text-xl font-bold text-emerald-600 tracking-tight">{backtestResult.winRate.toFixed(1)}%</div>
+                      <div className="text-lg sm:text-xl font-bold text-emerald-600 tracking-tight">{backtestResult.winRate.toFixed(1)}%</div>
                       <div className="text-[10px] text-slate-400 mt-0.5">{backtestResult.totalTrades}회 거래</div>
                     </div>
                   </div>
@@ -2330,8 +2330,8 @@ const StrategyPage = () => {
                         <span className="font-semibold text-slate-500 uppercase tracking-wider">벤치마크 비교</span>
                         <span className="text-slate-400">Buy & Hold {formatPercent(backtestResult.buyHoldReturnRate!)}</span>
                       </div>
-                      <div className="flex items-center gap-4 text-sm">
-                        <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden relative">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-sm">
+                        <div className="w-full sm:flex-1 h-2 bg-slate-200 rounded-full overflow-hidden relative">
                           <div className={`h-full rounded-full ${backtestResult.totalReturnRate >= 0 ? 'bg-blue-500' : 'bg-blue-500'}`}
                             style={{ width: `${Math.min(Math.max(((backtestResult.totalReturnRate - Math.min(0, backtestResult.buyHoldReturnRate!)) / (Math.max(Math.abs(backtestResult.totalReturnRate), Math.abs(backtestResult.buyHoldReturnRate!)) * 2 || 1)) * 100, 2), 100)}%` }} />
                         </div>
@@ -2344,7 +2344,7 @@ const StrategyPage = () => {
                   )}
 
                   {/* 상세 지표 그리드 */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
                     {[
                       { label: '소르티노 비율', value: (backtestResult.sortinoRatio ?? 0).toFixed(2), sub: (backtestResult.sortinoRatio ?? 0) >= 1 ? '양호' : '보통' },
                       { label: 'Profit Factor', value: (backtestResult.profitFactor ?? 0).toFixed(2), sub: (backtestResult.profitFactor ?? 0) >= 1.5 ? '양호' : (backtestResult.profitFactor ?? 0) >= 1 ? '보통' : '손실' },
@@ -2374,10 +2374,10 @@ const StrategyPage = () => {
 
                 {/* 가격 차트 + 매매 마커 */}
                 {backtestResult.priceData && backtestResult.priceData.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                    <h3 className="text-lg font-bold text-slate-800 mb-1">가격 차트 & 매매 포인트</h3>
-                    <p className="text-xs text-slate-400 mb-4">빨강 = 매수(롱) / 파랑 = 매도 / 보라 = 숏진입 / 남색 = 숏청산</p>
-                    <ResponsiveContainer width="100%" height={400}>
+                  <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-6 shadow-sm">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-1">가격 차트 & 매매 포인트</h3>
+                    <p className="text-[10px] sm:text-xs text-slate-400 mb-4">빨강 = 매수(롱) / 파랑 = 매도 / 보라 = 숏진입 / 남색 = 숏청산</p>
+                    <ResponsiveContainer width="100%" height={280} className="sm:!h-[400px]">
                       <ComposedChart data={(() => {
                         const tradeMap = new Map<string, { type: string; price: number }>();
                         (backtestResult.trades || []).forEach(t => tradeMap.set(t.date, { type: t.type, price: t.price }));
@@ -2413,12 +2413,12 @@ const StrategyPage = () => {
 
                 {/* 자산 변동 추이 (전략 vs Buy & Hold) */}
                 {backtestResult.equityCurve && backtestResult.equityCurve.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">
+                  <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-6 shadow-sm">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-4">
                       자산 변동 추이
-                      {backtestResult.buyHoldCurve && <span className="text-sm font-normal text-slate-400 ml-2">전략 vs Buy & Hold</span>}
+                      {backtestResult.buyHoldCurve && <span className="text-xs sm:text-sm font-normal text-slate-400 ml-2">전략 vs Buy & Hold</span>}
                     </h3>
-                    <ResponsiveContainer width="100%" height={350}>
+                    <ResponsiveContainer width="100%" height={250} className="sm:!h-[350px]">
                       <AreaChart data={(() => {
                         const bhMap = new Map((backtestResult.buyHoldCurve || []).map(p => [p.date, p.value]));
                         return backtestResult.equityCurve.map(p => ({
@@ -2450,10 +2450,10 @@ const StrategyPage = () => {
 
                 {/* 드로다운 차트 */}
                 {backtestResult.drawdownCurve && backtestResult.drawdownCurve.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                    <h3 className="text-lg font-bold text-slate-800 mb-1">드로다운 (Drawdown)</h3>
-                    <p className="text-xs text-slate-400 mb-4">고점 대비 자산 하락률 추이</p>
-                    <ResponsiveContainer width="100%" height={200}>
+                  <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-6 shadow-sm">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-1">드로다운 (Drawdown)</h3>
+                    <p className="text-[10px] sm:text-xs text-slate-400 mb-4">고점 대비 자산 하락률 추이</p>
+                    <ResponsiveContainer width="100%" height={160} className="sm:!h-[200px]">
                       <AreaChart data={backtestResult.drawdownCurve}>
                         <defs>
                           <linearGradient id="colorDD" x1="0" y1="0" x2="0" y2="1">
@@ -2474,9 +2474,9 @@ const StrategyPage = () => {
 
                 {/* 일일 수익률 */}
                 {backtestResult.dailyReturns && backtestResult.dailyReturns.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">일일 수익률</h3>
-                    <ResponsiveContainer width="100%" height={250}>
+                  <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-6 shadow-sm">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-4">일일 수익률</h3>
+                    <ResponsiveContainer width="100%" height={180} className="sm:!h-[250px]">
                       <ComposedChart data={backtestResult.dailyReturns}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.substring(5)} />

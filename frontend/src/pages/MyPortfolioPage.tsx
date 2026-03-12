@@ -678,7 +678,7 @@ const MyPortfolioPage = () => {
                                 진입 시그널 대기 중 (도치안 채널 돌파 + ADX 확인)
                               </div>
                             ) : (
-                              <div className="grid grid-cols-3 gap-2 text-center">
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-center">
                                 <div>
                                   <div className="text-xs text-gray-400">거래</div>
                                   <div className="text-sm font-bold text-whale-dark">{perf.totalTradeCount}회</div>

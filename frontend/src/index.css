@@ -262,3 +262,29 @@
   50%      { background-position: 100% 50%; }
 }
 
+/* 평소에는 스크롤바 숨기고, 스크롤/호버 시 얇게 등장 */
+.scrollbar-ghost {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s;
+}
+.scrollbar-ghost:hover,
+.scrollbar-ghost:active {
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+.scrollbar-ghost::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-ghost::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-ghost::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+  transition: background 0.3s;
+}
+.scrollbar-ghost:hover::-webkit-scrollbar-thumb,
+.scrollbar-ghost:active::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+}
+

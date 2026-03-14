@@ -18,6 +18,7 @@ import UserPage from './pages/UserPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
+import GoldenCrossChart from './components/GoldenCrossChart';
 
 function App() {
   return (
@@ -103,6 +104,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/golden-cross" element={<GoldenCrossChart />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
         </AuthProvider>

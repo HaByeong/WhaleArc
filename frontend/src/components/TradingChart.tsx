@@ -33,7 +33,15 @@ const INTERVALS = [
   { label: '10분', value: '10m' },
   { label: '30분', value: '30m' },
   { label: '1시간', value: '1h' },
-  { label: '24시간', value: '24h' },
+  { label: '1일', value: '1d' },
+];
+
+const STOCK_PERIODS = [
+  { label: '1개월', months: 1 },
+  { label: '3개월', months: 3 },
+  { label: '6개월', months: 6 },
+  { label: '1년', months: 12 },
+  { label: '2년', months: 24 },
 ];
 
 /** 지표 설정값 해석 */
@@ -105,6 +113,7 @@ const TradingChart = ({
   const prevSymbolRef = useRef('');
   const prevIntervalRef = useRef('');
   const [interval, setInterval] = useState('10m');
+  const [stockPeriod, setStockPeriod] = useState(3);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
   // 활성 서브차트 목록
@@ -469,7 +478,12 @@ const TradingChart = ({
         candleSeriesRef.current!.setData(candleData);
         volumeSeriesRef.current!.setData(volumeData);
 
-        if (candleData.length > 100) {
+        if (assetType === 'STOCK' && candleData.length > 0) {
+          const cutoff = Math.floor(Date.now() / 1000) - stockPeriod * 30 * 24 * 60 * 60;
+          const from = (candleData.find(c => (c.time as number) >= cutoff)?.time ?? candleData[0].time);
+          const to = candleData[candleData.length - 1].time;
+          chartRef.current?.timeScale().setVisibleRange({ from, to });
+        } else if (candleData.length > 100) {
           const from = candleData[candleData.length - 100].time;
           const to = candleData[candleData.length - 1].time;
           chartRef.current?.timeScale().setVisibleRange({ from, to });
@@ -480,6 +494,15 @@ const TradingChart = ({
       })
       .catch(() => setHistoryLoaded(true));
   }, [symbol, interval, assetType]);
+
+  // ─── 주식 기간 변경 시 visible range 업데이트 ──────────
+  useEffect(() => {
+    if (assetType !== 'STOCK' || !historyLoaded || dataRef.current.length === 0) return;
+    const cutoff = Math.floor(Date.now() / 1000) - stockPeriod * 30 * 24 * 60 * 60;
+    const from = (dataRef.current.find(c => (c.time as number) >= cutoff)?.time ?? dataRef.current[0].time);
+    const to = dataRef.current[dataRef.current.length - 1].time;
+    chartRef.current?.timeScale().setVisibleRange({ from, to });
+  }, [stockPeriod, assetType, historyLoaded]);
 
   // ─── 실시간 가격 업데이트 ──────────────────────────────
   useEffect(() => {
@@ -515,7 +538,22 @@ const TradingChart = ({
       {/* 인터벌 선택 + LIVE 표시 */}
       <div className="flex items-center justify-between mb-3">
         {assetType === 'STOCK' ? (
-          <div className="text-xs text-gray-400 font-medium">일봉 (3개월)</div>
+          <div className="flex items-center space-x-1">
+            <span className="text-xs text-gray-400 mr-1">일봉</span>
+            {STOCK_PERIODS.map(p => (
+              <button
+                key={p.months}
+                onClick={() => setStockPeriod(p.months)}
+                className={`px-3 py-1.5 text-xs rounded-full font-medium transition-all ${
+                  stockPeriod === p.months
+                    ? 'bg-whale-dark text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         ) : (
           <div className="flex space-x-1">
             {INTERVALS.map(iv => (

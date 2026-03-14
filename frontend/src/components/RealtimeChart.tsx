@@ -13,7 +13,7 @@ const INTERVALS = [
   { label: '10분', value: '10m' },
   { label: '30분', value: '30m' },
   { label: '1시간', value: '1h' },
-  { label: '24시간', value: '24h' },
+  { label: '1일', value: '1d' },
 ];
 
 const RealtimeChart = ({ symbol, price, className = '' }: RealtimeChartProps) => {

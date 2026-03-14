@@ -120,16 +120,26 @@ public class CandlestickService {
         }
     }
 
+    /** 앱 interval 형식을 빗썸 API 형식으로 변환 */
+    private String toBithumbInterval(String interval) {
+        return switch (interval) {
+            case "1d" -> "24h";
+            case "1w" -> "24h";
+            default -> interval; // 1m, 3m, 5m, 10m, 30m, 1h, 6h, 12h 그대로 사용
+        };
+    }
+
     /** 빗썸 캔들스틱 API 호출 */
     @SuppressWarnings("unchecked")
     private List<CandlestickResponse> getCryptoCandlesticks(String symbol, String interval) {
-        String url = baseUrl + "/public/candlestick/" + symbol + "_KRW/" + interval;
+        String bithumbInterval = toBithumbInterval(interval);
+        String url = baseUrl + "/public/candlestick/" + symbol + "_KRW/" + bithumbInterval;
 
         try {
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
 
             if (response == null || !"0000".equals(response.get("status"))) {
-                log.warn("빗썸 캔들스틱 API 오류: symbol={}, interval={}", symbol, interval);
+                log.warn("빗썸 캔들스틱 API 오류: symbol={}, interval={} (bithumb={})", symbol, interval, bithumbInterval);
                 return List.of();
             }
 

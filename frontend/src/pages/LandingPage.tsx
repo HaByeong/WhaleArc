@@ -168,6 +168,7 @@ const LandingPage = () => {
               {
                 title: '바다 한눈에 보기',
                 desc: '실시간 시세 흐름을 한눈에 확인',
+                route: '/market',
                 icon: (
                   <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 18l6-6 4 4 8-8" strokeWidth={2.5} />
@@ -178,6 +179,7 @@ const LandingPage = () => {
               {
                 title: '모의투자 거래',
                 desc: '실제 돈 없이 매수·매도를 체험',
+                route: '/trade',
                 icon: (
                   <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -187,6 +189,7 @@ const LandingPage = () => {
               {
                 title: '항로 상점',
                 desc: '검증된 퀀트 전략을 구매하고 자동 투자',
+                route: '/store',
                 icon: (
                   <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
@@ -196,6 +199,7 @@ const LandingPage = () => {
               {
                 title: '포트폴리오 관리',
                 desc: '자산 배분, 수익률, 항로 성과를 한눈에',
+                route: '/my-portfolio',
                 icon: (
                   <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
@@ -206,6 +210,7 @@ const LandingPage = () => {
               {
                 title: '투자 현황',
                 desc: '다른 투자자의 대표 항로와 수익률 비교',
+                route: '/ranking',
                 icon: (
                   <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -215,6 +220,7 @@ const LandingPage = () => {
               {
                 title: '전략 백테스트',
                 desc: '과거 데이터로 전략 검증 및 수익률 분석',
+                route: '/strategy',
                 icon: (
                   <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -224,7 +230,8 @@ const LandingPage = () => {
             ].map((feature) => (
               <div
                 key={feature.title}
-                className="group card text-center hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 border border-gray-100 hover:border-whale-light"
+                onClick={() => handleFeatureClick(feature.route)}
+                className="group card text-center hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 border border-gray-100 hover:border-whale-light cursor-pointer"
               >
                 <div className="w-16 h-16 bg-gradient-to-br from-whale-light to-whale-accent rounded-xl mx-auto mb-4 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg">
                   {feature.icon}

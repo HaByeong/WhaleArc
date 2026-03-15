@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Header from './Header';
 import BacktestPanel from './BacktestPanel';
+import RSIChart from './RSIChart';
+import BollingerChart from './BollingerChart';
+import MACDChart from './MACDChart';
 import { type BacktestResult } from '../services/strategyService';
 import {
   quantStoreService,
@@ -82,9 +85,15 @@ function genData(rng: () => number): OHLCData {
   return { opens, closes, highs, lows, shortMA, longMA };
 }
 
-/* ─── 골든크로스 항로 판별 ─── */
+/* ─── 항로 판별 ─── */
 const isGoldenCrossProduct = (p: QuantProduct): boolean =>
   /골든|golden.?cross/i.test(`${p.name} ${p.description}`);
+const isRsiProduct = (p: QuantProduct): boolean =>
+  /RSI|과매도/i.test(`${p.name} ${p.description}`);
+const isBollingerProduct = (p: QuantProduct): boolean =>
+  /볼린저|bollinger/i.test(`${p.name} ${p.description}`);
+const isMacdProduct = (p: QuantProduct): boolean =>
+  /MACD|다이버전스/i.test(`${p.name} ${p.description}`);
 
 /* ─── 숫자 포맷 ─── */
 const formatPercent = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
@@ -294,6 +303,10 @@ export default function GoldenCrossChart() {
   }, [products]);
 
   const showGoldenCross = !selectedProduct || isGoldenCrossProduct(selectedProduct);
+  const showRsi = selectedProduct ? isRsiProduct(selectedProduct) : false;
+  const showBollinger = selectedProduct ? isBollingerProduct(selectedProduct) : false;
+  const showMacd = selectedProduct ? isMacdProduct(selectedProduct) : false;
+  const hasChart = showGoldenCross || showRsi || showBollinger || showMacd;
 
   /* ─── 캔버스 드로잉 ─── */
   const draw = useCallback(() => {
@@ -626,6 +639,12 @@ export default function GoldenCrossChart() {
                         {statusText && <span style={{ color: statusColor }}>{statusLabel}</span>}
                       </div>
                     </div>
+                  ) : showRsi ? (
+                    <RSIChart />
+                  ) : showBollinger ? (
+                    <BollingerChart />
+                  ) : showMacd ? (
+                    <MACDChart />
                   ) : undefined}
                 />
               </>

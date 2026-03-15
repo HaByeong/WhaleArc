@@ -106,14 +106,7 @@ function App() {
             }
           />
           <Route path="/golden-cross" element={<GoldenCrossChart />} />
-          <Route
-            path="/strategy-lab"
-            element={
-              <ProtectedRoute>
-                <StrategyLabPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/strategy-lab" element={<StrategyLabPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
         </AuthProvider>

@@ -123,13 +123,6 @@ const Header = ({ showNav = false }: HeaderProps) => {
                 >
                   투자 현황
                 </Link>
-                <Link
-                  to="/golden-cross"
-                  className="text-gray-700 hover:text-whale-light transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5"
-                  aria-label="항로 검증"
-                >
-                  항로 검증
-                </Link>
                 {isAuthenticated && (
                   <div className="flex items-center space-x-3 ml-4 pl-4 border-l border-gray-200">
                     {/* 알림 벨 */}
@@ -308,14 +301,6 @@ const Header = ({ showNav = false }: HeaderProps) => {
               aria-label="투자 현황"
             >
               투자 현황
-            </Link>
-            <Link
-              to="/golden-cross"
-              onClick={closeMobileMenu}
-              className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-whale-light rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center"
-              aria-label="항로 검증"
-            >
-              항로 검증
             </Link>
             {isAuthenticated && (
               <>

@@ -10,7 +10,7 @@ import DashboardPage from './pages/DashboardPage';
 import MarketPage from './pages/MarketPage';
 import TradePage from './pages/TradePage';
 import StrategyPage from './pages/StrategyPage';
-import StrategyLabPage from './pages/StrategyLabPage';
+
 import QuantStorePage from './pages/QuantStorePage';
 import RankingPage from './pages/RankingPage';
 import PortfolioDetailPage from './pages/PortfolioDetailPage';
@@ -106,7 +106,7 @@ function App() {
             }
           />
           <Route path="/golden-cross" element={<GoldenCrossChart />} />
-          <Route path="/strategy-lab" element={<StrategyLabPage />} />
+
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
         </AuthProvider>

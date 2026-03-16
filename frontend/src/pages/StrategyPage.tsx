@@ -98,6 +98,23 @@ const StrategyPage = () => {
   const [directEntryConditions, setDirectEntryConditions] = useState<Condition[]>([]);
   const [directExitConditions, setDirectExitConditions] = useState<Condition[]>([]);
 
+  // 전략별 지표/조건 커스텀 편집
+  const [editableIndicators, setEditableIndicators] = useState<Indicator[]>([]);
+  const [editableEntryConditions, setEditableEntryConditions] = useState<Condition[]>([]);
+  const [editableExitConditions, setEditableExitConditions] = useState<Condition[]>([]);
+
+  // selectedStrategy 변경 시 편집 가능한 복사본 초기화
+  useEffect(() => {
+    if (selectedStrategy) {
+      setEditableIndicators(selectedStrategy.indicators?.map(i => ({ ...i, parameters: { ...i.parameters } })) || []);
+      setEditableEntryConditions(selectedStrategy.entryConditions?.map(c => ({ ...c })) || []);
+      setEditableExitConditions(selectedStrategy.exitConditions?.map(c => ({ ...c })) || []);
+    } else {
+      setEditableIndicators([]);
+      setEditableEntryConditions([]);
+      setEditableExitConditions([]);
+    }
+  }, [selectedStrategy]);
 
   // 데이터 로드
   useEffect(() => {
@@ -113,16 +130,13 @@ const StrategyPage = () => {
     try {
       const data = await strategyService.getStrategies().catch(() => []);
       setStrategies(data);
-      if (data.length > 0 && !selectedStrategy) {
-        setSelectedStrategy(data[0]);
-      }
       // 선택된 전략이 있으면 최신 데이터로 갱신
       if (selectedStrategy) {
         const updated = data.find(s => s.id === selectedStrategy.id);
         if (updated) {
           setSelectedStrategy(updated);
         } else {
-          setSelectedStrategy(data.length > 0 ? data[0] : null);
+          setSelectedStrategy(null);
         }
       }
     } catch {
@@ -144,7 +158,7 @@ const StrategyPage = () => {
       const updatedStrategies = strategies.filter(s => s.id !== strategyId);
       setStrategies(updatedStrategies);
       if (selectedStrategy?.id === strategyId) {
-        setSelectedStrategy(updatedStrategies.length > 0 ? updatedStrategies[0] : null);
+        setSelectedStrategy(null);
       }
       alert('항로가 삭제되었습니다.');
     } catch (error: any) {
@@ -432,7 +446,9 @@ const StrategyPage = () => {
   };
 
   const handleBacktestStockSelect = (code: string, name: string, market?: string) => {
-    setBacktestStockCode(code);
+    // 백엔드가 내부적으로 _KRW / USDT 접미사를 붙이므로 중복 방지
+    const cleanCode = code.replace(/_KRW$/, '');
+    setBacktestStockCode(cleanCode);
     setBacktestStockName(name);
     setBacktestAssetType(market || 'CRYPTO');
     setBacktestSearchQuery(name);
@@ -496,7 +512,15 @@ const StrategyPage = () => {
       if (parseInt(maxPositions) > 1) request.maxPositions = parseInt(maxPositions);
 
       if (backtestMode === 'strategy') {
-        request.strategyId = selectedStrategy!.id;
+        // 프리셋 전략이고 지표/조건이 편집됐으면 직접 조건으로 전송
+        const isPreset = selectedStrategy!.id.startsWith('preset-');
+        if (isPreset && editableIndicators.length > 0) {
+          request.indicators = editableIndicators;
+          request.entryConditions = editableEntryConditions;
+          request.exitConditions = editableExitConditions;
+        } else {
+          request.strategyId = selectedStrategy!.id;
+        }
       } else {
         request.entryConditions = directEntryConditions;
         request.exitConditions = directExitConditions;
@@ -761,8 +785,8 @@ const StrategyPage = () => {
       {/* 풀 와이드 3-컬럼 레이아웃 */}
       <div className="flex flex-col lg:flex-row w-full min-h-[calc(100vh-64px)]">
 
-        {/* ===== LEFT PANEL: 차트 영역 (7 cols) ===== */}
-        <div className="flex flex-col lg:flex-[7] min-w-0 bg-white border-r border-gray-100">
+        {/* ===== LEFT PANEL: 차트 영역 ===== */}
+        <div className="flex flex-col lg:flex-[6.5] min-w-0 bg-white border-r border-gray-100">
           {/* 선택된 전략 바 or 페이지 타이틀 */}
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             {selectedStrategy ? (
@@ -1194,8 +1218,315 @@ const StrategyPage = () => {
           )}
         </div>
 
-        {/* ===== RIGHT SIDEBAR: 전략 목록 + 백테스트 폼 (5 cols) ===== */}
-        <div className="lg:flex-[5] flex flex-col bg-gray-50 border-l border-gray-200 min-w-0">
+        {/* ===== MIDDLE PANEL: 백테스트 실행 ===== */}
+        <div className="lg:flex-[2.5] flex flex-col bg-white border-l border-gray-200 min-w-0">
+          <div className="px-5 pt-5 pb-4 border-b border-gray-200 bg-white shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-whale-light flex items-center justify-center shrink-0">
+                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-whale-dark">백테스트 실행</h2>
+                {selectedStrategy && (
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">— {selectedStrategy.name}</p>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+            {/* 선택된 전략 표시 */}
+            {selectedStrategy ? (
+              <div className="px-3 py-2.5 rounded-xl bg-whale-light/5 border border-whale-light/20">
+                <p className="text-sm font-semibold text-whale-dark">{selectedStrategy.name}</p>
+                <p className="text-[10px] mt-1 text-gray-400">
+                  진입 {selectedStrategy.entryConditions?.length || 0}개 · 청산 {selectedStrategy.exitConditions?.length || 0}개 조건
+                </p>
+              </div>
+            ) : (
+              <div className="px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200">
+                <p className="text-sm text-gray-400">오른쪽 라이브러리에서 전략을 선택하세요</p>
+              </div>
+            )}
+
+            {/* 종목 검색 */}
+            <div className="relative">
+              <label className="block text-xs font-semibold mb-1.5 text-gray-500">종목 검색</label>
+
+              {/* 항로 자산 바로가기 */}
+              {selectedStrategy?.targetAssets && selectedStrategy.targetAssets.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {selectedStrategy.targetAssets.map((assetCode) => {
+                    const assetName = selectedStrategy.targetAssetNames?.[assetCode] || assetCode;
+                    const isStock = /^\d{6}$/.test(assetCode);
+                    const isSel = backtestStockCode === assetCode;
+                    return (
+                      <button key={assetCode} type="button"
+                        onClick={() => handleBacktestStockSelect(assetCode, assetName, isStock ? 'STOCK' : 'CRYPTO')}
+                        className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 border ${isSel ? 'bg-whale-light text-white border-whale-light' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-whale-light'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isStock ? 'bg-indigo-400' : 'bg-emerald-400'}`} />
+                        {assetName}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="relative">
+                <input type="text" value={backtestSearchQuery} onChange={(e) => handleBacktestSearch(e.target.value)}
+                  onFocus={() => { if (backtestSearchResults.length > 0) setShowBacktestDropdown(true); }}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm pr-8 bg-gray-50 border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light focus:border-whale-light"
+                  placeholder="BTC, 삼성전자, AAPL..." />
+                {isBacktestSearching && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="w-4 h-4 border-2 border-whale-light border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+                {!isBacktestSearching && backtestStockCode && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+              {backtestStockCode && (
+                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs bg-gray-100 border border-gray-200">
+                  <span className={`w-1.5 h-1.5 rounded-full ${backtestAssetType === 'STOCK' ? 'bg-indigo-400' : 'bg-emerald-400'}`} />
+                  <span className="font-medium text-whale-dark">{backtestStockName}</span>
+                  <span className="text-gray-400">({backtestStockCode})</span>
+                </div>
+              )}
+              {showBacktestDropdown && backtestSearchResults.length > 0 && (
+                <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                  {backtestSearchResults.map((r) => (
+                    <button key={`${r.market}-${r.code}`} type="button"
+                      onClick={() => handleBacktestStockSelect(r.code, r.name, r.market)}
+                      className="w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-gray-50 border-b border-gray-100 last:border-0 text-gray-800">
+                      <span>{r.name} <span className="text-gray-400">({r.code})</span></span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                        {r.market === 'STOCK' ? '주식' : '코인'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 날짜 범위 + 초기 자본 */}
+            <div className="space-y-2">
+              <div>
+                <label className="block text-[10px] font-semibold mb-1 text-gray-500">시작일</label>
+                <input type="date" value={backtestStartDate} onChange={(e) => setBacktestStartDate(e.target.value)}
+                  max={backtestEndDate || undefined}
+                  className="w-full px-2 py-2 rounded-lg text-[11px] bg-gray-50 border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold mb-1 text-gray-500">종료일</label>
+                <input type="date" value={backtestEndDate} onChange={(e) => setBacktestEndDate(e.target.value)}
+                  min={backtestStartDate || undefined} max={new Date().toISOString().slice(0, 10)}
+                  className="w-full px-2 py-2 rounded-lg text-[11px] bg-gray-50 border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold mb-1 text-gray-500">초기 투자금</label>
+                <input type="number" value={backtestInitialCapital} onChange={(e) => setBacktestInitialCapital(e.target.value)}
+                  className="w-full px-2 py-2 rounded-lg text-[11px] bg-gray-50 border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light"
+                  placeholder="10,000,000" />
+              </div>
+            </div>
+
+            {/* 초기 자본 빠른 버튼 */}
+            <div className="flex flex-wrap gap-1.5">
+              {[1000000, 5000000, 10000000, 50000000].map(v => (
+                <button key={v} onClick={() => setBacktestInitialCapital(String(v))}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all border ${backtestInitialCapital === String(v) ? 'bg-whale-light text-white border-whale-light' : 'bg-white text-gray-500 border-gray-200 hover:border-whale-light'}`}>
+                  {v >= 1e8 ? `${v/1e8}억` : `${v/1e4}만`}
+                </button>
+              ))}
+            </div>
+
+            {/* 고급 설정 (접이식) */}
+            <div className="rounded-xl overflow-hidden border border-gray-200">
+              <button onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold transition-colors ${showAdvancedSettings ? 'bg-gray-100 text-whale-dark' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                  </svg>
+                  고급 설정
+                </span>
+                <svg className={`w-3.5 h-3.5 transition-transform ${showAdvancedSettings ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showAdvancedSettings && (
+                <div className="px-4 pb-4 pt-3 space-y-3 bg-gray-50">
+
+                  {/* ── 매매 조건 편집 ── */}
+                  {selectedStrategy && editableIndicators.length > 0 && (
+                    <>
+                      <p className="text-[10px] font-bold text-whale-dark">지표 파라미터</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {editableIndicators.map((ind, idx) => {
+                          const paramLabels: Record<string, Record<string, string>> = {
+                            MA: { period: '이동평균 기간' },
+                            EMA: { period: 'EMA 기간' },
+                            RSI: { period: 'RSI 기간' },
+                            BOLLINGER_BANDS: { period: '볼린저 기간', stdDev: '표준편차 배수' },
+                            MACD: { fast: '단기 EMA', slow: '장기 EMA', signal: '시그널' },
+                            STOCHASTIC: { kPeriod: '%K 기간', dPeriod: '%D 기간' },
+                            ATR: { period: 'ATR 기간' },
+                            CCI: { period: 'CCI 기간' },
+                          };
+                          // 같은 타입 지표가 여러 개면 순서로 구분 (e.g. 단기MA / 장기MA)
+                          const sameTypeCount = editableIndicators.filter(i => i.type === ind.type).length;
+                          const sameTypeIdx = editableIndicators.slice(0, idx).filter(i => i.type === ind.type).length;
+                          const prefix = sameTypeCount > 1 ? (sameTypeIdx === 0 ? '단기 ' : '장기 ') : '';
+                          const labels = paramLabels[ind.type] || {};
+                          return Object.entries(ind.parameters).map(([key, val]) => (
+                            <div key={`${idx}-${key}`}>
+                              <label className="block text-[10px] font-semibold mb-1 text-gray-500">
+                                {prefix}{labels[key] || `${ind.type} ${key}`}
+                              </label>
+                              <input type="number" value={val}
+                                onChange={(e) => {
+                                  const next = [...editableIndicators];
+                                  next[idx] = { ...next[idx], parameters: { ...next[idx].parameters, [key]: Number(e.target.value) } };
+                                  setEditableIndicators(next);
+                                }}
+                                className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800" />
+                            </div>
+                          ));
+                        })}
+                      </div>
+                    </>
+                  )}
+
+                  {/* ── 진입/청산 기준값 편집 ── */}
+                  {selectedStrategy && (editableEntryConditions.some(c => c.value !== 0) || editableExitConditions.some(c => c.value !== 0)) && (
+                    <>
+                      <p className="text-[10px] font-bold text-whale-dark mt-2">매매 기준값</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {editableEntryConditions.map((c, idx) => {
+                          if (c.value === 0) return null;
+                          const condLabels: Record<string, string> = {
+                            RSI: 'RSI 매수 기준',
+                            BOLLINGER_PCT_B: '%B 매수 기준',
+                            STOCH_K: '%K 매수 기준',
+                          };
+                          return (
+                            <div key={`entry-${idx}`}>
+                              <label className="block text-[10px] font-semibold mb-1 text-gray-500">
+                                {condLabels[c.indicator || ''] || `진입 ${c.indicator}`}
+                              </label>
+                              <input type="number" value={c.value}
+                                onChange={(e) => {
+                                  const next = [...editableEntryConditions];
+                                  next[idx] = { ...next[idx], value: Number(e.target.value) };
+                                  setEditableEntryConditions(next);
+                                }}
+                                className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800" />
+                            </div>
+                          );
+                        })}
+                        {editableExitConditions.map((c, idx) => {
+                          if (c.value === 0) return null;
+                          const condLabels: Record<string, string> = {
+                            RSI: 'RSI 매도 기준',
+                            BOLLINGER_PCT_B: '%B 매도 기준',
+                            STOCH_K: '%K 매도 기준',
+                          };
+                          return (
+                            <div key={`exit-${idx}`}>
+                              <label className="block text-[10px] font-semibold mb-1 text-gray-500">
+                                {condLabels[c.indicator || ''] || `청산 ${c.indicator}`}
+                              </label>
+                              <input type="number" value={c.value}
+                                onChange={(e) => {
+                                  const next = [...editableExitConditions];
+                                  next[idx] = { ...next[idx], value: Number(e.target.value) };
+                                  setEditableExitConditions(next);
+                                }}
+                                className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+
+                  {selectedStrategy && editableIndicators.length > 0 && (
+                    <div className="border-t border-gray-200 pt-3" />
+                  )}
+
+                  {/* ── 리스크 관리 ── */}
+                  <p className="text-[10px] font-bold text-whale-dark">리스크 관리</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: '손절 (%)', value: stopLossPercent, setter: setStopLossPercent, placeholder: '5' },
+                      { label: '익절 (%)', value: takeProfitPercent, setter: setTakeProfitPercent, placeholder: '10' },
+                      { label: '트레일링 (%)', value: trailingStopPercent, setter: setTrailingStopPercent, placeholder: '5' },
+                      { label: '슬리피지 (%)', value: slippagePercent, setter: setSlippagePercent, placeholder: '0.1' },
+                    ].map(({ label, value, setter, placeholder }) => (
+                      <div key={label}>
+                        <label className="block text-[10px] font-semibold mb-1 text-gray-500">{label}</label>
+                        <input type="number" value={value} onChange={(e) => setter(e.target.value)} placeholder={placeholder}
+                          className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-semibold mb-1 text-gray-500">매매 방향</label>
+                      <select value={tradeDirection} onChange={(e) => setTradeDirection(e.target.value as any)}
+                        className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800">
+                        <option value="LONG_ONLY">롱 (매수만)</option>
+                        <option value="SHORT_ONLY">숏 (공매도만)</option>
+                        <option value="LONG_SHORT">롱+숏</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold mb-1 text-gray-500">수수료율 (%)</label>
+                      <input type="number" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} placeholder="0.1"
+                        className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800" />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 실행 버튼 */}
+            <button onClick={handleRunBacktest}
+              disabled={isBacktesting || (!selectedStrategy && directEntryConditions.length === 0) || !backtestStockCode}
+              className={`w-full py-3 rounded-xl font-bold text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${isBacktesting ? 'bg-gray-400' : 'bg-whale-light hover:bg-whale-dark shadow-sm'}`}>
+              {isBacktesting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  분석 중...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  백테스트 실행
+                </>
+              )}
+            </button>
+
+            {!backtestStockCode && (
+              <p className="text-center text-[10px] text-gray-400">종목을 먼저 선택해주세요</p>
+            )}
+
+          </div>
+        </div>
+
+        {/* ===== RIGHT SIDEBAR: 전략 라이브러리 ===== */}
+        <div className="lg:flex-[3] flex flex-col bg-gray-50 border-l border-gray-200 min-w-0">
 
           {/* ---- 헤더: 타이틀 + 새 항로 버튼 ---- */}
           <div className="px-5 pt-5 pb-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
@@ -1280,6 +1611,7 @@ const StrategyPage = () => {
                     key={strategy.id}
                     onClick={() => {
                       setSelectedStrategy(strategy);
+                      setBacktestResult(null);
                       setShowBacktestForm(true);
                     }}
                     className={`relative rounded-xl cursor-pointer transition-all overflow-hidden border bg-white ${
@@ -1364,261 +1696,6 @@ const StrategyPage = () => {
             })()}
           </div>
 
-          {/* ---- 백테스트 폼 (하단, 접이식) ---- */}
-          <div className="shrink-0 border-t border-gray-200 bg-white">
-            {/* 접이식 토글 헤더 */}
-            <button
-              onClick={() => setShowBacktestForm(!showBacktestForm)}
-              className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-whale-light flex items-center justify-center shrink-0">
-                  <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div className="text-left">
-                  <span className="text-sm font-bold text-whale-dark">백테스트 실행</span>
-                  {selectedStrategy && (
-                    <span className="ml-2 text-xs text-gray-400 truncate">— {selectedStrategy.name}</span>
-                  )}
-                </div>
-              </div>
-              <svg
-                className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${showBacktestForm ? 'rotate-180' : ''}`}
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-
-            {/* 폼 본문 */}
-            {showBacktestForm && (
-              <div className="px-5 pb-5 space-y-4 border-t border-gray-100">
-
-                {/* 항로 선택 드롭다운 */}
-                <div className="pt-4">
-                  <label className="block text-xs font-semibold mb-1.5 text-gray-500">항로 선택</label>
-                  <select
-                    value={selectedStrategy?.id || ''}
-                    onChange={(e) => {
-                      const strategy = strategies.find((s) => s.id === e.target.value);
-                      setSelectedStrategy(strategy || null);
-                      setBacktestStockCode('');
-                      setBacktestStockName('');
-                      setBacktestSearchQuery('');
-                      setBacktestAssetType('CRYPTO');
-                      setBacktestMode('strategy');
-                    }}
-                    className="w-full px-3 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-whale-light border border-gray-200 bg-gray-50 text-gray-800 transition-all appearance-none cursor-pointer"
-                  >
-                    <option value="">항로를 선택하세요</option>
-                    {strategies.map((strategy) => (
-                      <option key={strategy.id} value={strategy.id}>{strategy.name}</option>
-                    ))}
-                  </select>
-                  {selectedStrategy && (
-                    <p className="text-[10px] mt-1 text-gray-400">
-                      진입 {selectedStrategy.entryConditions?.length || 0}개 · 청산 {selectedStrategy.exitConditions?.length || 0}개 조건
-                    </p>
-                  )}
-                </div>
-
-                {/* 빠른 프리셋 (항로 미선택 시) */}
-                {!selectedStrategy && (
-                  <div>
-                    <label className="block text-xs font-semibold mb-1.5 text-gray-500">또는 빠른 프리셋으로 분석</label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        { id: 'RSI', label: 'RSI' },
-                        { id: 'MACD', label: 'MACD' },
-                        { id: 'BOLLINGER', label: '볼린저' },
-                        { id: 'STOCHASTIC', label: '스토캐스틱' },
-                        { id: 'GOLDEN_CROSS', label: '골든크로스' },
-                      ].map((p) => (
-                        <button key={p.id} onClick={() => { applyDirectPreset(p.id); setBacktestMode('stock'); }}
-                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${activePreset === p.id ? 'bg-whale-light text-white border-whale-light' : 'bg-white text-gray-600 border-gray-200 hover:border-whale-light hover:text-whale-light'}`}>
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 종목 검색 */}
-                <div className="relative">
-                  <label className="block text-xs font-semibold mb-1.5 text-gray-500">종목 검색</label>
-
-                  {/* 항로 자산 바로가기 */}
-                  {selectedStrategy?.targetAssets && selectedStrategy.targetAssets.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {selectedStrategy.targetAssets.map((assetCode) => {
-                        const assetName = selectedStrategy.targetAssetNames?.[assetCode] || assetCode;
-                        const isStock = /^\d{6}$/.test(assetCode);
-                        const isSel = backtestStockCode === assetCode;
-                        return (
-                          <button key={assetCode} type="button"
-                            onClick={() => handleBacktestStockSelect(assetCode, assetName, isStock ? 'STOCK' : 'CRYPTO')}
-                            className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 border ${isSel ? 'bg-whale-light text-white border-whale-light' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-whale-light'}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${isStock ? 'bg-indigo-400' : 'bg-emerald-400'}`} />
-                            {assetName}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <div className="relative">
-                    <input type="text" value={backtestSearchQuery} onChange={(e) => handleBacktestSearch(e.target.value)}
-                      onFocus={() => { if (backtestSearchResults.length > 0) setShowBacktestDropdown(true); }}
-                      className="w-full px-3 py-2.5 rounded-xl text-sm pr-8 bg-gray-50 border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light focus:border-whale-light"
-                      placeholder="BTC, 삼성전자, AAPL..." />
-                    {isBacktestSearching && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <div className="w-4 h-4 border-2 border-whale-light border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    )}
-                    {!isBacktestSearching && backtestStockCode && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                  {backtestStockCode && (
-                    <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs bg-gray-100 border border-gray-200">
-                      <span className={`w-1.5 h-1.5 rounded-full ${backtestAssetType === 'STOCK' ? 'bg-indigo-400' : 'bg-emerald-400'}`} />
-                      <span className="font-medium text-whale-dark">{backtestStockName}</span>
-                      <span className="text-gray-400">({backtestStockCode})</span>
-                    </div>
-                  )}
-                  {showBacktestDropdown && backtestSearchResults.length > 0 && (
-                    <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                      {backtestSearchResults.map((r) => (
-                        <button key={`${r.market}-${r.code}`} type="button"
-                          onClick={() => handleBacktestStockSelect(r.code, r.name, r.market)}
-                          className="w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-gray-50 border-b border-gray-100 last:border-0 text-gray-800">
-                          <span>{r.name} <span className="text-gray-400">({r.code})</span></span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                            {r.market === 'STOCK' ? '주식' : '코인'}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 날짜 범위 + 초기 자본 (3열 tight 레이아웃) */}
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-semibold mb-1 text-gray-500">시작일</label>
-                    <input type="date" value={backtestStartDate} onChange={(e) => setBacktestStartDate(e.target.value)}
-                      max={backtestEndDate || undefined}
-                      className="w-full px-2 py-2 rounded-lg text-[11px] bg-gray-50 border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-semibold mb-1 text-gray-500">종료일</label>
-                    <input type="date" value={backtestEndDate} onChange={(e) => setBacktestEndDate(e.target.value)}
-                      min={backtestStartDate || undefined} max={new Date().toISOString().slice(0, 10)}
-                      className="w-full px-2 py-2 rounded-lg text-[11px] bg-gray-50 border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-semibold mb-1 text-gray-500">초기 투자금</label>
-                    <input type="number" value={backtestInitialCapital} onChange={(e) => setBacktestInitialCapital(e.target.value)}
-                      className="w-full px-2 py-2 rounded-lg text-[11px] bg-gray-50 border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light"
-                      placeholder="10,000,000" />
-                  </div>
-                </div>
-
-                {/* 초기 자본 빠른 버튼 */}
-                <div className="flex gap-1.5">
-                  {[1000000, 5000000, 10000000, 50000000].map(v => (
-                    <button key={v} onClick={() => setBacktestInitialCapital(String(v))}
-                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all border ${backtestInitialCapital === String(v) ? 'bg-whale-light text-white border-whale-light' : 'bg-white text-gray-500 border-gray-200 hover:border-whale-light'}`}>
-                      {v >= 1e8 ? `${v/1e8}억` : `${v/1e4}만`}
-                    </button>
-                  ))}
-                </div>
-
-                {/* 고급 설정 (접이식) */}
-                <div className="rounded-xl overflow-hidden border border-gray-200">
-                  <button onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-                    className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold transition-colors ${showAdvancedSettings ? 'bg-gray-100 text-whale-dark' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
-                    <span className="flex items-center gap-1.5">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                      </svg>
-                      고급 설정 (리스크 관리)
-                    </span>
-                    <svg className={`w-3.5 h-3.5 transition-transform ${showAdvancedSettings ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  {showAdvancedSettings && (
-                    <div className="px-4 pb-4 pt-3 space-y-3 bg-gray-50">
-                      <div className="grid grid-cols-2 gap-2">
-                        {[
-                          { label: '손절 (%)', value: stopLossPercent, setter: setStopLossPercent, placeholder: '5' },
-                          { label: '익절 (%)', value: takeProfitPercent, setter: setTakeProfitPercent, placeholder: '10' },
-                          { label: '트레일링 (%)', value: trailingStopPercent, setter: setTrailingStopPercent, placeholder: '5' },
-                          { label: '슬리피지 (%)', value: slippagePercent, setter: setSlippagePercent, placeholder: '0.1' },
-                        ].map(({ label, value, setter, placeholder }) => (
-                          <div key={label}>
-                            <label className="block text-[10px] font-semibold mb-1 text-gray-500">{label}</label>
-                            <input type="number" value={value} onChange={(e) => setter(e.target.value)} placeholder={placeholder}
-                              className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800" />
-                          </div>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[10px] font-semibold mb-1 text-gray-500">매매 방향</label>
-                          <select value={tradeDirection} onChange={(e) => setTradeDirection(e.target.value as any)}
-                            className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800">
-                            <option value="LONG_ONLY">롱 (매수만)</option>
-                            <option value="SHORT_ONLY">숏 (공매도만)</option>
-                            <option value="LONG_SHORT">롱+숏</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-semibold mb-1 text-gray-500">수수료율 (%)</label>
-                          <input type="number" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} placeholder="0.1"
-                            className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 실행 버튼 */}
-                <button onClick={handleRunBacktest}
-                  disabled={isBacktesting || (!selectedStrategy && directEntryConditions.length === 0) || !backtestStockCode}
-                  className={`w-full py-3 rounded-xl font-bold text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${isBacktesting ? 'bg-gray-400' : 'bg-whale-light hover:bg-whale-dark shadow-sm'}`}>
-                  {isBacktesting ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      분석 중...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      백테스트 실행
-                    </>
-                  )}
-                </button>
-
-                {!backtestStockCode && (
-                  <p className="text-center text-[10px] text-gray-400">종목을 먼저 선택해주세요</p>
-                )}
-
-              </div>
-            )}
-          </div>
         </div>
       </div>
 

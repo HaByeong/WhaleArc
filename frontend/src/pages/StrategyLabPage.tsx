@@ -3,6 +3,20 @@ import Header from '../components/Header';
 import { strategyService, type Strategy, type BacktestRequest, type BacktestResult, type IndicatorData, type Indicator, type Condition } from '../services/strategyService';
 import { tradeService, type StockPrice } from '../services/tradeService';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, ComposedChart, Bar, ReferenceLine } from 'recharts';
+import GoldenCrossCanvasChart from '../components/GoldenCrossCanvasChart';
+import RSIChart from '../components/RSIChart';
+import BollingerChart from '../components/BollingerChart';
+import MACDChart from '../components/MACDChart';
+
+const PresetChart = ({ presetId }: { presetId: string }) => {
+  switch (presetId) {
+    case 'p-golden': return <GoldenCrossCanvasChart />;
+    case 'p-rsi': return <RSIChart />;
+    case 'p-bb': return <BollingerChart />;
+    case 'p-macd': return <MACDChart />;
+    default: return null;
+  }
+};
 
 // ── 프리셋 전략 (교육용) ──
 const PRESETS = [
@@ -146,7 +160,7 @@ const StrategyCardMini = ({ s, selected, onSelect }: { s:Preset; selected:boolea
 );
 
 // ── StrategyDetail ──
-const StrategyDetail = ({ s, showVideo, setShowVideo }: { s:Preset; showVideo:boolean; setShowVideo:(v:boolean)=>void }) => (
+const StrategyDetail = ({ s }: { s:Preset }) => (
   <>
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-4">
       <div className="flex items-start justify-between mb-5">
@@ -181,16 +195,7 @@ const StrategyDetail = ({ s, showVideo, setShowVideo }: { s:Preset; showVideo:bo
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
       <h3 className="font-bold text-gray-900 mb-3">이 전략 이해하기</h3>
       <p className="text-gray-600 text-sm leading-relaxed mb-5">{s.longDescription}</p>
-      <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl p-4 border border-red-100/50">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg shadow-red-500/30"><svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><polygon points="8,5 15,10 8,15"/></svg></div>
-            <div><div className="text-sm font-semibold text-gray-900">{s.videoTitle}</div><div className="text-xs text-gray-400">참고 학습 영상</div></div>
-          </div>
-          <button onClick={()=>setShowVideo(!showVideo)} className="text-red-500 text-sm font-semibold hover:text-red-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50">{showVideo?'접기':'영상 보기'}</button>
-        </div>
-        {showVideo&&<div className="aspect-video rounded-xl overflow-hidden bg-black shadow-lg"><iframe src={s.videoUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen title="video"/></div>}
-      </div>
+      <PresetChart presetId={s.id} />
       {s.indicators.length>0&&<div className="mt-5"><div className="text-sm font-semibold text-gray-700 mb-2">사용된 기술 지표</div><div className="flex gap-2">{s.indicators.map(i=><span key={i} className="px-3 py-1.5 bg-gradient-to-r from-[#13395e]/10 to-[#1e6091]/10 text-[#13395e] rounded-lg text-sm font-semibold border border-[#13395e]/15">{i}</span>)}</div></div>}
     </div>
   </>
@@ -450,10 +455,9 @@ const ApplyModal = ({ open, onClose, strategyId }: { open:boolean; onClose:()=>v
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const StrategyLabPage = () => {
   const [design, setDesign] = useState<DesignVariant>('A');
-  const [selectedPreset, setSelectedPreset] = useState(PRESETS[0]);
+  const [selectedPreset, setSelectedPreset] = useState<Preset | null>(null);
   const [userStrategies, setUserStrategies] = useState<Strategy[]>([]);
   const [filterCat, setFilterCat] = useState('전체');
-  const [showVideo, setShowVideo] = useState(false);
   const [learningStep, setLearningStep] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [applyTarget, setApplyTarget] = useState<string|null>(null);
@@ -463,7 +467,7 @@ const StrategyLabPage = () => {
   const categories = ['전체', ...new Set(PRESETS.map(s=>s.category))];
   const filtered = PRESETS.filter(s => filterCat==='전체'||s.category===filterCat);
   const deleteStrategy = async (id: string) => { try { await strategyService.deleteStrategy(id); setUserStrategies(prev=>prev.filter(s=>s.id!==id)); } catch {} };
-  const selectPreset = (s: Preset) => { setSelectedPreset(s); setShowVideo(false); };
+  const selectPreset = (s: Preset) => { setSelectedPreset(s); };
 
   const UserStrategiesList = () => userStrategies.length>0 ? (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
@@ -483,19 +487,31 @@ const StrategyLabPage = () => {
   // ━━ Design A ━━
   const DesignA = () => (
     <div className="flex gap-6 mt-6">
-      <div className="flex-[6] min-w-0 space-y-4">
-        <StrategyDetail s={selectedPreset} showVideo={showVideo} setShowVideo={setShowVideo}/>
-        <BacktestPanel strategies={userStrategies}/>
-        <IndicatorPanel/>
+      {/* 왼쪽: 전략 상세 */}
+      <div className="flex-1 min-w-0 space-y-4">
+        {selectedPreset ? (
+          <><StrategyDetail s={selectedPreset}/><IndicatorPanel/></>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-24 text-gray-400">
+            <svg className="w-16 h-16 mb-4 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            <p className="text-sm font-medium mb-1">전략을 선택해주세요</p>
+            <p className="text-xs">오른쪽 목록에서 학습할 전략을 클릭하세요</p>
+          </div>
+        )}
       </div>
-      <div className="w-[340px] flex-shrink-0">
-        <button onClick={()=>setShowCreate(true)} className="w-full mb-3 py-3 rounded-xl text-sm font-semibold border-2 border-dashed border-[#13395e]/30 text-[#13395e] hover:bg-[#13395e]/5 hover:border-[#13395e]/50 transition-all duration-300">+ 새 전략 만들기</button>
+      {/* 가운데: 백테스트 */}
+      <div className="w-[320px] flex-shrink-0">
+        <BacktestPanel strategies={userStrategies}/>
+      </div>
+      {/* 오른쪽: 전략 목록 */}
+      <div className="w-[190px] flex-shrink-0">
+        <button onClick={()=>setShowCreate(true)} className="w-full mb-3 py-2.5 rounded-xl text-xs font-semibold border-2 border-dashed border-[#13395e]/30 text-[#13395e] hover:bg-[#13395e]/5 hover:border-[#13395e]/50 transition-all duration-300">+ 새 전략</button>
         <UserStrategiesList/>
-        <div className="flex gap-1.5 mb-4 flex-wrap">
-          {categories.map(c=><button key={c} onClick={()=>setFilterCat(c)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${filterCat===c?'bg-gradient-to-r from-[#13395e] to-[#1e6091] text-white shadow-sm':'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>{c}</button>)}
+        <div className="flex gap-1 mb-3 flex-wrap">
+          {categories.map(c=><button key={c} onClick={()=>setFilterCat(c)} className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all duration-200 ${filterCat===c?'bg-gradient-to-r from-[#13395e] to-[#1e6091] text-white shadow-sm':'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>{c}</button>)}
         </div>
-        <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto pr-1 scrollbar-thin">
-          {filtered.map(s=><StrategyCardMini key={s.id} s={s} selected={selectedPreset.id===s.id} onSelect={()=>selectPreset(s)}/>)}
+        <div className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto pr-1 scrollbar-thin">
+          {filtered.map(s=><StrategyCardMini key={s.id} s={s} selected={selectedPreset?.id===s.id} onSelect={()=>selectPreset(s)}/>)}
         </div>
       </div>
     </div>
@@ -507,6 +523,7 @@ const StrategyLabPage = () => {
   const DesignB = () => (
     <div className="mt-6 grid grid-cols-12 gap-6">
       <div className="col-span-8">
+        {selectedPreset ? (<>
         <div className="bg-gradient-to-br from-[#13395e] via-[#174f7a] to-[#1e6091] rounded-2xl p-7 text-white mb-4 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"/>
           <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"/>
@@ -531,7 +548,7 @@ const StrategyLabPage = () => {
           {learningStep===0&&<div>
             <h3 className="text-lg font-extrabold text-gray-900 mb-3">전략 개념 이해하기</h3>
             <p className="text-gray-600 leading-relaxed mb-5">{selectedPreset.longDescription}</p>
-            <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl p-4 border border-red-100/50"><div className="aspect-video rounded-xl overflow-hidden bg-black shadow-lg"><iframe src={selectedPreset.videoUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen title="video"/></div></div>
+            <PresetChart presetId={selectedPreset.id} />
           </div>}
           {learningStep===1&&<div>
             <h3 className="text-lg font-extrabold text-gray-900 mb-3">사용되는 기술적 지표</h3>
@@ -558,6 +575,13 @@ const StrategyLabPage = () => {
             <button onClick={()=>setLearningStep(Math.min(3,learningStep+1))} disabled={learningStep===3} className="px-5 py-2.5 text-sm bg-gradient-to-r from-[#13395e] to-[#1e6091] text-white rounded-xl font-semibold disabled:opacity-30 hover:shadow-lg transition-all">다음 →</button>
           </div>
         </div>
+        </>) : (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-24 text-gray-400">
+            <svg className="w-16 h-16 mb-4 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            <p className="text-sm font-medium mb-1">전략을 선택해주세요</p>
+            <p className="text-xs">오른쪽 목록에서 학습할 전략을 클릭하세요</p>
+          </div>
+        )}
       </div>
       <div className="col-span-4">
         <div className="sticky top-4">
@@ -566,7 +590,7 @@ const StrategyLabPage = () => {
           <h3 className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider">프리셋 전략</h3>
           <div className="space-y-2 max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
             {PRESETS.map(s=>(
-              <div key={s.id} onClick={()=>{selectPreset(s);setLearningStep(0);}} className={`rounded-xl border p-3.5 cursor-pointer transition-all duration-300 ${selectedPreset.id===s.id?'border-[#13395e] bg-[#13395e]/5 shadow-sm':'border-gray-100 bg-white hover:border-[#13395e]/30'}`}>
+              <div key={s.id} onClick={()=>{selectPreset(s);setLearningStep(0);}} className={`rounded-xl border p-3.5 cursor-pointer transition-all duration-300 ${selectedPreset?.id===s.id?'border-[#13395e] bg-[#13395e]/5 shadow-sm':'border-gray-100 bg-white hover:border-[#13395e]/30'}`}>
                 <div className="flex items-center justify-between mb-1"><span className="font-bold text-sm text-gray-900">{s.name}</span><Badge level={s.difficulty}/></div>
                 <p className="text-xs text-gray-400 line-clamp-1 mb-2">{s.description}</p>
                 <MiniChart data={CHART_CACHE[s.id]||[]} height={45}/>
@@ -584,17 +608,18 @@ const StrategyLabPage = () => {
     <div className="mt-6">
       <div className="flex gap-3 overflow-x-auto pb-4 mb-6 scrollbar-thin">
         {PRESETS.map(s=>(
-          <div key={s.id} onClick={()=>selectPreset(s)} className={`flex-shrink-0 w-52 rounded-2xl p-4 cursor-pointer transition-all duration-300 ${selectedPreset.id===s.id?'bg-gradient-to-br from-[#13395e] to-[#1e6091] text-white shadow-xl shadow-[#13395e]/25 scale-105':'bg-white border border-gray-100 hover:shadow-md hover:border-[#13395e]/20'}`}>
-            <div className="flex items-center justify-between mb-2"><Badge level={s.difficulty}/>{!s.isPremium&&<span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${selectedPreset.id===s.id?'bg-white/20 text-white':'bg-emerald-100 text-emerald-700'}`}>FREE</span>}</div>
-            <h4 className={`font-bold text-sm mb-1 ${selectedPreset.id===s.id?'text-white':'text-gray-900'}`}>{s.name}</h4>
-            <p className={`text-xs mb-2 line-clamp-1 ${selectedPreset.id===s.id?'text-white/60':'text-gray-400'}`}>{s.category}</p>
+          <div key={s.id} onClick={()=>selectPreset(s)} className={`flex-shrink-0 w-52 rounded-2xl p-4 cursor-pointer transition-all duration-300 ${selectedPreset?.id===s.id?'bg-gradient-to-br from-[#13395e] to-[#1e6091] text-white shadow-xl shadow-[#13395e]/25 scale-105':'bg-white border border-gray-100 hover:shadow-md hover:border-[#13395e]/20'}`}>
+            <div className="flex items-center justify-between mb-2"><Badge level={s.difficulty}/>{!s.isPremium&&<span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${selectedPreset?.id===s.id?'bg-white/20 text-white':'bg-emerald-100 text-emerald-700'}`}>FREE</span>}</div>
+            <h4 className={`font-bold text-sm mb-1 ${selectedPreset?.id===s.id?'text-white':'text-gray-900'}`}>{s.name}</h4>
+            <p className={`text-xs mb-2 line-clamp-1 ${selectedPreset?.id===s.id?'text-white/60':'text-gray-400'}`}>{s.category}</p>
             <div className="flex items-center justify-between text-xs">
-              <span className={`font-semibold ${selectedPreset.id===s.id?'text-emerald-300':'text-emerald-600'}`}>+{s.metrics.returnRate}%</span>
-              <span className={selectedPreset.id===s.id?'text-white/50':'text-gray-400'}>승률 {s.metrics.winRate}%</span>
+              <span className={`font-semibold ${selectedPreset?.id===s.id?'text-emerald-300':'text-emerald-600'}`}>+{s.metrics.returnRate}%</span>
+              <span className={selectedPreset?.id===s.id?'text-white/50':'text-gray-400'}>승률 {s.metrics.winRate}%</span>
             </div>
           </div>
         ))}
       </div>
+      {selectedPreset ? (
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-4 space-y-4">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
@@ -606,9 +631,8 @@ const StrategyLabPage = () => {
             <button onClick={()=>setShowCreate(true)} className="w-full bg-gradient-to-r from-[#13395e] to-[#1e6091] text-white py-3 rounded-xl text-sm font-semibold hover:shadow-lg hover:shadow-[#13395e]/20 transition-all duration-300">내 전략 만들기</button>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-            <h3 className="font-bold text-gray-900 mb-3 text-sm">참고 영상</h3>
-            <div className="aspect-video rounded-xl overflow-hidden bg-black mb-3 shadow-lg"><iframe src={selectedPreset.videoUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen title="video"/></div>
-            <p className="text-xs text-gray-500">{selectedPreset.videoTitle}</p>
+            <h3 className="font-bold text-gray-900 mb-3 text-sm">전략 시각화</h3>
+            <PresetChart presetId={selectedPreset.id} />
           </div>
           <UserStrategiesList/>
         </div>
@@ -646,6 +670,13 @@ const StrategyLabPage = () => {
           <IndicatorPanel/>
         </div>
       </div>
+      ) : (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-24 text-gray-400">
+          <svg className="w-16 h-16 mb-4 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          <p className="text-sm font-medium mb-1">전략을 선택해주세요</p>
+          <p className="text-xs">위 카드에서 학습할 전략을 클릭하세요</p>
+        </div>
+      )}
     </div>
   );
 

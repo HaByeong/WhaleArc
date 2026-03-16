@@ -10,6 +10,10 @@ import {
   type Condition,
 } from '../services/strategyService';
 import { tradeService, type StockPrice } from '../services/tradeService';
+import GoldenCrossCanvasChart from '../components/GoldenCrossCanvasChart';
+import RSIChart from '../components/RSIChart';
+import BollingerChart from '../components/BollingerChart';
+import MACDChart from '../components/MACDChart';
 import {
   LineChart,
   Line,
@@ -636,7 +640,17 @@ const StrategyPage = () => {
     return '혼합';
   };
 
-  // INDICATORS list for the right panel (지표 분석 섹션)
+  // 전략 ID에 매핑되는 캔버스 차트
+  const StrategyChart = ({ strategyId }: { strategyId: string }) => {
+    switch (strategyId) {
+      case 'preset-golden-cross': return <GoldenCrossCanvasChart />;
+      case 'preset-rsi-reversal': return <RSIChart />;
+      case 'preset-bollinger-squeeze': return <BollingerChart />;
+      case 'preset-macd-divergence': return <MACDChart />;
+      default: return null;
+    }
+  };
+
   // 기본 제공 프리셋 전략 (항로 상점)
   const PRESET_STRATEGIES: Strategy[] = [
     {
@@ -878,38 +892,18 @@ const StrategyPage = () => {
                     </div>
                   )}
 
-                  {/* 참고 학습 영상 (크게) */}
-                  <div className="rounded-xl overflow-hidden border border-gray-200 bg-white">
-                    <div className="px-5 py-3 flex items-center justify-between border-b border-gray-100">
-                      <h3 className="text-sm font-bold text-whale-dark">
-                        {(() => {
-                          const indicators = selectedStrategy.entryConditions?.map(c => c.indicator) || [];
-                          if (selectedStrategy.strategyLogic?.includes('MA') || indicators.some(i => i?.includes('MA')))
-                            return '이동평균선 완벽 가이드';
-                          if (indicators.some(i => i === 'RSI'))
-                            return 'RSI 지표 100% 활용법';
-                          if (indicators.some(i => i?.includes('MACD')))
-                            return 'MACD 다이버전스 완벽 정리';
-                          if (indicators.some(i => i?.includes('BOLLINGER')))
-                            return '볼린저밴드 스퀴즈 전략';
-                          if (indicators.some(i => i?.includes('STOCH')))
-                            return '스토캐스틱 지표 활용법';
-                          return '자산 리밸런싱이란?';
-                        })()}
-                      </h3>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-50 text-red-500">참고 학습 영상</span>
+                  {/* 전략 시각화 차트 */}
+                  {selectedStrategy.id.startsWith('preset-') && (
+                    <div className="rounded-xl overflow-hidden border border-gray-200 bg-white">
+                      <div className="px-5 py-3 flex items-center justify-between border-b border-gray-100">
+                        <h3 className="text-sm font-bold text-whale-dark">전략 시각화</h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-500">실시간 차트</span>
+                      </div>
+                      <div className="p-4">
+                        <StrategyChart strategyId={selectedStrategy.id} />
+                      </div>
                     </div>
-                    <div className="aspect-video bg-black">
-                      <iframe
-                        className="w-full h-full"
-                        src="https://www.youtube.com/embed/dQw4w9WgXcQ"
-                        allow="autoplay; encrypted-media; picture-in-picture"
-                        allowFullScreen
-                        title="전략 학습 영상"
-                        style={{ border: 0 }}
-                      />
-                    </div>
-                  </div>
+                  )}
 
                   {/* 이 전략 이해하기 */}
                   <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">

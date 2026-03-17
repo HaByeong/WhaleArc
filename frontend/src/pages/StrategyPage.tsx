@@ -17,7 +17,6 @@ import RSIChart from '../components/RSIChart';
 import BollingerChart from '../components/BollingerChart';
 import MACDChart from '../components/MACDChart';
 import {
-  LineChart,
   Line,
   AreaChart,
   Area,
@@ -25,8 +24,6 @@ import {
   YAxis,
   ResponsiveContainer,
   Tooltip,
-  Legend,
-  Bar,
   ReferenceLine,
   ComposedChart,
   CartesianGrid,
@@ -34,14 +31,14 @@ import {
 
 const StrategyPage = () => {
   // 상태 관리
-  const [activeTab, setActiveTab] = useState<'strategies' | 'backtest' | 'indicators'>('strategies');
+  const [_activeTab] = useState<'strategies' | 'backtest' | 'indicators'>('strategies');
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [isBacktesting, setIsBacktesting] = useState(false);
   const [stockList, setStockList] = useState<StockPrice[]>([]);
   const [krxStockList, setKrxStockList] = useState<StockPrice[]>([]);
-  const [indicatorData] = useState<IndicatorData[]>([]);
+  const [_indicatorData] = useState<IndicatorData[]>([]);
 
   // 전략 생성/수정 모달 상태 (공유)
   const [strategyModalMode, setStrategyModalMode] = useState<'create' | 'edit' | null>(null);
@@ -71,7 +68,7 @@ const StrategyPage = () => {
   const [showBacktestGuide, setShowBacktestGuide] = useState(false);
 
   // 백테스팅 폼 상태
-  const [backtestMode, setBacktestMode] = useState<'strategy' | 'stock'>('strategy');
+  const [backtestMode, _setBacktestMode] = useState<'strategy' | 'stock'>('strategy');
   const [backtestStockCode, setBacktestStockCode] = useState('');
   const [backtestStartDate, setBacktestStartDate] = useState(() => {
     const d = new Date(); d.setFullYear(d.getFullYear() - 2);
@@ -721,7 +718,16 @@ const StrategyPage = () => {
       case 'preset-rsi-reversal': return <RSIChart />;
       case 'preset-bollinger-squeeze': return <BollingerChart />;
       case 'preset-macd-divergence': return <MACDChart />;
-      default: return null;
+      default:
+        return (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <svg className="w-12 h-12 text-whale-light/30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+            </svg>
+            <p className="text-sm text-gray-400">차트 준비 중</p>
+            <p className="text-xs text-gray-300 mt-1">이 전략의 시각화 차트가 곧 추가됩니다</p>
+          </div>
+        );
     }
   };
 
@@ -830,15 +836,212 @@ const StrategyPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <style>{`
+        @keyframes float { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+        @keyframes wave { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        @keyframes sail { 0% { transform: translateX(-10px) rotate(-2deg); } 50% { transform: translateX(10px) rotate(2deg); } 100% { transform: translateX(-10px) rotate(-2deg); } }
+        .float-animation { animation: float 3s ease-in-out infinite; }
+        .wave-animation { animation: wave 8s linear infinite; }
+        .sail-animation { animation: sail 4s ease-in-out infinite; }
+      `}</style>
       <Header showNav={true} />
 
       {/* 풀 와이드 3-컬럼 레이아웃 */}
       <div className="flex flex-col lg:flex-row w-full min-h-[calc(100vh-64px)]">
 
-        {/* ===== LEFT PANEL: 차트 영역 ===== */}
-        <div className="flex flex-col lg:flex-[6.5] min-w-0 bg-white border-r border-gray-100">
+        {/* ===== LEFT SIDEBAR: 전략 라이브러리 ===== */}
+        <div className="lg:flex-[3] flex flex-col bg-gray-50 border-r border-gray-200 min-w-0 shadow-sm">
+
+          {/* ---- 헤더: 타이틀 + 새 항로 버튼 ---- */}
+          <div className="relative px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-whale-dark to-whale-light flex items-center justify-between shrink-0 h-[72px]">
+            <div>
+              <h2 className="text-sm font-bold text-white">전략 라이브러리</h2>
+              <p className="text-xs text-white/60 mt-0.5">전략을 선택하고 백테스트로 검증하세요</p>
+            </div>
+            <button onClick={openCreateModal}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white bg-white/10 border border-white/40 hover:bg-white/20 transition-all shrink-0">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              새 항로
+            </button>
+            <div className="absolute bottom-0 left-0 right-0 overflow-hidden" style={{ height: '6px' }}>
+              <svg viewBox="0 0 1200 20" preserveAspectRatio="none" className="w-full h-full">
+                <path d="M0,10 C150,20 350,0 500,10 C650,20 850,0 1000,10 C1100,15 1150,5 1200,10 L1200,20 L0,20 Z" fill="white" />
+              </svg>
+            </div>
+          </div>
+
+          {/* ---- 필터 탭 ---- */}
+          <div className="px-5 pt-3 pb-0 bg-slate-50/80 border-b border-gray-200 shrink-0">
+            <div className="flex gap-1">
+              {(['전체', '추세추종', '역추세', '변동성'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setStrategyFilter(tab)}
+                  className={`px-3.5 py-2 rounded-t-lg text-xs font-semibold transition-all duration-200 border-b-2 ${
+                    strategyFilter === tab
+                      ? 'text-white bg-gradient-to-r from-whale-light to-blue-500 border-whale-light shadow-sm'
+                      : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-white/80'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ---- 전략 카드 목록 (스크롤) ---- */}
+          <div className="overflow-y-auto px-5 py-4 space-y-2" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+            {(() => {
+              const filtered = allStrategies.filter((s) => {
+                if (strategyFilter === '전체') return true;
+                if (strategyFilter === '추세추종') {
+                  return s.entryConditions?.some(c =>
+                    c.indicator?.includes('CROSS') || c.indicator?.includes('MA') || c.indicator?.includes('EMA') || c.indicator?.includes('MACD')
+                  );
+                }
+                if (strategyFilter === '역추세') {
+                  return s.entryConditions?.some(c =>
+                    c.indicator === 'RSI' || c.indicator?.includes('STOCH') || c.indicator?.includes('BOLLINGER') || c.indicator?.includes('CCI')
+                  );
+                }
+                if (strategyFilter === '변동성') {
+                  return s.entryConditions?.some(c =>
+                    c.indicator?.includes('BOLLINGER') || c.indicator?.includes('ATR')
+                  );
+                }
+                return true;
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mb-3">
+                      <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-medium text-gray-400">해당 전략이 없습니다</p>
+                    <button onClick={openCreateModal}
+                      className="mt-3 px-4 py-1.5 rounded-lg text-xs font-semibold text-whale-light bg-whale-light/10 border border-whale-light/30 hover:bg-whale-light hover:text-white transition-all">
+                      + 새 항로 만들기
+                    </button>
+                  </div>
+                );
+              }
+
+              return filtered.map((strategy) => {
+                const isSelected = selectedStrategy?.id === strategy.id;
+                const isPreset = strategy.id.startsWith('preset-');
+                const perf = isPreset ? PRESET_PERFORMANCE[strategy.id] : null;
+                // Determine category color for left border
+                const isTrend = strategy.entryConditions?.some(c =>
+                  c.indicator?.includes('CROSS') || c.indicator?.includes('MA') || c.indicator?.includes('EMA') || c.indicator?.includes('MACD')
+                );
+                const isReverse = strategy.entryConditions?.some(c =>
+                  c.indicator === 'RSI' || c.indicator?.includes('STOCH') || c.indicator?.includes('CCI')
+                );
+                const isVolatility = strategy.entryConditions?.some(c =>
+                  c.indicator?.includes('BOLLINGER') || c.indicator?.includes('ATR')
+                );
+                const categoryBorderColor = isVolatility ? 'border-l-orange-400' : isReverse ? 'border-l-purple-400' : isTrend ? 'border-l-blue-400' : 'border-l-gray-300';
+                return (
+                  <div
+                    key={strategy.id}
+                    onClick={() => {
+                      setSelectedStrategy(strategy);
+                      setBacktestResult(null);
+                      setShowBacktestForm(true);
+                    }}
+                    className={`relative rounded-xl cursor-pointer transition-all duration-200 overflow-hidden border border-l-[3px] ${categoryBorderColor} ${
+                      isSelected
+                        ? 'bg-gradient-to-r from-whale-light/5 to-blue-50 border-whale-light border-l-whale-light shadow-lg ring-1 ring-whale-light/30 shadow-[0_0_15px_rgba(74,144,226,0.15)]'
+                        : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md hover:scale-[1.01]'
+                    }`}
+                  >
+                    {/* 선택 표시 — 왼쪽 파란 테두리 */}
+                    {isSelected && (
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-whale-light rounded-l-xl" />
+                    )}
+
+                    <div className={`px-4 py-3 ${isSelected ? 'pl-5' : ''}`}>
+                      {/* 이름 행 */}
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-bold text-sm text-whale-dark truncate">{strategy.name}</span>
+                          {isPreset && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-whale-light/10 text-whale-light">기본</span>
+                          )}
+                          {strategy.applied && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-600">적용중</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* 수익률 배지 */}
+                          {perf && (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-sm">
+                              +{perf.returnRate}%
+                            </span>
+                          )}
+                          {/* 사용자 항로 삭제 버튼 */}
+                          {!isPreset && (
+                            <button
+                              onClick={(e) => handleDeleteStrategy(strategy.id, e)}
+                              className="p-1 rounded text-gray-300 hover:text-red-400 transition-colors">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 한 줄 설명 */}
+                      <p className="text-sm text-gray-400 line-clamp-1 mb-2">
+                        {strategy.description || strategy.strategyLogic || '사용자 전략'}
+                      </p>
+
+                      {/* 하단 메타 행 */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          {strategy.assetType && (
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                              strategy.assetType === 'CRYPTO' ? 'bg-orange-50 text-orange-600' :
+                              strategy.assetType === 'STOCK' ? 'bg-indigo-50 text-indigo-600' :
+                              'bg-purple-50 text-purple-600'
+                            }`}>{assetTypeLabel(strategy.assetType)}</span>
+                          )}
+                          {perf && (
+                            <span className="text-[9px] text-gray-400">승률 {perf.winRate}% · 샤프 {perf.sharpe}</span>
+                          )}
+                          {!perf && (strategy.entryConditions?.length || 0) > 0 && (
+                            <span className="text-[9px] text-gray-400">
+                              조건 {(strategy.entryConditions?.length || 0) + (strategy.exitConditions?.length || 0)}개
+                            </span>
+                          )}
+                        </div>
+                        {!strategy.applied && strategy.targetAssets && strategy.targetAssets.length > 0 && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSelectedStrategy(strategy); setShowApplyModal(true); }}
+                            className="px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-whale-light to-blue-500 hover:from-whale-dark hover:to-whale-light shadow-sm hover:shadow-md transition-all duration-200">
+                            포트폴리오 적용
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+
+        </div>
+
+        {/* ===== CENTER PANEL: 차트 영역 ===== */}
+        <div className="flex flex-col lg:flex-[5.5] min-w-0 bg-white border-r border-gray-100 shadow-sm">
           {/* 선택된 전략 바 or 페이지 타이틀 */}
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-slate-50 to-blue-50/50 flex items-center justify-between h-[72px]">
             {selectedStrategy ? (
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-2 h-8 rounded-full bg-whale-light shrink-0" />
@@ -865,19 +1068,28 @@ const StrategyPage = () => {
             {isBacktesting ? (
               /* 로딩 */
               <div className="w-full h-full min-h-[400px] bg-gray-50 border border-gray-200 rounded-xl flex flex-col items-center justify-center">
-                <div className="w-14 h-14 border-4 border-whale-light border-t-transparent rounded-full animate-spin mb-5" />
+                <div className="sail-animation">
+                  <div className="w-14 h-14 border-4 border-whale-light border-t-transparent rounded-full animate-spin mb-5" />
+                </div>
                 <p className="text-lg font-bold text-whale-dark">항로 분석 중...</p>
                 <p className="text-sm mt-2 text-gray-500">
                   {backtestStockName || backtestStockCode} · {backtestStartDate?.slice(5)} ~ {backtestEndDate?.slice(5)}
                 </p>
                 <p className="text-xs mt-1 text-gray-400">과거 데이터를 항해하고 있습니다</p>
+                <div className="w-32 h-4 mt-4 overflow-hidden opacity-30">
+                  <div className="wave-animation" style={{ width: '200%' }}>
+                    <svg viewBox="0 0 1200 20" className="w-full h-4">
+                      <path d="M0,10 C150,18 350,2 500,10 C650,18 850,2 1000,10 C1150,18 1200,10 1200,10 L1200,20 L0,20Z" fill="#4a90e2" opacity="0.5"/>
+                    </svg>
+                  </div>
+                </div>
               </div>
             ) : !backtestResult ? (
               /* 교육 콘텐츠 또는 빈 상태 */
               selectedStrategy ? (
                 <div className="space-y-5">
                   {/* 전략 헤더 */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-6">
+                  <div className="bg-gradient-to-r from-slate-50 to-blue-50/50 border border-gray-200 rounded-xl p-6">
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <div className="flex items-center gap-2 mb-2">
@@ -896,14 +1108,14 @@ const StrategyPage = () => {
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => openEditModal(selectedStrategy)}
-                          className="p-2 rounded-lg transition-colors bg-gray-100 hover:bg-gray-200 text-whale-dark" title="수정">
+                          className="p-2 rounded-lg transition-all bg-gray-100 hover:bg-gray-200 hover:shadow-sm text-whale-dark" title="수정">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
                         {!selectedStrategy.applied && selectedStrategy.targetAssets && selectedStrategy.targetAssets.length > 0 && (
                           <button onClick={() => setShowApplyModal(true)}
-                            className="px-3 py-2 rounded-lg text-xs font-semibold text-white bg-whale-light hover:bg-whale-dark transition-all">
+                            className="px-3 py-2 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-whale-light to-blue-500 hover:from-whale-dark hover:to-whale-light hover:shadow-md transition-all duration-200">
                             포트폴리오 적용
                           </button>
                         )}
@@ -913,6 +1125,16 @@ const StrategyPage = () => {
                       <p className="text-sm leading-relaxed text-gray-500">{selectedStrategy.description}</p>
                     )}
                   </div>
+
+                  {/* 항로 로직 */}
+                  {selectedStrategy.strategyLogic && (
+                    <div className="bg-gradient-to-r from-whale-dark/5 to-blue-50/50 border border-whale-light/20 rounded-xl p-5">
+                      <h3 className="text-xs font-bold mb-3 text-whale-light tracking-wide uppercase">Trading Logic</h3>
+                      <div className="px-4 py-3 rounded-xl text-sm font-mono text-whale-dark bg-white border border-gray-200 shadow-sm">
+                        {selectedStrategy.strategyLogic}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 매매 조건 시각화 */}
                   {((selectedStrategy.entryConditions?.length || 0) > 0 || (selectedStrategy.exitConditions?.length || 0) > 0) && (
@@ -955,9 +1177,9 @@ const StrategyPage = () => {
                   {/* 전략 시각화 차트 */}
                   {selectedStrategy.id.startsWith('preset-') && (
                     <div className="rounded-xl overflow-hidden border border-gray-200 bg-white">
-                      <div className="px-5 py-3 flex items-center justify-between border-b border-gray-100">
-                        <h3 className="text-sm font-bold text-whale-dark">전략 시각화</h3>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-500">실시간 차트</span>
+                      <div className="px-5 py-3.5 flex items-center justify-between border-b border-gray-200">
+                        <h3 className="text-base font-bold text-whale-dark border-l-4 border-whale-light pl-3">전략 시각화</h3>
+                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-500 font-medium">실시간 차트</span>
                       </div>
                       <div className="p-4">
                         <StrategyChart strategyId={selectedStrategy.id} />
@@ -966,8 +1188,8 @@ const StrategyPage = () => {
                   )}
 
                   {/* 이 전략 이해하기 */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
-                    <h3 className="text-sm font-bold text-whale-dark mb-3">이 전략 이해하기</h3>
+                  <div className="bg-gradient-to-br from-blue-50/50 to-slate-50 border border-gray-200 rounded-xl p-5">
+                    <h3 className="text-base font-bold text-whale-dark mb-3 pb-2 border-b border-gray-200 border-l-4 border-l-whale-light pl-3">이 전략 이해하기</h3>
                     <p className="text-sm leading-relaxed text-gray-500">
                       {selectedStrategy.description ||
                         (selectedStrategy.strategyLogic?.includes('MA') || selectedStrategy.strategyLogic?.includes('이동평균')
@@ -984,10 +1206,10 @@ const StrategyPage = () => {
                   {/* 사용된 기술 지표 */}
                   {selectedStrategy.indicators && selectedStrategy.indicators.length > 0 && (
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
-                      <h3 className="text-sm font-bold text-whale-dark mb-3">사용된 기술 지표</h3>
+                      <h3 className="text-base font-bold text-whale-dark mb-3 pb-2 border-b border-gray-200 border-l-4 border-l-whale-light pl-3">사용된 기술 지표</h3>
                       <div className="flex flex-wrap gap-2">
                         {selectedStrategy.indicators.map((ind, i) => (
-                          <span key={i} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-whale-dark border border-gray-200">
+                          <span key={i} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-whale-dark border border-gray-200 hover:border-whale-light/50 hover:bg-whale-light/5 transition-all cursor-default">
                             <span className="font-bold text-whale-dark">{ind.type}</span>
                             <span className="text-xs ml-1.5 text-gray-400">
                               ({Object.entries(ind.parameters).map(([k, v]) => `${k}=${v}`).join(', ')})
@@ -1001,10 +1223,10 @@ const StrategyPage = () => {
                   {/* 투자 대상 자산 */}
                   {selectedStrategy.targetAssets && selectedStrategy.targetAssets.length > 0 && (
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
-                      <h3 className="text-sm font-bold text-whale-dark mb-3">항해 대상 ({selectedStrategy.targetAssets.length}개 자산)</h3>
+                      <h3 className="text-base font-bold text-whale-dark mb-3 pb-2 border-b border-gray-200 border-l-4 border-l-whale-light pl-3">항해 대상 ({selectedStrategy.targetAssets.length}개 자산)</h3>
                       <div className="flex flex-wrap gap-2">
                         {selectedStrategy.targetAssets.map(code => (
-                          <span key={code} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-whale-dark border border-gray-200">
+                          <span key={code} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-whale-dark border border-gray-200 hover:border-whale-light/50 hover:bg-whale-light/5 transition-all cursor-default">
                             {selectedStrategy.targetAssetNames?.[code] || getAssetName(code)} <span className="text-gray-400">({code})</span>
                           </span>
                         ))}
@@ -1017,12 +1239,13 @@ const StrategyPage = () => {
                 <div className="space-y-5">
                   <div className="bg-gradient-to-br from-whale-light/5 to-blue-50 border border-whale-light/20 rounded-xl p-8 text-center">
                     <div className="w-16 h-16 rounded-2xl bg-whale-light/10 flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-whale-light" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      <svg className="w-16 h-16 text-whale-light float-animation" viewBox="0 0 64 64" fill="currentColor">
+                        <path d="M32 8c-4 0-8 2-10 6-3 5-2 12 2 16l8 10 8-10c4-4 5-11 2-16-2-4-6-6-10-6zm0 4c2.5 0 5 1.2 6.5 3.8 2 3.5 1.2 8-1.5 11L32 33l-5-6.2c-2.7-3-3.5-7.5-1.5-11C27 13.2 29.5 12 32 12z"/>
+                        <path d="M20 40c-2 2-4 6-4 10h32c0-4-2-8-4-10l-6-2h-12l-6 2z" opacity="0.3"/>
                       </svg>
                     </div>
-                    <h2 className="text-xl font-bold text-whale-dark mb-2">항로를 선택하여 시작하세요</h2>
-                    <p className="text-sm text-gray-500">오른쪽 목록에서 전략을 선택하면 전략 해설, 학습 영상, 백테스트 결과가 여기에 표시됩니다</p>
+                    <h2 className="text-xl font-bold text-whale-dark mb-2">항로를 설정하여 항해를 시작하세요</h2>
+                    <p className="text-sm text-gray-500">왼쪽에서 전략을 선택하면 항로 분석, 학습 영상, 백테스트가 여기에 표시됩니다</p>
                   </div>
                   <div className="grid grid-cols-3 gap-4">
                     <div className="bg-white rounded-xl border border-gray-100 p-4 text-center shadow-sm">
@@ -1042,12 +1265,13 @@ const StrategyPage = () => {
                     <h3 className="text-sm font-bold text-whale-dark mb-4">빠른 시작 가이드</h3>
                     <div className="space-y-3">
                       {[
-                        { step: '1', title: '전략 선택', desc: '오른쪽 목록에서 기본 전략이나 직접 만든 전략을 선택하세요' },
-                        { step: '2', title: '종목 & 기간 설정', desc: '백테스트할 종목과 기간을 가운데 패널에서 설정하세요' },
+                        { step: '1', title: '전략 선택', desc: '왼쪽 목록에서 기본 전략이나 직접 만든 전략을 선택하세요' },
+                        { step: '2', title: '종목 & 기간 설정', desc: '백테스트할 종목과 기간을 오른쪽 패널에서 설정하세요' },
                         { step: '3', title: '백테스트 실행', desc: '실행 버튼을 누르면 과거 성과가 차트로 표시됩니다' },
-                      ].map(item => (
-                        <div key={item.step} className="flex items-start gap-3">
-                          <div className="w-7 h-7 rounded-lg bg-whale-light/10 text-whale-light font-bold text-sm flex items-center justify-center shrink-0">{item.step}</div>
+                      ].map((item, idx) => (
+                        <div key={item.step} className="flex items-start gap-3 relative">
+                          {idx < 2 && <div className="absolute left-[14px] top-7 bottom-0 border-l-2 border-dashed border-whale-light/30" />}
+                          <div className="w-7 h-7 rounded-lg bg-whale-light/10 text-whale-light font-bold text-sm flex items-center justify-center shrink-0 relative z-10">{item.step}</div>
                           <div>
                             <div className="text-sm font-semibold text-whale-dark">{item.title}</div>
                             <div className="text-xs text-gray-400">{item.desc}</div>
@@ -1061,6 +1285,67 @@ const StrategyPage = () => {
             ) : (
               /* 백테스트 결과 차트 */
               <div className="space-y-4">
+                {/* 테스트 요약 카드 */}
+                <div className="bg-gradient-to-r from-slate-50 to-blue-50/50 border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-7 h-7 rounded-lg bg-whale-light/10 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-whale-light" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    </div>
+                    <h3 className="text-sm font-bold text-whale-dark">테스트 요약</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">전략</span>
+                      <span className="font-semibold text-whale-dark truncate ml-2">{selectedStrategy?.name || '직접 설정'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">종목</span>
+                      <span className="font-semibold text-whale-dark">{backtestStockName || backtestStockCode || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">기간</span>
+                      <span className="font-semibold text-whale-dark">{backtestStartDate?.slice(2).replace(/-/g, '.')} ~ {backtestEndDate?.slice(2).replace(/-/g, '.')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">투자금</span>
+                      <span className="font-semibold text-whale-dark">{Number(backtestInitialCapital).toLocaleString()}원</span>
+                    </div>
+                    {(stopLossPercent || takeProfitPercent) && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">손절/익절</span>
+                        <span className="font-semibold text-whale-dark">
+                          {stopLossPercent ? `${stopLossPercent}%` : '-'} / {takeProfitPercent ? `${takeProfitPercent}%` : '-'}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">매매방향</span>
+                      <span className="font-semibold text-whale-dark">
+                        {tradeDirection === 'LONG_ONLY' ? '롱' : tradeDirection === 'SHORT_ONLY' ? '숏' : '롱+숏'}
+                      </span>
+                    </div>
+                    {commissionRate && Number(commissionRate) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">수수료</span>
+                        <span className="font-semibold text-whale-dark">{commissionRate}%</span>
+                      </div>
+                    )}
+                    {trailingStopPercent && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">트레일링</span>
+                        <span className="font-semibold text-whale-dark">{trailingStopPercent}%</span>
+                      </div>
+                    )}
+                  </div>
+                  {selectedStrategy?.strategyLogic && (
+                    <div className="mt-3 px-3 py-2 rounded-lg bg-white border border-gray-200 font-mono text-xs text-whale-dark shadow-sm">
+                      {selectedStrategy.strategyLogic}
+                    </div>
+                  )}
+                </div>
+
                 {/* 핵심 KPI 배너 */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
@@ -1069,8 +1354,8 @@ const StrategyPage = () => {
                     { label: '승률', value: `${backtestResult.winRate.toFixed(1)}%`, color: '#60a5fa', sub: `${backtestResult.totalTrades}회 거래` },
                     { label: '샤프 비율', value: backtestResult.sharpeRatio.toFixed(2), color: '#a78bfa', sub: backtestResult.sharpeRatio >= 1 ? '양호' : '보통' },
                   ].map((kpi, i) => (
-                    <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
-                      <div className="text-xs mb-1 text-gray-500">{kpi.label}</div>
+                    <div key={i} className="rounded-xl p-3 text-center shadow-sm border transition-all duration-200 hover:shadow-md" style={{ backgroundColor: `${kpi.color}08`, borderColor: `${kpi.color}30`, borderTopWidth: '3px', borderTopColor: kpi.color }}>
+                      <div className="text-xs mb-1 font-medium" style={{ color: `${kpi.color}cc` }}>{kpi.label}</div>
                       <div className="text-lg font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
                       <div className="text-[10px] mt-0.5 text-gray-400">{kpi.sub}</div>
                     </div>
@@ -1081,7 +1366,7 @@ const StrategyPage = () => {
                 {backtestResult.priceData && backtestResult.priceData.length > 0 && (
                   <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                     <h3 className="text-sm font-bold mb-1 text-whale-dark">가격 차트 & 매매 포인트</h3>
-                    <p className="text-[10px] mb-3 text-gray-400">빨강 = 매수 / 파랑 = 매도 / 보라 = 숏진입 / 남색 = 숏청산</p>
+                    <p className="text-xs mb-3 text-gray-400">빨강 = 매수 / 파랑 = 매도 / 보라 = 숏진입 / 남색 = 숏청산</p>
                     <ResponsiveContainer width="100%" height={260}>
                       <ComposedChart data={(() => {
                         const tradeMap = new Map<string, { type: string; price: number }>();
@@ -1165,9 +1450,9 @@ const StrategyPage = () => {
                       { label: '수익 거래', value: `${backtestResult.profitableTrades}회` },
                       { label: '손실 거래', value: `${backtestResult.losingTrades}회` },
                     ].map((item, i) => (
-                      <div key={i} className="p-2 rounded-lg text-center bg-white border border-gray-100">
-                        <div className="text-[10px] mb-0.5 text-gray-400">{item.label}</div>
-                        <div className="text-xs font-bold text-whale-dark">{item.value}</div>
+                      <div key={i} className="p-2.5 rounded-lg text-center bg-white border border-gray-100 shadow-sm">
+                        <div className="text-xs mb-0.5 text-gray-400">{item.label}</div>
+                        <div className="text-sm font-bold text-whale-dark">{item.value}</div>
                       </div>
                     ))}
                   </div>
@@ -1194,7 +1479,7 @@ const StrategyPage = () => {
                               <tr key={idx} className="border-b border-gray-100">
                                 <td className="py-1.5 px-2 text-whale-dark font-mono">{trade.date}</td>
                                 <td className="py-1.5 px-2">
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${
                                     trade.type === 'BUY' ? 'bg-red-100 text-red-600' :
                                     trade.type === 'SHORT' ? 'bg-purple-100 text-purple-600' :
                                     trade.type === 'COVER' ? 'bg-indigo-100 text-indigo-600' :
@@ -1219,6 +1504,18 @@ const StrategyPage = () => {
                     </div>
                   </div>
                 )}
+
+                <div className="flex justify-center pt-2">
+                  <button
+                    onClick={() => setBacktestResult(null)}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-whale-dark bg-white border border-gray-200 hover:border-whale-light hover:bg-whale-light/5 transition-all shadow-sm"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    전략 상세로 돌아가기
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1254,37 +1551,42 @@ const StrategyPage = () => {
           )}
         </div>
 
-        {/* ===== MIDDLE PANEL: 백테스트 실행 ===== */}
-        <div className="lg:flex-[2.5] flex flex-col bg-white border-l border-gray-200 min-w-0">
-          <div className="px-5 pt-5 pb-4 border-b border-gray-200 bg-white shrink-0">
+        {/* ===== RIGHT PANEL: 백테스트 실행 ===== */}
+        <div className="lg:flex-[2.5] flex flex-col bg-white border-l border-gray-200 min-w-0 shadow-sm">
+          <div className="relative px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-whale-dark to-whale-light shrink-0 h-[72px] flex items-center">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-whale-light flex items-center justify-center shrink-0">
-                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div>
-                <h2 className="text-sm font-bold text-whale-dark">백테스트 실행</h2>
+                <h2 className="text-sm font-bold text-white">백테스트 실행</h2>
                 {selectedStrategy && (
-                  <p className="text-xs text-gray-400 mt-0.5 truncate">— {selectedStrategy.name}</p>
+                  <p className="text-xs text-white/60 mt-0.5 truncate">— {selectedStrategy.name}</p>
                 )}
               </div>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 overflow-hidden" style={{ height: '6px' }}>
+              <svg viewBox="0 0 1200 20" preserveAspectRatio="none" className="w-full h-full">
+                <path d="M0,10 C150,20 350,0 500,10 C650,20 850,0 1000,10 C1100,15 1150,5 1200,10 L1200,20 L0,20 Z" fill="white" />
+              </svg>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
             {/* 선택된 전략 표시 */}
             {selectedStrategy ? (
-              <div className="px-3 py-2.5 rounded-xl bg-whale-light/5 border border-whale-light/20">
+              <div className="px-3 py-2.5 rounded-xl bg-whale-light/5 border border-whale-light/20 border-l-4 border-l-whale-light">
                 <p className="text-sm font-semibold text-whale-dark">{selectedStrategy.name}</p>
-                <p className="text-[10px] mt-1 text-gray-400">
+                <p className="text-xs mt-1 text-gray-400">
                   진입 {selectedStrategy.entryConditions?.length || 0}개 · 청산 {selectedStrategy.exitConditions?.length || 0}개 조건
                 </p>
               </div>
             ) : (
               <div className="px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200">
-                <p className="text-sm text-gray-400">오른쪽 라이브러리에서 전략을 선택하세요</p>
+                <p className="text-sm text-gray-400">왼쪽 라이브러리에서 전략을 선택하세요</p>
               </div>
             )}
 
@@ -1302,7 +1604,7 @@ const StrategyPage = () => {
                     return (
                       <button key={assetCode} type="button"
                         onClick={() => handleBacktestStockSelect(assetCode, assetName, isStock ? 'STOCK' : 'CRYPTO')}
-                        className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 border ${isSel ? 'bg-whale-light text-white border-whale-light' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-whale-light'}`}>
+                        className={`px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1 border ${isSel ? 'bg-gradient-to-r from-whale-light to-blue-500 text-white border-whale-light shadow-md' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-whale-light hover:shadow-sm hover:shadow-whale-light/20'}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${isStock ? 'bg-indigo-400' : 'bg-emerald-400'}`} />
                         {assetName}
                       </button>
@@ -1343,7 +1645,7 @@ const StrategyPage = () => {
                       onClick={() => handleBacktestStockSelect(r.code, r.name, r.market)}
                       className="w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-gray-50 border-b border-gray-100 last:border-0 text-gray-800">
                       <span>{r.name} <span className="text-gray-400">({r.code})</span></span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
                         {r.market === 'STOCK' ? '주식' : '코인'}
                       </span>
                     </button>
@@ -1420,7 +1722,7 @@ const StrategyPage = () => {
             <div className="flex flex-wrap gap-1.5">
               {[1000000, 5000000, 10000000, 50000000].map(v => (
                 <button key={v} onClick={() => setBacktestInitialCapital(String(v))}
-                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all border ${backtestInitialCapital === String(v) ? 'bg-whale-light text-white border-whale-light' : 'bg-white text-gray-500 border-gray-200 hover:border-whale-light'}`}>
+                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200 border ${backtestInitialCapital === String(v) ? 'bg-gradient-to-r from-whale-light to-blue-500 text-white border-whale-light shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:border-whale-light hover:bg-whale-light/5'}`}>
                   {v >= 1e8 ? `${v/1e8}억` : `${v/1e4}만`}
                 </button>
               ))}
@@ -1446,7 +1748,7 @@ const StrategyPage = () => {
                   {/* ── 매매 조건 편집 ── */}
                   {selectedStrategy && editableIndicators.length > 0 && (
                     <>
-                      <p className="text-[10px] font-bold text-whale-dark">지표 파라미터</p>
+                      <p className="text-xs font-bold text-whale-dark">지표 파라미터</p>
                       <div className="grid grid-cols-2 gap-2">
                         {editableIndicators.map((ind, idx) => {
                           const paramLabels: Record<string, Record<string, string>> = {
@@ -1466,7 +1768,7 @@ const StrategyPage = () => {
                           const labels = paramLabels[ind.type] || {};
                           return Object.entries(ind.parameters).map(([key, val]) => (
                             <div key={`${idx}-${key}`}>
-                              <label className="block text-[10px] font-semibold mb-1 text-gray-500">
+                              <label className="block text-xs font-semibold mb-1 text-gray-500">
                                 {prefix}{labels[key] || `${ind.type} ${key}`}
                               </label>
                               <input type="number" value={val}
@@ -1486,7 +1788,7 @@ const StrategyPage = () => {
                   {/* ── 진입/청산 기준값 편집 ── */}
                   {selectedStrategy && (editableEntryConditions.some(c => c.value !== 0) || editableExitConditions.some(c => c.value !== 0)) && (
                     <>
-                      <p className="text-[10px] font-bold text-whale-dark mt-2">매매 기준값</p>
+                      <p className="text-xs font-bold text-whale-dark mt-2">매매 기준값</p>
                       <div className="grid grid-cols-2 gap-2">
                         {editableEntryConditions.map((c, idx) => {
                           if (c.value === 0) return null;
@@ -1497,7 +1799,7 @@ const StrategyPage = () => {
                           };
                           return (
                             <div key={`entry-${idx}`}>
-                              <label className="block text-[10px] font-semibold mb-1 text-gray-500">
+                              <label className="block text-xs font-semibold mb-1 text-gray-500">
                                 {condLabels[c.indicator || ''] || `진입 ${c.indicator}`}
                               </label>
                               <input type="number" value={c.value}
@@ -1519,7 +1821,7 @@ const StrategyPage = () => {
                           };
                           return (
                             <div key={`exit-${idx}`}>
-                              <label className="block text-[10px] font-semibold mb-1 text-gray-500">
+                              <label className="block text-xs font-semibold mb-1 text-gray-500">
                                 {condLabels[c.indicator || ''] || `청산 ${c.indicator}`}
                               </label>
                               <input type="number" value={c.value}
@@ -1541,7 +1843,7 @@ const StrategyPage = () => {
                   )}
 
                   {/* ── 리스크 관리 ── */}
-                  <p className="text-[10px] font-bold text-whale-dark">리스크 관리</p>
+                  <p className="text-xs font-bold text-whale-dark">리스크 관리</p>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { label: '손절 (%)', value: stopLossPercent, setter: setStopLossPercent, placeholder: '5' },
@@ -1550,7 +1852,7 @@ const StrategyPage = () => {
                       { label: '슬리피지 (%)', value: slippagePercent, setter: setSlippagePercent, placeholder: '0.1' },
                     ].map(({ label, value, setter, placeholder }) => (
                       <div key={label}>
-                        <label className="block text-[10px] font-semibold mb-1 text-gray-500">{label}</label>
+                        <label className="block text-xs font-semibold mb-1 text-gray-500">{label}</label>
                         <input type="number" value={value} onChange={(e) => setter(e.target.value)} placeholder={placeholder}
                           className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800" />
                       </div>
@@ -1558,7 +1860,7 @@ const StrategyPage = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-[10px] font-semibold mb-1 text-gray-500">매매 방향</label>
+                      <label className="block text-xs font-semibold mb-1 text-gray-500">매매 방향</label>
                       <select value={tradeDirection} onChange={(e) => setTradeDirection(e.target.value as any)}
                         className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800">
                         <option value="LONG_ONLY">롱 (매수만)</option>
@@ -1567,7 +1869,7 @@ const StrategyPage = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-semibold mb-1 text-gray-500">수수료율 (%)</label>
+                      <label className="block text-xs font-semibold mb-1 text-gray-500">수수료율 (%)</label>
                       <input type="number" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} placeholder="0.1"
                         className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800" />
                     </div>
@@ -1579,7 +1881,10 @@ const StrategyPage = () => {
             {/* 실행 버튼 */}
             <button onClick={handleRunBacktest}
               disabled={isBacktesting || (!selectedStrategy && directEntryConditions.length === 0) || !backtestStockCode}
-              className={`w-full py-3 rounded-xl font-bold text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${isBacktesting ? 'bg-gray-400' : 'bg-whale-light hover:bg-whale-dark shadow-sm'}`}>
+              className={`w-full py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 overflow-hidden relative ${isBacktesting ? 'bg-gray-400' : 'bg-gradient-to-r from-whale-light to-blue-500 hover:from-whale-dark hover:to-whale-light shadow-lg hover:shadow-xl'}`}>
+              {!isBacktesting && !(isBacktesting || (!selectedStrategy && directEntryConditions.length === 0) || !backtestStockCode) && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent" style={{ animation: 'wave 3s ease-in-out infinite', width: '200%' }} />
+              )}
               {isBacktesting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1587,194 +1892,22 @@ const StrategyPage = () => {
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-4 h-4 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  백테스트 실행
+                  <span className="relative z-10">백테스트 실행</span>
                 </>
               )}
             </button>
 
             {!backtestStockCode && (
-              <p className="text-center text-[10px] text-gray-400">종목을 먼저 선택해주세요</p>
+              <p className="text-center text-xs text-gray-400">종목을 먼저 선택해주세요</p>
             )}
 
           </div>
         </div>
 
-        {/* ===== RIGHT SIDEBAR: 전략 라이브러리 ===== */}
-        <div className="lg:flex-[3] flex flex-col bg-gray-50 border-l border-gray-200 min-w-0">
-
-          {/* ---- 헤더: 타이틀 + 새 항로 버튼 ---- */}
-          <div className="px-5 pt-5 pb-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
-            <div>
-              <h2 className="text-sm font-bold text-whale-dark">전략 라이브러리</h2>
-              <p className="text-xs text-gray-400 mt-0.5">전략을 선택하고 백테스트로 검증하세요</p>
-            </div>
-            <button onClick={openCreateModal}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-whale-light bg-whale-light/10 border border-whale-light/30 hover:bg-whale-light hover:text-white transition-all shrink-0">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              새 항로
-            </button>
-          </div>
-
-          {/* ---- 필터 탭 ---- */}
-          <div className="px-5 pt-3 pb-0 bg-white border-b border-gray-200 shrink-0">
-            <div className="flex gap-1">
-              {(['전체', '추세추종', '역추세', '변동성'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setStrategyFilter(tab)}
-                  className={`px-3 py-1.5 rounded-t-lg text-xs font-semibold transition-all border-b-2 ${
-                    strategyFilter === tab
-                      ? 'text-whale-light border-whale-light bg-whale-light/5'
-                      : 'text-gray-400 border-transparent hover:text-gray-600'
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ---- 전략 카드 목록 (스크롤) ---- */}
-          <div className="overflow-y-auto px-5 py-4 space-y-2" style={{ maxHeight: 'calc(100vh - 300px)' }}>
-            {(() => {
-              const filtered = allStrategies.filter((s) => {
-                if (strategyFilter === '전체') return true;
-                if (strategyFilter === '추세추종') {
-                  return s.entryConditions?.some(c =>
-                    c.indicator?.includes('CROSS') || c.indicator?.includes('MA') || c.indicator?.includes('EMA') || c.indicator?.includes('MACD')
-                  );
-                }
-                if (strategyFilter === '역추세') {
-                  return s.entryConditions?.some(c =>
-                    c.indicator === 'RSI' || c.indicator?.includes('STOCH') || c.indicator?.includes('BOLLINGER') || c.indicator?.includes('CCI')
-                  );
-                }
-                if (strategyFilter === '변동성') {
-                  return s.entryConditions?.some(c =>
-                    c.indicator?.includes('BOLLINGER') || c.indicator?.includes('ATR')
-                  );
-                }
-                return true;
-              });
-
-              if (filtered.length === 0) {
-                return (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mb-3">
-                      <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                    </div>
-                    <p className="text-sm font-medium text-gray-400">해당 전략이 없습니다</p>
-                    <button onClick={openCreateModal}
-                      className="mt-3 px-4 py-1.5 rounded-lg text-xs font-semibold text-whale-light bg-whale-light/10 border border-whale-light/30 hover:bg-whale-light hover:text-white transition-all">
-                      + 새 항로 만들기
-                    </button>
-                  </div>
-                );
-              }
-
-              return filtered.map((strategy) => {
-                const isSelected = selectedStrategy?.id === strategy.id;
-                const isPreset = strategy.id.startsWith('preset-');
-                const perf = isPreset ? PRESET_PERFORMANCE[strategy.id] : null;
-                return (
-                  <div
-                    key={strategy.id}
-                    onClick={() => {
-                      setSelectedStrategy(strategy);
-                      setBacktestResult(null);
-                      setShowBacktestForm(true);
-                    }}
-                    className={`relative rounded-xl cursor-pointer transition-all overflow-hidden border bg-white ${
-                      isSelected
-                        ? 'border-whale-light shadow-sm'
-                        : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
-                    }`}
-                  >
-                    {/* 선택 표시 — 왼쪽 파란 테두리 */}
-                    {isSelected && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-whale-light rounded-l-xl" />
-                    )}
-
-                    <div className={`px-4 py-3 ${isSelected ? 'pl-5' : ''}`}>
-                      {/* 이름 행 */}
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-bold text-sm text-whale-dark truncate">{strategy.name}</span>
-                          {isPreset && (
-                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-whale-light/10 text-whale-light">기본</span>
-                          )}
-                          {strategy.applied && (
-                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-600">적용중</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {/* 수익률 배지 */}
-                          {perf && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
-                              +{perf.returnRate}%
-                            </span>
-                          )}
-                          {/* 사용자 항로 삭제 버튼 */}
-                          {!isPreset && (
-                            <button
-                              onClick={(e) => handleDeleteStrategy(strategy.id, e)}
-                              className="p-1 rounded text-gray-300 hover:text-red-400 transition-colors">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* 한 줄 설명 */}
-                      <p className="text-[11px] text-gray-400 line-clamp-1 mb-2">
-                        {strategy.description || strategy.strategyLogic || '사용자 전략'}
-                      </p>
-
-                      {/* 하단 메타 행 */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          {strategy.assetType && (
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                              strategy.assetType === 'CRYPTO' ? 'bg-orange-50 text-orange-600' :
-                              strategy.assetType === 'STOCK' ? 'bg-indigo-50 text-indigo-600' :
-                              'bg-purple-50 text-purple-600'
-                            }`}>{assetTypeLabel(strategy.assetType)}</span>
-                          )}
-                          {perf && (
-                            <span className="text-[9px] text-gray-400">승률 {perf.winRate}% · 샤프 {perf.sharpe}</span>
-                          )}
-                          {!perf && (strategy.entryConditions?.length || 0) > 0 && (
-                            <span className="text-[9px] text-gray-400">
-                              조건 {(strategy.entryConditions?.length || 0) + (strategy.exitConditions?.length || 0)}개
-                            </span>
-                          )}
-                        </div>
-                        {!strategy.applied && strategy.targetAssets && strategy.targetAssets.length > 0 && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedStrategy(strategy); setShowApplyModal(true); }}
-                            className="px-2 py-0.5 rounded text-[10px] font-semibold text-whale-light bg-whale-light/10 hover:bg-whale-light hover:text-white transition-all">
-                            포트폴리오 적용
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              });
-            })()}
-          </div>
-
-        </div>
       </div>
 
       {/* ===== 전략 생성/수정 모달 ===== */}

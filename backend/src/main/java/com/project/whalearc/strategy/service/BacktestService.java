@@ -539,7 +539,7 @@ public class BacktestService {
                     int[] streaks = {currentStreak, maxWinStreak, maxLossStreak};
                     int[] tradeCounts = {profitableTrades, losingTrades};
                     cash = executeCloseAll(trades, posEntries, currentDir, price, slippage, commissionRate,
-                            date, i, "청산 조건 충족", cash,
+                            date, i, "방향 전환 (롱→숏)", cash,
                             winAmounts, lossAmounts, winRates, lossRates, holdingDaysList,
                             streaks, tradeCounts);
                     currentStreak = streaks[0]; maxWinStreak = streaks[1]; maxLossStreak = streaks[2];
@@ -552,8 +552,11 @@ public class BacktestService {
                     currentDir = "SHORT";
                     lowSinceEntry = price;
                     firstEntryDayIndex = i;
+                } else if ("LONG_SHORT".equals(tradeDir) && "SHORT".equals(currentDir)) {
+                    // LONG_SHORT 모드에서 숏 보유 중 청산 신호 → 숏 유지 (다음 진입 신호에서 롱 전환)
+                    // do nothing
                 } else {
-                    // 일반 청산
+                    // 일반 청산 (LONG_ONLY / SHORT_ONLY)
                     int[] streaks = {currentStreak, maxWinStreak, maxLossStreak};
                     int[] tradeCounts = {profitableTrades, losingTrades};
                     cash = executeCloseAll(trades, posEntries, currentDir, price, slippage, commissionRate,
@@ -575,7 +578,8 @@ public class BacktestService {
                 equity = cash + totalQty * price;
             } else if ("SHORT".equals(currentDir)) {
                 double sev = posEntries.stream().mapToDouble(e -> e.quantity * e.execPrice).sum();
-                equity = cash - totalQty * price + sev;
+                double margin = posEntries.stream().mapToDouble(PosEntry::cost).sum();
+                equity = cash + margin + (sev - totalQty * price);
             } else {
                 equity = cash;
             }

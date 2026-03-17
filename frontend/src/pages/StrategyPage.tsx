@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import Header from '../components/Header';
 import {
   strategyService,
@@ -72,7 +74,7 @@ const StrategyPage = () => {
   const [backtestMode, setBacktestMode] = useState<'strategy' | 'stock'>('strategy');
   const [backtestStockCode, setBacktestStockCode] = useState('');
   const [backtestStartDate, setBacktestStartDate] = useState(() => {
-    const d = new Date(); d.setFullYear(d.getFullYear() - 1);
+    const d = new Date(); d.setFullYear(d.getFullYear() - 2);
     return d.toISOString().slice(0, 10);
   });
   const [backtestEndDate, setBacktestEndDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -121,9 +123,9 @@ const StrategyPage = () => {
     loadStrategies();
     loadStockList();
     const today = new Date().toISOString().split('T')[0];
-    const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const twoYearsAgo = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     setBacktestEndDate(today);
-    setBacktestStartDate(sixMonthsAgo);
+    setBacktestStartDate(twoYearsAgo);
   }, []);
 
   const loadStrategies = async () => {
@@ -664,6 +666,54 @@ const StrategyPage = () => {
     return '혼합';
   };
 
+  // 조건을 읽기 쉬운 형태로 변환
+  const formatCondition = (c: Condition, type: 'entry' | 'exit') => {
+    const ind = c.indicator || '';
+    const color = type === 'entry' ? 'red' : 'blue';
+
+    // 크로스오버 조건: MA_20_CROSS_MA_60 → "MA(20) ↑ MA(60) 골든크로스"
+    if (ind.includes('_CROSS_') || ind.includes('_CROSSUNDER_')) {
+      const isUnder = ind.includes('_CROSSUNDER_');
+      const parts = isUnder ? ind.split('_CROSSUNDER_', 2) : ind.split('_CROSS_', 2);
+      const formatKey = (k: string) => {
+        const m = k.match(/^([A-Z]+)_(\d+)$/);
+        return m ? `${m[1]}(${m[2]})` : k;
+      };
+      const a = formatKey(parts[0]);
+      const b = formatKey(parts[1]);
+      if (isUnder) {
+        return (
+          <span className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200`}>
+            <span className="font-bold">{a}</span>
+            <span className="text-blue-400 mx-1">가</span>
+            <span className="font-bold">{b}</span>
+            <span className="text-blue-400 mx-1">아래로 돌파 시</span>
+            <span className="inline-block px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-bold ml-0.5">매도</span>
+          </span>
+        );
+      }
+      return (
+        <span className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-red-700 border border-red-200`}>
+          <span className="font-bold">{a}</span>
+          <span className="text-red-400 mx-1">가</span>
+          <span className="font-bold">{b}</span>
+          <span className="text-red-400 mx-1">위로 돌파 시</span>
+          <span className="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-bold ml-0.5">매수</span>
+        </span>
+      );
+    }
+
+    // 일반 임계값 조건: RSI < 30
+    const opMap: Record<string, string> = { GT: '>', GTE: '≥', LT: '<', LTE: '≤', EQ: '=' };
+    return (
+      <>
+        <span className={`px-2 py-0.5 rounded text-xs font-semibold bg-${color}-100 text-${color}-600`}>{ind}</span>
+        <span className="text-whale-dark font-bold">{opMap[c.operator || ''] || c.operator}</span>
+        <span className="font-semibold text-whale-dark">{c.value}</span>
+      </>
+    );
+  };
+
   // 전략 ID에 매핑되는 캔버스 차트
   const StrategyChart = ({ strategyId }: { strategyId: string }) => {
     switch (strategyId) {
@@ -682,8 +732,8 @@ const StrategyPage = () => {
       strategyLogic: 'MA(20) > MA(60) → 매수 / MA(20) < MA(60) → 매도',
       assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW', 'SOL_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)', SOL_KRW: '솔라나(SOL)' },
       indicators: [{ type: 'MA', parameters: { period: 20 } }, { type: 'MA', parameters: { period: 60 } }],
-      entryConditions: [{ indicator: 'EMA_CROSS_MA', operator: 'GT', value: 0, logic: 'AND' }],
-      exitConditions: [{ indicator: 'EMA_CROSSUNDER_MA', operator: 'GT', value: 0, logic: 'AND' }],
+      entryConditions: [{ indicator: 'MA_20_CROSS_MA_60', operator: 'GT', value: 0, logic: 'AND' }],
+      exitConditions: [{ indicator: 'MA_20_CROSSUNDER_MA_60', operator: 'GT', value: 0, logic: 'AND' }],
       applied: false, createdAt: '', updatedAt: '',
     },
     {
@@ -864,16 +914,6 @@ const StrategyPage = () => {
                     )}
                   </div>
 
-                  {/* 항로 로직 */}
-                  {selectedStrategy.strategyLogic && (
-                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
-                      <h3 className="text-xs font-semibold mb-3 text-gray-400">TRADING LOGIC</h3>
-                      <div className="px-4 py-3 rounded-xl text-sm font-mono text-whale-dark bg-white border border-gray-200">
-                        {selectedStrategy.strategyLogic}
-                      </div>
-                    </div>
-                  )}
-
                   {/* 매매 조건 시각화 */}
                   {((selectedStrategy.entryConditions?.length || 0) > 0 || (selectedStrategy.exitConditions?.length || 0) > 0) && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -887,9 +927,7 @@ const StrategyPage = () => {
                             {selectedStrategy.entryConditions.map((c, i) => (
                               <div key={i} className="flex items-center gap-2 text-sm">
                                 {i > 0 && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">{c.logic}</span>}
-                                <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-600">{c.indicator}</span>
-                                <span className="text-whale-dark font-bold">{({'GT':'>','GTE':'≥','LT':'<','LTE':'≤','EQ':'='} as any)[c.operator]}</span>
-                                <span className="font-semibold text-whale-dark">{c.value}</span>
+                                {formatCondition(c, 'entry')}
                               </div>
                             ))}
                           </div>
@@ -905,9 +943,7 @@ const StrategyPage = () => {
                             {selectedStrategy.exitConditions.map((c, i) => (
                               <div key={i} className="flex items-center gap-2 text-sm">
                                 {i > 0 && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">{c.logic}</span>}
-                                <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-600">{c.indicator}</span>
-                                <span className="text-whale-dark font-bold">{({'GT':'>','GTE':'≥','LT':'<','LTE':'≤','EQ':'='} as any)[c.operator]}</span>
-                                <span className="font-semibold text-whale-dark">{c.value}</span>
+                                {formatCondition(c, 'exit')}
                               </div>
                             ))}
                           </div>
@@ -1316,26 +1352,68 @@ const StrategyPage = () => {
               )}
             </div>
 
-            {/* 날짜 범위 + 초기 자본 */}
-            <div className="space-y-2">
-              <div>
-                <label className="block text-[10px] font-semibold mb-1 text-gray-500">시작일</label>
-                <input type="date" value={backtestStartDate} onChange={(e) => setBacktestStartDate(e.target.value)}
-                  max={backtestEndDate || undefined}
-                  className="w-full px-2 py-2 rounded-lg text-[11px] bg-gray-50 border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light" />
+            {/* 기간 빠른 선택 */}
+            <div>
+              <label className="block text-[10px] font-semibold mb-1.5 text-gray-500">분석 기간</label>
+              <div className="flex gap-1.5 mb-2">
+                {[
+                  { label: '6개월', months: 6 },
+                  { label: '1년', months: 12 },
+                  { label: '2년', months: 24 },
+                  { label: '3년', months: 36 },
+                  { label: '5년', months: 60 },
+                ].map(({ label, months }) => {
+                  const d = new Date(); d.setMonth(d.getMonth() - months);
+                  const start = d.toISOString().slice(0, 10);
+                  const isActive = backtestStartDate === start;
+                  return (
+                    <button key={label} onClick={() => { setBacktestStartDate(start); setBacktestEndDate(new Date().toISOString().slice(0, 10)); }}
+                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all border ${isActive ? 'bg-whale-light text-white border-whale-light' : 'bg-white text-gray-500 border-gray-200 hover:border-whale-light hover:text-whale-light'}`}>
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
-              <div>
-                <label className="block text-[10px] font-semibold mb-1 text-gray-500">종료일</label>
-                <input type="date" value={backtestEndDate} onChange={(e) => setBacktestEndDate(e.target.value)}
-                  min={backtestStartDate || undefined} max={new Date().toISOString().slice(0, 10)}
-                  className="w-full px-2 py-2 rounded-lg text-[11px] bg-gray-50 border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light" />
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="block text-[10px] font-semibold mb-1 text-gray-400">시작일</label>
+                  <DatePicker
+                    selected={backtestStartDate ? new Date(backtestStartDate + 'T00:00:00') : null}
+                    onChange={(date: Date | null) => date && setBacktestStartDate(date.toISOString().slice(0, 10))}
+                    maxDate={backtestEndDate ? new Date(backtestEndDate + 'T00:00:00') : undefined}
+                    dateFormat="yyyy.MM.dd"
+                    className="w-full px-3 py-2 rounded-lg text-xs bg-white border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light focus:border-whale-light transition-all cursor-pointer"
+                    calendarClassName="whale-datepicker"
+                    showMonthDropdown
+                    showYearDropdown
+                    dropdownMode="select"
+                  />
+                </div>
+                <span className="text-gray-300 text-xs mt-4">~</span>
+                <div className="flex-1">
+                  <label className="block text-[10px] font-semibold mb-1 text-gray-400">종료일</label>
+                  <DatePicker
+                    selected={backtestEndDate ? new Date(backtestEndDate + 'T00:00:00') : null}
+                    onChange={(date: Date | null) => date && setBacktestEndDate(date.toISOString().slice(0, 10))}
+                    minDate={backtestStartDate ? new Date(backtestStartDate + 'T00:00:00') : undefined}
+                    maxDate={new Date()}
+                    dateFormat="yyyy.MM.dd"
+                    className="w-full px-3 py-2 rounded-lg text-xs bg-white border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light focus:border-whale-light transition-all cursor-pointer"
+                    calendarClassName="whale-datepicker"
+                    showMonthDropdown
+                    showYearDropdown
+                    dropdownMode="select"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-[10px] font-semibold mb-1 text-gray-500">초기 투자금</label>
-                <input type="number" value={backtestInitialCapital} onChange={(e) => setBacktestInitialCapital(e.target.value)}
-                  className="w-full px-2 py-2 rounded-lg text-[11px] bg-gray-50 border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light"
-                  placeholder="10,000,000" />
-              </div>
+            </div>
+
+            {/* 초기 투자금 */}
+            <div>
+              <label className="block text-[10px] font-semibold mb-1.5 text-gray-500">초기 투자금</label>
+              <input type="number" value={backtestInitialCapital} onChange={(e) => setBacktestInitialCapital(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-xs bg-white border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light focus:border-whale-light transition-all"
+                placeholder="10,000,000" />
             </div>
 
             {/* 초기 자본 빠른 버튼 */}

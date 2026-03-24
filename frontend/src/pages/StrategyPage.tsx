@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import Header from '../components/Header';
+import { GLOSSARY, Term } from '../components/TermTooltip';
 import {
   strategyService,
   type Strategy,
@@ -28,6 +29,7 @@ import {
   ComposedChart,
   CartesianGrid,
 } from 'recharts';
+
 
 const StrategyPage = () => {
   // 상태 관리
@@ -875,17 +877,29 @@ const StrategyPage = () => {
           {/* ---- 필터 탭 ---- */}
           <div className="px-5 pt-3 pb-0 bg-slate-50/80 border-b border-gray-200 shrink-0">
             <div className="flex gap-1">
-              {(['전체', '추세추종', '역추세', '변동성'] as const).map((tab) => (
+              {([
+                { tab: '전체' as const, glossaryKey: '' },
+                { tab: '추세추종' as const, glossaryKey: '추세추종' },
+                { tab: '역추세' as const, glossaryKey: '역추세' },
+                { tab: '변동성' as const, glossaryKey: '변동성' },
+              ]).map(({ tab, glossaryKey }) => (
                 <button
                   key={tab}
                   onClick={() => setStrategyFilter(tab)}
-                  className={`px-3.5 py-2 rounded-t-lg text-xs font-semibold transition-all duration-200 border-b-2 ${
+                  className={`group relative px-3.5 py-2 rounded-t-lg text-xs font-semibold transition-all duration-200 border-b-2 ${
                     strategyFilter === tab
                       ? 'text-white bg-gradient-to-r from-whale-light to-blue-500 border-whale-light shadow-sm'
                       : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-white/80'
                   }`}
                 >
                   {tab}
+                  {glossaryKey && GLOSSARY[glossaryKey] && (
+                    <span className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50 w-56 px-3 py-2 rounded-lg shadow-xl border border-gray-200 bg-white text-left pointer-events-none">
+                      <span className="block text-[10px] font-bold text-whale-dark mb-0.5">{GLOSSARY[glossaryKey].title}</span>
+                      <span className="block text-[10px] text-gray-500 leading-relaxed font-normal">{GLOSSARY[glossaryKey].desc}</span>
+                      <span className="absolute left-1/2 -translate-x-1/2 top-[-4px] w-2 h-2 bg-white border-l border-t border-gray-200 rotate-45" />
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -1013,7 +1027,7 @@ const StrategyPage = () => {
                             }`}>{assetTypeLabel(strategy.assetType)}</span>
                           )}
                           {perf && (
-                            <span className="text-[9px] text-gray-400">승률 {perf.winRate}% · 샤프 {perf.sharpe}</span>
+                            <span className="text-[9px] text-gray-400"><Term k="승률">승률</Term> {perf.winRate}% · <Term k="샤프비율">샤프</Term> {perf.sharpe}</span>
                           )}
                           {!perf && (strategy.entryConditions?.length || 0) > 0 && (
                             <span className="text-[9px] text-gray-400">
@@ -1187,20 +1201,304 @@ const StrategyPage = () => {
                     </div>
                   )}
 
-                  {/* 이 전략 이해하기 */}
+                  {/* 이 전략 이해하기 — 초보자 교육 콘텐츠 */}
                   <div className="bg-gradient-to-br from-blue-50/50 to-slate-50 border border-gray-200 rounded-xl p-5">
-                    <h3 className="text-base font-bold text-whale-dark mb-3 pb-2 border-b border-gray-200 border-l-4 border-l-whale-light pl-3">이 전략 이해하기</h3>
-                    <p className="text-sm leading-relaxed text-gray-500">
-                      {selectedStrategy.description ||
-                        (selectedStrategy.strategyLogic?.includes('MA') || selectedStrategy.strategyLogic?.includes('이동평균')
-                          ? '이동평균선(MA)은 일정 기간의 평균 가격을 선으로 연결한 것입니다. 단기 MA가 장기 MA를 위로 돌파하면 "골든크로스"로 상승 추세 시작을 의미하며, 반대로 아래로 돌파하면 "데드크로스"로 하락 추세 전환을 의미합니다.'
-                          : selectedStrategy.entryConditions?.some(c => c.indicator === 'RSI')
-                          ? 'RSI(상대강도지수)는 가격의 상승/하락 강도를 0~100으로 나타냅니다. 30 이하면 과매도(매수 기회), 70 이상이면 과매수(매도 기회)로 판단합니다.'
-                          : selectedStrategy.entryConditions?.some(c => c.indicator?.includes('BOLLINGER'))
-                          ? '볼린저 밴드는 가격의 정상 범위를 상단·하단 밴드로 표시합니다. 밴드가 좁아지면(스퀴즈) 곧 큰 움직임이 올 신호입니다.'
-                          : '백테스트를 실행하면 이 전략의 과거 성과를 확인할 수 있습니다.'
-                        )}
-                    </p>
+                    <h3 className="text-base font-bold text-whale-dark mb-4 pb-2 border-b border-gray-200 border-l-4 border-l-whale-light pl-3">
+                      이 전략 이해하기
+                      <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-600">초보자 가이드</span>
+                    </h3>
+
+                    {/* 전략별 상세 교육 콘텐츠 */}
+                    {(() => {
+                      const sid = selectedStrategy.id;
+                      const hasMACross = selectedStrategy.strategyLogic?.includes('MA') || selectedStrategy.entryConditions?.some(c => c.indicator?.includes('MA_') && c.indicator?.includes('_CROSS_'));
+                      const hasRSI = selectedStrategy.entryConditions?.some(c => c.indicator === 'RSI');
+                      const hasBollinger = selectedStrategy.entryConditions?.some(c => c.indicator?.includes('BOLLINGER'));
+                      const hasMACD = selectedStrategy.entryConditions?.some(c => c.indicator?.includes('MACD'));
+                      const hasStochastic = selectedStrategy.entryConditions?.some(c => c.indicator?.includes('STOCH'));
+
+                      if (sid === 'preset-golden-cross' || hasMACross) {
+                        return (
+                          <div className="space-y-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                                <span className="text-base">📈</span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-whale-dark mb-1">핵심 개념: <Term k="이동평균선">이동평균선</Term>과 <Term k="골든크로스">골든크로스</Term></p>
+                                <p className="text-sm text-gray-500 leading-relaxed">
+                                  <Term k="이동평균선">이동평균선(MA)</Term>은 일정 기간의 평균 가격을 매일 계산해 선으로 연결한 것입니다.
+                                  이 선의 방향이 위를 향하면 상승 추세, 아래를 향하면 하락 추세입니다.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border border-gray-100">
+                              <p className="text-xs font-bold text-whale-dark mb-2">이 전략의 매매 원리</p>
+                              <div className="space-y-2">
+                                <div className="flex items-start gap-2">
+                                  <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-bold shrink-0 mt-0.5">매수</span>
+                                  <p className="text-xs text-gray-600">단기 평균(20일)이 장기 평균(60일) <Term k="골든크로스">위로 돌파</Term>하면 → 상승 추세 시작으로 판단하고 매수합니다</p>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">매도</span>
+                                  <p className="text-xs text-gray-600">단기 평균(20일)이 장기 평균(60일) <Term k="데드크로스">아래로 돌파</Term>하면 → 하락 추세로 전환되었다고 판단하고 매도합니다</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                              <p className="text-xs font-semibold text-amber-700 mb-1">초보자 TIP</p>
+                              <p className="text-xs text-amber-600">이 전략은 <Term k="추세추종">추세추종</Term> 전략의 대표격입니다. 큰 상승장에서는 높은 수익을 내지만, 횡보장(가격이 오르락내리락 반복)에서는 잦은 손절이 발생할 수 있습니다. <Term k="MDD">MDD(최대 낙폭)</Term>을 확인하여 내가 감당할 수 있는 수준인지 반드시 체크하세요.</p>
+                            </div>
+                          </div>
+                        );
+                      } else if (sid === 'preset-rsi-reversal' || hasRSI) {
+                        return (
+                          <div className="space-y-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center shrink-0 mt-0.5">
+                                <span className="text-base">🔄</span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-whale-dark mb-1">핵심 개념: <Term k="RSI">RSI (상대강도지수)</Term></p>
+                                <p className="text-sm text-gray-500 leading-relaxed">
+                                  <Term k="RSI">RSI</Term>는 최근 가격의 상승/하락 강도를 0~100 사이의 숫자로 보여줍니다.
+                                  마치 "가격 체온계"처럼, 시장이 과열인지 냉각인지를 한눈에 알 수 있습니다.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border border-gray-100">
+                              <p className="text-xs font-bold text-whale-dark mb-2">RSI 수치별 의미</p>
+                              <div className="flex items-center gap-1 mb-3">
+                                <div className="flex-1 h-3 rounded-l-full bg-gradient-to-r from-blue-500 via-gray-300 to-red-500 relative">
+                                  <span className="absolute left-[30%] -translate-x-1/2 -top-4 text-[9px] font-bold text-blue-600">30</span>
+                                  <span className="absolute left-[70%] -translate-x-1/2 -top-4 text-[9px] font-bold text-red-600">70</span>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2 text-center">
+                                <div className="bg-blue-50 rounded-lg p-2">
+                                  <p className="text-[10px] font-bold text-blue-600">0~30</p>
+                                  <p className="text-[10px] text-blue-500"><Term k="과매도">과매도</Term> 구간</p>
+                                  <p className="text-[9px] text-gray-400 mt-0.5">반등 가능성 ↑</p>
+                                </div>
+                                <div className="bg-gray-50 rounded-lg p-2">
+                                  <p className="text-[10px] font-bold text-gray-500">30~70</p>
+                                  <p className="text-[10px] text-gray-400">중립 구간</p>
+                                  <p className="text-[9px] text-gray-400 mt-0.5">관망</p>
+                                </div>
+                                <div className="bg-red-50 rounded-lg p-2">
+                                  <p className="text-[10px] font-bold text-red-600">70~100</p>
+                                  <p className="text-[10px] text-red-500"><Term k="과매수">과매수</Term> 구간</p>
+                                  <p className="text-[9px] text-gray-400 mt-0.5">조정 가능성 ↑</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border border-gray-100">
+                              <p className="text-xs font-bold text-whale-dark mb-2">이 전략의 매매 원리</p>
+                              <div className="space-y-2">
+                                <div className="flex items-start gap-2">
+                                  <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-bold shrink-0 mt-0.5">매수</span>
+                                  <p className="text-xs text-gray-600">RSI가 30 이하로 떨어지면 → "<Term k="과매도">과매도</Term>" 상태이므로, 곧 반등할 수 있다고 판단하여 매수합니다</p>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">매도</span>
+                                  <p className="text-xs text-gray-600">RSI가 70 이상으로 올라가면 → "<Term k="과매수">과매수</Term>" 상태이므로, 곧 하락할 수 있다고 판단하여 매도합니다</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                              <p className="text-xs font-semibold text-amber-700 mb-1">초보자 TIP</p>
+                              <p className="text-xs text-amber-600">이것은 <Term k="역추세">역추세(평균회귀)</Term> 전략입니다. "너무 떨어졌으니 오를 것이다"라는 논리인데, 강한 하락 추세에서는 RSI가 30 이하에서도 계속 떨어질 수 있습니다. <Term k="손절">손절</Term> 설정을 반드시 함께 사용하세요.</p>
+                            </div>
+                          </div>
+                        );
+                      } else if (sid === 'preset-bollinger-squeeze' || hasBollinger) {
+                        return (
+                          <div className="space-y-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
+                                <span className="text-base">📊</span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-whale-dark mb-1">핵심 개념: <Term k="볼린저밴드">볼린저 밴드</Term></p>
+                                <p className="text-sm text-gray-500 leading-relaxed">
+                                  <Term k="볼린저밴드">볼린저 밴드</Term>는 가격의 "정상 범위"를 상단·중심·하단 3개의 띠로 보여줍니다.
+                                  마치 고무줄처럼, 가격이 밴드 밖으로 벗어나면 다시 안으로 돌아오려는 성질이 있습니다.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border border-gray-100">
+                              <p className="text-xs font-bold text-whale-dark mb-2">볼린저 밴드 구조</p>
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-16 h-1 rounded bg-red-300" />
+                                  <span className="text-[10px] text-gray-600"><strong>상단 밴드</strong> — 가격이 여기를 넘으면 <Term k="과매수">과매수</Term> (<Term k="%B">%B</Term> {'>'} 1)</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-16 h-1 rounded bg-gray-400" />
+                                  <span className="text-[10px] text-gray-600"><strong>중심선</strong> — 20일 <Term k="이동평균선">이동평균선</Term> (<Term k="%B">%B</Term> = 0.5)</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-16 h-1 rounded bg-blue-300" />
+                                  <span className="text-[10px] text-gray-600"><strong>하단 밴드</strong> — 가격이 여기 아래면 <Term k="과매도">과매도</Term> (<Term k="%B">%B</Term> {'<'} 0)</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border border-gray-100">
+                              <p className="text-xs font-bold text-whale-dark mb-2">이 전략의 매매 원리</p>
+                              <div className="space-y-2">
+                                <div className="flex items-start gap-2">
+                                  <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-bold shrink-0 mt-0.5">매수</span>
+                                  <p className="text-xs text-gray-600">가격이 상단 밴드를 돌파하면 → 강한 상승 에너지로 판단, <Term k="변동성">변동성</Term> 확대 구간에서 수익을 노립니다</p>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">매도</span>
+                                  <p className="text-xs text-gray-600">가격이 하단 밴드 아래로 이탈하면 → 상승 에너지 소진으로 판단하고 매도합니다</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                              <p className="text-xs font-semibold text-amber-700 mb-1">초보자 TIP</p>
+                              <p className="text-xs text-amber-600">밴드가 매우 좁아지는 "스퀴즈" 구간을 주목하세요! 이때 폭발적인 가격 변동이 시작되는 경우가 많습니다. <Term k="백테스트">백테스트</Term>로 과거 스퀴즈 구간의 성과를 확인해보세요.</p>
+                            </div>
+                          </div>
+                        );
+                      } else if (sid === 'preset-macd-divergence' || hasMACD) {
+                        return (
+                          <div className="space-y-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                                <span className="text-base">🔀</span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-whale-dark mb-1">핵심 개념: <Term k="MACD">MACD</Term></p>
+                                <p className="text-sm text-gray-500 leading-relaxed">
+                                  <Term k="MACD">MACD</Term>는 두 <Term k="이동평균선">이동평균선</Term>의 차이를 분석하여 추세의 방향과 전환 시점을 알려줍니다.
+                                  "추세가 바뀌려는 순간"을 잡아내는 데 특화된 지표입니다.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border border-gray-100">
+                              <p className="text-xs font-bold text-whale-dark mb-2">MACD 3가지 구성 요소</p>
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-3 h-3 rounded-full bg-blue-500" />
+                                  <span className="text-xs text-gray-600"><strong>MACD선</strong> — 단기 <Term k="EMA">EMA(12)</Term>와 장기 <Term k="EMA">EMA(26)</Term>의 차이</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-3 h-3 rounded-full bg-orange-400" />
+                                  <span className="text-xs text-gray-600"><strong>시그널선</strong> — MACD선의 9일 <Term k="EMA">EMA</Term> (MACD의 평균)</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-3 h-3 rounded bg-gray-300" />
+                                  <span className="text-xs text-gray-600"><strong>히스토그램</strong> — MACD선과 시그널선의 차이 (막대 그래프)</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border border-gray-100">
+                              <p className="text-xs font-bold text-whale-dark mb-2">이 전략의 매매 원리</p>
+                              <div className="space-y-2">
+                                <div className="flex items-start gap-2">
+                                  <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-bold shrink-0 mt-0.5">매수</span>
+                                  <p className="text-xs text-gray-600">MACD선이 시그널선을 <Term k="골든크로스">위로 돌파</Term>하면 → 상승 추세 전환 신호로 매수</p>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">매도</span>
+                                  <p className="text-xs text-gray-600">MACD선이 시그널선을 <Term k="데드크로스">아래로 돌파</Term>하면 → 하락 추세 전환 신호로 매도</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                              <p className="text-xs font-semibold text-amber-700 mb-1">초보자 TIP</p>
+                              <p className="text-xs text-amber-600"><Term k="MACD">MACD</Term>는 <Term k="RSI">RSI</Term>와 함께 사용하면 더 정확합니다. MACD가 <Term k="골든크로스">골든크로스</Term>이면서 RSI가 <Term k="과매도">과매도</Term> 구간이면 더 강한 매수 신호로 볼 수 있습니다.</p>
+                            </div>
+                          </div>
+                        );
+                      } else if (sid === 'preset-stochastic' || hasStochastic) {
+                        return (
+                          <div className="space-y-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center shrink-0 mt-0.5">
+                                <span className="text-base">⚡</span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-whale-dark mb-1">핵심 개념: <Term k="스토캐스틱">스토캐스틱</Term></p>
+                                <p className="text-sm text-gray-500 leading-relaxed">
+                                  <Term k="스토캐스틱">스토캐스틱</Term>은 일정 기간의 최고가~최저가 범위에서 현재 가격의 위치를 0~100으로 보여줍니다.
+                                  <Term k="RSI">RSI</Term>와 비슷하지만 가격 변화에 더 민감하게 반응합니다.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border border-gray-100">
+                              <p className="text-xs font-bold text-whale-dark mb-2">이 전략의 매매 원리</p>
+                              <div className="space-y-2">
+                                <div className="flex items-start gap-2">
+                                  <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-bold shrink-0 mt-0.5">매수</span>
+                                  <p className="text-xs text-gray-600">%K선이 %D선을 위로 돌파하면 → 상승 모멘텀 발생으로 매수</p>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">매도</span>
+                                  <p className="text-xs text-gray-600">%K선이 %D선을 아래로 돌파하면 → 하락 모멘텀 발생으로 매도</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                              <p className="text-xs font-semibold text-amber-700 mb-1">초보자 TIP</p>
+                              <p className="text-xs text-amber-600"><Term k="과매도">과매도</Term>(20 이하) 구간에서의 <Term k="골든크로스">골든크로스</Term>가 가장 신뢰도 높은 매수 신호입니다. 반대로 <Term k="과매수">과매수</Term>(80 이상) 구간에서의 <Term k="데드크로스">데드크로스</Term>가 강한 매도 신호입니다.</p>
+                            </div>
+                          </div>
+                        );
+                      } else if (sid === 'preset-safe-rebalancing') {
+                        return (
+                          <div className="space-y-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
+                                <span className="text-base">⚖️</span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-whale-dark mb-1">핵심 개념: 리밸런싱 (자산 재배분)</p>
+                                <p className="text-sm text-gray-500 leading-relaxed">
+                                  여러 자산에 정해진 비율로 나누어 투자하고, 시간이 지나 비율이 틀어지면 원래 비율로 되돌리는 전략입니다.
+                                  "달걀을 한 바구니에 담지 마라"는 분산투자의 원칙을 따릅니다.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border border-gray-100">
+                              <p className="text-xs font-bold text-whale-dark mb-2">목표 자산 배분</p>
+                              <div className="flex gap-2">
+                                <div className="flex-[6] bg-orange-50 rounded-lg p-2 text-center">
+                                  <p className="text-xs font-bold text-orange-600">BTC 60%</p>
+                                  <p className="text-[9px] text-orange-400">핵심 자산</p>
+                                </div>
+                                <div className="flex-[3] bg-blue-50 rounded-lg p-2 text-center">
+                                  <p className="text-xs font-bold text-blue-600">ETH 30%</p>
+                                  <p className="text-[9px] text-blue-400">성장 자산</p>
+                                </div>
+                                <div className="flex-[1] bg-green-50 rounded-lg p-2 text-center">
+                                  <p className="text-xs font-bold text-green-600">USDT 10%</p>
+                                  <p className="text-[9px] text-green-400">안전 자산</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                              <p className="text-xs font-semibold text-amber-700 mb-1">초보자 TIP</p>
+                              <p className="text-xs text-amber-600">리밸런싱은 가장 안전한 투자 방식 중 하나입니다. 자동으로 "비싸진 건 팔고, 싸진 건 사는" 효과가 있어 장기적으로 안정적인 수익을 기대할 수 있습니다. 투자가 처음이라면 이 전략부터 시작해보세요.</p>
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="space-y-3">
+                            <p className="text-sm text-gray-500 leading-relaxed">
+                              {selectedStrategy.description || '이 전략을 백테스트하여 과거 성과를 확인할 수 있습니다.'}
+                            </p>
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                              <p className="text-xs font-semibold text-amber-700 mb-1">시작하기</p>
+                              <p className="text-xs text-amber-600">오른쪽 패널에서 종목과 기간을 선택한 후 <Term k="백테스트">백테스트</Term>를 실행해보세요. 과거 데이터로 이 전략이 얼마나 효과적이었는지 확인할 수 있습니다.</p>
+                            </div>
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
 
                   {/* 사용된 기술 지표 */}
@@ -1208,14 +1506,29 @@ const StrategyPage = () => {
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
                       <h3 className="text-base font-bold text-whale-dark mb-3 pb-2 border-b border-gray-200 border-l-4 border-l-whale-light pl-3">사용된 기술 지표</h3>
                       <div className="flex flex-wrap gap-2">
-                        {selectedStrategy.indicators.map((ind, i) => (
-                          <span key={i} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-whale-dark border border-gray-200 hover:border-whale-light/50 hover:bg-whale-light/5 transition-all cursor-default">
-                            <span className="font-bold text-whale-dark">{ind.type}</span>
-                            <span className="text-xs ml-1.5 text-gray-400">
-                              ({Object.entries(ind.parameters).map(([k, v]) => `${k}=${v}`).join(', ')})
+                        {selectedStrategy.indicators.map((ind, i) => {
+                          const indGlossary: Record<string, string> = {
+                            MA: '이동평균선', EMA: 'EMA', RSI: 'RSI', MACD: 'MACD',
+                            BOLLINGER_BANDS: '볼린저밴드', STOCHASTIC: '스토캐스틱', ATR: 'ATR',
+                          };
+                          const paramLabelsKo: Record<string, Record<string, string>> = {
+                            MA: { period: '기간(일)' }, EMA: { period: '기간(일)' }, RSI: { period: '기간(일)' },
+                            BOLLINGER_BANDS: { period: '기간(일)', stdDev: '표준편차' },
+                            MACD: { fast: '단기', slow: '장기', signal: '시그널' },
+                            STOCHASTIC: { kPeriod: '%K 기간', dPeriod: '%D 기간' },
+                            ATR: { period: '기간(일)' },
+                          };
+                          const gKey = indGlossary[ind.type];
+                          const pLabels = paramLabelsKo[ind.type] || {};
+                          return (
+                            <span key={i} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-whale-dark border border-gray-200 hover:border-whale-light/50 hover:bg-whale-light/5 transition-all cursor-default">
+                              {gKey ? <Term k={gKey}><span className="font-bold">{ind.type}</span></Term> : <span className="font-bold">{ind.type}</span>}
+                              <span className="text-xs ml-1.5 text-gray-400">
+                                ({Object.entries(ind.parameters).map(([k, v]) => `${pLabels[k] || k}=${v}`).join(', ')})
+                              </span>
                             </span>
-                          </span>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -1265,9 +1578,9 @@ const StrategyPage = () => {
                     <h3 className="text-sm font-bold text-whale-dark mb-4">빠른 시작 가이드</h3>
                     <div className="space-y-3">
                       {[
-                        { step: '1', title: '전략 선택', desc: '왼쪽 목록에서 기본 전략이나 직접 만든 전략을 선택하세요' },
-                        { step: '2', title: '종목 & 기간 설정', desc: '백테스트할 종목과 기간을 오른쪽 패널에서 설정하세요' },
-                        { step: '3', title: '백테스트 실행', desc: '실행 버튼을 누르면 과거 성과가 차트로 표시됩니다' },
+                        { step: '1', title: '전략 선택', desc: '왼쪽 목록에서 기본 전략(골든크로스, RSI 등)을 선택하세요. 각 전략에 마우스를 올리면 상세 설명을 볼 수 있습니다.' },
+                        { step: '2', title: '종목 & 기간 설정', desc: '오른쪽 패널에서 테스트할 종목(예: 비트코인)과 기간을 설정하세요.' },
+                        { step: '3', title: '백테스트 실행', desc: '실행 버튼을 누르면 "이 전략으로 과거에 투자했다면?" 결과가 차트로 표시됩니다.' },
                       ].map((item, idx) => (
                         <div key={item.step} className="flex items-start gap-3 relative">
                           {idx < 2 && <div className="absolute left-[14px] top-7 bottom-0 border-l-2 border-dashed border-whale-light/30" />}
@@ -1314,7 +1627,7 @@ const StrategyPage = () => {
                     </div>
                     {(stopLossPercent || takeProfitPercent) && (
                       <div className="flex justify-between">
-                        <span className="text-gray-400">손절/익절</span>
+                        <span className="text-gray-400"><Term k="손절">손절</Term>/<Term k="익절">익절</Term></span>
                         <span className="font-semibold text-whale-dark">
                           {stopLossPercent ? `${stopLossPercent}%` : '-'} / {takeProfitPercent ? `${takeProfitPercent}%` : '-'}
                         </span>
@@ -1323,7 +1636,7 @@ const StrategyPage = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-400">매매방향</span>
                       <span className="font-semibold text-whale-dark">
-                        {tradeDirection === 'LONG_ONLY' ? '롱' : tradeDirection === 'SHORT_ONLY' ? '숏' : '롱+숏'}
+                        {tradeDirection === 'LONG_ONLY' ? <Term k="롱">롱</Term> : tradeDirection === 'SHORT_ONLY' ? <Term k="숏">숏</Term> : <><Term k="롱">롱</Term>+<Term k="숏">숏</Term></>}
                       </span>
                     </div>
                     {commissionRate && Number(commissionRate) > 0 && (
@@ -1334,7 +1647,7 @@ const StrategyPage = () => {
                     )}
                     {trailingStopPercent && (
                       <div className="flex justify-between">
-                        <span className="text-gray-400">트레일링</span>
+                        <span className="text-gray-400"><Term k="트레일링스탑">트레일링</Term></span>
                         <span className="font-semibold text-whale-dark">{trailingStopPercent}%</span>
                       </div>
                     )}
@@ -1349,15 +1662,19 @@ const StrategyPage = () => {
                 {/* 핵심 KPI 배너 */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
-                    { label: '기대 수익률', value: formatPercent(backtestResult.totalReturnRate), color: backtestResult.totalReturnRate >= 0 ? '#10b981' : '#ef4444', sub: `CAGR ${formatPercent(backtestResult.cagr ?? 0)}` },
-                    { label: '최대 파고 (MDD)', value: `${backtestResult.maxDrawdown.toFixed(1)}%`, color: '#f59e0b', sub: `기간 ${backtestResult.maxDrawdownDuration ?? 0}일` },
-                    { label: '승률', value: `${backtestResult.winRate.toFixed(1)}%`, color: '#60a5fa', sub: `${backtestResult.totalTrades}회 거래` },
-                    { label: '샤프 비율', value: backtestResult.sharpeRatio.toFixed(2), color: '#a78bfa', sub: backtestResult.sharpeRatio >= 1 ? '양호' : '보통' },
+                    { label: '기대 수익률', glossary: '', value: formatPercent(backtestResult.totalReturnRate), color: backtestResult.totalReturnRate >= 0 ? '#10b981' : '#ef4444', sub: `CAGR ${formatPercent(backtestResult.cagr ?? 0)}`, subGlossary: 'CAGR' },
+                    { label: '최대 파고 (MDD)', glossary: 'MDD', value: `${backtestResult.maxDrawdown.toFixed(1)}%`, color: '#f59e0b', sub: `기간 ${backtestResult.maxDrawdownDuration ?? 0}일`, subGlossary: '' },
+                    { label: '승률', glossary: '승률', value: `${backtestResult.winRate.toFixed(1)}%`, color: '#60a5fa', sub: `${backtestResult.totalTrades}회 거래`, subGlossary: '' },
+                    { label: '샤프 비율', glossary: '샤프비율', value: backtestResult.sharpeRatio.toFixed(2), color: '#a78bfa', sub: backtestResult.sharpeRatio >= 1 ? '양호' : backtestResult.sharpeRatio >= 0.5 ? '보통' : '개선 필요', subGlossary: '' },
                   ].map((kpi, i) => (
-                    <div key={i} className="rounded-xl p-3 text-center shadow-sm border transition-all duration-200 hover:shadow-md" style={{ backgroundColor: `${kpi.color}08`, borderColor: `${kpi.color}30`, borderTopWidth: '3px', borderTopColor: kpi.color }}>
-                      <div className="text-xs mb-1 font-medium" style={{ color: `${kpi.color}cc` }}>{kpi.label}</div>
+                    <div key={i} className="group relative rounded-xl p-3 text-center shadow-sm border transition-all duration-200 hover:shadow-md cursor-help" style={{ backgroundColor: `${kpi.color}08`, borderColor: `${kpi.color}30`, borderTopWidth: '3px', borderTopColor: kpi.color }}>
+                      <div className="text-xs mb-1 font-medium" style={{ color: `${kpi.color}cc` }}>
+                        {kpi.glossary ? <Term k={kpi.glossary}>{kpi.label}</Term> : kpi.label}
+                      </div>
                       <div className="text-lg font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
-                      <div className="text-[10px] mt-0.5 text-gray-400">{kpi.sub}</div>
+                      <div className="text-[10px] mt-0.5 text-gray-400">
+                        {kpi.subGlossary ? <Term k={kpi.subGlossary}>{kpi.sub}</Term> : kpi.sub}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1441,17 +1758,17 @@ const StrategyPage = () => {
                   <h3 className="text-sm font-bold mb-3 text-whale-dark">상세 성과 지표</h3>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {[
-                      { label: '총 수익률', value: formatPercent(backtestResult.totalReturnRate) },
-                      { label: '최종 자산', value: formatCurrency(backtestResult.finalValue) },
-                      { label: 'CAGR', value: formatPercent(backtestResult.cagr ?? 0) },
-                      { label: 'Profit Factor', value: (backtestResult.profitFactor ?? 0).toFixed(2) },
-                      { label: '소르티노', value: (backtestResult.sortinoRatio ?? 0).toFixed(2) },
-                      { label: '평균 보유', value: `${(backtestResult.avgHoldingDays ?? 0).toFixed(1)}일` },
-                      { label: '수익 거래', value: `${backtestResult.profitableTrades}회` },
-                      { label: '손실 거래', value: `${backtestResult.losingTrades}회` },
+                      { label: '총 수익률', value: formatPercent(backtestResult.totalReturnRate), glossary: '' },
+                      { label: '최종 자산', value: formatCurrency(backtestResult.finalValue), glossary: '' },
+                      { label: 'CAGR', value: formatPercent(backtestResult.cagr ?? 0), glossary: 'CAGR' },
+                      { label: 'Profit Factor', value: (backtestResult.profitFactor ?? 0).toFixed(2), glossary: 'ProfitFactor' },
+                      { label: '소르티노', value: (backtestResult.sortinoRatio ?? 0).toFixed(2), glossary: '소르티노' },
+                      { label: '평균 보유', value: `${(backtestResult.avgHoldingDays ?? 0).toFixed(1)}일`, glossary: '평균보유' },
+                      { label: '수익 거래', value: `${backtestResult.profitableTrades}회`, glossary: '' },
+                      { label: '손실 거래', value: `${backtestResult.losingTrades}회`, glossary: '' },
                     ].map((item, i) => (
                       <div key={i} className="p-2.5 rounded-lg text-center bg-white border border-gray-100 shadow-sm">
-                        <div className="text-xs mb-0.5 text-gray-400">{item.label}</div>
+                        <div className="text-xs mb-0.5 text-gray-400">{item.glossary ? <Term k={item.glossary}>{item.label}</Term> : item.label}</div>
                         <div className="text-sm font-bold text-whale-dark">{item.value}</div>
                       </div>
                     ))}
@@ -1562,7 +1879,7 @@ const StrategyPage = () => {
                 </svg>
               </div>
               <div>
-                <h2 className="text-sm font-bold text-white">백테스트 실행</h2>
+                <h2 className="text-sm font-bold text-white"><Term k="백테스트" className="!text-white [&_.border-b]:border-white/60 [&_svg]:text-white/50">백테스트 실행</Term></h2>
                 {selectedStrategy && (
                   <p className="text-xs text-white/60 mt-0.5 truncate">— {selectedStrategy.name}</p>
                 )}
@@ -1846,13 +2163,13 @@ const StrategyPage = () => {
                   <p className="text-xs font-bold text-whale-dark">리스크 관리</p>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { label: '손절 (%)', value: stopLossPercent, setter: setStopLossPercent, placeholder: '5' },
-                      { label: '익절 (%)', value: takeProfitPercent, setter: setTakeProfitPercent, placeholder: '10' },
-                      { label: '트레일링 (%)', value: trailingStopPercent, setter: setTrailingStopPercent, placeholder: '5' },
-                      { label: '슬리피지 (%)', value: slippagePercent, setter: setSlippagePercent, placeholder: '0.1' },
-                    ].map(({ label, value, setter, placeholder }) => (
+                      { label: '손절 (%)', glossary: '손절', value: stopLossPercent, setter: setStopLossPercent, placeholder: '5' },
+                      { label: '익절 (%)', glossary: '익절', value: takeProfitPercent, setter: setTakeProfitPercent, placeholder: '10' },
+                      { label: '트레일링 (%)', glossary: '트레일링스탑', value: trailingStopPercent, setter: setTrailingStopPercent, placeholder: '5' },
+                      { label: '슬리피지 (%)', glossary: '슬리피지', value: slippagePercent, setter: setSlippagePercent, placeholder: '0.1' },
+                    ].map(({ label, glossary, value, setter, placeholder }) => (
                       <div key={label}>
-                        <label className="block text-xs font-semibold mb-1 text-gray-500">{label}</label>
+                        <label className="block text-xs font-semibold mb-1 text-gray-500"><Term k={glossary}>{label}</Term></label>
                         <input type="number" value={value} onChange={(e) => setter(e.target.value)} placeholder={placeholder}
                           className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800" />
                       </div>
@@ -1867,9 +2184,10 @@ const StrategyPage = () => {
                         <option value="SHORT_ONLY">숏 (공매도만)</option>
                         <option value="LONG_SHORT">롱+숏</option>
                       </select>
+                      <p className="text-[9px] text-gray-400 mt-0.5"><Term k="롱">롱</Term>=가격 상승에 베팅 / <Term k="숏">숏</Term>=가격 하락에 베팅</p>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold mb-1 text-gray-500">수수료율 (%)</label>
+                      <label className="block text-xs font-semibold mb-1 text-gray-500"><Term k="수수료">수수료율 (%)</Term></label>
                       <input type="number" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} placeholder="0.1"
                         className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800" />
                     </div>

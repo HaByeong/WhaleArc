@@ -862,6 +862,12 @@ const QuantStorePage = () => {
                 </div>
               </div>
 
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg mb-3">
+                <p className="text-[10px] text-amber-700 leading-relaxed text-center">
+                  본 전략은 교육 목적으로 제공되며, 투자 권유가 아닙니다. 과거 성과가 미래 수익을 보장하지 않으며, 투자 판단과 책임은 본인에게 있습니다.
+                </p>
+              </div>
+
               <div className="flex gap-3">
                 <button onClick={() => setConfirmStep(false)} className="flex-1 py-3 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors">이전</button>
                 <button onClick={handlePurchase} disabled={purchasing} className="flex-1 py-3 bg-whale-light hover:bg-whale-dark text-white rounded-xl font-semibold transition-colors disabled:opacity-50">

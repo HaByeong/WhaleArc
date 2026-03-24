@@ -941,6 +941,11 @@ const TradePage = () => {
                     </div>
                   )}
 
+                  {/* 투자 유의사항 */}
+                  <p className="text-[10px] text-gray-400 leading-relaxed text-center px-2">
+                    투자 판단의 최종 책임은 본인에게 있으며, WhaleArc는 투자 손실에 대해 책임지지 않습니다.
+                  </p>
+
                   {/* 주문 버튼 */}
                   <button
                     type="submit"

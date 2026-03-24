@@ -1881,6 +1881,13 @@ const StrategyPage = () => {
                   </div>
                 )}
 
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-[11px] text-amber-700 leading-relaxed text-center">
+                    본 백테스트 결과는 과거 데이터를 기반으로 한 시뮬레이션이며, 미래 수익을 보장하지 않습니다.
+                    실제 투자 시 슬리피지, 수수료, 시장 충격 등으로 결과가 달라질 수 있습니다. 투자 판단의 최종 책임은 본인에게 있습니다.
+                  </p>
+                </div>
+
                 <div className="flex justify-center pt-2">
                   <button
                     onClick={() => setBacktestResult(null)}

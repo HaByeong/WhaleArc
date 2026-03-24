@@ -340,6 +340,13 @@ const LandingPage = () => {
       {/* Footer */}
       <footer className="bg-whale-dark border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center mb-6 px-4">
+            <p className="text-[11px] text-gray-500 leading-relaxed max-w-3xl mx-auto">
+              WhaleArc에서 제공하는 모든 정보는 투자 권유가 아니며, 교육 및 참고 목적으로만 제공됩니다.
+              투자에 대한 최종 판단과 책임은 본인에게 있으며, WhaleArc는 투자 손실에 대해 어떠한 법적 책임도 지지 않습니다.
+              과거 수익률은 미래 수익을 보장하지 않습니다.
+            </p>
+          </div>
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm">
             <p className="text-gray-400">
               &copy; 2025 WhaleArc. All rights reserved.

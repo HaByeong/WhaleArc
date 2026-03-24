@@ -53,7 +53,7 @@ const MyPortfolioPage = () => {
       setHistoryData(history);
       setTrades(tradeData.sort((a, b) => new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime()));
     } catch (err: any) {
-      if (!silent) setError(err.message || '포트폴리오 정보를 불러오는데 실패했습니다.');
+      if (!silent) setError(err.message || '포트폴리오 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       if (!silent) setLoading(false);
     }
@@ -515,8 +515,9 @@ const MyPortfolioPage = () => {
                   /* 거래 내역 */
                   trades.length === 0 ? (
                     <div className="text-center py-12">
+                      <img src="/whales/gray-whale.png" alt="" className="w-14 h-14 object-contain mx-auto mb-3 opacity-50" />
                       <p className="text-gray-500 font-medium mb-1">거래 내역이 없습니다</p>
-                      <p className="text-sm text-gray-400">매수/매도 시 내역이 여기에 표시됩니다</p>
+                      <p className="text-sm text-gray-400">매수 또는 매도를 하면 여기에 거래 내역이 기록됩니다.</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -739,7 +740,7 @@ const MyPortfolioPage = () => {
                       try {
                         await tradeService.exportTradesCsv();
                       } catch {
-                        alert('다운로드에 실패했습니다.');
+                        alert('CSV 다운로드에 실패했습니다. 데이터가 없거나 네트워크 문제일 수 있습니다.');
                       } finally {
                         setExporting(null);
                       }
@@ -758,7 +759,7 @@ const MyPortfolioPage = () => {
                       try {
                         await tradeService.exportPortfolioCsv();
                       } catch {
-                        alert('다운로드에 실패했습니다.');
+                        alert('CSV 다운로드에 실패했습니다. 데이터가 없거나 네트워크 문제일 수 있습니다.');
                       } finally {
                         setExporting(null);
                       }

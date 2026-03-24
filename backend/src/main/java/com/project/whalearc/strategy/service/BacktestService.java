@@ -467,9 +467,9 @@ public class BacktestService {
             boolean riskExit = hasPosition && (stopLossHit || takeProfitHit || trailingStopHit);
             boolean canAddPosition = !hasPosition || posEntries.size() < maxPos;
             boolean entrySignal = !riskExit && canAddPosition
-                    && evaluateConditions(entryConditions, indicatorValues, gi, price);
+                    && evaluateConditions(entryConditions, indicatorValues, gi, price, candles, globalOffset, i);
             boolean exitSignal = hasPosition && !riskExit
-                    && evaluateConditions(exitConditions, indicatorValues, gi, price);
+                    && evaluateConditions(exitConditions, indicatorValues, gi, price, candles, globalOffset, i);
 
             // ── 매매 실행 ──
 
@@ -915,7 +915,8 @@ public class BacktestService {
     // ── 조건 평가 ──
     private boolean evaluateConditions(List<Condition> conditions,
                                         Map<String, double[]> indicatorValues,
-                                        int index, double currentPrice) {
+                                        int index, double currentPrice,
+                                        List<CandlestickResponse> candles, int globalOffset, int localIndex) {
         if (conditions == null || conditions.isEmpty()) return false;
 
         Boolean accumulated = null;
@@ -931,24 +932,38 @@ public class BacktestService {
                 continue;
             }
 
-            double indicatorValue = getIndicatorValue(indicatorName, indicatorValues, index, currentPrice);
+            double indicatorValue = getIndicatorValue(indicatorName, indicatorValues, index, currentPrice, candles, localIndex);
             if (Double.isNaN(indicatorValue)) {
-                // NaN이면 조건 불충족으로 처리 (AND: false 전파, OR: 무시)
                 boolean nanResult = false;
                 if (accumulated == null) accumulated = nanResult;
                 else accumulated = cond.getLogic() == Condition.Logic.AND ? false : accumulated;
                 continue;
             }
 
-            // value 또는 operator가 null이면 조건 불충족 처리 (크로스오버가 아닌데 값이 없는 경우)
-            if (cond.getValue() == null || cond.getOperator() == null) {
+            // valueExpression이 있으면 수식으로 비교값 계산, 없으면 고정 value 사용
+            double targetValue;
+            if (cond.getValueExpression() != null && !cond.getValueExpression().isBlank()) {
+                targetValue = evaluateExpression(cond.getValueExpression(), indicatorValues, index, currentPrice, candles, localIndex);
+                if (Double.isNaN(targetValue)) {
+                    boolean nanResult = false;
+                    if (accumulated == null) accumulated = nanResult;
+                    else accumulated = cond.getLogic() == Condition.Logic.AND ? false : accumulated;
+                    continue;
+                }
+            } else if (cond.getValue() != null && cond.getOperator() != null) {
+                targetValue = cond.getValue().doubleValue();
+            } else {
                 boolean nullResult = false;
                 if (accumulated == null) accumulated = nullResult;
                 else accumulated = cond.getLogic() == Condition.Logic.AND ? false : accumulated;
                 continue;
             }
 
-            double targetValue = cond.getValue().doubleValue();
+            if (cond.getOperator() == null) {
+                if (accumulated == null) accumulated = false;
+                continue;
+            }
+
             boolean matches = switch (cond.getOperator()) {
                 case GT -> indicatorValue > targetValue;
                 case LT -> indicatorValue < targetValue;
@@ -990,13 +1005,31 @@ public class BacktestService {
         else return prevA <= prevB && currA > currB;
     }
 
-    // ── 지표값 조회 ──
+    // ── 지표값 조회 (OHLC + 전일 OHLC 참조 지원) ──
     private double getIndicatorValue(String indicator, Map<String, double[]> indicatorValues,
-                                      int index, double currentPrice) {
+                                      int index, double currentPrice,
+                                      List<CandlestickResponse> candles, int localIndex) {
         if (indicator == null) return Double.NaN;
         String key = indicator.toUpperCase().trim();
 
+        // 현재 봉 OHLC
         if ("PRICE".equals(key) || "CLOSE".equals(key)) return currentPrice;
+        if ("OPEN".equals(key) && localIndex >= 0 && localIndex < candles.size()) return candles.get(localIndex).getOpen();
+        if ("HIGH".equals(key) && localIndex >= 0 && localIndex < candles.size()) return candles.get(localIndex).getHigh();
+        if ("LOW".equals(key) && localIndex >= 0 && localIndex < candles.size()) return candles.get(localIndex).getLow();
+        if ("VOLUME".equals(key) && localIndex >= 0 && localIndex < candles.size()) return candles.get(localIndex).getVolume();
+
+        // 전일 봉 OHLC
+        if ("PREV_CLOSE".equals(key) && localIndex >= 1) return candles.get(localIndex - 1).getClose();
+        if ("PREV_OPEN".equals(key) && localIndex >= 1) return candles.get(localIndex - 1).getOpen();
+        if ("PREV_HIGH".equals(key) && localIndex >= 1) return candles.get(localIndex - 1).getHigh();
+        if ("PREV_LOW".equals(key) && localIndex >= 1) return candles.get(localIndex - 1).getLow();
+        if ("PREV_VOLUME".equals(key) && localIndex >= 1) return candles.get(localIndex - 1).getVolume();
+
+        // 전일 변동폭 (변동성 돌파 전략용)
+        if ("PREV_RANGE".equals(key) && localIndex >= 1) {
+            return candles.get(localIndex - 1).getHigh() - candles.get(localIndex - 1).getLow();
+        }
 
         String mappedKey = switch (key) {
             case "RSI" -> "RSI";
@@ -1021,6 +1054,94 @@ public class BacktestService {
         double[] values = indicatorValues.get(mappedKey);
         if (values == null || index < 0 || index >= values.length) return Double.NaN;
         return values[index];
+    }
+
+    // ── 수식 평가 엔진 (valueExpression) ──
+    // 지원: 변수(OPEN, HIGH, LOW, CLOSE, PREV_HIGH, PREV_LOW, PREV_OPEN, PREV_CLOSE, PREV_RANGE, ATR 등)
+    //       연산자(+, -, *, /), 괄호, 숫자 리터럴
+    private double evaluateExpression(String expression, Map<String, double[]> indicatorValues,
+                                       int index, double currentPrice,
+                                       List<CandlestickResponse> candles, int localIndex) {
+        if (expression == null || expression.isBlank()) return Double.NaN;
+        try {
+            String expr = expression.toUpperCase().trim();
+            return parseExpression(expr, new int[]{0}, indicatorValues, index, currentPrice, candles, localIndex);
+        } catch (Exception e) {
+            return Double.NaN;
+        }
+    }
+
+    // 재귀 하향 파서: expr = term ((+|-) term)*
+    private double parseExpression(String expr, int[] pos, Map<String, double[]> iv,
+                                    int index, double price, List<CandlestickResponse> candles, int li) {
+        double result = parseTerm(expr, pos, iv, index, price, candles, li);
+        while (pos[0] < expr.length()) {
+            char c = expr.charAt(pos[0]);
+            if (c == '+' || c == '-') {
+                pos[0]++;
+                double term = parseTerm(expr, pos, iv, index, price, candles, li);
+                result = c == '+' ? result + term : result - term;
+            } else break;
+        }
+        return result;
+    }
+
+    // term = factor ((*|/) factor)*
+    private double parseTerm(String expr, int[] pos, Map<String, double[]> iv,
+                              int index, double price, List<CandlestickResponse> candles, int li) {
+        double result = parseFactor(expr, pos, iv, index, price, candles, li);
+        while (pos[0] < expr.length()) {
+            char c = expr.charAt(pos[0]);
+            if (c == '*' || c == '/') {
+                pos[0]++;
+                double factor = parseFactor(expr, pos, iv, index, price, candles, li);
+                result = c == '*' ? result * factor : (factor != 0 ? result / factor : Double.NaN);
+            } else break;
+        }
+        return result;
+    }
+
+    // factor = '-' factor | '(' expr ')' | number | variable
+    private double parseFactor(String expr, int[] pos, Map<String, double[]> iv,
+                                int index, double price, List<CandlestickResponse> candles, int li) {
+        while (pos[0] < expr.length() && expr.charAt(pos[0]) == ' ') pos[0]++;
+        if (pos[0] >= expr.length()) return Double.NaN;
+
+        // 음수 부호 처리: -factor → factor의 음수값
+        if (expr.charAt(pos[0]) == '-') {
+            pos[0]++;
+            return -parseFactor(expr, pos, iv, index, price, candles, li);
+        }
+
+        // 괄호
+        if (expr.charAt(pos[0]) == '(') {
+            pos[0]++;
+            double result = parseExpression(expr, pos, iv, index, price, candles, li);
+            if (pos[0] < expr.length() && expr.charAt(pos[0]) == ')') {
+                pos[0]++;
+            } else {
+                return Double.NaN; // 괄호 불일치 → 수식 오류
+            }
+            return result;
+        }
+
+        // 숫자 (정수, 소수)
+        if (Character.isDigit(expr.charAt(pos[0])) || expr.charAt(pos[0]) == '.') {
+            int start = pos[0];
+            while (pos[0] < expr.length() && (Character.isDigit(expr.charAt(pos[0])) || expr.charAt(pos[0]) == '.')) pos[0]++;
+            return Double.parseDouble(expr.substring(start, pos[0]));
+        }
+
+        // 변수 (알파벳+언더스코어)
+        if (Character.isLetter(expr.charAt(pos[0])) || expr.charAt(pos[0]) == '_') {
+            int start = pos[0];
+            while (pos[0] < expr.length() && (Character.isLetterOrDigit(expr.charAt(pos[0])) || expr.charAt(pos[0]) == '_')) pos[0]++;
+            String varName = expr.substring(start, pos[0]);
+            while (pos[0] < expr.length() && expr.charAt(pos[0]) == ' ') pos[0]++;
+            return getIndicatorValue(varName, iv, index, price, candles, li);
+        }
+
+        return Double.NaN;
     }
 
     // ── 샤프 비율 ──

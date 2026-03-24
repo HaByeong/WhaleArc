@@ -26,9 +26,10 @@ export interface Indicator {
 
 export interface Condition {
   indicator: string;
-  operator: 'GT' | 'LT' | 'EQ' | 'GTE' | 'LTE'; // Greater Than, Less Than, Equal, etc.
+  operator: 'GT' | 'LT' | 'EQ' | 'GTE' | 'LTE';
   value: number;
   logic: 'AND' | 'OR';
+  valueExpression?: string; // 수식 기반 비교값 (예: "OPEN + (PREV_HIGH - PREV_LOW) * 0.5")
 }
 
 export interface BacktestRequest {

@@ -41,12 +41,21 @@ export const GLOSSARY: Record<string, { title: string; desc: string; example?: s
   '변동성돌파': { title: '변동성 돌파 전략', desc: '전날의 가격 변동폭을 기준으로, 오늘 가격이 일정 비율 이상 움직이면 그 방향으로 진입하는 전략입니다. 래리 윌리엄스가 개발했습니다.', example: '전날 변동폭 1만원 × 0.5 = 5천원 → 오늘 시가 대비 5천원 이상 오르면 매수' },
   '듀얼모멘텀': { title: '듀얼 모멘텀', desc: '절대 모멘텀(자산이 올랐는가?)과 상대 모멘텀(다른 자산보다 더 올랐는가?)을 동시에 확인하는 전략입니다. 두 조건을 모두 만족해야 투자합니다.', example: 'BTC가 지난달보다 올랐고(절대) + ETH보다 더 올랐으면(상대) → BTC에 투자' },
   '피라미딩': { title: '피라미딩 (Pyramiding)', desc: '수익이 나고 있는 포지션에 추가로 매수하여 포지션 크기를 키우는 기법입니다. 추세가 강할 때 수익을 극대화할 수 있지만, 반전 시 손실도 커집니다.', example: '1차 매수 후 5% 상승 → 2차 추가 매수 → 또 5% 상승 → 3차 추가 매수' },
+  '종가': { title: '종가 (CLOSE)', desc: '해당 기간(일봉이면 하루)의 마지막 거래 가격입니다. 가장 널리 사용되는 가격 기준으로, 대부분의 지표 계산에 종가가 사용됩니다.', example: '오늘 종가 = 장 마감 시점의 최종 체결 가격' },
+  '시가': { title: '시가 (OPEN)', desc: '해당 기간의 첫 번째 거래 가격입니다. 전일 종가와 비교하여 갭(Gap) 상승/하락을 판단하는 데 사용됩니다.', example: '오늘 시가 > 어제 종가 → 갭 상승 출발' },
+  '고가': { title: '고가 (HIGH)', desc: '해당 기간 동안 거래된 가장 높은 가격입니다. 저항선(가격이 더 이상 오르기 어려운 수준)을 파악하는 데 사용됩니다.', example: '전일 고가를 돌파하면 → 상승 추세 강화 신호' },
+  '저가': { title: '저가 (LOW)', desc: '해당 기간 동안 거래된 가장 낮은 가격입니다. 지지선(가격이 더 이상 내리기 어려운 수준)을 파악하는 데 사용됩니다.', example: '전일 저가를 이탈하면 → 하락 추세 강화 신호' },
+  '전일종가': { title: '전일 종가 (PREV_CLOSE)', desc: '전날(이전 봉)의 마지막 거래 가격입니다. 오늘 시가와 비교하여 갭을 분석하거나, 변동폭 계산에 사용됩니다.', example: '오늘 시가 - 전일 종가 = 오버나이트 갭' },
+  '전일고가': { title: '전일 고가 (PREV_HIGH)', desc: '전날(이전 봉)의 최고 가격입니다. 변동성 돌파 전략에서 전일 변동폭(PREV_HIGH - PREV_LOW)을 계산할 때 사용됩니다.', example: '전일 고가 5만원 - 전일 저가 4만원 = 변동폭 1만원' },
+  '전일저가': { title: '전일 저가 (PREV_LOW)', desc: '전날(이전 봉)의 최저 가격입니다. 전일 고가와 함께 변동폭을 계산하는 데 사용됩니다.', example: '전일 변동폭 = PREV_HIGH - PREV_LOW' },
+  '수식조건': { title: '수식 조건', desc: '고정된 숫자 대신 수식으로 비교값을 계산하는 고급 기능입니다. 변동성 돌파 전략처럼 "시가 + 전일 변동폭 × 0.5" 같은 동적 기준을 설정할 수 있습니다.', example: 'OPEN + (PREV_HIGH - PREV_LOW) * 0.5 → 시가에서 전일 변동폭의 50%만큼 상승한 가격' },
 };
 
-// 용어 툴팁 컴포넌트 - 마우스 호버 시 설명 표시
+// 용어 툴팁 컴포넌트 - 마우스 호버 시 설명 표시 (fixed 포지셔닝으로 overflow 잘림 방지)
 export const Term = ({ k, children, className = '' }: { k: string; children?: React.ReactNode; className?: string }) => {
   const [show, setShow] = useState(false);
-  const [pos, setPos] = useState<'top' | 'bottom'>('top');
+  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
+  const [arrowPos, setArrowPos] = useState<'top' | 'bottom'>('top');
   const ref = useRef<HTMLSpanElement>(null);
   const entry = GLOSSARY[k];
   if (!entry) return <span className={className}>{children || k}</span>;
@@ -54,7 +63,21 @@ export const Term = ({ k, children, className = '' }: { k: string; children?: Re
   const handleEnter = () => {
     if (ref.current) {
       const rect = ref.current.getBoundingClientRect();
-      setPos(rect.top < 200 ? 'bottom' : 'top');
+      const tooltipW = 288; // w-72 = 18rem = 288px
+      const showBelow = rect.top < 160;
+
+      let left = rect.left + rect.width / 2 - tooltipW / 2;
+      if (left < 8) left = 8;
+      if (left + tooltipW > window.innerWidth - 8) left = window.innerWidth - tooltipW - 8;
+
+      setArrowPos(showBelow ? 'bottom' : 'top');
+      setTooltipStyle({
+        position: 'fixed',
+        left,
+        top: showBelow ? rect.bottom + 8 : rect.top - 8,
+        transform: showBelow ? 'none' : 'translateY(-100%)',
+        width: tooltipW,
+      });
     }
     setShow(true);
   };
@@ -69,13 +92,16 @@ export const Term = ({ k, children, className = '' }: { k: string; children?: Re
         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
       </svg>
       {show && (
-        <span className={`absolute left-1/2 -translate-x-1/2 z-[100] w-72 px-4 py-3 rounded-xl shadow-2xl border border-whale-light/20 bg-white text-left pointer-events-none ${pos === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+        <span
+          style={tooltipStyle}
+          className="z-[9999] px-4 py-3 rounded-xl shadow-2xl border border-whale-light/20 bg-white text-left pointer-events-none"
+        >
           <span className="block text-xs font-bold text-whale-dark mb-1">{entry.title}</span>
           <span className="block text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{entry.desc}</span>
           {entry.example && (
             <span className="block text-[11px] text-whale-light mt-1.5 pt-1.5 border-t border-gray-100 leading-relaxed">{entry.example}</span>
           )}
-          <span className={`absolute left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-whale-light/20 rotate-45 ${pos === 'top' ? 'bottom-[-5px] border-r border-b' : 'top-[-5px] border-l border-t'}`} />
+          <span className={`absolute left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-whale-light/20 rotate-45 ${arrowPos === 'top' ? 'bottom-[-5px] border-r border-b' : 'top-[-5px] border-l border-t'}`} />
         </span>
       )}
     </span>

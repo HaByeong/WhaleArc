@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, type ReactNode } from 'react';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -6,6 +6,45 @@ import RealtimeChart from '../components/RealtimeChart';
 import TradingChart from '../components/TradingChart';
 import { marketService, type MarketPrice, type AssetType } from '../services/marketService';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
+
+/** 차트 로딩 래퍼: 데이터 로드 중일 때 placeholder를 보여주고, 로드 완료 후 차트를 표시 */
+const ChartLoadingWrapper = ({ symbol, children }: { symbol: string; children: ReactNode }) => {
+  const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    setReady(false);
+    setFailed(false);
+    // 차트가 내부적으로 데이터를 로드할 시간을 확보한 뒤 표시
+    timerRef.current = setTimeout(() => setReady(true), 600);
+    // 8초 내에 차트가 렌더되지 않으면 실패로 간주 (별도 재시도 안내)
+    const failTimer = setTimeout(() => setFailed(true), 8000);
+    return () => {
+      clearTimeout(timerRef.current);
+      clearTimeout(failTimer);
+    };
+  }, [symbol]);
+
+  return (
+    <div className="relative">
+      {/* 차트는 항상 렌더하되 준비 전에는 숨김 */}
+      <div className={ready ? '' : 'invisible h-0 overflow-hidden'}>{children}</div>
+      {!ready && (
+        <div className="bg-gray-50 rounded-xl p-10 text-center border border-gray-100">
+          <div className="inline-block w-5 h-5 border-2 border-whale-light border-t-transparent rounded-full animate-spin mb-3" />
+          <div className="text-gray-400 text-sm">차트 데이터를 불러오는 중입니다</div>
+          <div className="text-gray-300 text-xs mt-1">잠시만 기다려주세요. 자동으로 로드됩니다.</div>
+          {failed && (
+            <div className="text-yellow-500 text-xs mt-2">
+              로드가 지연되고 있습니다. 네트워크 상태를 확인해주세요.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const MarketPage = () => {
   const [assetType, setAssetType] = useState<AssetType>('STOCK');
@@ -188,8 +227,8 @@ const MarketPage = () => {
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-whale-dark">시장 현황</h1>
             {assetType === 'CRYPTO' && (
               <div className="flex items-center space-x-2">
-                <span className={`inline-block w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-                <span className={`text-sm font-medium ${connected ? 'text-green-600' : 'text-gray-500'}`}>
+                <span className={`inline-block w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-yellow-400 animate-pulse'}`} />
+                <span className={`text-sm font-medium ${connected ? 'text-green-600' : 'text-yellow-600'}`}>
                   {connected ? '실시간' : '연결 중...'}
                 </span>
               </div>
@@ -395,21 +434,25 @@ const MarketPage = () => {
                           </div>
                         )
                       ) : (
-                        <TradingChart
-                          symbol={liveSelectedAsset.symbol}
-                          price={liveSelectedAsset.price}
-                          changeRate={liveSelectedAsset.changeRate}
-                        />
+                        <ChartLoadingWrapper symbol={liveSelectedAsset.symbol}>
+                          <TradingChart
+                            symbol={liveSelectedAsset.symbol}
+                            price={liveSelectedAsset.price}
+                            changeRate={liveSelectedAsset.changeRate}
+                          />
+                        </ChartLoadingWrapper>
                       )}
                     </div>
                   ) : (
                     <div className="mt-4">
-                      <TradingChart
-                        symbol={liveSelectedAsset.symbol}
-                        price={liveSelectedAsset.price}
-                        changeRate={liveSelectedAsset.changeRate}
-                        assetType="STOCK"
-                      />
+                      <ChartLoadingWrapper symbol={liveSelectedAsset.symbol}>
+                        <TradingChart
+                          symbol={liveSelectedAsset.symbol}
+                          price={liveSelectedAsset.price}
+                          changeRate={liveSelectedAsset.changeRate}
+                          assetType="STOCK"
+                        />
+                      </ChartLoadingWrapper>
                     </div>
                   )}
                 </div>

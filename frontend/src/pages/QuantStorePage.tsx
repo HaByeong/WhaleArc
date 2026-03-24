@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { Term } from '../components/TermTooltip';
+import WhaleCharacterLogo from '../components/WhaleCharacterLogo';
 import {
   quantStoreService,
   type QuantProduct,
@@ -406,7 +407,7 @@ const QuantStorePage = () => {
         <div className="mb-8 text-center">
           <div className="inline-flex items-center gap-3 mb-3">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-sky-100 to-blue-200 p-2 shadow-md">
-              <img src="/whales/narwhal.png" alt="" className="w-full h-full object-contain" />
+              <img src="/whales/humpback.png" alt="" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-2xl md:text-3xl font-bold text-whale-dark">전략 가이드</h1>
           </div>

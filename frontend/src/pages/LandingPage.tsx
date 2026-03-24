@@ -336,6 +336,27 @@ const LandingPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="bg-whale-dark border-t border-white/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm">
+            <p className="text-gray-400">
+              &copy; 2025 WhaleArc. All rights reserved.
+            </p>
+            <div className="flex items-center gap-4 text-gray-300">
+              <a href="#" className="hover:text-white transition-colors">이용약관</a>
+              <span className="text-white/20">|</span>
+              <a href="#" className="hover:text-white transition-colors">개인정보처리방침</a>
+              <span className="text-white/20">|</span>
+              <a href="#" className="hover:text-white transition-colors">고객센터</a>
+            </div>
+            <p className="text-gray-500 italic">
+              고래처럼, 시장을 유영하듯
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

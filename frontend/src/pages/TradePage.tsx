@@ -149,7 +149,7 @@ const TradePage = () => {
         if (defaultList.length > 0) setSelectedStock(defaultList[0]);
       }
     } catch (err: any) {
-      setError(err.message || '데이터를 불러오는데 실패했습니다.');
+      setError(err.message || '종목 데이터를 불러오지 못했습니다. 네트워크 연결을 확인해주세요.');
     } finally {
       setLoading(false);
     }
@@ -589,7 +589,15 @@ const TradePage = () => {
 
           {/* ━━━ 중앙: 차트 + 탭 내용 (5칸) ━━━ */}
           <div className="md:col-span-1 lg:col-span-5 space-y-4">
-            {liveSelectedStock && (
+            {!liveSelectedStock ? (
+              <div className="bg-white rounded-xl shadow-lg flex flex-col items-center justify-center py-24 px-6">
+                <svg className="w-16 h-16 text-gray-200 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 13l4-4 4 4 4-8 4 4m1 7H4a1 1 0 01-1-1V4" />
+                </svg>
+                <p className="text-gray-400 text-sm font-semibold mb-1">종목이 선택되지 않았습니다</p>
+                <p className="text-gray-300 text-xs">좌측에서 종목을 선택해주세요</p>
+              </div>
+            ) : (
               <>
                 {/* 종목 헤더 */}
                 <div className="bg-white rounded-xl shadow-lg p-5">
@@ -759,7 +767,13 @@ const TradePage = () => {
                     {/* 보유 종목 */}
                     {activeTab === 'holdings' && portfolio && (
                       portfolio.holdings.length === 0 ? (
-                        <div className="py-12 text-center text-gray-400 text-sm">보유 종목이 없습니다</div>
+                        <div className="py-12 text-center">
+                          <svg className="w-10 h-10 text-gray-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                          </svg>
+                          <p className="text-gray-400 text-sm">보유 종목이 없습니다</p>
+                          <p className="text-gray-300 text-xs mt-1">시세 탭에서 종목을 검색하고 매수해보세요</p>
+                        </div>
                       ) : (
                         <div className="space-y-2 max-h-80 overflow-y-auto">
                           {portfolio.holdings.map(h => {
@@ -803,7 +817,15 @@ const TradePage = () => {
 
           {/* ━━━ 우측: 주문 폼 + 포트폴리오 (4칸) ━━━ */}
           <div className="md:col-span-2 lg:col-span-4 space-y-4">
-            {liveSelectedStock && (
+            {!liveSelectedStock ? (
+              <div className="bg-white rounded-xl shadow-lg flex flex-col items-center justify-center py-16 px-6">
+                <svg className="w-12 h-12 text-gray-200 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                </svg>
+                <p className="text-gray-400 text-sm font-semibold mb-1">주문 패널</p>
+                <p className="text-gray-300 text-xs">좌측에서 종목을 선택해주세요</p>
+              </div>
+            ) : (
               <div className="bg-white rounded-xl shadow-lg p-5">
                 {/* 매수/매도 토글 */}
                 <div className="flex gap-2 mb-4">

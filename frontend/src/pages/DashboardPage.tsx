@@ -19,6 +19,7 @@ const DashboardPage = () => {
   const [activePurchases, setActivePurchases] = useState<ProductPurchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
 
   // 실시간 WebSocket 시세
   const { prices: realtimePrices } = useRealtimePrice({ enabled: true });
@@ -117,14 +118,16 @@ const DashboardPage = () => {
       setLoading(true);
       setError(null);
 
+      let portfolioFallback = false;
       const [portfolioData, stocksData, profile, purchaseData] = await Promise.all([
-        tradeService.getPortfolio().catch(() => getDemoPortfolio()),
+        tradeService.getPortfolio().catch(() => { portfolioFallback = true; return getDemoPortfolio(); }),
         tradeService.getStockList().catch(() => []),
         userService.getProfile().catch(() => null),
         quantStoreService.getMyPurchases().catch(() => ({ purchases: [], purchasedProductIds: [] })),
       ]);
 
       setActivePurchases(purchaseData.purchases.filter((p) => p.status === 'ACTIVE'));
+      setIsDemo(portfolioFallback);
 
       const favAssets = profile?.favoriteAssets?.length ? profile.favoriteAssets : [];
       setFavoriteAssets(favAssets);
@@ -145,7 +148,8 @@ const DashboardPage = () => {
       }
     } catch (err: any) {
       setPortfolio(getDemoPortfolio());
-      setError(err.message || '데이터를 불러오는데 실패했습니다.');
+      setIsDemo(true);
+      setError(err.message || '대시보드 데이터를 불러오지 못했습니다. 네트워크 연결을 확인해주세요.');
     } finally {
       setLoading(false);
     }
@@ -219,7 +223,7 @@ const DashboardPage = () => {
                   <div className="text-center">
                     <div className="text-xs md:text-sm text-blue-200 mb-1">수익률</div>
                     <div className={`text-lg md:text-2xl font-bold ${
-                      portfolio.returnRate >= 0 ? 'text-red-300' : 'text-blue-300'
+                      portfolio.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'
                     }`}>
                       {portfolio.returnRate >= 0 ? '+' : ''}
                       {portfolio.returnRate.toFixed(2)}%
@@ -230,6 +234,16 @@ const DashboardPage = () => {
             </div>
           </div>
         </div>
+
+        {/* 샘플 데이터 안내 */}
+        {isDemo && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-700">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
+            </svg>
+            <span>샘플 데이터입니다. 거래를 시작하면 실제 데이터가 표시됩니다.</span>
+          </div>
+        )}
 
         {/* 포트폴리오 요약 카드 */}
         {portfolio && (
@@ -272,7 +286,7 @@ const DashboardPage = () => {
               }`}>
                 <div className="text-sm text-gray-500 mb-1">수익률</div>
                 <div className={`text-2xl font-bold ${
-                  portfolio.returnRate >= 0 ? 'text-red-600' : 'text-blue-600'
+                  portfolio.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'
                 }`}>
                   {portfolio.returnRate >= 0 ? '+' : ''}
                   {portfolio.returnRate.toFixed(2)}%

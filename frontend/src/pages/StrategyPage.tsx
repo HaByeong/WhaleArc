@@ -3,6 +3,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import Header from '../components/Header';
 import { GLOSSARY, Term } from '../components/TermTooltip';
+import GuideTour, { type TourStep } from '../components/GuideTour';
 import {
   strategyService,
   type Strategy,
@@ -91,6 +92,19 @@ const StrategyPage = () => {
   const [maxPositions, setMaxPositions] = useState('1');
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [showBacktestForm, setShowBacktestForm] = useState(false);
+
+  // 가이드 투어
+  const [showTour, setShowTour] = useState(false);
+  const tourSteps: TourStep[] = [
+    { target: 'strategy-library', title: '1단계: 전략을 골라보세요', description: '골든크로스, RSI, 볼린저 밴드, MACD 등 검증된 투자 전략이 준비되어 있습니다.\n\n각 카드를 클릭하면 전략의 상세 설명과 매매 규칙을 확인할 수 있고, "새 항로" 버튼으로 나만의 전략을 직접 만들 수도 있습니다.', position: 'right' },
+    { target: 'strategy-filter', title: '전략 유형별 필터', description: '전략이 많아서 고민이라면 유형별로 필터링해보세요.\n\n• 추세추종 — 오르는 흐름을 따라가는 전략\n• 역추세 — 과매도 반등을 노리는 전략\n• 변동성 — 큰 움직임을 포착하는 전략\n\n각 탭에 마우스를 올리면 설명이 나옵니다.', position: 'bottom' },
+    { target: 'center-panel', title: '2단계: 전략 상세 확인', description: '왼쪽에서 전략을 선택하면 이 영역에 상세 정보가 표시됩니다.\n\n• 전략의 핵심 원리와 매매 조건\n• 초보자를 위한 교육 콘텐츠\n• 전략 시각화 차트\n\n파란색 밑줄이 있는 용어에 마우스를 올리면 쉬운 설명이 나옵니다.', position: 'bottom' },
+    { target: 'stock-search', title: '3단계: 테스트할 종목 선택', description: '어떤 종목으로 백테스트할지 선택하세요.\n\n• 암호화폐: BTC, ETH, XRP, SOL 등\n• 국내 주식: 삼성전자, 카카오 등\n• 해외 주식: AAPL, TSLA 등\n\n전략에 포함된 종목이 있으면 바로가기 버튼이 자동으로 나타납니다.', position: 'left' },
+    { target: 'period-select', title: '4단계: 분석 기간 설정', description: '과거 어느 기간의 데이터로 테스트할지 설정하세요.\n\n• 빠른 선택: 6개월, 1년, 2년, 3년, 5년 버튼\n• 직접 설정: 캘린더에서 시작일/종료일 선택\n\n기간이 길수록 결과가 신뢰할 수 있지만, 시장 환경 변화도 고려해야 합니다.', position: 'left' },
+    { target: 'initial-capital', title: '투자금 설정', description: '가상으로 얼마를 투자할지 설정합니다.\n\n빠른 버튼(100만~5000만)을 누르거나 직접 입력할 수 있습니다. 실제 돈이 아니라 시뮬레이션 금액이니 부담 없이 설정하세요.', position: 'left' },
+    { target: 'advanced-settings', title: '고급 설정 (선택사항)', description: '더 정밀한 백테스트를 원한다면 펼쳐보세요.\n\n• 손절/익절 — 자동 매도 기준 설정\n• 트레일링 스탑 — 수익 보호 장치\n• 슬리피지/수수료 — 실제 거래 비용 반영\n• 매매 방향 — 롱(매수) 또는 숏(공매도)\n• 수식 조건 — 고급 사용자를 위한 커스텀 매매 규칙\n\n초보자는 기본값 그대로 두어도 됩니다.', position: 'left' },
+    { target: 'run-backtest', title: '마지막: 실행!', description: '모든 준비가 끝났으면 이 버튼을 누르세요!\n\n결과로 다음 정보가 표시됩니다:\n• 수익률, 승률, 샤프 비율 등 핵심 성과 지표\n• 매수/매도 포인트가 표시된 가격 차트\n• 자산 변동 추이 (전략 vs 단순 보유 비교)\n• 모든 거래 내역\n\n같은 전략이라도 종목/기간/설정을 바꿔가며 여러 번 테스트해보세요.', position: 'top' },
+  ];
 
   // 전략 필터 탭
   const [strategyFilter, setStrategyFilter] = useState<'전체' | '추세추종' | '역추세' | '변동성'>('전체');
@@ -781,6 +795,24 @@ const StrategyPage = () => {
       applied: false, createdAt: '', updatedAt: '',
     },
     {
+      id: 'preset-connors-rsi2', name: '래리 코너스 RSI(2)', description: '초단기 RSI(2일)를 사용하여 급락 후 반등을 포착하는 단기 매매 전략입니다. 래리 코너스가 개발한 전략으로, 상승 추세 종목에서 일시적 과매도 구간을 노립니다.',
+      strategyLogic: 'RSI(2) < 5 → 매수 (초단기 과매도) / RSI(2) > 60 → 매도 (반등 확인)',
+      assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)' },
+      indicators: [{ type: 'RSI', parameters: { period: 2 } }],
+      entryConditions: [{ indicator: 'RSI', operator: 'LT', value: 5, logic: 'AND' }],
+      exitConditions: [{ indicator: 'RSI', operator: 'GT', value: 60, logic: 'AND' }],
+      applied: false, createdAt: '', updatedAt: '',
+    },
+    {
+      id: 'preset-volatility-breakout', name: '변동성 돌파 전략', description: '래리 윌리엄스의 변동성 돌파 전략입니다. 전일 변동폭(고가-저가)의 일정 비율만큼 당일 시가에서 상승하면 매수하고, 다음 날 청산합니다.',
+      strategyLogic: 'CLOSE > OPEN + (전일고가 - 전일저가) × 0.5 → 매수 / 다음날 시가 매도',
+      assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)' },
+      indicators: [{ type: 'ATR', parameters: { period: 1 } }],
+      entryConditions: [{ indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'OPEN + (PREV_HIGH - PREV_LOW) * 0.5' }],
+      exitConditions: [{ indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'OPEN + (PREV_HIGH - PREV_LOW) * 0.3' }],
+      applied: false, createdAt: '', updatedAt: '',
+    },
+    {
       id: 'preset-safe-rebalancing', name: '안전 자산 리밸런싱', description: 'BTC 60% + ETH 30% + 스테이블 10% 비율을 매주 리밸런싱하는 보수적 전략입니다. 장기 안정적 수익을 추구합니다.',
       strategyLogic: '목표 비율 유지: BTC 60%, ETH 30%, USDT 10%',
       assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW', 'USDT_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)', USDT_KRW: 'USDT' },
@@ -789,16 +821,6 @@ const StrategyPage = () => {
       applied: false, createdAt: '', updatedAt: '',
     },
   ];
-
-  // 프리셋 성과 데이터 (mock)
-  const PRESET_PERFORMANCE: Record<string, { returnRate: number; winRate: number; sharpe: number }> = {
-    'preset-golden-cross': { returnRate: 18.5, winRate: 58.2, sharpe: 1.45 },
-    'preset-rsi-reversal': { returnRate: 32.1, winRate: 64.8, sharpe: 1.82 },
-    'preset-bollinger-squeeze': { returnRate: 42.3, winRate: 52.1, sharpe: 1.95 },
-    'preset-macd-divergence': { returnRate: 20.1, winRate: 55.8, sharpe: 1.55 },
-    'preset-stochastic': { returnRate: 15.7, winRate: 61.2, sharpe: 1.38 },
-    'preset-safe-rebalancing': { returnRate: 12.8, winRate: 72.3, sharpe: 1.15 },
-  };
 
   // 프리셋 + 사용자 항로 합치기
   const allStrategies = [...PRESET_STRATEGIES, ...strategies];
@@ -849,10 +871,11 @@ const StrategyPage = () => {
       <Header showNav={true} />
 
       {/* 풀 와이드 3-컬럼 레이아웃 */}
-      <div className="flex flex-col lg:flex-row w-full min-h-[calc(100vh-64px)]">
+      <div className="max-w-[1600px] mx-auto px-4 py-4">
+      <div className="flex flex-col lg:flex-row w-full min-h-[calc(100vh-96px)] rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
 
         {/* ===== LEFT SIDEBAR: 전략 라이브러리 ===== */}
-        <div className="lg:flex-[3] flex flex-col bg-gray-50 border-r border-gray-200 min-w-0 shadow-sm">
+        <div data-tour="strategy-library" className="lg:flex-[3] flex flex-col bg-gray-50 border-r border-gray-200 min-w-0 shadow-sm">
 
           {/* ---- 헤더: 타이틀 + 새 항로 버튼 ---- */}
           <div className="relative px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-whale-dark to-whale-light flex items-center justify-between shrink-0 h-[72px]">
@@ -875,7 +898,7 @@ const StrategyPage = () => {
           </div>
 
           {/* ---- 필터 탭 ---- */}
-          <div className="px-5 pt-3 pb-0 bg-slate-50/80 border-b border-gray-200 shrink-0">
+          <div data-tour="strategy-filter" className="px-5 pt-3 pb-0 bg-slate-50/80 border-b border-gray-200 shrink-0">
             <div className="flex gap-1">
               {([
                 { tab: '전체' as const, glossaryKey: '' },
@@ -948,7 +971,6 @@ const StrategyPage = () => {
               return filtered.map((strategy) => {
                 const isSelected = selectedStrategy?.id === strategy.id;
                 const isPreset = strategy.id.startsWith('preset-');
-                const perf = isPreset ? PRESET_PERFORMANCE[strategy.id] : null;
                 // Determine category color for left border
                 const isTrend = strategy.entryConditions?.some(c =>
                   c.indicator?.includes('CROSS') || c.indicator?.includes('MA') || c.indicator?.includes('EMA') || c.indicator?.includes('MACD')
@@ -992,12 +1014,6 @@ const StrategyPage = () => {
                           )}
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          {/* 수익률 배지 */}
-                          {perf && (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-sm">
-                              +{perf.returnRate}%
-                            </span>
-                          )}
                           {/* 사용자 항로 삭제 버튼 */}
                           {!isPreset && (
                             <button
@@ -1026,10 +1042,7 @@ const StrategyPage = () => {
                               'bg-purple-50 text-purple-600'
                             }`}>{assetTypeLabel(strategy.assetType)}</span>
                           )}
-                          {perf && (
-                            <span className="text-[9px] text-gray-400"><Term k="승률">승률</Term> {perf.winRate}% · <Term k="샤프비율">샤프</Term> {perf.sharpe}</span>
-                          )}
-                          {!perf && (strategy.entryConditions?.length || 0) > 0 && (
+                          {(strategy.entryConditions?.length || 0) > 0 && (
                             <span className="text-[9px] text-gray-400">
                               조건 {(strategy.entryConditions?.length || 0) + (strategy.exitConditions?.length || 0)}개
                             </span>
@@ -1055,7 +1068,7 @@ const StrategyPage = () => {
         {/* ===== CENTER PANEL: 차트 영역 ===== */}
         <div className="flex flex-col lg:flex-[5.5] min-w-0 bg-white border-r border-gray-100 shadow-sm">
           {/* 선택된 전략 바 or 페이지 타이틀 */}
-          <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-slate-50 to-blue-50/50 flex items-center justify-between h-[72px]">
+          <div data-tour="center-panel" className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-slate-50 to-blue-50/50 flex items-center justify-between h-[72px]">
             {selectedStrategy ? (
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-2 h-8 rounded-full bg-whale-light shrink-0" />
@@ -1592,6 +1605,52 @@ const StrategyPage = () => {
                         </div>
                       ))}
                     </div>
+
+                    {/* 가이드 체험 버튼 */}
+                    <div className="mt-5 pt-4 border-t border-gray-100">
+                      <button
+                        onClick={() => {
+                          // 1. 골든크로스 전략 선택
+                          const goldenCross = allStrategies.find(s => s.id === 'preset-golden-cross');
+                          if (goldenCross) {
+                            setSelectedStrategy(goldenCross);
+                            setBacktestResult(null);
+                          }
+                          // 2. BTC 종목 선택
+                          setBacktestStockCode('BTC');
+                          setBacktestStockName('비트코인(BTC)');
+                          setBacktestAssetType('CRYPTO');
+                          setBacktestSearchQuery('비트코인(BTC)');
+                          // 3. 1년 기간 설정
+                          const d = new Date(); d.setFullYear(d.getFullYear() - 1);
+                          setBacktestStartDate(d.toISOString().slice(0, 10));
+                          setBacktestEndDate(new Date().toISOString().slice(0, 10));
+                          // 4. 투자금 1천만원
+                          setBacktestInitialCapital('10000000');
+                        }}
+                        className="w-full py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-whale-light to-blue-500 hover:from-whale-dark hover:to-whale-light shadow-md hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        가이드 체험 — 골든크로스 × BTC 백테스트
+                      </button>
+                      <p className="text-[10px] text-gray-400 text-center mt-2">
+                        골든크로스 전략으로 비트코인 1년 백테스트를 자동으로 세팅합니다.
+                        <br />오른쪽 패널에서 '백테스트 실행' 버튼만 누르면 됩니다.
+                      </p>
+                      <button
+                        onClick={() => setShowTour(true)}
+                        className="group w-full mt-3 py-3 rounded-xl text-sm font-semibold text-whale-dark bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 hover:border-amber-300 hover:from-amber-100 hover:to-orange-100 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 relative overflow-hidden"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                        <span className="relative flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-amber-400 text-white text-xs font-bold flex items-center justify-center animate-pulse">?</span>
+                          처음이신가요? 화면 가이드 받기
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
@@ -1908,7 +1967,7 @@ const StrategyPage = () => {
             )}
 
             {/* 종목 검색 */}
-            <div className="relative">
+            <div data-tour="stock-search" className="relative">
               <label className="block text-xs font-semibold mb-1.5 text-gray-500">종목 검색</label>
 
               {/* 항로 자산 바로가기 */}
@@ -1972,7 +2031,7 @@ const StrategyPage = () => {
             </div>
 
             {/* 기간 빠른 선택 */}
-            <div>
+            <div data-tour="period-select">
               <label className="block text-[10px] font-semibold mb-1.5 text-gray-500">분석 기간</label>
               <div className="flex gap-1.5 mb-2">
                 {[
@@ -2028,7 +2087,7 @@ const StrategyPage = () => {
             </div>
 
             {/* 초기 투자금 */}
-            <div>
+            <div data-tour="initial-capital">
               <label className="block text-[10px] font-semibold mb-1.5 text-gray-500">초기 투자금</label>
               <input type="number" value={backtestInitialCapital} onChange={(e) => setBacktestInitialCapital(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg text-xs bg-white border border-gray-200 text-gray-800 focus:ring-2 focus:ring-whale-light focus:border-whale-light transition-all"
@@ -2046,7 +2105,7 @@ const StrategyPage = () => {
             </div>
 
             {/* 고급 설정 (접이식) */}
-            <div className="rounded-xl overflow-hidden border border-gray-200">
+            <div data-tour="advanced-settings" className="rounded-xl overflow-hidden border border-gray-200">
               <button onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
                 className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold transition-colors ${showAdvancedSettings ? 'bg-gray-100 text-whale-dark' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
                 <span className="flex items-center gap-1.5">
@@ -2192,12 +2251,134 @@ const StrategyPage = () => {
                         className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800" />
                     </div>
                   </div>
+
+                  {/* ── 커스텀 수식 조건 (선택) ── */}
+                  <div className="border-t border-gray-200 pt-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-bold text-whale-dark"><Term k="수식조건">수식 조건</Term> (선택)</p>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium">고급</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mb-2 leading-relaxed">
+                      숫자 대신 수식으로 비교값을 설정합니다. 전략에 이미 조건이 있으면 무시됩니다.
+                    </p>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-[10px] font-semibold mb-1 text-gray-500">매수 조건 — 지표</label>
+                        <select
+                          value={directEntryConditions[0]?.indicator || ''}
+                          onChange={(e) => {
+                            if (!e.target.value) { setDirectEntryConditions([]); return; }
+                            setDirectEntryConditions([{ indicator: e.target.value, operator: 'GT', value: 0, logic: 'AND', valueExpression: directEntryConditions[0]?.valueExpression || '' }]);
+                          }}
+                          className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800">
+                          <option value="">사용 안 함</option>
+                          <option value="CLOSE">종가 (CLOSE)</option>
+                          <option value="HIGH">고가 (HIGH)</option>
+                          <option value="RSI">RSI</option>
+                          <option value="MACD">MACD</option>
+                          <option value="BOLLINGER_PCT_B">볼린저 %B</option>
+                          <option value="CCI">CCI</option>
+                        </select>
+                      </div>
+                      {directEntryConditions.length > 0 && (
+                        <>
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              value={directEntryConditions[0]?.operator || 'GT'}
+                              onChange={(e) => {
+                                const next = [...directEntryConditions];
+                                next[0] = { ...next[0], operator: e.target.value as any };
+                                setDirectEntryConditions(next);
+                              }}
+                              className="w-16 px-1.5 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800">
+                              <option value="GT">&gt;</option>
+                              <option value="GTE">&ge;</option>
+                              <option value="LT">&lt;</option>
+                              <option value="LTE">&le;</option>
+                            </select>
+                            <input
+                              type="text"
+                              value={directEntryConditions[0]?.valueExpression || ''}
+                              onChange={(e) => {
+                                const next = [...directEntryConditions];
+                                next[0] = { ...next[0], valueExpression: e.target.value, value: 0 };
+                                setDirectEntryConditions(next);
+                              }}
+                              placeholder="OPEN + (PREV_HIGH - PREV_LOW) * 0.5"
+                              className="flex-1 px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800 font-mono" />
+                          </div>
+                        </>
+                      )}
+                      <div>
+                        <label className="block text-[10px] font-semibold mb-1 text-gray-500">매도 조건 — 지표</label>
+                        <select
+                          value={directExitConditions[0]?.indicator || ''}
+                          onChange={(e) => {
+                            if (!e.target.value) { setDirectExitConditions([]); return; }
+                            setDirectExitConditions([{ indicator: e.target.value, operator: 'LT', value: 0, logic: 'AND', valueExpression: directExitConditions[0]?.valueExpression || '' }]);
+                          }}
+                          className="w-full px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800">
+                          <option value="">사용 안 함</option>
+                          <option value="CLOSE">종가 (CLOSE)</option>
+                          <option value="LOW">저가 (LOW)</option>
+                          <option value="RSI">RSI</option>
+                          <option value="MACD">MACD</option>
+                          <option value="BOLLINGER_PCT_B">볼린저 %B</option>
+                          <option value="CCI">CCI</option>
+                        </select>
+                      </div>
+                      {directExitConditions.length > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={directExitConditions[0]?.operator || 'LT'}
+                            onChange={(e) => {
+                              const next = [...directExitConditions];
+                              next[0] = { ...next[0], operator: e.target.value as any };
+                              setDirectExitConditions(next);
+                            }}
+                            className="w-16 px-1.5 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800">
+                            <option value="GT">&gt;</option>
+                            <option value="GTE">&ge;</option>
+                            <option value="LT">&lt;</option>
+                            <option value="LTE">&le;</option>
+                          </select>
+                          <input
+                            type="text"
+                            value={directExitConditions[0]?.valueExpression || ''}
+                            onChange={(e) => {
+                              const next = [...directExitConditions];
+                              next[0] = { ...next[0], valueExpression: e.target.value, value: 0 };
+                              setDirectExitConditions(next);
+                            }}
+                            placeholder="OPEN + (PREV_HIGH - PREV_LOW) * 0.3"
+                            className="flex-1 px-2 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-800 font-mono" />
+                        </div>
+                      )}
+                      {(directEntryConditions.length > 0 || directExitConditions.length > 0) && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 space-y-1.5">
+                          <p className="text-[10px] font-semibold text-blue-700">사용 가능 변수</p>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] text-blue-600">
+                            <span><Term k="시가">OPEN</Term> — 당일 시가</span>
+                            <span><Term k="고가">HIGH</Term> — 당일 고가</span>
+                            <span><Term k="저가">LOW</Term> — 당일 저가</span>
+                            <span><Term k="종가">CLOSE</Term> — 당일 종가</span>
+                            <span><Term k="전일고가">PREV_HIGH</Term> — 전일 고가</span>
+                            <span><Term k="전일저가">PREV_LOW</Term> — 전일 저가</span>
+                            <span><Term k="전일종가">PREV_CLOSE</Term> — 전일 종가</span>
+                            <span><Term k="변동성돌파">PREV_RANGE</Term> — 전일 변동폭</span>
+                            <span><Term k="RSI">RSI</Term>, <Term k="MACD">MACD</Term>, <Term k="ATR">ATR</Term> 등</span>
+                            <span>+, -, *, /, 괄호 ()</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
             {/* 실행 버튼 */}
-            <button onClick={handleRunBacktest}
+            <button data-tour="run-backtest" onClick={handleRunBacktest}
               disabled={isBacktesting || (!selectedStrategy && directEntryConditions.length === 0) || !backtestStockCode}
               className={`w-full py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 overflow-hidden relative ${isBacktesting ? 'bg-gray-400' : 'bg-gradient-to-r from-whale-light to-blue-500 hover:from-whale-dark hover:to-whale-light shadow-lg hover:shadow-xl'}`}>
               {!isBacktesting && !(isBacktesting || (!selectedStrategy && directEntryConditions.length === 0) || !backtestStockCode) && (
@@ -2227,6 +2408,10 @@ const StrategyPage = () => {
         </div>
 
       </div>
+      </div>
+
+      {/* ===== 가이드 투어 ===== */}
+      <GuideTour steps={tourSteps} isActive={showTour} onFinish={() => setShowTour(false)} />
 
       {/* ===== 전략 생성/수정 모달 ===== */}
       {strategyModalMode && (

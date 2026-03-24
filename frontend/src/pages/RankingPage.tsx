@@ -56,7 +56,7 @@ const RankingPage = () => {
         setTotalPages(1);
       }
     } catch (err: any) {
-      setError(err.message || '데이터를 불러오는데 실패했습니다.');
+      setError(err.message || '랭킹 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       setLoading(false);
     }
@@ -153,7 +153,7 @@ const RankingPage = () => {
         {loading && <LoadingSpinner fullScreen={false} message="투자 현황을 불러오는 중..." />}
 
         {error && !loading && (
-          <ErrorMessage message={error} onRetry={loadRankings} variant="error" />
+          <ErrorMessage message={error} onRetry={() => loadRankings(currentPage)} variant="error" />
         )}
 
         {/* 투자자 리스트 */}

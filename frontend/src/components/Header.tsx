@@ -76,56 +76,29 @@ const Header = ({ showNav = false }: HeaderProps) => {
           {showNav ? (
             <>
               {/* 데스크톱 네비게이션 */}
-              <nav className="hidden lg:flex items-center space-x-6" aria-label="주요 네비게이션">
-                <Link
-                  to="/dashboard"
-                  className={`transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5 ${isActive('/dashboard') ? 'text-whale-light border-b-2 border-whale-light' : 'text-gray-700 hover:text-whale-light'}`}
-                  aria-label="내 투자"
-                >
-                  내 투자
-                </Link>
-                <Link
-                  to="/my-portfolio"
-                  className={`transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5 ${isActive('/my-portfolio') ? 'text-whale-light border-b-2 border-whale-light' : 'text-gray-700 hover:text-whale-light'}`}
-                  aria-label="내 포트폴리오"
-                >
-                  포트폴리오
-                </Link>
-                <Link
-                  to="/market"
-                  className={`transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5 ${isActive('/market') ? 'text-whale-light border-b-2 border-whale-light' : 'text-gray-700 hover:text-whale-light'}`}
-                  aria-label="시장"
-                >
-                  시세
-                </Link>
-                <Link
-                  to="/trade"
-                  className={`transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5 ${isActive('/trade') ? 'text-whale-light border-b-2 border-whale-light' : 'text-gray-700 hover:text-whale-light'}`}
-                  aria-label="거래"
-                >
-                  거래
-                </Link>
-                <Link
-                  to="/strategy"
-                  className={`transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5 ${isActive('/strategy') ? 'text-whale-light border-b-2 border-whale-light' : 'text-gray-700 hover:text-whale-light'}`}
-                  aria-label="전략"
-                >
-                  전략
-                </Link>
-                <Link
-                  to="/store"
-                  className={`transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5 ${isActive('/store') ? 'text-whale-light border-b-2 border-whale-light' : 'text-gray-700 hover:text-whale-light'}`}
-                  aria-label="항로"
-                >
-                  항로
-                </Link>
-                <Link
-                  to="/ranking"
-                  className={`transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded px-3 py-1.5 ${isActive('/ranking') ? 'text-whale-light border-b-2 border-whale-light' : 'text-gray-700 hover:text-whale-light'}`}
-                  aria-label="투자 현황"
-                >
-                  투자 현황
-                </Link>
+              <nav className="hidden lg:flex items-center space-x-4" aria-label="주요 네비게이션">
+                {[
+                  { to: '/dashboard', label: '내 투자' },
+                  { to: '/my-portfolio', label: '포트폴리오' },
+                  { to: '/market', label: '시세' },
+                  { to: '/trade', label: '거래' },
+                  { to: '/strategy', label: '전략' },
+                  { to: '/store', label: '전략 학습' },
+                  { to: '/ranking', label: '투자 현황' },
+                ].map(({ to, label }) => (
+                  <Link
+                    key={to}
+                    to={to}
+                    className={`text-sm transition-colors font-medium rounded px-2 py-1.5 ${
+                      isActive(to)
+                        ? 'text-whale-light border-b-2 border-whale-light'
+                        : 'text-gray-700 hover:text-whale-light'
+                    }`}
+                    aria-label={label}
+                  >
+                    {label}
+                  </Link>
+                ))}
                 {isAuthenticated && (
                   <div className="flex items-center space-x-3 ml-4 pl-4 border-l border-gray-200">
                     {/* 알림 벨 */}

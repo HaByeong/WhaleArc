@@ -73,17 +73,29 @@ const LandingPage = () => {
                 실시간 시세 데이터와 포트폴리오 분석으로<br />
                 나만의 투자 전략을 실험해보세요
               </p>
-              <button
-                onClick={() => handleFeatureClick('/dashboard')}
-                className="inline-flex items-center gap-2 px-8 py-3.5 bg-whale-light text-white font-bold text-lg rounded-xl hover:bg-whale-accent transition-all duration-300 shadow-lg hover:shadow-whale-light/30 hover:-translate-y-0.5"
-              >
-                항해 시작하기
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </button>
+              <div className="flex flex-col items-center gap-4">
+                <button
+                  onClick={() => handleFeatureClick('/dashboard')}
+                  className="inline-flex items-center gap-2 px-8 py-3.5 bg-whale-light text-white font-bold text-lg rounded-xl hover:bg-whale-accent transition-all duration-300 shadow-lg hover:shadow-whale-light/30 hover:-translate-y-0.5"
+                >
+                  항해 시작하기
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => handleFeatureClick('/virt')}
+                  className="group inline-flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-lg font-bold transition-all duration-300 hover:-translate-y-0.5 border border-white/25 hover:border-blue-300/50 bg-white/[0.08] hover:bg-white/[0.15] backdrop-blur-sm"
+                >
+                  <span className="text-blue-200">더 깊은 바다로 잠수하기</span>
+                  <span className="text-[10px] text-blue-200/70 tracking-wider font-semibold">VIRT</span>
+                  <svg className="w-4 h-4 text-blue-300/60 group-hover:translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            
+
             {/* Whale Illustration - 모바일에서 적당한 크기 */}
             <div className="flex justify-center items-center w-full mt-4">
               <div className="relative w-full max-w-xs">
@@ -117,17 +129,29 @@ const LandingPage = () => {
                 실시간 시세 데이터와 포트폴리오 분석으로<br />
                 나만의 투자 전략을 실험해보세요
               </p>
-              <button
-                onClick={() => handleFeatureClick('/dashboard')}
-                className="inline-flex items-center gap-2 px-10 py-4 bg-whale-light text-white font-bold text-lg rounded-xl hover:bg-whale-accent transition-all duration-300 shadow-lg hover:shadow-whale-light/30 hover:-translate-y-0.5"
-              >
-                항해 시작하기
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-4 flex-wrap">
+                <button
+                  onClick={() => handleFeatureClick('/dashboard')}
+                  className="inline-flex items-center gap-2 px-10 py-4 bg-whale-light text-white font-bold text-lg rounded-xl hover:bg-whale-accent transition-all duration-300 shadow-lg hover:shadow-whale-light/30 hover:-translate-y-0.5"
+                >
+                  항해 시작하기
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => handleFeatureClick('/virt')}
+                  className="group inline-flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-lg font-bold transition-all duration-300 hover:-translate-y-0.5 border border-white/25 hover:border-blue-300/50 bg-white/[0.08] hover:bg-white/[0.15] backdrop-blur-sm"
+                >
+                  <span className="text-blue-200">더 깊은 바다로 잠수하기</span>
+                  <span className="text-[10px] text-blue-200/70 tracking-wider font-semibold">VIRT</span>
+                  <svg className="w-4 h-4 text-blue-300/60 group-hover:translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            
+
             {/* Right: Whale Illustration */}
             <div className="flex-1 flex justify-center items-center">
               <div className="relative w-full">

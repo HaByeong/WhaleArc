@@ -546,6 +546,26 @@ const DashboardPage = () => {
                     <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                   </button>
                 ))}
+
+                {/* Virt 진입 */}
+                <div className="pt-2 mt-1 border-t border-gray-100">
+                  <button
+                    onClick={() => navigate('/virt')}
+                    className="w-full relative overflow-hidden rounded-lg min-h-[44px] group"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#0a1628] to-[#0c1a2e]" />
+                    <div className="relative flex items-center justify-between px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-white/80">VIRT</span>
+                        <span className="text-white/20">|</span>
+                        <span className="text-xs text-slate-400">내 자산 연동</span>
+                      </div>
+                      <svg className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -594,6 +614,7 @@ const DashboardPage = () => {
 
           </div>
         </div>
+
       </div>
     </div>
   );

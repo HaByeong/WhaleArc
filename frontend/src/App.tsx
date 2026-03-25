@@ -16,6 +16,7 @@ import RankingPage from './pages/RankingPage';
 import PortfolioDetailPage from './pages/PortfolioDetailPage';
 import MyPortfolioPage from './pages/MyPortfolioPage';
 import UserPage from './pages/UserPage';
+import VirtDashboardPage from './pages/VirtDashboardPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -102,6 +103,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <PortfolioDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/virt"
+            element={
+              <ProtectedRoute>
+                <VirtDashboardPage />
               </ProtectedRoute>
             }
           />

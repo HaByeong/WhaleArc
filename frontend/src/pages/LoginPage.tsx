@@ -148,9 +148,26 @@ const LoginPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Login Form */}
           <div className="card">
+            {/* Virt 경유 로그인 표시 */}
+            {(location.state as any)?.from === '/virt' && (
+              <div className="flex items-center gap-3 mb-6 px-4 py-3 rounded-xl bg-[#060d18] border border-cyan-500/20">
+                <img src="/tail-sample-2.png" alt="" className="w-8 h-8 object-contain" />
+                <div>
+                  <div className="text-sm font-bold text-white tracking-tighter">
+                    <span className="text-slate-400">WHALEARC</span><span className="text-slate-600">/</span><span className="text-white">VIRT</span>
+                  </div>
+                  <p className="text-[11px] text-cyan-400/70">로그인하면 Virt로 바로 이동합니다</p>
+                </div>
+              </div>
+            )}
+
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-whale-dark">다시 만나서 반가워요</h2>
-              <p className="text-gray-400 text-sm mt-1">계정에 로그인하고 항해를 이어가세요</p>
+              <h2 className="text-2xl font-bold text-whale-dark">
+                {(location.state as any)?.from === '/virt' ? 'Virt에 오신 것을 환영해요' : '다시 만나서 반가워요'}
+              </h2>
+              <p className="text-gray-400 text-sm mt-1">
+                {(location.state as any)?.from === '/virt' ? '로그인하고 내 실제 자산을 확인하세요' : '계정에 로그인하고 항해를 이어가세요'}
+              </p>
             </div>
 
             {/* 인앱 브라우저 경고 */}
@@ -383,6 +400,65 @@ const LoginPage = () => {
                   </div>
                 ))}
               </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* ═══ Virt — 하단 전체폭 ═══ */}
+        <div
+          onClick={() => { navigate('/login', { state: { from: '/virt', message: '로그인하면 바로 Virt로 이동합니다.' } }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+          className="mt-10 relative overflow-hidden rounded-2xl cursor-pointer group"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/virt'); }}
+        >
+          {/* 배경 */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#060d18] via-[#040b1d] to-[#060d18]" />
+          <div className="absolute top-[10%] left-1/2 -translate-x-1/2 w-[500px] h-[400px] bg-cyan-500/[0.04] rounded-full blur-[120px]" />
+          <div className="absolute top-[5%] left-1/2 -translate-x-1/2 w-[250px] h-[300px] bg-blue-400/[0.03] rounded-full blur-[80px]" />
+          <div className="absolute inset-0 rounded-2xl border border-white/[0.06] group-hover:border-cyan-500/20 transition-colors duration-500" />
+          {/* 파티클 */}
+          <div className="absolute top-[12%] left-[8%] w-1 h-1 bg-cyan-400/25 rounded-full animate-pulse" />
+          <div className="absolute top-[25%] right-[10%] w-1 h-1 bg-cyan-300/15 rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
+
+          <div className="relative z-10 px-8 md:px-12 py-10 md:py-14 text-center">
+            {/* 로고 — 중앙 대형 */}
+            <div className="relative w-[360px] h-[360px] md:w-[480px] md:h-[480px] mx-auto -mb-10">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-3/4 h-3/4 bg-cyan-500/[0.06] rounded-full blur-[50px] animate-pulse" style={{ animationDuration: '4s' }} />
+              </div>
+              <img
+                src="/tail-sample-2.png"
+                alt="Virt"
+                className="relative w-full h-full object-contain"
+                style={{ filter: 'drop-shadow(0 0 30px rgba(56, 189, 248, 0.18)) drop-shadow(0 0 60px rgba(56, 189, 248, 0.08))' }}
+              />
+            </div>
+
+            {/* 타이틀 */}
+            <h3 className="text-3xl md:text-4xl font-bold tracking-tighter mb-2">
+              <span className="text-slate-500">WHALEARC</span>
+              <span className="text-slate-700 mx-0.5">/</span>
+              <span className="text-white">VIRT</span>
+            </h3>
+            <p className="text-slate-400 text-base mb-2">내 실제 자산을, 한 곳에서</p>
+            <p className="text-sm text-slate-600 mb-6 max-w-md mx-auto">
+              증권사와 거래소 API를 연동하면 흩어진 내 자산을 하나의 화면에서 확인할 수 있습니다
+            </p>
+
+            {/* 지원 거래소 */}
+            <div className="flex items-center gap-2 justify-center mb-6">
+              {['한국투자증권', '업비트', '비트겟'].map((name) => (
+                <span key={name} className="text-[11px] text-slate-500 bg-white/[0.04] border border-white/[0.06] rounded-md px-3 py-1">{name}</span>
+              ))}
+            </div>
+
+            <div className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-cyan-500/10 text-cyan-400 font-semibold text-sm border border-cyan-500/25 group-hover:bg-cyan-500/20 group-hover:border-cyan-400/40 transition-all duration-500">
+              로그인하고 시작하기
+              <svg className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
             </div>
           </div>
         </div>

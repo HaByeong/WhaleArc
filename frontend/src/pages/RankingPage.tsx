@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useVirtNavigate } from '../hooks/useRoutePrefix';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -7,7 +7,7 @@ import { type RankingType, type RankingEntry } from '../services/rankingService'
 import apiClient from '../utils/api';
 
 const RankingPage = () => {
-  const navigate = useNavigate();
+  const navigate = useVirtNavigate();
   const [rankingType, setRankingType] = useState<RankingType>('all');
   const [rankings, setRankings] = useState<RankingEntry[]>([]);
   const [loading, setLoading] = useState(true);

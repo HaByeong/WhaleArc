@@ -107,13 +107,23 @@ function App() {
             }
           />
           <Route
-            path="/virt"
+            path="/api-setting"
             element={
               <ProtectedRoute>
                 <VirtDashboardPage />
               </ProtectedRoute>
             }
           />
+          {/* Virt 모드 라우트 - 동일한 페이지 컴포넌트 재사용 */}
+          <Route path="/virt/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/virt/my-portfolio" element={<ProtectedRoute><MyPortfolioPage /></ProtectedRoute>} />
+          <Route path="/virt/market" element={<ProtectedRoute><MarketPage /></ProtectedRoute>} />
+          <Route path="/virt/trade" element={<ProtectedRoute><TradePage /></ProtectedRoute>} />
+          <Route path="/virt/strategy" element={<ProtectedRoute><StrategyPage /></ProtectedRoute>} />
+          <Route path="/virt/store" element={<ProtectedRoute><QuantStorePage /></ProtectedRoute>} />
+          <Route path="/virt/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
+          <Route path="/virt/user" element={<ProtectedRoute><UserPage /></ProtectedRoute>} />
+          <Route path="/virt/portfolio/:portfolioId" element={<ProtectedRoute><PortfolioDetailPage /></ProtectedRoute>} />
           <Route path="/golden-cross" element={<GoldenCrossChart />} />
 
           <Route path="*" element={<NotFoundPage />} />

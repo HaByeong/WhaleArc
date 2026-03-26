@@ -149,7 +149,7 @@ const LoginPage = () => {
           {/* Login Form */}
           <div className="card">
             {/* Virt 경유 로그인 표시 */}
-            {(location.state as any)?.from === '/virt' && (
+            {(location.state as any)?.from?.startsWith('/virt') && (
               <div className="flex items-center gap-3 mb-6 px-4 py-3 rounded-xl bg-[#060d18] border border-cyan-500/20">
                 <img src="/tail-sample-2.png" alt="" className="w-8 h-8 object-contain" />
                 <div>
@@ -163,10 +163,10 @@ const LoginPage = () => {
 
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-whale-dark">
-                {(location.state as any)?.from === '/virt' ? 'Virt에 오신 것을 환영해요' : '다시 만나서 반가워요'}
+                {(location.state as any)?.from?.startsWith('/virt') ? 'Virt에 오신 것을 환영해요' : '다시 만나서 반가워요'}
               </h2>
               <p className="text-gray-400 text-sm mt-1">
-                {(location.state as any)?.from === '/virt' ? '로그인하고 내 실제 자산을 확인하세요' : '계정에 로그인하고 항해를 이어가세요'}
+                {(location.state as any)?.from?.startsWith('/virt') ? '로그인하고 내 실제 자산을 확인하세요' : '계정에 로그인하고 항해를 이어가세요'}
               </p>
             </div>
 
@@ -407,11 +407,11 @@ const LoginPage = () => {
 
         {/* ═══ Virt — 하단 전체폭 ═══ */}
         <div
-          onClick={() => { navigate('/login', { state: { from: '/virt', message: '로그인하면 바로 Virt로 이동합니다.' } }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+          onClick={() => { navigate('/login', { state: { from: '/virt/dashboard', message: '로그인하면 바로 Virt로 이동합니다.' } }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
           className="mt-10 relative overflow-hidden rounded-2xl cursor-pointer group"
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/virt'); }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/virt/dashboard'); }}
         >
           {/* 배경 */}
           <div className="absolute inset-0 bg-gradient-to-b from-[#060d18] via-[#040b1d] to-[#060d18]" />

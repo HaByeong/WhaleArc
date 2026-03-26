@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -24,6 +25,7 @@ interface PortfolioSummary {
 
 const PortfolioDetailPage = () => {
   const { portfolioId } = useParams<{ portfolioId: string }>();
+  const { prefix } = useRoutePrefix();
   const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +93,7 @@ const PortfolioDetailPage = () => {
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
         <Link
-          to="/ranking"
+          to={`${prefix}/ranking`}
           className="inline-flex items-center text-gray-500 hover:text-whale-light mb-6 text-sm transition-colors"
         >
           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

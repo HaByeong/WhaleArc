@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useVirtNavigate, useRoutePrefix } from '../hooks/useRoutePrefix';
 import Header from '../components/Header';
 import { Term } from '../components/TermTooltip';
 import WhaleCharacterLogo from '../components/WhaleCharacterLogo';
@@ -259,7 +259,8 @@ const CATEGORY_GLOSSARY_KEY: Record<string, string> = {
 };
 
 const QuantStorePage = () => {
-  const navigate = useNavigate();
+  const navigate = useVirtNavigate();
+  const { isVirt } = useRoutePrefix();
   const [products, setProducts] = useState<QuantProduct[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | 'ALL'>('ALL');
   const [selectedProduct, setSelectedProduct] = useState<QuantProduct | null>(null);
@@ -299,6 +300,7 @@ const QuantStorePage = () => {
   };
 
   const openInvestModal = (product: QuantProduct) => {
+    if (!isVirt) return; // 일반 모드에서는 구매 불가
     if (purchasedIds.has(product.id)) return;
     setInvestModal(product);
     setInvestmentAmount('');
@@ -557,13 +559,17 @@ const QuantStorePage = () => {
                       <span className="px-4 py-2.5 text-sm font-semibold text-emerald-600 bg-emerald-50 rounded-xl">
                         항해 중 ⛵
                       </span>
-                    ) : (
+                    ) : isVirt ? (
                       <button
                         onClick={(e) => { e.stopPropagation(); openInvestModal(product); }}
                         className="px-4 py-2.5 text-sm font-semibold text-white bg-whale-light hover:bg-whale-dark rounded-xl transition-colors"
                       >
                         항해하기
                       </button>
+                    ) : (
+                      <span className="px-4 py-2.5 text-sm font-semibold text-gray-400 bg-gray-100 rounded-xl">
+                        Virt 전용
+                      </span>
                     )}
                   </div>
                 </div>
@@ -725,13 +731,17 @@ const QuantStorePage = () => {
                           <div className="w-full py-3 text-sm font-semibold text-center text-emerald-600 bg-emerald-50 rounded-xl">
                             ⛵ 이미 항해 중인 전략이에요!
                           </div>
-                        ) : (
+                        ) : isVirt ? (
                           <button
                             onClick={() => openInvestModal(selectedProduct)}
                             className="w-full py-3 text-sm font-semibold text-white bg-gradient-to-r from-whale-light to-whale-dark hover:opacity-90 rounded-xl transition-all shadow-md"
                           >
-                            이 전략으로 항해 시작하기 🚀
+                            이 전략으로 항해 시작하기
                           </button>
+                        ) : (
+                          <div className="w-full py-3 text-sm font-semibold text-center text-gray-400 bg-gray-100 rounded-xl">
+                            Virt 모드에서 항해를 시작할 수 있어요
+                          </div>
                         )}
                       </div>
                     </>

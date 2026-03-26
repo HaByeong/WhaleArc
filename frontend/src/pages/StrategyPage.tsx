@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import Header from '../components/Header';
+import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import { GLOSSARY, Term } from '../components/TermTooltip';
 import GuideTour, { type TourStep } from '../components/GuideTour';
 import {
@@ -33,6 +34,7 @@ import {
 
 
 const StrategyPage = () => {
+  const { isVirt } = useRoutePrefix();
   // 상태 관리
   const [_activeTab] = useState<'strategies' | 'backtest' | 'indicators'>('strategies');
   const [strategies, setStrategies] = useState<Strategy[]>([]);
@@ -1048,7 +1050,7 @@ const StrategyPage = () => {
                             </span>
                           )}
                         </div>
-                        {!strategy.applied && strategy.targetAssets && strategy.targetAssets.length > 0 && (
+                        {isVirt && !strategy.applied && strategy.targetAssets && strategy.targetAssets.length > 0 && (
                           <button
                             onClick={(e) => { e.stopPropagation(); setSelectedStrategy(strategy); setShowApplyModal(true); }}
                             className="px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-whale-light to-blue-500 hover:from-whale-dark hover:to-whale-light shadow-sm hover:shadow-md transition-all duration-200">
@@ -1140,7 +1142,7 @@ const StrategyPage = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                        {!selectedStrategy.applied && selectedStrategy.targetAssets && selectedStrategy.targetAssets.length > 0 && (
+                        {isVirt && !selectedStrategy.applied && selectedStrategy.targetAssets && selectedStrategy.targetAssets.length > 0 && (
                           <button onClick={() => setShowApplyModal(true)}
                             className="px-3 py-2 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-whale-light to-blue-500 hover:from-whale-dark hover:to-whale-light hover:shadow-md transition-all duration-200">
                             포트폴리오 적용

@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
+import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import Toast from './Toast';
 import WhaleTailLogo from './WhaleTailLogo';
 
@@ -13,6 +14,7 @@ interface HeaderProps {
 const Header = ({ showNav = false }: HeaderProps) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { prefix, isVirt } = useRoutePrefix();
   const { session, user, profileName } = useAuth();
   const isAuthenticated = !!session;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -65,7 +67,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
               <span
                 className={`text-xl ml-1 ${showNav ? 'whalearc-text-nav' : 'whalearc-text'}`}
               >
-                WHALEARC
+                WHALEARC{isVirt && <span className="text-cyan-400">-VIRT</span>}
               </span>
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${showNav ? 'bg-whale-light text-white' : 'bg-blue-400 text-white'}`}>
                 BETA
@@ -78,13 +80,13 @@ const Header = ({ showNav = false }: HeaderProps) => {
               {/* 데스크톱 네비게이션 */}
               <nav className="hidden lg:flex items-center space-x-4" aria-label="주요 네비게이션">
                 {[
-                  { to: '/dashboard', label: '내 투자' },
-                  { to: '/my-portfolio', label: '포트폴리오' },
-                  { to: '/market', label: '시세' },
-                  { to: '/trade', label: '거래' },
-                  { to: '/strategy', label: '전략' },
-                  { to: '/store', label: '전략 학습' },
-                  { to: '/ranking', label: '투자 현황' },
+                  { to: `${prefix}/dashboard`, label: '내 투자' },
+                  { to: `${prefix}/my-portfolio`, label: '포트폴리오' },
+                  { to: `${prefix}/market`, label: '시세' },
+                  { to: `${prefix}/trade`, label: '거래' },
+                  { to: `${prefix}/strategy`, label: '전략' },
+                  { to: `${prefix}/store`, label: '전략 학습' },
+                  { to: `${prefix}/ranking`, label: '투자 현황' },
                 ].map(({ to, label }) => (
                   <Link
                     key={to}
@@ -142,7 +144,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
                                 <div
                                   key={n.id}
                                   className={`px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors ${!n.read ? 'bg-blue-50/50' : ''}`}
-                                  onClick={() => { markAsRead(n.id); if (n.metadata?.stockCode) navigate(`/trade?code=${n.metadata.stockCode}&type=${n.metadata.assetType || 'CRYPTO'}`); setShowNotifPanel(false); }}
+                                  onClick={() => { markAsRead(n.id); if (n.metadata?.stockCode) navigate(`${prefix}/trade?code=${n.metadata.stockCode}&type=${n.metadata.assetType || 'CRYPTO'}`); setShowNotifPanel(false); }}
                                 >
                                   <div className="flex items-start gap-2.5">
                                     <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${!n.read ? 'bg-whale-light' : 'bg-transparent'}`} />
@@ -163,7 +165,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
                     </div>
 
                     <Link
-                      to="/user"
+                      to={`${prefix}/user`}
                       className="flex items-center space-x-2 text-gray-700 hover:text-whale-light transition-colors rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2"
                       aria-label="내 프로필"
                     >
@@ -222,62 +224,25 @@ const Header = ({ showNav = false }: HeaderProps) => {
             className="lg:hidden border-t border-gray-200 py-4 space-y-2 animate-fade-in"
             aria-label="모바일 네비게이션"
           >
-            <Link
-              to="/dashboard"
-              onClick={closeMobileMenu}
-              className={`block px-4 py-3 rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center ${isActive('/dashboard') ? 'bg-whale-light/10 text-whale-light' : 'text-gray-700 hover:bg-gray-50 hover:text-whale-light'}`}
-              aria-label="내 투자"
-            >
-              내 투자
-            </Link>
-            <Link
-              to="/my-portfolio"
-              onClick={closeMobileMenu}
-              className={`block px-4 py-3 rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center ${isActive('/my-portfolio') ? 'bg-whale-light/10 text-whale-light' : 'text-gray-700 hover:bg-gray-50 hover:text-whale-light'}`}
-              aria-label="내 포트폴리오"
-            >
-              포트폴리오
-            </Link>
-            <Link
-              to="/market"
-              onClick={closeMobileMenu}
-              className={`block px-4 py-3 rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center ${isActive('/market') ? 'bg-whale-light/10 text-whale-light' : 'text-gray-700 hover:bg-gray-50 hover:text-whale-light'}`}
-              aria-label="시장"
-            >
-              시세
-            </Link>
-            <Link
-              to="/trade"
-              onClick={closeMobileMenu}
-              className={`block px-4 py-3 rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center ${isActive('/trade') ? 'bg-whale-light/10 text-whale-light' : 'text-gray-700 hover:bg-gray-50 hover:text-whale-light'}`}
-              aria-label="거래"
-            >
-              거래
-            </Link>
-            <Link
-              to="/strategy"
-              onClick={closeMobileMenu}
-              className={`block px-4 py-3 rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center ${isActive('/strategy') ? 'bg-whale-light/10 text-whale-light' : 'text-gray-700 hover:bg-gray-50 hover:text-whale-light'}`}
-              aria-label="전략"
-            >
-              전략
-            </Link>
-            <Link
-              to="/store"
-              onClick={closeMobileMenu}
-              className={`block px-4 py-3 rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center ${isActive('/store') ? 'bg-whale-light/10 text-whale-light' : 'text-gray-700 hover:bg-gray-50 hover:text-whale-light'}`}
-              aria-label="항로"
-            >
-              항로
-            </Link>
-            <Link
-              to="/ranking"
-              onClick={closeMobileMenu}
-              className={`block px-4 py-3 rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center ${isActive('/ranking') ? 'bg-whale-light/10 text-whale-light' : 'text-gray-700 hover:bg-gray-50 hover:text-whale-light'}`}
-              aria-label="투자 현황"
-            >
-              투자 현황
-            </Link>
+            {[
+              { to: `${prefix}/dashboard`, label: '내 투자', ariaLabel: '내 투자' },
+              { to: `${prefix}/my-portfolio`, label: '포트폴리오', ariaLabel: '내 포트폴리오' },
+              { to: `${prefix}/market`, label: '시세', ariaLabel: '시장' },
+              { to: `${prefix}/trade`, label: '거래', ariaLabel: '거래' },
+              { to: `${prefix}/strategy`, label: '전략', ariaLabel: '전략' },
+              { to: `${prefix}/store`, label: '항로', ariaLabel: '항로' },
+              { to: `${prefix}/ranking`, label: '투자 현황', ariaLabel: '투자 현황' },
+            ].map(({ to, label, ariaLabel }) => (
+              <Link
+                key={to}
+                to={to}
+                onClick={closeMobileMenu}
+                className={`block px-4 py-3 rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center ${isActive(to) ? 'bg-whale-light/10 text-whale-light' : 'text-gray-700 hover:bg-gray-50 hover:text-whale-light'}`}
+                aria-label={ariaLabel}
+              >
+                {label}
+              </Link>
+            ))}
             {isAuthenticated && (
               <>
                 <div className="px-4 py-3 border-t border-gray-200 mt-2">
@@ -297,7 +262,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
                     )}
                   </button>
                   <Link
-                    to="/user"
+                    to={`${prefix}/user`}
                     onClick={closeMobileMenu}
                     className="flex items-center space-x-2 text-gray-700 mb-3 focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-lg px-2 py-2"
                     aria-label="내 프로필"

@@ -142,18 +142,18 @@ const VirtDashboardPage = () => {
   const isConnected = serviceTab === 'stock' ? isKis : serviceTab === 'upbit' ? isUpbit : isBitget;
   const activePortfolio = serviceTab === 'stock' ? portfolio : serviceTab === 'upbit' ? upbitPortfolio : bitgetPortfolio;
 
-  // Virt 전용 헤더 (공통)
-  const VirtHeader = () => (
+  // API 설정 전용 헤더 (공통)
+  const ApiSettingHeader = () => (
     <header className="relative z-50 border-b border-white/[0.06]" style={{ backgroundColor: '#060d18' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
         <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-slate-500 hover:text-white transition-colors">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-          <span className="text-xs">WhaleArc</span>
+          <span className="text-xs">대시보드</span>
         </button>
         <div className="flex items-center gap-1.5">
           <img src="/tail-sample-2.png" alt="" className="w-14 h-14 object-contain" />
           <span className="text-sm font-bold tracking-tighter">
-            <span className="text-slate-500">WHALEARC</span><span className="text-slate-700">/</span><span className="text-white">VIRT</span>
+            <span className="text-slate-500">WHALEARC</span><span className="text-slate-700">/</span><span className="text-white">API 설정</span>
           </span>
         </div>
         <div className="w-16" />
@@ -164,7 +164,7 @@ const VirtDashboardPage = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#060d18]">
-        <VirtHeader />
+        <ApiSettingHeader />
         <div className="flex items-center justify-center h-[85vh]">
           <div className="text-center">
             <div className="relative w-48 h-48 md:w-64 md:h-64 mx-auto mb-6">
@@ -184,7 +184,7 @@ const VirtDashboardPage = () => {
   if (error && !credInfo && !upbitCredInfo && !bitgetCredInfo) {
     return (
       <div className="min-h-screen bg-[#060d18]">
-        <VirtHeader />
+        <ApiSettingHeader />
         <div className="flex items-center justify-center h-[85vh]">
           <div className="text-center max-w-md px-4">
             <div className="relative w-40 h-40 mx-auto mb-6">
@@ -203,7 +203,7 @@ const VirtDashboardPage = () => {
 
   return (
     <div className="min-h-screen bg-[#060d18] text-white">
-      <VirtHeader />
+      <ApiSettingHeader />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
 

@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -9,8 +8,10 @@ import { userService } from '../services/userService';
 import { useAuth } from '../contexts/AuthContext';
 import { usePolling } from '../hooks/usePolling';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
+import { useVirtNavigate, useRoutePrefix } from '../hooks/useRoutePrefix';
 const DashboardPage = () => {
-  const navigate = useNavigate();
+  const navigate = useVirtNavigate();
+  const { isVirt } = useRoutePrefix();
   const { user, profileName } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [watchlist, setWatchlist] = useState<StockPrice[]>([]);
@@ -55,13 +56,16 @@ const DashboardPage = () => {
     loadData();
   }, []);
 
+  // 일반 모드에서는 가상 포트폴리오 로드 생략
+  const shouldLoadVirtData = isVirt;
+
   const pollData = useCallback(async () => {
     try {
       const [portfolioData, stocksData] = await Promise.all([
-        tradeService.getPortfolio().catch(() => null),
+        isVirt ? tradeService.getPortfolio().catch(() => null) : Promise.resolve(null),
         tradeService.getStockList().catch(() => []),
       ]);
-      if (portfolioData) setPortfolio(portfolioData);
+      if (portfolioData && isVirt) setPortfolio(portfolioData);
       if (stocksData.length) {
         const sorted = [...stocksData].sort((a, b) => Math.abs(b.changeRate) - Math.abs(a.changeRate));
         setTopMovers(sorted.slice(0, 5));
@@ -120,10 +124,10 @@ const DashboardPage = () => {
 
       let portfolioFallback = false;
       const [portfolioData, stocksData, profile, purchaseData] = await Promise.all([
-        tradeService.getPortfolio().catch(() => { portfolioFallback = true; return getDemoPortfolio(); }),
+        isVirt ? tradeService.getPortfolio().catch(() => { portfolioFallback = true; return getDemoPortfolio(); }) : Promise.resolve(null),
         tradeService.getStockList().catch(() => []),
         userService.getProfile().catch(() => null),
-        quantStoreService.getMyPurchases().catch(() => ({ purchases: [], purchasedProductIds: [] })),
+        isVirt ? quantStoreService.getMyPurchases().catch(() => ({ purchases: [], purchasedProductIds: [] })) : Promise.resolve({ purchases: [], purchasedProductIds: [] }),
       ]);
 
       setActivePurchases(purchaseData.purchases.filter((p) => p.status === 'ACTIVE'));
@@ -147,8 +151,10 @@ const DashboardPage = () => {
         }
       }
     } catch (err: any) {
-      setPortfolio(getDemoPortfolio());
-      setIsDemo(true);
+      if (isVirt) {
+        setPortfolio(getDemoPortfolio());
+        setIsDemo(true);
+      }
       setError(err.message || '대시보드 데이터를 불러오지 못했습니다. 네트워크 연결을 확인해주세요.');
     } finally {
       setLoading(false);
@@ -211,7 +217,7 @@ const DashboardPage = () => {
                 </div>
               </div>
 
-              {portfolio && (
+              {isVirt && portfolio && (
                 <div className="flex items-center gap-4 md:gap-6">
                   <div className="text-center">
                     <div className="text-xs md:text-sm text-blue-200 mb-1">총 자산</div>
@@ -235,8 +241,42 @@ const DashboardPage = () => {
           </div>
         </div>
 
-        {/* 샘플 데이터 안내 */}
-        {isDemo && (
+        {/* 일반 모드: Virt 체험 + 실계좌 연동 안내 */}
+        {!isVirt && (
+          <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button
+              onClick={() => navigate('/virt/dashboard')}
+              className="text-left p-6 rounded-2xl border-2 border-dashed border-cyan-300/40 bg-gradient-to-br from-cyan-50 to-blue-50 hover:border-cyan-400 hover:shadow-md transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-lg font-bold text-cyan-700">VIRT 가상 투자</span>
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-cyan-500 text-white rounded-full">체험하기</span>
+              </div>
+              <p className="text-sm text-gray-500">가상돈 1,000만원으로 주식·코인 매매를 체험해보세요. 전략 백테스팅, 자동 매매까지 무료로 이용 가능합니다.</p>
+              <div className="mt-3 text-sm font-semibold text-cyan-600 group-hover:text-cyan-700 flex items-center gap-1">
+                Virt 대시보드로 이동
+                <svg className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </div>
+            </button>
+            <button
+              onClick={() => navigate('/api-setting')}
+              className="text-left p-6 rounded-2xl border-2 border-dashed border-slate-300/40 bg-gradient-to-br from-slate-50 to-gray-50 hover:border-slate-400 hover:shadow-md transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-lg font-bold text-slate-700">실계좌 연동</span>
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-500 text-white rounded-full">API</span>
+              </div>
+              <p className="text-sm text-gray-500">한국투자증권(KIS), 업비트, 비트겟 API를 연동하면 실제 보유 자산과 거래 내역을 확인할 수 있습니다.</p>
+              <div className="mt-3 text-sm font-semibold text-slate-600 group-hover:text-slate-700 flex items-center gap-1">
+                API 설정으로 이동
+                <svg className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* 샘플 데이터 안내 - Virt 모드만 */}
+        {isVirt && isDemo && (
           <div className="mb-4 flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-700">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
@@ -245,8 +285,8 @@ const DashboardPage = () => {
           </div>
         )}
 
-        {/* 포트폴리오 요약 카드 */}
-        {portfolio && (
+        {/* 포트폴리오 요약 카드 - Virt 모드만 */}
+        {isVirt && portfolio && (
           <div
             className="mb-8 card card-hover cursor-pointer group"
             onClick={() => navigate('/my-portfolio')}
@@ -297,8 +337,8 @@ const DashboardPage = () => {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* 보유 종목 or 빈 상태 */}
-          {portfolio && portfolio.holdings.length > 0 ? (
+          {/* 보유 종목 or 빈 상태 - Virt 모드만 */}
+          {isVirt && portfolio && portfolio.holdings.length > 0 ? (
             <div className="card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-whale-dark">보유 종목</h2>
@@ -390,7 +430,7 @@ const DashboardPage = () => {
                 ) : null;
               })()}
             </div>
-          ) : activePurchases.length > 0 ? (
+          ) : isVirt && activePurchases.length > 0 ? (
             <div className="card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-whale-dark">항해 중인 항로</h2>
@@ -412,7 +452,7 @@ const DashboardPage = () => {
                 ))}
               </div>
             </div>
-          ) : (
+          ) : isVirt ? (
             <div className="card flex flex-col items-center justify-center text-center py-10">
               <img src="/whales/gray-whale.png" alt="회색고래" className="w-16 h-16 object-contain mb-4 opacity-60" />
               <h3 className="text-lg font-bold text-whale-dark mb-1">아직 보유 종목이 없어요</h3>
@@ -426,7 +466,7 @@ const DashboardPage = () => {
                 </button>
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* 시세 변동 상위 */}
           {liveTopMovers.length > 0 && (
@@ -525,6 +565,7 @@ const DashboardPage = () => {
             <div className="card !p-5">
               <h2 className="text-lg font-bold text-whale-dark mb-3">어디로 항해할까요?</h2>
               <div className="space-y-2">
+                {isVirt && (
                 <button
                   onClick={() => navigate('/trade')}
                   className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-gradient-to-r from-whale-light to-whale-accent text-white font-semibold text-sm shadow-sm hover:shadow-md hover:opacity-95 transition-all min-h-[44px] border border-transparent"
@@ -532,6 +573,7 @@ const DashboardPage = () => {
                   거래하기
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                 </button>
+                )}
                 {[
                   { path: '/market', label: '시세 확인하기' },
                   { path: '/strategy', label: '전략 분석하기' },
@@ -547,16 +589,17 @@ const DashboardPage = () => {
                   </button>
                 ))}
 
-                {/* Virt 진입 */}
+                {/* API 설정 - 일반 모드에서만 표시 */}
+                {!isVirt && (
                 <div className="pt-2 mt-1 border-t border-gray-100">
                   <button
-                    onClick={() => navigate('/virt')}
+                    onClick={() => navigate('/api-setting')}
                     className="w-full relative overflow-hidden rounded-lg min-h-[44px] group"
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-[#0a1628] to-[#0c1a2e]" />
                     <div className="relative flex items-center justify-between px-4 py-2.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-white/80">VIRT</span>
+                        <span className="text-sm font-bold text-white/80">API</span>
                         <span className="text-white/20">|</span>
                         <span className="text-xs text-slate-400">내 자산 연동</span>
                       </div>
@@ -566,11 +609,12 @@ const DashboardPage = () => {
                     </div>
                   </button>
                 </div>
+                )}
               </div>
             </div>
 
-            {/* 포트폴리오 통계 */}
-            {portfolio && (
+            {/* 포트폴리오 통계 - Virt 모드만 */}
+            {isVirt && portfolio && (
               <div className="card">
                 <h2 className="text-lg font-bold text-whale-dark mb-4">포트폴리오 통계</h2>
                 <div className="space-y-3.5">

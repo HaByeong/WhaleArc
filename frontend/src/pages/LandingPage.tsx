@@ -84,7 +84,7 @@ const LandingPage = () => {
                   </svg>
                 </button>
                 <button
-                  onClick={() => handleFeatureClick('/virt')}
+                  onClick={() => handleFeatureClick('/virt/dashboard')}
                   className="group inline-flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-lg font-bold transition-all duration-300 hover:-translate-y-0.5 border border-white/25 hover:border-blue-300/50 bg-white/[0.08] hover:bg-white/[0.15] backdrop-blur-sm"
                 >
                   <span className="text-blue-200">더 깊은 바다로 잠수하기</span>
@@ -140,7 +140,7 @@ const LandingPage = () => {
                   </svg>
                 </button>
                 <button
-                  onClick={() => handleFeatureClick('/virt')}
+                  onClick={() => handleFeatureClick('/virt/dashboard')}
                   className="group inline-flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-lg font-bold transition-all duration-300 hover:-translate-y-0.5 border border-white/25 hover:border-blue-300/50 bg-white/[0.08] hover:bg-white/[0.15] backdrop-blur-sm"
                 >
                   <span className="text-blue-200">더 깊은 바다로 잠수하기</span>

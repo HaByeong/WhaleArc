@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { usePolling } from '../hooks/usePolling';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
+import { useRoutePrefix, useVirtNavigate } from '../hooks/useRoutePrefix';
 import {
   tradeService,
   type StockPrice,
@@ -32,6 +33,8 @@ const assetName = (code: string, assetType?: string) => {
 };
 
 const TradePage = () => {
+  const { isVirt } = useRoutePrefix();
+  const virtNavigate = useVirtNavigate();
   const [searchParams] = useSearchParams();
   const urlCode = searchParams.get('code');
   const urlType = searchParams.get('type') as 'CRYPTO' | 'STOCK' | null;
@@ -817,7 +820,20 @@ const TradePage = () => {
 
           {/* ━━━ 우측: 주문 폼 + 포트폴리오 (4칸) ━━━ */}
           <div className="md:col-span-2 lg:col-span-4 space-y-4">
-            {!liveSelectedStock ? (
+            {!isVirt ? (
+              <div className="bg-white rounded-xl shadow-lg flex flex-col items-center justify-center py-16 px-6 text-center">
+                <img src="/whales/gray-whale.png" alt="" className="w-16 h-16 object-contain mb-4 opacity-60" />
+                <h3 className="text-lg font-bold text-whale-dark mb-2">가상 거래는 Virt에서 이용하세요</h3>
+                <p className="text-sm text-gray-400 mb-5">가상돈으로 매수/매도 주문을 체험하고 전략을 테스트해보세요</p>
+                <button
+                  onClick={() => virtNavigate('/virt/trade' + (urlCode ? `?code=${urlCode}&type=${urlType || 'CRYPTO'}` : ''))}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-cyan-500 text-white font-bold rounded-xl hover:bg-cyan-600 transition-colors"
+                >
+                  Virt에서 거래하기
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+                </button>
+              </div>
+            ) : !liveSelectedStock ? (
               <div className="bg-white rounded-xl shadow-lg flex flex-col items-center justify-center py-16 px-6">
                 <svg className="w-12 h-12 text-gray-200 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />

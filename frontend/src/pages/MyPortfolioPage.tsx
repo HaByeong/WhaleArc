@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { useVirtNavigate, useRoutePrefix } from '../hooks/useRoutePrefix';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Area, AreaChart } from 'recharts';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -19,7 +20,8 @@ const REFRESH_INTERVAL = 15_000; // 15초
 const CHART_COLORS = ['#4a90e2', '#50c878', '#f5a623', '#e74c3c', '#9b59b6', '#1abc9c', '#e67e22', '#3498db'];
 
 const MyPortfolioPage = () => {
-  const navigate = useNavigate();
+  const navigate = useVirtNavigate();
+  const { prefix, isVirt } = useRoutePrefix();
   const { user, profileName } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [purchasePerformance, setPurchasePerformance] = useState<PurchasePerformance[]>([]);
@@ -175,13 +177,52 @@ const MyPortfolioPage = () => {
     }
   }
 
+  // 일반 모드: Virt 안내 표시
+  if (!isVirt) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header showNav />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Link
+            to={`${prefix}/dashboard`}
+            className="inline-flex items-center text-gray-500 hover:text-whale-light mb-6 text-sm transition-colors"
+          >
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            대시보드
+          </Link>
+          <div className="flex flex-col items-center justify-center text-center py-20">
+            <img src="/whales/beluga.png" alt="" className="w-20 h-20 object-contain mb-6 opacity-60" />
+            <h2 className="text-2xl font-bold text-whale-dark mb-3">포트폴리오</h2>
+            <p className="text-gray-500 mb-8 max-w-md">가상 포트폴리오는 Virt 모드에서 확인할 수 있습니다.<br/>실계좌 자산은 API 설정에서 연동해주세요.</p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => navigate('/virt/my-portfolio')}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-cyan-500 text-white font-bold rounded-xl hover:bg-cyan-600 transition-colors"
+              >
+                Virt 포트폴리오 보기
+              </button>
+              <button
+                onClick={() => navigate('/api-setting')}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                실계좌 연동
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header showNav />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Link
-          to="/dashboard"
+          to={`${prefix}/dashboard`}
           className="inline-flex items-center text-gray-500 hover:text-whale-light mb-6 text-sm transition-colors"
         >
           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

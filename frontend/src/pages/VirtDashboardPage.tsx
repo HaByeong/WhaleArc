@@ -10,6 +10,7 @@ import {
   type VirtTrade,
   type VirtCredentialInfo,
 } from '../services/virtService';
+import VirtSplashLoading from '../components/VirtSplashLoading';
 
 const CHART_COLORS = ['#38bdf8', '#22d3ee', '#818cf8', '#a78bfa', '#34d399', '#f472b6', '#fb923c', '#94a3b8'];
 
@@ -162,23 +163,7 @@ const VirtDashboardPage = () => {
   );
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#060d18]">
-        <ApiSettingHeader />
-        <div className="flex items-center justify-center h-[85vh]">
-          <div className="text-center">
-            <div className="relative w-48 h-48 md:w-64 md:h-64 mx-auto mb-6">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-3/4 h-3/4 bg-cyan-500/[0.06] rounded-full blur-[60px] animate-pulse" style={{ animationDuration: '3s' }} />
-              </div>
-              <img src="/tail-sample-2.png" alt="" className="relative w-full h-full object-contain opacity-50 animate-pulse"
-                style={{ filter: 'drop-shadow(0 0 30px rgba(56, 189, 248, 0.15))' }} />
-            </div>
-            <p className="text-slate-500 text-sm">로딩 중...</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <VirtSplashLoading message="실계좌 자산을 불러오는 중..." />;
   }
 
   if (error && !credInfo && !upbitCredInfo && !bitgetCredInfo) {

@@ -58,7 +58,7 @@ const ForgotPasswordPage = () => {
 
               <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
                 WhaleArc은 이메일이 곧 아이디입니다.
-                가입한 이메일이 기억나지 않으시면 Google/카카오 소셜 로그인을 시도해보세요.
+                가입한 이메일이 기억나지 않으시면 Google 소셜 로그인을 시도해보세요.
               </div>
 
               {error && (

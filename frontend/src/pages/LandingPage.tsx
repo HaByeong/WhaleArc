@@ -87,32 +87,33 @@ const LandingPage = () => {
                   onClick={() => handleFeatureClick('/virt/dashboard')}
                   className="group inline-flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-lg font-bold transition-all duration-300 hover:-translate-y-0.5 border border-white/25 hover:border-blue-300/50 bg-white/[0.08] hover:bg-white/[0.15] backdrop-blur-sm"
                 >
-                  <span className="text-blue-200">더 깊은 바다로 잠수하기</span>
+                  <span className="text-blue-200">첫 항해가 불안하다면</span>
                   <span className="text-[10px] text-blue-200/70 tracking-wider font-semibold">VIRT</span>
-                  <svg className="w-4 h-4 text-blue-300/60 group-hover:translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  <svg className="w-4 h-4 text-blue-300/60 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </button>
               </div>
             </div>
 
-            {/* Whale Illustration - 모바일에서 적당한 크기 */}
+            {/* Whale Illustration - 모바일 */}
             <div className="flex justify-center items-center w-full mt-4">
               <div className="relative w-full max-w-xs">
-                {/* 더 강한 글로우 효과 - 여러 색상 레이어 */}
-                <div className="absolute inset-0 bg-whale-light opacity-20 rounded-full blur-3xl animate-pulse scale-150" style={{ willChange: 'opacity' }}></div>
-                <div className="absolute inset-0 bg-whale-accent opacity-12 rounded-full blur-2xl animate-pulse scale-125" style={{ animationDelay: '0.5s', willChange: 'opacity' }}></div>
+                <div className="absolute inset-0 bg-whale-light opacity-20 rounded-full blur-3xl animate-pulse scale-150 z-0" style={{ willChange: 'opacity' }}></div>
                 <img
                   src="/whale-hero.png"
                   alt="WhaleArc Whale Illustration"
-                  className="relative w-full h-auto object-contain animate-whale-swim"
+                  className="relative z-10 w-full h-auto object-contain whale-hero-swim"
                   style={{
-                    filter: 'drop-shadow(0 0 25px rgba(74, 144, 226, 0.35)) drop-shadow(0 0 50px rgba(74, 144, 226, 0.15))',
+                    filter: 'drop-shadow(0 0 15px rgba(74, 144, 226, 0.2)) drop-shadow(0 0 35px rgba(74, 144, 226, 0.08))',
                     transformOrigin: 'center center',
                     willChange: 'transform',
                     backfaceVisibility: 'hidden',
                   }}
                 />
+                <div className="whale-bubble whale-bubble-1" />
+                <div className="whale-bubble whale-bubble-3" />
+                <div className="whale-bubble whale-bubble-5" />
               </div>
             </div>
           </div>
@@ -143,10 +144,10 @@ const LandingPage = () => {
                   onClick={() => handleFeatureClick('/virt/dashboard')}
                   className="group inline-flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-lg font-bold transition-all duration-300 hover:-translate-y-0.5 border border-white/25 hover:border-blue-300/50 bg-white/[0.08] hover:bg-white/[0.15] backdrop-blur-sm"
                 >
-                  <span className="text-blue-200">더 깊은 바다로 잠수하기</span>
+                  <span className="text-blue-200">첫 항해가 불안하다면</span>
                   <span className="text-[10px] text-blue-200/70 tracking-wider font-semibold">VIRT</span>
-                  <svg className="w-4 h-4 text-blue-300/60 group-hover:translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  <svg className="w-4 h-4 text-blue-300/60 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </button>
               </div>
@@ -155,20 +156,27 @@ const LandingPage = () => {
             {/* Right: Whale Illustration */}
             <div className="flex-1 flex justify-center items-center">
               <div className="relative w-full">
-                {/* 더 강한 글로우 효과 - 여러 색상 레이어 */}
-                <div className="absolute inset-0 bg-whale-light opacity-20 rounded-full blur-3xl animate-pulse scale-150" style={{ willChange: 'opacity' }}></div>
-                <div className="absolute inset-0 bg-whale-accent opacity-12 rounded-full blur-2xl animate-pulse scale-125" style={{ animationDelay: '0.5s', willChange: 'opacity' }}></div>
+                {/* 글로우 */}
+                <div className="absolute inset-0 bg-whale-light opacity-20 rounded-full blur-3xl animate-pulse scale-150 z-0" style={{ willChange: 'opacity' }}></div>
+                {/* 고래 이미지 — z-10 */}
                 <img
                   src="/whale-hero.png"
                   alt="WhaleArc Whale Illustration"
-                  className="relative w-full max-w-3xl h-auto object-contain animate-whale-swim hover:scale-105 transition-transform duration-500"
+                  className="relative z-10 w-full max-w-3xl h-auto object-contain whale-hero-swim hover:scale-105 transition-transform duration-500"
                   style={{
-                    filter: 'drop-shadow(0 0 25px rgba(74, 144, 226, 0.35)) drop-shadow(0 0 50px rgba(74, 144, 226, 0.15))',
+                    filter: 'drop-shadow(0 0 15px rgba(74, 144, 226, 0.2)) drop-shadow(0 0 35px rgba(74, 144, 226, 0.08))',
                     transformOrigin: 'center center',
                     willChange: 'transform',
                     backfaceVisibility: 'hidden',
                   }}
                 />
+                {/* 거품 파티클 — 고래 입에서 위로 */}
+                <div className="whale-bubble whale-bubble-1" />
+                <div className="whale-bubble whale-bubble-2" />
+                <div className="whale-bubble whale-bubble-3" />
+                <div className="whale-bubble whale-bubble-4" />
+                <div className="whale-bubble whale-bubble-5" />
+                <div className="whale-bubble whale-bubble-6" />
               </div>
             </div>
           </div>
@@ -211,8 +219,8 @@ const LandingPage = () => {
                 ),
               },
               {
-                title: '항로 상점',
-                desc: '검증된 퀀트 전략을 구매하고 자동 투자',
+                title: '전략 학습',
+                desc: '퀀트 전략을 배우고 백테스트로 검증',
                 route: '/store',
                 icon: (
                   <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -273,29 +281,34 @@ const LandingPage = () => {
       </div>
 
       {/* 용어 가이드 섹션 */}
-      <div className="bg-whale-dark text-white py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
+      <div className="relative bg-whale-dark text-white py-20 overflow-hidden">
+        {/* 배경 장식 */}
+        <div className="absolute top-10 left-10 w-72 h-72 bg-whale-light opacity-[0.03] rounded-full blur-3xl" />
+        <div className="absolute bottom-10 right-10 w-96 h-96 bg-whale-accent opacity-[0.03] rounded-full blur-3xl" />
+
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-14">
+            <p className="text-whale-light text-sm font-semibold tracking-widest uppercase mb-3">Glossary</p>
             <h2 className="text-3xl md:text-4xl font-bold mb-3" style={{ fontFamily: "'Quicksand', sans-serif" }}>
               <span className="text-whale-light">WhaleArc</span> 용어 가이드
             </h2>
-            <p className="text-blue-200 text-lg">
+            <p className="text-blue-200/70 text-lg">
               투자의 세계를 고래의 항해에 빗대어 표현합니다
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {[
               {
                 icon: '/whales/narwhal.png',
                 term: '항로',
                 meaning: '퀀트 트레이딩 전략',
-                desc: '과거 데이터로 백테스트를 거친 검증된 자동 투자 전략. 항로를 따라가면 전략대로 자동 매매됩니다.',
+                desc: '백테스트를 거친 자동 투자 전략. 항로를 따라가면 전략대로 자동 매매됩니다.',
               },
               {
                 icon: '/whales/sperm-whale.png',
                 term: '항해',
-                meaning: '전략 기반 투자 실행',
+                meaning: '전략 실행 · 운용',
                 desc: '항로를 구매하고 투자금을 설정하면 항해가 시작됩니다. 항해 중 = 전략 운용 중.',
               },
               {
@@ -311,50 +324,33 @@ const LandingPage = () => {
                 desc: '실시간 시세를 확인하고 시장 흐름을 분석하는 과정. 시세 페이지에서 유영할 수 있습니다.',
               },
               {
-                icon: '/whales/dolphin.png',
-                term: '항로 상점',
-                meaning: '전략 마켓플레이스',
-                desc: '다양한 퀀트 전략(항로)을 탐색하고 구매할 수 있는 공간입니다.',
-              },
-              {
-                icon: '/whales/orca.png',
-                term: '항해 중',
-                meaning: '전략 운용 상태',
-                desc: '구매한 항로가 활성화되어 자동 매매가 진행되고 있는 상태입니다.',
-              },
-              {
-                icon: '/whales/beluga.png',
-                term: '포트폴리오',
-                meaning: '나의 투자 현황',
-                desc: '보유 자산, 수익률, 현금 잔고 등 전체 투자 현황을 한눈에 볼 수 있습니다.',
-              },
-              {
-                icon: '/whales/risso-dolphin.png',
-                term: '선원',
-                meaning: 'WhaleArc 사용자',
-                desc: '바다 위의 투자자. 회원가입하면 선원이 되어 항해를 시작할 수 있습니다.',
-              },
-              {
                 icon: '/whales/gray-whale.png',
                 term: '해류',
                 meaning: '시장 추세 · 흐름',
                 desc: '시장의 전체적인 방향성. 해류를 읽어야 좋은 항로를 선택할 수 있습니다.',
               },
+              {
+                icon: '/whales/orca.png',
+                term: '백테스트',
+                meaning: '과거 데이터 전략 검증',
+                desc: '실제 투자 전에 과거 시세 데이터로 전략의 수익률과 리스크를 미리 시뮬레이션합니다.',
+              },
             ].map((item) => (
               <div
                 key={item.term}
-                className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 hover:bg-white/10 transition-colors"
+                className="group bg-white/[0.04] backdrop-blur-sm border border-white/[0.08] rounded-xl p-5 hover:bg-white/[0.08] hover:border-whale-light/30 hover:-translate-y-0.5 transition-all duration-300"
               >
                 <div className="flex items-center gap-3 mb-3">
-                  <img src={item.icon} alt={item.term} className="w-10 h-10 object-contain"
-/>
+                  <div className="w-11 h-11 rounded-lg bg-white/[0.06] p-1.5 flex items-center justify-center group-hover:bg-whale-light/10 transition-colors">
+                    <img src={item.icon} alt={item.term} className="w-full h-full object-contain" />
+                  </div>
                   <div>
-                    <span className="text-lg font-bold text-white">{item.term}</span>
-                    <span className="mx-2 text-white/30">=</span>
+                    <span className="text-[17px] font-bold text-white">{item.term}</span>
+                    <span className="mx-2 text-white/20">=</span>
                     <span className="text-sm font-medium text-whale-light">{item.meaning}</span>
                   </div>
                 </div>
-                <p className="text-sm text-blue-200/80 leading-relaxed">{item.desc}</p>
+                <p className="text-sm text-blue-200/60 leading-relaxed">{item.desc}</p>
               </div>
             ))}
           </div>

@@ -16,13 +16,15 @@ import java.util.*;
 /**
  * 업비트 Open API 클라이언트.
  * - JWT 인증 (access_key + secret_key)
- * - 계좌 잔고 조회
+ * - 리트라이 + 지수 백오프
  */
 @Slf4j
 @Service
 public class VirtUpbitClient {
 
     private static final String BASE_URL = "https://api.upbit.com/v1";
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_DELAY_MS = 500;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -36,43 +38,66 @@ public class VirtUpbitClient {
 
     /**
      * 전체 계좌 잔고 조회
-     * @return 코인별 잔고 리스트
      */
     public List<Map<String, Object>> getAccounts(String accessKey, String secretKey) {
-        String token = generateToken(accessKey, secretKey);
+        Exception lastException = null;
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + token);
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                String token = generateToken(accessKey, secretKey);
 
-        HttpEntity<Void> request = new HttpEntity<>(headers);
+                HttpHeaders headers = new HttpHeaders();
+                headers.set("Authorization", "Bearer " + token);
+                HttpEntity<Void> request = new HttpEntity<>(headers);
 
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(
-                    BASE_URL + "/accounts", HttpMethod.GET, request, String.class);
+                ResponseEntity<String> response = restTemplate.exchange(
+                        BASE_URL + "/accounts", HttpMethod.GET, request, String.class);
 
-            return objectMapper.readValue(response.getBody(),
-                    new TypeReference<List<Map<String, Object>>>() {});
-        } catch (Exception e) {
-            log.error("[Virt/Upbit] 잔고 조회 실패: {}", e.getMessage());
-            throw new RuntimeException("업비트 잔고 조회 실패: " + e.getMessage(), e);
+                List<Map<String, Object>> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<List<Map<String, Object>>>() {});
+
+                if (attempt > 1) {
+                    log.info("[Virt/Upbit] 잔고 조회 성공 ({}번째 시도)", attempt);
+                }
+                return result;
+            } catch (Exception e) {
+                lastException = e;
+                log.warn("[Virt/Upbit] 잔고 조회 실패 (시도 {}/{}): {}", attempt, MAX_RETRIES, e.getMessage());
+                if (attempt < MAX_RETRIES) {
+                    sleep(RETRY_DELAY_MS * attempt);
+                }
+            }
         }
+
+        throw new RuntimeException("업비트 잔고 조회 실패 (" + MAX_RETRIES + "회 재시도 실패)", lastException);
     }
 
     /**
      * 현재 시세 조회 (여러 마켓)
-     * @param markets "KRW-BTC,KRW-ETH,..." 형태
      */
     public List<Map<String, Object>> getTicker(String markets) {
-        try {
-            ResponseEntity<String> response = restTemplate.getForEntity(
-                    BASE_URL + "/ticker?markets=" + markets, String.class);
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                ResponseEntity<String> response = restTemplate.getForEntity(
+                        BASE_URL + "/ticker?markets=" + markets, String.class);
 
-            return objectMapper.readValue(response.getBody(),
-                    new TypeReference<List<Map<String, Object>>>() {});
-        } catch (Exception e) {
-            log.error("[Virt/Upbit] 시세 조회 실패: {}", e.getMessage());
-            return List.of();
+                List<Map<String, Object>> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<List<Map<String, Object>>>() {});
+
+                if (attempt > 1) {
+                    log.info("[Virt/Upbit] 시세 조회 성공 ({}번째 시도)", attempt);
+                }
+                return result;
+            } catch (Exception e) {
+                log.warn("[Virt/Upbit] 시세 조회 실패 (시도 {}/{}): {}", attempt, MAX_RETRIES, e.getMessage());
+                if (attempt < MAX_RETRIES) {
+                    sleep(RETRY_DELAY_MS * attempt);
+                }
+            }
         }
+
+        log.error("[Virt/Upbit] 시세 조회 최종 실패");
+        return List.of();
     }
 
     /** 업비트 JWT 토큰 생성 */
@@ -82,5 +107,13 @@ public class VirtUpbitClient {
                 .claim("nonce", UUID.randomUUID().toString())
                 .signWith(Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8)))
                 .compact();
+    }
+
+    private void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

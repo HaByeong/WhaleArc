@@ -26,6 +26,7 @@ interface TradingChartProps {
   className?: string;
   assetType?: 'STOCK' | 'CRYPTO';
   activeIndicators?: string[];
+  isDark?: boolean;
 }
 
 const INTERVALS = [
@@ -94,7 +95,7 @@ interface SubChartInfo {
 
 const TradingChart = ({
   symbol, price, changeRate, className = '', assetType,
-  activeIndicators = [],
+  activeIndicators = [], isDark = false,
 }: TradingChartProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -127,15 +128,15 @@ const TradingChart = ({
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { color: '#ffffff' },
-        textColor: '#6b7280',
+        background: { color: isDark ? '#0a1628' : '#ffffff' },
+        textColor: isDark ? '#475569' : '#6b7280',
         fontFamily: "'Pretendard', sans-serif",
         fontSize: 11,
         attributionLogo: false,
       },
       grid: {
-        vertLines: { color: '#f3f4f6', style: 0 },
-        horzLines: { color: '#f3f4f6', style: 0 },
+        vertLines: { color: isDark ? 'rgba(255,255,255,0.04)' : '#f3f4f6', style: 0 },
+        horzLines: { color: isDark ? 'rgba(255,255,255,0.04)' : '#f3f4f6', style: 0 },
       },
       width: containerRef.current.clientWidth,
       height: 340,
@@ -222,8 +223,8 @@ const TradingChart = ({
       if (!container) continue;
 
       const subChart = createChart(container, {
-        layout: { background: { color: '#ffffff' }, textColor: '#6b7280', fontFamily: "'Pretendard', sans-serif", fontSize: 10, attributionLogo: false },
-        grid: { vertLines: { color: '#f9fafb' }, horzLines: { color: '#f3f4f6' } },
+        layout: { background: { color: isDark ? '#0a1628' : '#ffffff' }, textColor: isDark ? '#475569' : '#6b7280', fontFamily: "'Pretendard', sans-serif", fontSize: 10, attributionLogo: false },
+        grid: { vertLines: { color: isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb' }, horzLines: { color: isDark ? 'rgba(255,255,255,0.04)' : '#f3f4f6' } },
         width: container.clientWidth,
         height: 100,
         timeScale: { visible: false },
@@ -539,15 +540,15 @@ const TradingChart = ({
       <div className="flex items-center justify-between mb-3">
         {assetType === 'STOCK' ? (
           <div className="flex items-center space-x-1">
-            <span className="text-xs text-gray-400 mr-1">일봉</span>
+            <span className={`text-xs mr-1 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>일봉</span>
             {STOCK_PERIODS.map(p => (
               <button
                 key={p.months}
                 onClick={() => setStockPeriod(p.months)}
                 className={`px-3 py-1.5 text-xs rounded-full font-medium transition-all ${
                   stockPeriod === p.months
-                    ? 'bg-whale-dark text-white shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                    ? isDark ? 'bg-white/10 text-cyan-400' : 'bg-whale-dark text-white shadow-sm'
+                    : isDark ? 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.05]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
                 }`}
               >
                 {p.label}
@@ -562,8 +563,8 @@ const TradingChart = ({
                 onClick={() => setInterval(iv.value)}
                 className={`px-3 py-1.5 text-xs rounded-full font-medium transition-all ${
                   interval === iv.value
-                    ? 'bg-whale-dark text-white shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                    ? isDark ? 'bg-white/10 text-cyan-400' : 'bg-whale-dark text-white shadow-sm'
+                    : isDark ? 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.05]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
                 }`}
               >
                 {iv.label}

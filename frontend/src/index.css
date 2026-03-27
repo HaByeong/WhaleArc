@@ -89,6 +89,84 @@
   }
 }
 
+/* ═══════════════════════════════════════
+   WhaleArc 다크 모드 (non-Virt 전용)
+   body.whalearc-dark 에서 자동 적용
+   — 컴포넌트 클래스만 오버라이드
+   — 각 페이지는 자체적으로 isVirt 분기
+   ═══════════════════════════════════════ */
+body.whalearc-dark {
+  background-color: #060d18;
+  color: #e2e8f0;
+}
+
+body.whalearc-dark .card {
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+  color: #e2e8f0;
+}
+body.whalearc-dark .card:hover {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+body.whalearc-dark .card-hover:hover {
+  border-color: rgba(56, 189, 248, 0.3);
+}
+body.whalearc-dark .btn-secondary {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+body.whalearc-dark .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+body.whalearc-dark .input-field {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+body.whalearc-dark .input-field:hover { border-color: rgba(56, 189, 248, 0.3); }
+body.whalearc-dark .input-field:focus { border-color: rgba(56, 189, 248, 0.5); }
+body.whalearc-dark .input-field select,
+body.whalearc-dark .input-field option { background: #0c1a2e; color: #e2e8f0; }
+body.whalearc-dark .stock-item-default {
+  background: rgba(255, 255, 255, 0.025);
+  border-color: transparent;
+}
+body.whalearc-dark .stock-item-default:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+body.whalearc-dark .stock-item-selected {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+/* 폼 요소 */
+body.whalearc-dark select,
+body.whalearc-dark input:not([type="checkbox"]):not([type="radio"]),
+body.whalearc-dark textarea {
+  background-color: rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.1);
+  color-scheme: dark;
+}
+body.whalearc-dark select option { background: #0c1a2e; color: #e2e8f0; }
+body.whalearc-dark input::placeholder,
+body.whalearc-dark textarea::placeholder { color: #475569; }
+
+/* 스크롤바 */
+body.whalearc-dark ::-webkit-scrollbar-track { background: #060d18; }
+body.whalearc-dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+
+/* 그래디언트 텍스트 보호 */
+body.whalearc-dark .whalearc-text,
+body.whalearc-dark .whalearc-text-nav {
+  color: unset !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -132,8 +210,78 @@
   animation: whale-swim 4s ease-in-out infinite;
   will-change: transform;
   backface-visibility: hidden;
-  -webkit-font-smoothing: antialiased;
 }
+
+/* 글로우 — 느리게 숨쉬듯 */
+.whale-glow-slow {
+  animation: whale-glow-breathe 8s ease-in-out infinite;
+}
+@keyframes whale-glow-breathe {
+  0%, 100% { opacity: 0.12; transform: scale(1.35); }
+  50%      { opacity: 0.2; transform: scale(1.45); }
+}
+
+/* 랜딩 히어로 고래 — 더 자연스러운 헤엄 */
+.whale-hero-swim {
+  animation: whale-hero-motion 6s ease-in-out infinite;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+@keyframes whale-hero-motion {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  20%      { transform: translate3d(5px, -12px, 0) rotate(-1.5deg) scale(1.01); }
+  50%      { transform: translate3d(-3px, -8px, 0) rotate(0.5deg) scale(1); }
+  75%      { transform: translate3d(2px, -14px, 0) rotate(1.5deg) scale(1.01); }
+}
+
+/* ── 거품 파티클 — 고래 입(왼쪽 아래)에서 위로 ── */
+.whale-bubble {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.8), rgba(255,255,255,0.15));
+  border: 1px solid rgba(255,255,255,0.35);
+  box-shadow: 0 0 8px rgba(255,255,255,0.35), inset 0 0 4px rgba(255,255,255,0.2);
+  pointer-events: none;
+  z-index: 30;
+}
+.whale-bubble-1 {
+  width: 14px; height: 14px;
+  bottom: 55%; left: 18%;
+  animation: whale-bubble-rise 4s ease-in-out 0s infinite;
+}
+.whale-bubble-2 {
+  width: 10px; height: 10px;
+  bottom: 50%; left: 22%;
+  animation: whale-bubble-rise 5s ease-in-out 0.8s infinite;
+}
+.whale-bubble-3 {
+  width: 16px; height: 16px;
+  bottom: 48%; left: 15%;
+  animation: whale-bubble-rise 4.5s ease-in-out 1.6s infinite;
+}
+.whale-bubble-4 {
+  width: 8px; height: 8px;
+  bottom: 52%; left: 26%;
+  animation: whale-bubble-rise 5.5s ease-in-out 2.4s infinite;
+}
+.whale-bubble-5 {
+  width: 12px; height: 12px;
+  bottom: 45%; left: 20%;
+  animation: whale-bubble-rise 3.8s ease-in-out 3.2s infinite;
+}
+.whale-bubble-6 {
+  width: 6px; height: 6px;
+  bottom: 58%; left: 24%;
+  animation: whale-bubble-rise 4.2s ease-in-out 0.4s infinite;
+}
+@keyframes whale-bubble-rise {
+  0%   { transform: translateY(0) scale(0.3); opacity: 0; }
+  10%  { opacity: 0.9; transform: translateY(-10px) scale(0.7); }
+  40%  { opacity: 0.7; transform: translateY(-60px) scale(1); }
+  70%  { opacity: 0.4; transform: translateY(-110px) scale(0.85); }
+  100% { transform: translateY(-160px) scale(0.3); opacity: 0; }
+}
+
 
 .animate-whale-float {
   animation: whale-float 3s ease-in-out infinite;
@@ -210,56 +358,279 @@
   80%       { transform: rotate(-6deg); }
 }
 
-.whale-logo-wag {
-  transform-origin: 50% 85%;
-  animation: wt-wag 2.2s ease-in-out infinite;
-  will-change: transform;
+/* 로고 래퍼: 호버 시 살짝 올라감 */
+.wt-logo-wrap {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.wt-logo-wrap:hover {
+  transform: translateY(-2px) scale(1.05);
 }
 
+/* 고래 꼬리 흔들기 */
+.whale-logo-wag {
+  transform-origin: 50% 85%;
+  animation: wt-wag 2.5s ease-in-out infinite;
+  will-change: transform;
+  transition: filter 0.3s;
+}
+
+/* 글로우 오라: 은은한 숨쉬기 */
+.wt-glow {
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(74, 144, 226, 0.25) 0%, transparent 70%);
+  animation: wt-glow-pulse 3s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes wt-glow-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50%      { opacity: 0.8; transform: scale(1.1); }
+}
+
+/* 수면 파도 */
 .wt-wave {
   border-radius: 50%;
-  border: 1.5px solid rgba(74, 144, 226, 0.75);
   background: transparent;
   transform-origin: center;
 }
-
-.wt-wave-1 { animation: wt-wave-out 2.6s ease-out infinite; }
-.wt-wave-2 { animation: wt-wave-out 2.6s ease-out 0.87s infinite; }
-.wt-wave-3 { animation: wt-wave-out 2.6s ease-out 1.73s infinite; }
+.wt-wave-1 {
+  border: 1.5px solid rgba(74, 144, 226, 0.7);
+  animation: wt-wave-out 2.8s ease-out infinite;
+}
+.wt-wave-2 {
+  border: 1.2px solid rgba(96, 165, 250, 0.6);
+  animation: wt-wave-out 2.8s ease-out 0.7s infinite;
+}
+.wt-wave-3 {
+  border: 1px solid rgba(125, 185, 255, 0.5);
+  animation: wt-wave-out 2.8s ease-out 1.4s infinite;
+}
+.wt-wave-4 {
+  border: 0.8px solid rgba(147, 197, 253, 0.35);
+  animation: wt-wave-out 2.8s ease-out 2.1s infinite;
+}
 
 @keyframes wt-wave-out {
-  0%   { transform: scale(0.35, 0.2);  opacity: 0.9; }
-  80%  { opacity: 0.12; }
-  100% { transform: scale(3.8, 1.2); opacity: 0; }
+  0%   { transform: scale(0.3, 0.15); opacity: 0.95; }
+  60%  { opacity: 0.2; }
+  100% { transform: scale(4, 1.3); opacity: 0; }
 }
 
-/* WHALEARC 로고 텍스트 */
+/* WHALEARC 로고 텍스트 (랜딩) */
 .whalearc-text {
-  letter-spacing: 0.18em;
+  letter-spacing: 0.12em;
   font-weight: 800;
-  background: linear-gradient(135deg, #ffffff 0%, #a8d4ff 40%, #4a90e2 70%, #a8d4ff 100%);
-  background-size: 200% 200%;
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%, #a8d4ff 25%, #4a90e2 50%, #a8d4ff 75%, #ffffff 100%
+  );
+  background-size: 300% 100%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: whalearc-shimmer 4s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px rgba(74, 144, 226, 0.4));
+  animation: whalearc-shine 5s linear infinite;
+  filter: drop-shadow(0 0 8px rgba(74, 144, 226, 0.35));
 }
 
+/* WHALEARC 로고 텍스트 (Virt 네비 — 라이트 배경) */
 .whalearc-text-nav {
-  letter-spacing: 0.18em;
+  letter-spacing: 0.12em;
   font-weight: 800;
-  background: linear-gradient(135deg, #1a2b4d 0%, #2d4a7a 50%, #4a90e2 100%);
-  background-size: 200% 200%;
+  background: linear-gradient(
+    90deg,
+    #0f2240 0%, #1e3a6e 20%, #4a90e2 50%, #1e3a6e 80%, #0f2240 100%
+  );
+  background-size: 300% 100%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: whalearc-shimmer 4s ease-in-out infinite;
+  animation: whalearc-shine 5s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(74, 144, 226, 0.15));
 }
 
-@keyframes whalearc-shimmer {
-  0%, 100% { background-position: 0% 50%; }
-  50%      { background-position: 100% 50%; }
+/* 빛이 좌→우로 흘러가는 효과 */
+@keyframes whalearc-shine {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: -100% 50%; }
+}
+
+/* Pro 로고: 부드러운 부유 */
+.whale-logo-float {
+  transform-origin: 50% 60%;
+  animation: wt-float 3.5s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes wt-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2.5px); }
+}
+
+/* Pro 글로우 */
+.wt-glow-pro {
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(56, 189, 248, 0.25) 0%, rgba(74, 144, 226, 0.1) 40%, transparent 70%);
+  animation: wt-glow-pro-pulse 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+/* 대시보드 고래 로고 파문 */
+.dash-ripple-1 {
+  animation: dash-ripple 3s ease-out infinite;
+}
+.dash-ripple-2 {
+  animation: dash-ripple 3s ease-out 1.5s infinite;
+}
+@keyframes dash-ripple {
+  0%   { transform: scale(1); opacity: 0.4; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+/* 대시보드 고래 부유 + 글로우 */
+.dash-whale-float {
+  animation: dash-whale-float 4s ease-in-out infinite;
+}
+@keyframes dash-whale-float {
+  0%, 100% { transform: translateY(0) scale(1); filter: drop-shadow(0 0 6px rgba(74,144,226,0.4)); }
+  50%      { transform: translateY(-4px) scale(1.05); filter: drop-shadow(0 0 14px rgba(74,144,226,0.7)); }
+}
+/* 대시보드 배너 거품 — 배너 전체 영역에서 떠오름 */
+.dash-banner-bubble {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+  pointer-events: none;
+  z-index: 20;
+  animation: dash-banner-bubble-rise 5s ease-in-out infinite;
+}
+.dash-banner-bubble-1 { width: 8px; height: 8px; left: 5%;  bottom: 10%; animation-duration: 4s;   animation-delay: 0s; }
+.dash-banner-bubble-2 { width: 6px; height: 6px; left: 12%; bottom: 20%; animation-duration: 5s;   animation-delay: 1.2s; }
+.dash-banner-bubble-3 { width: 10px; height: 10px; left: 8%; bottom: 5%;  animation-duration: 4.5s; animation-delay: 0.6s; }
+.dash-banner-bubble-4 { width: 5px; height: 5px; left: 18%; bottom: 15%; animation-duration: 5.5s; animation-delay: 2s; }
+.dash-banner-bubble-5 { width: 7px; height: 7px; left: 3%;  bottom: 30%; animation-duration: 3.5s; animation-delay: 0.3s; }
+@keyframes dash-banner-bubble-rise {
+  0%   { opacity: 0; transform: translateY(0) scale(0.4); }
+  20%  { opacity: 0.7; }
+  80%  { opacity: 0.3; }
+  100% { opacity: 0; transform: translateY(-60px) scale(1.2); }
+}
+
+@keyframes wt-glow-pro-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.92); }
+  50%      { opacity: 1; transform: scale(1.12); }
+}
+
+/* 노드 반짝임 파티클 (와이어프레임 꼭짓점 빛) */
+.wt-node {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(56, 189, 248, 0.9);
+  pointer-events: none;
+  box-shadow: 0 0 4px rgba(56, 189, 248, 0.6);
+}
+.wt-node-1 { animation: wt-node-blink 2.5s ease-in-out 0s infinite; }
+.wt-node-2 { animation: wt-node-blink 2.5s ease-in-out 0.7s infinite; }
+.wt-node-3 { animation: wt-node-blink 2.5s ease-in-out 1.3s infinite; }
+.wt-node-4 { animation: wt-node-blink 2.5s ease-in-out 1.9s infinite; }
+.wt-node-5 { animation: wt-node-blink 2.5s ease-in-out 0.4s infinite; }
+
+/* 바다 수면 물결 — 좌우 출렁임 */
+.wt-ocean-wave-1 {
+  animation: wt-ocean-sway 3s ease-in-out infinite;
+  transform-origin: center;
+}
+.wt-ocean-wave-2 {
+  animation: wt-ocean-sway 3.5s ease-in-out 0.5s infinite;
+  transform-origin: center;
+}
+@keyframes wt-ocean-sway {
+  0%, 100% { transform: translateX(-2px); opacity: 0.25; }
+  50%      { transform: translateX(2px); opacity: 0.5; }
+}
+
+/* 윤곽선을 따라 빛이 흐르는 효과 */
+.wt-trace-left {
+  stroke-dasharray: 15 120;
+  animation: wt-trace-flow 4s ease-in-out infinite;
+}
+.wt-trace-right {
+  stroke-dasharray: 15 120;
+  animation: wt-trace-flow 4s ease-in-out 0.5s infinite;
+}
+@keyframes wt-trace-flow {
+  0%   { stroke-dashoffset: 135; }
+  100% { stroke-dashoffset: 0; }
+}
+
+/* 스플래시 로딩 바 */
+.animate-loading-bar {
+  animation: wt-loading-bar 1.8s ease-in-out infinite;
+}
+@keyframes wt-loading-bar {
+  0%   { width: 0%; margin-left: 0; }
+  50%  { width: 60%; margin-left: 20%; }
+  100% { width: 0%; margin-left: 100%; }
+}
+
+/* ── 해류 불안정 이펙트 ── */
+.wt-current-wave-1 { animation: wt-current-drift 4s ease-in-out infinite; }
+.wt-current-wave-2 { animation: wt-current-drift 5s ease-in-out 0.5s infinite; }
+.wt-current-wave-3 { animation: wt-current-drift 6s ease-in-out 1s infinite; }
+@keyframes wt-current-drift {
+  0%, 100% { transform: translateX(-8px); }
+  50%      { transform: translateX(8px); }
+}
+.wt-drift-particle-1 { animation: wt-particle-float 3s ease-in-out infinite; }
+.wt-drift-particle-2 { animation: wt-particle-float 4s ease-in-out 1s infinite; }
+.wt-drift-particle-3 { animation: wt-particle-float 3.5s ease-in-out 0.5s infinite; }
+@keyframes wt-particle-float {
+  0%, 100% { transform: translate(0, 0); opacity: 0.2; }
+  50%      { transform: translate(10px, -5px); opacity: 0.5; }
+}
+.wt-current-icon {
+  animation: wt-icon-flicker 2s ease-in-out infinite;
+}
+@keyframes wt-icon-flicker {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%      { opacity: 0.7; transform: scale(1.05); }
+}
+
+/* 물이 꼬리를 타고 흐르는 라인 */
+.wt-water-flow-1 {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: wt-water-drip 2.5s ease-in-out 0.3s infinite;
+}
+.wt-water-flow-2 {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: wt-water-drip 2.5s ease-in-out 1.0s infinite;
+}
+@keyframes wt-water-drip {
+  0%   { stroke-dashoffset: 20; opacity: 0; }
+  20%  { opacity: 0.5; }
+  60%  { opacity: 0.3; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+/* BETA 뱃지 미세 펄스 */
+.wt-beta-badge {
+  animation: wt-beta-pulse 3s ease-in-out infinite;
+}
+@keyframes wt-beta-pulse {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes wt-node-blink {
+  0%, 100% { opacity: 0; transform: scale(0.5); }
+  50%      { opacity: 1; transform: scale(1.2); }
+}
+
+/* BETA 뱃지 미세 펄스 */
+.wt-beta-badge {
+  animation: wt-beta-pulse 3s ease-in-out infinite;
+}
+@keyframes wt-beta-pulse {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.05); }
 }
 
 /* 평소에는 스크롤바 숨기고, 스크롤/호버 시 얇게 등장 */

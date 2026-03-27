@@ -48,28 +48,26 @@ const Header = ({ showNav = false }: HeaderProps) => {
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
+  // non-Virt + 네비 = 다크 헤더
+  const isDarkNav = showNav && !isVirt;
+
   return (
     <>
     <Toast toasts={toasts} onDismiss={dismissToast} />
-    <header className={showNav ? "bg-white shadow-sm" : "bg-whale-dark"}>
+    <header className={isDarkNav ? "bg-[#060d18] border-b border-white/[0.06]" : showNav ? "bg-white shadow-sm" : "bg-whale-dark"}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="flex items-center focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-lg"
             aria-label="홈으로 이동"
           >
-            <div className="flex items-center space-x-2">
-              <WhaleTailLogo
-                size={40}
-                showNav={showNav}
-              />
-              <span
-                className={`text-xl ml-1 ${showNav ? 'whalearc-text-nav' : 'whalearc-text'}`}
-              >
+            <div className="flex items-center gap-1.5" style={{ height: 40 }}>
+              <WhaleTailLogo size={40} showNav={showNav} darkNav={isDarkNav} />
+              <span className={`text-xl ${isDarkNav ? 'whalearc-text' : showNav ? 'whalearc-text-nav' : 'whalearc-text'}`}>
                 WHALEARC{isVirt && <span className="text-cyan-400">-VIRT</span>}
               </span>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${showNav ? 'bg-whale-light text-white' : 'bg-blue-400 text-white'}`}>
+              <span className={`wt-beta-badge text-[10px] font-bold px-2 py-0.5 rounded-full ${isDarkNav ? 'bg-cyan-500/15 text-cyan-400/80 border border-cyan-500/25' : showNav ? 'bg-gradient-to-r from-whale-light to-whale-accent text-white shadow-sm' : 'bg-gradient-to-r from-blue-400 to-blue-500 text-white shadow-sm shadow-blue-400/30'}`}>
                 BETA
               </span>
             </div>
@@ -93,8 +91,8 @@ const Header = ({ showNav = false }: HeaderProps) => {
                     to={to}
                     className={`text-sm transition-colors font-medium rounded px-2 py-1.5 ${
                       isActive(to)
-                        ? 'text-whale-light border-b-2 border-whale-light'
-                        : 'text-gray-700 hover:text-whale-light'
+                        ? isDarkNav ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-whale-light border-b-2 border-whale-light'
+                        : isDarkNav ? 'text-slate-400 hover:text-white' : 'text-gray-700 hover:text-whale-light'
                     }`}
                     aria-label={label}
                   >
@@ -102,12 +100,12 @@ const Header = ({ showNav = false }: HeaderProps) => {
                   </Link>
                 ))}
                 {isAuthenticated && (
-                  <div className="flex items-center space-x-3 ml-4 pl-4 border-l border-gray-200">
+                  <div className={`flex items-center space-x-3 ml-4 pl-4 border-l ${isDarkNav ? 'border-white/10' : 'border-gray-200'}`}>
                     {/* 알림 벨 */}
                     <div className="relative" ref={notifRef}>
                       <button
                         onClick={() => { setShowNotifPanel(!showNotifPanel); if (!showNotifPanel) refreshNotifications(); }}
-                        className="relative p-2 text-gray-500 hover:text-whale-light transition-colors rounded-lg focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2"
+                        className={`relative p-2 transition-colors rounded-lg focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 ${isDarkNav ? 'text-slate-400 hover:text-white' : 'text-gray-500 hover:text-whale-light'}`}
                         aria-label="알림"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -166,17 +164,17 @@ const Header = ({ showNav = false }: HeaderProps) => {
 
                     <Link
                       to={`${prefix}/user`}
-                      className="flex items-center space-x-2 text-gray-700 hover:text-whale-light transition-colors rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2"
+                      className={`flex items-center space-x-2 transition-colors rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 ${isDarkNav ? 'text-slate-300 hover:text-white' : 'text-gray-700 hover:text-whale-light'}`}
                       aria-label="내 프로필"
                     >
-                      <div className="w-7 h-7 bg-whale-light rounded-full flex items-center justify-center text-white text-xs font-semibold">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${isDarkNav ? 'bg-cyan-500/20 text-cyan-400' : 'bg-whale-light text-white'}`}>
                         {displayName.charAt(0).toUpperCase()}
                       </div>
                       <span className="text-sm font-medium">{displayName}</span>
                     </Link>
                     <button
                       onClick={handleLogout}
-                      className="px-3 py-1.5 text-sm text-gray-400 hover:text-red-500 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 rounded-lg min-h-[44px] min-w-[44px]"
+                      className={`px-3 py-1.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 rounded-lg min-h-[44px] min-w-[44px] ${isDarkNav ? 'text-slate-500 hover:text-red-400' : 'text-gray-400 hover:text-red-500'}`}
                       aria-label="로그아웃"
                     >
                       로그아웃
@@ -188,7 +186,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
               {/* 모바일 메뉴 버튼 */}
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="lg:hidden p-2 rounded-lg text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                className={`lg:hidden p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${isDarkNav ? 'text-slate-300 hover:bg-white/10' : 'text-gray-700 hover:bg-gray-100'}`}
                 aria-label="메뉴 열기"
                 aria-expanded={isMobileMenuOpen}
               >
@@ -220,8 +218,8 @@ const Header = ({ showNav = false }: HeaderProps) => {
 
         {/* 모바일 메뉴 */}
         {showNav && isMobileMenuOpen && (
-          <nav 
-            className="lg:hidden border-t border-gray-200 py-4 space-y-2 animate-fade-in"
+          <nav
+            className={`lg:hidden py-4 space-y-2 animate-fade-in ${isDarkNav ? 'border-t border-white/[0.06]' : 'border-t border-gray-200'}`}
             aria-label="모바일 네비게이션"
           >
             {[
@@ -237,7 +235,11 @@ const Header = ({ showNav = false }: HeaderProps) => {
                 key={to}
                 to={to}
                 onClick={closeMobileMenu}
-                className={`block px-4 py-3 rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center ${isActive(to) ? 'bg-whale-light/10 text-whale-light' : 'text-gray-700 hover:bg-gray-50 hover:text-whale-light'}`}
+                className={`block px-4 py-3 rounded-lg transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 min-h-[44px] flex items-center ${
+                  isActive(to)
+                    ? isDarkNav ? 'bg-cyan-500/10 text-cyan-400' : 'bg-whale-light/10 text-whale-light'
+                    : isDarkNav ? 'text-slate-400 hover:bg-white/5 hover:text-white' : 'text-gray-700 hover:bg-gray-50 hover:text-whale-light'
+                }`}
                 aria-label={ariaLabel}
               >
                 {label}

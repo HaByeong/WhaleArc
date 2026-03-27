@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useVirtNavigate, useRoutePrefix } from '../hooks/useRoutePrefix';
 import Header from '../components/Header';
+import SplashLoading from '../components/SplashLoading';
+import VirtSplashLoading from '../components/VirtSplashLoading';
 import { Term } from '../components/TermTooltip';
 import WhaleCharacterLogo from '../components/WhaleCharacterLogo';
 import {
@@ -363,9 +365,9 @@ const QuantStorePage = () => {
           <img src={whale} alt="" className="w-full h-full object-contain" />
         </div>
       </div>
-      <div className="relative bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[calc(100%-4rem)]">
-        <div className="absolute -left-[7px] top-3 w-0 h-0 border-t-[6px] border-t-transparent border-r-[7px] border-r-gray-200 border-b-[6px] border-b-transparent" />
-        <div className="absolute -left-[5px] top-[13px] w-0 h-0 border-t-[5px] border-t-transparent border-r-[6px] border-r-white border-b-[5px] border-b-transparent" />
+      <div className={`relative rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[calc(100%-4rem)] ${isVirt ? 'bg-white border border-gray-200' : 'bg-white/[0.02] border border-white/[0.06]'}`}>
+        <div className={`absolute -left-[7px] top-3 w-0 h-0 border-t-[6px] border-t-transparent border-r-[7px] border-b-[6px] border-b-transparent ${isVirt ? 'border-r-gray-200' : 'border-r-white/[0.06]'}`} />
+        <div className={`absolute -left-[5px] top-[13px] w-0 h-0 border-t-[5px] border-t-transparent border-r-[6px] border-b-[5px] border-b-transparent ${isVirt ? 'border-r-white' : 'border-r-[#0a1525]'}`} />
         {children}
       </div>
     </div>
@@ -400,8 +402,11 @@ const QuantStorePage = () => {
   //  렌더링
   // ═══════════════════════════════════════
 
+  if (loading && !isVirt) return <SplashLoading message="전략 가이드를 불러오는 중..." />;
+  if (loading && isVirt) return <VirtSplashLoading message="전략 가이드를 불러오는 중..." />;
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-50/50 via-white to-sky-50/30">
+    <div className={`min-h-screen ${isVirt ? 'bg-gradient-to-b from-sky-50/50 via-white to-sky-50/30' : 'bg-[#060d18] text-white'}`}>
       <Header showNav={true} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -411,9 +416,9 @@ const QuantStorePage = () => {
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-sky-100 to-blue-200 p-2 shadow-md">
               <img src="/whales/humpback.png" alt="" className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-whale-dark">전략 가이드</h1>
+            <h1 className={`text-2xl md:text-3xl font-bold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>전략 가이드</h1>
           </div>
-          <p className="text-gray-500 text-sm md:text-base max-w-xl mx-auto leading-relaxed">
+          <p className={`text-sm md:text-base max-w-xl mx-auto leading-relaxed ${isVirt ? 'text-gray-500' : 'text-slate-400'}`}>
             각 전략을 쉽게 알려드려요! 용어에 마우스를 올리면 설명이 나와요.<br className="hidden md:inline" />
             마음에 드는 전략이 있다면 직접 항해도 시작할 수 있어요.
           </p>
@@ -421,16 +426,16 @@ const QuantStorePage = () => {
 
         {/* ── 내 항해 현황 ── */}
         {purchases.length > 0 && (
-          <div className="mb-8 bg-white rounded-xl border border-sky-100 p-5 shadow-sm">
-            <h2 className="text-base font-bold text-whale-dark mb-3 flex items-center gap-2">
+          <div className={`mb-8 rounded-xl p-5 ${isVirt ? 'bg-white border border-sky-100 shadow-sm' : 'bg-white/[0.02] border border-white/[0.06]'}`}>
+            <h2 className={`text-base font-bold mb-3 flex items-center gap-2 ${isVirt ? 'text-whale-dark' : 'text-white'}`}>
               <span className="text-lg">⛵</span> 내 항해 현황
             </h2>
             <div className="space-y-2">
               {purchases.map((p) => (
-                <div key={p.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-sky-50/50 rounded-lg p-3 gap-2">
+                <div key={p.id} className={`flex flex-col sm:flex-row sm:items-center justify-between rounded-lg p-3 gap-2 ${isVirt ? 'bg-sky-50/50' : 'bg-white/[0.04]'}`}>
                   <div className="min-w-0">
-                    <div className="font-semibold text-whale-dark text-sm">{p.productName}</div>
-                    <div className="text-xs text-gray-500 truncate">
+                    <div className={`font-semibold text-sm ${isVirt ? 'text-whale-dark' : 'text-white'}`}>{p.productName}</div>
+                    <div className={`text-xs truncate ${isVirt ? 'text-gray-500' : 'text-slate-500'}`}>
                       투자: {formatCurrency(p.investmentAmount)} · {p.purchasedAssets?.map(a => `${cryptoDisplayName(a.code)} ${formatQuantity(a.quantity)}개`).join(', ') || '-'}
                     </div>
                   </div>
@@ -455,8 +460,8 @@ const QuantStorePage = () => {
               onClick={() => setSelectedCategory(cat)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                 selectedCategory === cat
-                  ? 'bg-whale-light text-white shadow-md scale-105'
-                  : 'bg-white text-gray-500 hover:bg-sky-50 border border-gray-200 hover:border-sky-300'
+                  ? isVirt ? 'bg-whale-light text-white shadow-md scale-105' : 'text-cyan-400 bg-white/10 scale-105'
+                  : isVirt ? 'bg-white text-gray-500 hover:bg-sky-50 border border-gray-200 hover:border-sky-300' : 'text-slate-500 border border-white/[0.06] hover:bg-white/[0.03]'
               }`}
             >
               {CATEGORY_TAB_LABELS[cat]}
@@ -467,9 +472,9 @@ const QuantStorePage = () => {
         {/* ── 카테고리 설명 ── */}
         {selectedCategory !== 'ALL' && (
           <div className="mb-6 flex justify-center">
-            <div className="inline-flex items-center gap-2 bg-white border border-sky-100 rounded-full px-5 py-2 shadow-sm">
+            <div className={`inline-flex items-center gap-2 rounded-full px-5 py-2 ${isVirt ? 'bg-white border border-sky-100 shadow-sm' : 'bg-white/[0.02] border border-white/[0.06]'}`}>
               <img src={CATEGORY_WHALE[selectedCategory]?.image} alt="" className="w-6 h-6 object-contain" />
-              <span className="text-sm text-gray-600">
+              <span className={`text-sm ${isVirt ? 'text-gray-600' : 'text-slate-400'}`}>
                 {CATEGORY_GLOSSARY_KEY[selectedCategory]
                   ? <><Term k={CATEGORY_GLOSSARY_KEY[selectedCategory]}>{CATEGORY_TAB_LABELS[selectedCategory]}</Term> — {CATEGORY_SIMPLE[selectedCategory]}</>
                   : CATEGORY_SIMPLE[selectedCategory]
@@ -483,14 +488,14 @@ const QuantStorePage = () => {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white rounded-2xl p-6 animate-pulse shadow-sm border border-gray-100">
-                <div className="h-5 bg-gray-200 rounded-full w-1/3 mb-4" />
-                <div className="h-6 bg-gray-200 rounded w-3/4 mb-4" />
+              <div key={i} className={`rounded-2xl p-6 animate-pulse border ${isVirt ? 'bg-white shadow-sm border-gray-100' : 'bg-white/[0.02] border-white/[0.06]'}`}>
+                <div className={`h-5 rounded-full w-1/3 mb-4 ${isVirt ? 'bg-gray-200' : 'bg-white/[0.06]'}`} />
+                <div className={`h-6 rounded w-3/4 mb-4 ${isVirt ? 'bg-gray-200' : 'bg-white/[0.06]'}`} />
                 <div className="flex items-start gap-3 mb-4">
-                  <div className="w-10 h-10 bg-gray-200 rounded-full" />
-                  <div className="flex-1 bg-gray-100 rounded-2xl h-16" />
+                  <div className={`w-10 h-10 rounded-full ${isVirt ? 'bg-gray-200' : 'bg-white/[0.06]'}`} />
+                  <div className={`flex-1 rounded-2xl h-16 ${isVirt ? 'bg-gray-100' : 'bg-white/[0.04]'}`} />
                 </div>
-                <div className="h-10 bg-gray-200 rounded-xl" />
+                <div className={`h-10 rounded-xl ${isVirt ? 'bg-gray-200' : 'bg-white/[0.06]'}`} />
               </div>
             ))}
           </div>
@@ -505,7 +510,7 @@ const QuantStorePage = () => {
               return (
                 <div
                   key={product.id}
-                  className="group bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-lg hover:border-sky-200 hover:-translate-y-1 transition-all cursor-pointer relative"
+                  className={`group rounded-2xl p-5 border hover:-translate-y-1 transition-all cursor-pointer relative ${isVirt ? 'bg-white shadow-sm border-gray-100 hover:shadow-lg hover:border-sky-200' : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.03] hover:border-white/10'}`}
                   onClick={() => setSelectedProduct(product)}
                 >
                   {/* 뱃지 */}
@@ -527,31 +532,31 @@ const QuantStorePage = () => {
                   </div>
 
                   {/* 전략명 */}
-                  <h3 className="text-lg font-bold text-whale-dark mb-3 group-hover:text-whale-light transition-colors">
+                  <h3 className={`text-lg font-bold mb-3 group-hover:text-whale-light transition-colors ${isVirt ? 'text-whale-dark' : 'text-white'}`}>
                     {product.name}
                   </h3>
 
                   {/* 고래 말풍선 */}
                   <div className="mb-4">
                     <WhaleBubble whale={whale.image} size="sm">
-                      <p className="text-sm text-gray-700 leading-relaxed">{edu.simpleExplain}</p>
+                      <p className={`text-sm leading-relaxed ${isVirt ? 'text-gray-700' : 'text-slate-400'}`}>{edu.simpleExplain}</p>
                     </WhaleBubble>
                   </div>
 
                   {/* 대상 자산 */}
                   <div className="flex flex-wrap gap-1 mb-4">
                     {product.targetAssets.map((asset) => (
-                      <span key={asset} className="px-2 py-0.5 text-xs bg-gray-50 text-gray-500 rounded-md">
+                      <span key={asset} className={`px-2 py-0.5 text-xs rounded-md ${isVirt ? 'bg-gray-50 text-gray-500' : 'bg-white/[0.04] text-slate-500'}`}>
                         {assetDisplayName(asset, product.assetType)}
                       </span>
                     ))}
                   </div>
 
                   {/* 버튼 */}
-                  <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+                  <div className={`flex items-center gap-2 pt-3 border-t ${isVirt ? 'border-gray-100' : 'border-white/[0.06]'}`}>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedProduct(product); }}
-                      className="flex-1 py-2.5 text-sm font-semibold text-whale-light bg-sky-50 hover:bg-sky-100 rounded-xl transition-colors"
+                      className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-colors ${isVirt ? 'text-whale-light bg-sky-50 hover:bg-sky-100' : 'text-cyan-400 bg-white/[0.04] hover:bg-white/[0.06]'}`}
                     >
                       📚 알아보기
                     </button>
@@ -567,7 +572,7 @@ const QuantStorePage = () => {
                         항해하기
                       </button>
                     ) : (
-                      <span className="px-4 py-2.5 text-sm font-semibold text-gray-400 bg-gray-100 rounded-xl">
+                      <span className={`px-4 py-2.5 text-sm font-semibold rounded-xl ${isVirt ? 'text-gray-400 bg-gray-100' : 'text-slate-500 bg-white/[0.04]'}`}>
                         Virt 전용
                       </span>
                     )}
@@ -582,11 +587,11 @@ const QuantStorePage = () => {
         {selectedProduct && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedProduct(null)}>
             <div
-              className="bg-gradient-to-b from-sky-50 to-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              className={`rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl ${isVirt ? 'bg-gradient-to-b from-sky-50 to-white' : 'bg-[#0c1829] border border-white/[0.06]'}`}
               onClick={(e) => e.stopPropagation()}
             >
               {/* 모달 헤더 */}
-              <div className="sticky top-0 bg-gradient-to-b from-sky-50 to-sky-50/80 backdrop-blur-sm px-5 pt-5 pb-3 z-10">
+              <div className={`sticky top-0 backdrop-blur-sm px-5 pt-5 pb-3 z-10 ${isVirt ? 'bg-gradient-to-b from-sky-50 to-sky-50/80' : 'bg-[#0c1829]/90'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${(DIFFICULTY_CONFIG[selectedProduct.riskLevel] || DIFFICULTY_CONFIG.MEDIUM).color}`}>
@@ -607,7 +612,7 @@ const QuantStorePage = () => {
                     </svg>
                   </button>
                 </div>
-                <h2 className="text-xl font-bold text-whale-dark">{selectedProduct.name}</h2>
+                <h2 className={`text-xl font-bold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>{selectedProduct.name}</h2>
               </div>
 
               {/* 대화형 교육 콘텐츠 */}
@@ -620,7 +625,7 @@ const QuantStorePage = () => {
                     <>
                       {/* 인사 */}
                       <WhaleBubble whale={whale.image}>
-                        <p className="text-sm text-gray-700">
+                        <p className={`text-sm ${isVirt ? 'text-gray-700' : 'text-slate-400'}`}>
                           이 전략에 대해 쉽게 알려드릴게요!
                         </p>
                       </WhaleBubble>
@@ -628,7 +633,7 @@ const QuantStorePage = () => {
                       {/* Q1: 이 전략이 뭐예요? */}
                       <QuestionBubble>이 전략이 뭐예요?</QuestionBubble>
                       <WhaleBubble whale={whale.image}>
-                        <p className="text-sm text-gray-700 leading-relaxed">{edu.simpleExplain}</p>
+                        <p className={`text-sm leading-relaxed ${isVirt ? 'text-gray-700' : 'text-slate-400'}`}>{edu.simpleExplain}</p>
                         {/* 관련 용어 바로가기 */}
                         {(() => {
                           const termKeys: string[] = [];
@@ -656,7 +661,7 @@ const QuantStorePage = () => {
                       {/* Q2: 쉽게 설명해주세요 */}
                       <QuestionBubble>좀 더 쉽게 설명해주세요!</QuestionBubble>
                       <WhaleBubble whale={whale.image}>
-                        <p className="text-sm text-gray-700 leading-relaxed">💡 {edu.analogy}</p>
+                        <p className={`text-sm leading-relaxed ${isVirt ? 'text-gray-700' : 'text-slate-400'}`}>💡 {edu.analogy}</p>
                       </WhaleBubble>
 
                       {/* Q3: 어떻게 작동해요? */}
@@ -668,7 +673,7 @@ const QuantStorePage = () => {
                               <span className="flex-shrink-0 w-5 h-5 rounded-full bg-sky-100 text-sky-600 text-xs font-bold flex items-center justify-center mt-0.5">
                                 {i + 1}
                               </span>
-                              <p className="text-sm text-gray-700">{step}</p>
+                              <p className={`text-sm ${isVirt ? 'text-gray-700' : 'text-slate-400'}`}>{step}</p>
                             </div>
                           ))}
                         </div>
@@ -691,11 +696,11 @@ const QuantStorePage = () => {
                       </WhaleBubble>
 
                       {/* 대상 자산 */}
-                      <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-                        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">투자 대상</h4>
+                      <div className={`rounded-xl border p-4 ${isVirt ? 'bg-white border-gray-100 shadow-sm' : 'bg-white/[0.02] border-white/[0.06]'}`}>
+                        <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>투자 대상</h4>
                         <div className="flex flex-wrap gap-1.5">
                           {selectedProduct.targetAssets.map((asset) => (
-                            <span key={asset} className="px-3 py-1 text-sm bg-gray-50 text-gray-700 rounded-lg font-medium border border-gray-100">
+                            <span key={asset} className={`px-3 py-1 text-sm rounded-lg font-medium border ${isVirt ? 'bg-gray-50 text-gray-700 border-gray-100' : 'bg-white/[0.04] text-slate-300 border-white/[0.06]'}`}>
                               {assetDisplayName(asset, selectedProduct.assetType)}
                             </span>
                           ))}
@@ -706,7 +711,7 @@ const QuantStorePage = () => {
                       {selectedProduct.tags.filter(t => !['무료', '유료', '프리미엄', '할인', '이벤트'].includes(t)).length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {selectedProduct.tags.filter(t => !['무료', '유료', '프리미엄', '할인', '이벤트'].includes(t)).map((tag) => (
-                            <span key={tag} className="px-2.5 py-1 text-xs bg-sky-50 text-sky-500 rounded-full font-medium">
+                            <span key={tag} className={`px-2.5 py-1 text-xs rounded-full font-medium ${isVirt ? 'bg-sky-50 text-sky-500' : 'bg-cyan-500/10 text-cyan-400'}`}>
                               #{tag}
                             </span>
                           ))}
@@ -714,11 +719,11 @@ const QuantStorePage = () => {
                       )}
 
                       {/* 하단 CTA */}
-                      <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm space-y-3">
+                      <div className={`rounded-xl border p-4 space-y-3 ${isVirt ? 'bg-white border-gray-100 shadow-sm' : 'bg-white/[0.02] border-white/[0.06]'}`}>
                         {/* 백테스트 유도 */}
                         <button
                           onClick={() => { setSelectedProduct(null); navigate('/strategy'); }}
-                          className="w-full py-3 text-sm font-semibold text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-xl transition-colors flex items-center justify-center gap-2"
+                          className={`w-full py-3 text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${isVirt ? 'text-sky-600 bg-sky-50 hover:bg-sky-100' : 'text-cyan-400 bg-white/[0.04] hover:bg-white/[0.06]'}`}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -739,7 +744,7 @@ const QuantStorePage = () => {
                             이 전략으로 항해 시작하기
                           </button>
                         ) : (
-                          <div className="w-full py-3 text-sm font-semibold text-center text-gray-400 bg-gray-100 rounded-xl">
+                          <div className={`w-full py-3 text-sm font-semibold text-center rounded-xl ${isVirt ? 'text-gray-400 bg-gray-100' : 'text-slate-500 bg-white/[0.04]'}`}>
                             Virt 모드에서 항해를 시작할 수 있어요
                           </div>
                         )}
@@ -755,12 +760,12 @@ const QuantStorePage = () => {
         {/* ═══ 투자 금액 입력 모달 ═══ */}
         {investModal && !confirmStep && (
           <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setInvestModal(null)}>
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-xl font-bold text-whale-dark mb-1">투자 금액 설정</h3>
-              <p className="text-sm text-gray-500 mb-5">
+            <div className={`rounded-2xl max-w-md w-full p-6 shadow-2xl ${isVirt ? 'bg-white' : 'bg-[#0c1829] border border-white/[0.06]'}`} onClick={(e) => e.stopPropagation()}>
+              <h3 className={`text-xl font-bold mb-1 ${isVirt ? 'text-whale-dark' : 'text-white'}`}>투자 금액 설정</h3>
+              <p className={`text-sm mb-5 ${isVirt ? 'text-gray-500' : 'text-slate-400'}`}>
                 "{investModal.name}" 항로에 투자할 금액을 입력하세요.
                 <br />
-                <span className="text-xs text-gray-400">
+                <span className={`text-xs ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>
                   투자 금액이 {investModal.targetAssets.length}개 자산({investModal.targetAssets.map(cryptoDisplayName).join(', ')})에 균등 분배됩니다.
                 </span>
               </p>
@@ -771,10 +776,10 @@ const QuantStorePage = () => {
                   value={investmentAmount}
                   onChange={(e) => setInvestmentAmount(formatInputAmount(e.target.value))}
                   placeholder="0"
-                  className="w-full text-2xl font-bold text-right pr-10 pl-4 py-3 border-2 border-gray-200 rounded-xl focus:border-whale-light focus:ring-2 focus:ring-whale-light/20 outline-none"
+                  className={`w-full text-2xl font-bold text-right pr-10 pl-4 py-3 border-2 rounded-xl focus:border-whale-light focus:ring-2 focus:ring-whale-light/20 outline-none ${isVirt ? 'border-gray-200' : 'border-white/10 bg-white/[0.04] text-white'}`}
                   autoFocus
                 />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">원</span>
+                <span className={`absolute right-4 top-1/2 -translate-y-1/2 font-medium ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>원</span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
@@ -782,7 +787,7 @@ const QuantStorePage = () => {
                   <button
                     key={amount}
                     onClick={() => setInvestmentAmount(amount.toLocaleString('ko-KR'))}
-                    className="py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-whale-light/10 hover:text-whale-light rounded-lg transition-colors"
+                    className={`py-2 text-sm font-medium rounded-lg transition-colors ${isVirt ? 'text-gray-600 bg-gray-100 hover:bg-whale-light/10 hover:text-whale-light' : 'text-slate-400 bg-white/[0.04] hover:bg-white/[0.06] hover:text-cyan-400'}`}
                   >
                     {amount >= 10000000 ? `${amount / 10000000}천만` : `${amount / 10000}만`}
                   </button>
@@ -796,7 +801,7 @@ const QuantStorePage = () => {
               )}
 
               <div className="flex gap-3">
-                <button onClick={() => setInvestModal(null)} className="flex-1 py-3 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors">
+                <button onClick={() => setInvestModal(null)} className={`flex-1 py-3 rounded-xl font-medium transition-colors ${isVirt ? 'text-gray-600 bg-gray-100 hover:bg-gray-200' : 'text-slate-400 bg-white/[0.04] hover:bg-white/[0.06]'}`}>
                   취소
                 </button>
                 <button onClick={goToConfirmStep} disabled={!investmentAmount} className="flex-1 py-3 bg-whale-light hover:bg-whale-dark text-white rounded-xl font-semibold transition-colors disabled:opacity-50">
@@ -810,32 +815,32 @@ const QuantStorePage = () => {
         {/* ═══ 구매 최종 확인 모달 ═══ */}
         {investModal && confirmStep && (
           <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div className={`rounded-2xl max-w-md w-full p-6 shadow-2xl ${isVirt ? 'bg-white' : 'bg-[#0c1829] border border-white/[0.06]'}`}>
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-10 h-10 rounded-full bg-whale-light/10 flex items-center justify-center">
                   <svg className="w-5 h-5 text-whale-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold text-whale-dark">주문 확인</h3>
+                <h3 className={`text-xl font-bold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>주문 확인</h3>
               </div>
 
-              <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3">
+              <div className={`rounded-xl p-4 mb-4 space-y-3 ${isVirt ? 'bg-gray-50' : 'bg-white/[0.04]'}`}>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">항로</span>
-                  <span className="text-sm font-semibold text-whale-dark">{investModal.name}</span>
+                  <span className={`text-sm ${isVirt ? 'text-gray-500' : 'text-slate-500'}`}>항로</span>
+                  <span className={`text-sm font-semibold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>{investModal.name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">총 투자 금액</span>
-                  <span className="text-sm font-bold text-whale-dark">{investmentAmount}원</span>
+                  <span className={`text-sm ${isVirt ? 'text-gray-500' : 'text-slate-500'}`}>총 투자 금액</span>
+                  <span className={`text-sm font-bold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>{investmentAmount}원</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">투자 대상</span>
-                  <span className="text-sm font-medium text-gray-700">{investModal.targetAssets.map(cryptoDisplayName).join(', ')}</span>
+                  <span className={`text-sm ${isVirt ? 'text-gray-500' : 'text-slate-500'}`}>투자 대상</span>
+                  <span className={`text-sm font-medium ${isVirt ? 'text-gray-700' : 'text-slate-300'}`}>{investModal.targetAssets.map(cryptoDisplayName).join(', ')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">자산당 배분</span>
-                  <span className="text-sm font-medium text-gray-700">
+                  <span className={`text-sm ${isVirt ? 'text-gray-500' : 'text-slate-500'}`}>자산당 배분</span>
+                  <span className={`text-sm font-medium ${isVirt ? 'text-gray-700' : 'text-slate-300'}`}>
                     ~{formatCurrency(Math.floor(Number(investmentAmount.replace(/,/g, '')) / investModal.targetAssets.length))}
                   </span>
                 </div>
@@ -879,7 +884,7 @@ const QuantStorePage = () => {
               </div>
 
               <div className="flex gap-3">
-                <button onClick={() => setConfirmStep(false)} className="flex-1 py-3 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors">이전</button>
+                <button onClick={() => setConfirmStep(false)} className={`flex-1 py-3 rounded-xl font-medium transition-colors ${isVirt ? 'text-gray-600 bg-gray-100 hover:bg-gray-200' : 'text-slate-400 bg-white/[0.04] hover:bg-white/[0.06]'}`}>이전</button>
                 <button onClick={handlePurchase} disabled={purchasing} className="flex-1 py-3 bg-whale-light hover:bg-whale-dark text-white rounded-xl font-semibold transition-colors disabled:opacity-50">
                   {purchasing ? '매수 진행 중...' : '확인, 항해 시작'}
                 </button>
@@ -891,7 +896,7 @@ const QuantStorePage = () => {
         {/* ═══ 취소 확인 모달 ═══ */}
         {cancelTarget && (
           <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div className={`rounded-2xl max-w-md w-full p-6 shadow-2xl ${isVirt ? 'bg-white' : 'bg-[#0c1829] border border-white/[0.06]'}`}>
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
                   <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -901,18 +906,18 @@ const QuantStorePage = () => {
                 <h3 className="text-xl font-bold text-red-700">항해 취소</h3>
               </div>
 
-              <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-2">
+              <div className={`rounded-xl p-4 mb-4 space-y-2 ${isVirt ? 'bg-gray-50' : 'bg-white/[0.04]'}`}>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">항로</span>
-                  <span className="text-sm font-semibold text-whale-dark">{cancelTarget.productName}</span>
+                  <span className={`text-sm ${isVirt ? 'text-gray-500' : 'text-slate-500'}`}>항로</span>
+                  <span className={`text-sm font-semibold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>{cancelTarget.productName}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">투자 금액</span>
-                  <span className="text-sm font-bold">{formatCurrency(cancelTarget.investmentAmount)}</span>
+                  <span className={`text-sm ${isVirt ? 'text-gray-500' : 'text-slate-500'}`}>투자 금액</span>
+                  <span className={`text-sm font-bold ${isVirt ? '' : 'text-white'}`}>{formatCurrency(cancelTarget.investmentAmount)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">보유 자산</span>
-                  <span className="text-sm font-medium">{cancelTarget.purchasedAssets?.map(a => `${cryptoDisplayName(a.code)} ${formatQuantity(a.quantity)}개`).join(', ') || '-'}</span>
+                  <span className={`text-sm ${isVirt ? 'text-gray-500' : 'text-slate-500'}`}>보유 자산</span>
+                  <span className={`text-sm font-medium ${isVirt ? '' : 'text-slate-300'}`}>{cancelTarget.purchasedAssets?.map(a => `${cryptoDisplayName(a.code)} ${formatQuantity(a.quantity)}개`).join(', ') || '-'}</span>
                 </div>
               </div>
 
@@ -932,7 +937,7 @@ const QuantStorePage = () => {
               </div>
 
               <div className="flex gap-3">
-                <button onClick={() => setCancelTarget(null)} className="flex-1 py-3 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors">돌아가기</button>
+                <button onClick={() => setCancelTarget(null)} className={`flex-1 py-3 rounded-xl font-medium transition-colors ${isVirt ? 'text-gray-600 bg-gray-100 hover:bg-gray-200' : 'text-slate-400 bg-white/[0.04] hover:bg-white/[0.06]'}`}>돌아가기</button>
                 <button onClick={handleCancel} disabled={cancelling === cancelTarget.id} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold transition-colors disabled:opacity-50">
                   {cancelling === cancelTarget.id ? '매도 진행 중...' : '취소 및 전량 매도'}
                 </button>
@@ -947,8 +952,8 @@ const QuantStorePage = () => {
             <div className="w-20 h-20 rounded-full bg-sky-50 mx-auto mb-4 flex items-center justify-center">
               <img src="/whales/gray-whale.png" alt="" className="w-14 h-14 object-contain opacity-60" />
             </div>
-            <div className="text-gray-500 font-medium text-lg">이 카테고리에 등록된 전략이 없어요</div>
-            <div className="text-sm text-gray-400 mt-1">다른 카테고리를 탐색해보세요!</div>
+            <div className={`font-medium text-lg ${isVirt ? 'text-gray-500' : 'text-slate-400'}`}>이 카테고리에 등록된 전략이 없어요</div>
+            <div className={`text-sm mt-1 ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>다른 카테고리를 탐색해보세요!</div>
           </div>
         )}
       </div>

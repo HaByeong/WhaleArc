@@ -55,7 +55,7 @@ const SignUpPage = () => {
     }
   };
 
-  const handleOAuthLogin = async (provider: 'google' | 'kakao') => {
+  const handleOAuthLogin = async (provider: 'google') => {
     try {
       await authService.loginWithOAuth(provider);
     } catch (err: any) {
@@ -90,17 +90,6 @@ const SignUpPage = () => {
               <span className="font-medium text-gray-700">Google로 시작하기</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => handleOAuthLogin('kakao')}
-              className="w-full flex items-center justify-center space-x-3 px-4 py-3 rounded-lg hover:opacity-90 transition-colors"
-              style={{ backgroundColor: '#FEE500' }}
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path d="M12 3C6.48 3 2 6.36 2 10.5c0 2.67 1.76 5.02 4.4 6.36-.15.56-.97 3.6-.99 3.82 0 0-.02.16.08.22.1.06.23.01.23.01.3-.04 3.52-2.3 4.08-2.7.7.1 1.43.15 2.2.15 5.52 0 10-3.36 10-7.5S17.52 3 12 3z" fill="#3C1E1E"/>
-              </svg>
-              <span className="font-medium" style={{ color: '#3C1E1E' }}>카카오로 시작하기</span>
-            </button>
           </div>
 
           {/* 구분선 */}

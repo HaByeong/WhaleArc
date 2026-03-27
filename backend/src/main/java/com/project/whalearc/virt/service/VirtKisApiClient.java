@@ -3,6 +3,7 @@ package com.project.whalearc.virt.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
@@ -14,14 +15,16 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 유저별 KIS API 키를 사용하여 실전투자 API를 호출하는 클라이언트.
- * 기존 KisApiClient와 달리 서버 키가 아닌 유저 개인 키를 사용.
+ * - 리트라이 + 지수 백오프
+ * - 유저별 토큰 캐시
  */
 @Slf4j
 @Service
 public class VirtKisApiClient {
 
-    /** KIS 실전투자 API 도메인 */
     private static final String REAL_BASE_URL = "https://openapi.koreainvestment.com:9443";
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_DELAY_MS = 500;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -31,8 +34,8 @@ public class VirtKisApiClient {
 
     public VirtKisApiClient() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(20_000);
-        factory.setReadTimeout(30_000);
+        factory.setConnectTimeout(5_000);
+        factory.setReadTimeout(10_000);
         this.restTemplate = new RestTemplate(factory);
     }
 
@@ -60,24 +63,37 @@ public class VirtKisApiClient {
                 "appsecret", appsecret
         );
 
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, String>> request = new HttpEntity<>(body, headers);
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpEntity<Map<String, String>> request = new HttpEntity<>(body, headers);
 
-            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
-            Map<String, Object> result = objectMapper.readValue(response.getBody(),
-                    new TypeReference<>() {});
+                ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+                Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<>() {});
 
-            String token = (String) result.get("access_token");
-            long expiresAt = System.currentTimeMillis() + 23 * 60 * 60 * 1000L;
-            tokenCache.put(userId, new TokenEntry(token, expiresAt));
-            log.info("[Virt] KIS 토큰 발급 성공: userId={}", userId);
-            return token;
-        } catch (Exception e) {
-            log.error("[Virt] KIS 토큰 발급 실패: userId={}, error={}", userId, e.getMessage());
-            throw new RuntimeException("KIS API 인증 실패. API 키를 확인해주세요.", e);
+                String token = (String) result.get("access_token");
+                long expiresAt = System.currentTimeMillis() + 23 * 60 * 60 * 1000L;
+                tokenCache.put(userId, new TokenEntry(token, expiresAt));
+                log.info("[Virt] KIS 토큰 발급 성공: userId={}", userId);
+                return token;
+            } catch (Exception e) {
+                log.warn("[Virt] KIS 토큰 발급 실패 (시도 {}/{}): userId={}, error={}",
+                        attempt, MAX_RETRIES, userId, e.getMessage());
+                if (attempt < MAX_RETRIES) {
+                    sleep(RETRY_DELAY_MS * attempt);
+                }
+            }
         }
+
+        // 이전 토큰 재사용 시도
+        TokenEntry existing = tokenCache.get(userId);
+        if (existing != null && System.currentTimeMillis() < existing.expiresAt) {
+            log.warn("[Virt] KIS 이전 토큰 재사용: userId={}", userId);
+            return existing.token;
+        }
+        throw new RuntimeException("KIS API 인증 실패. API 키를 확인해주세요.");
     }
 
     public void evictToken(String userId) {
@@ -86,10 +102,6 @@ public class VirtKisApiClient {
 
     /* ───── 실계좌 잔고 조회 ───── */
 
-    /**
-     * 주식잔고조회 (실전투자)
-     * tr_id: TTTC8434R (실전), VTTC8434R (모의)
-     */
     @SuppressWarnings("unchecked")
     public Map<String, Object> getAccountBalance(String userId, String appkey, String appsecret,
                                                   String accountNo, String productCode) {
@@ -106,33 +118,11 @@ public class VirtKisApiClient {
                 + "&CTX_AREA_FK100="
                 + "&CTX_AREA_NK100=";
 
-        HttpHeaders headers = buildHeaders(userId, appkey, appsecret, "TTTC8434R");
-        HttpEntity<Void> request = new HttpEntity<>(headers);
-
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-            Map<String, Object> result = objectMapper.readValue(response.getBody(),
-                    new TypeReference<>() {});
-
-            if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
-                log.warn("[Virt] 잔고조회 실패: {}", result.get("msg1"));
-                throw new RuntimeException("잔고 조회 실패: " + result.get("msg1"));
-            }
-            return result;
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("[Virt] 잔고조회 오류: {}", e.getMessage());
-            throw new RuntimeException("잔고 조회 중 오류가 발생했습니다.", e);
-        }
+        return executeWithRetry(userId, appkey, appsecret, url, "TTTC8434R", "잔고조회");
     }
 
     /* ───── 체결내역 조회 ───── */
 
-    /**
-     * 주식 일별주문체결 조회 (실전투자)
-     * tr_id: TTTC8001R (실전), VTTC8001R (모의)
-     */
     @SuppressWarnings("unchecked")
     public Map<String, Object> getTradeHistory(String userId, String appkey, String appsecret,
                                                 String accountNo, String productCode,
@@ -153,25 +143,53 @@ public class VirtKisApiClient {
                 + "&CTX_AREA_FK100="
                 + "&CTX_AREA_NK100=";
 
-        HttpHeaders headers = buildHeaders(userId, appkey, appsecret, "TTTC8001R");
-        HttpEntity<Void> request = new HttpEntity<>(headers);
+        return executeWithRetry(userId, appkey, appsecret, url, "TTTC8001R", "체결내역");
+    }
 
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-            Map<String, Object> result = objectMapper.readValue(response.getBody(),
-                    new TypeReference<>() {});
+    /* ───── 공통 리트라이 실행 ───── */
 
-            if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
-                log.warn("[Virt] 체결내역 조회 실패: {}", result.get("msg1"));
-                throw new RuntimeException("체결내역 조회 실패: " + result.get("msg1"));
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> executeWithRetry(String userId, String appkey, String appsecret,
+                                                   String url, String trId, String apiName) {
+        Exception lastException = null;
+
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                HttpHeaders headers = buildHeaders(userId, appkey, appsecret, trId);
+                HttpEntity<Void> request = new HttpEntity<>(headers);
+
+                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
+                Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<>() {});
+
+                if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
+                    log.warn("[Virt] {} 실패: {}", apiName, result.get("msg1"));
+                    throw new RuntimeException(apiName + " 실패: " + result.get("msg1"));
+                }
+
+                if (attempt > 1) {
+                    log.info("[Virt] {} 성공 ({}번째 시도)", apiName, attempt);
+                }
+                return result;
+            } catch (RuntimeException e) {
+                if (e.getMessage() != null && e.getMessage().contains("실패:")) {
+                    throw e; // API 비즈니스 에러는 리트라이하지 않음
+                }
+                lastException = e;
+                log.warn("[Virt] {} 오류 (시도 {}/{}): {}", apiName, attempt, MAX_RETRIES, e.getMessage());
+                if (attempt < MAX_RETRIES) {
+                    sleep(RETRY_DELAY_MS * attempt);
+                }
+            } catch (Exception e) {
+                lastException = e;
+                log.warn("[Virt] {} 오류 (시도 {}/{}): {}", apiName, attempt, MAX_RETRIES, e.getMessage());
+                if (attempt < MAX_RETRIES) {
+                    sleep(RETRY_DELAY_MS * attempt);
+                }
             }
-            return result;
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("[Virt] 체결내역 조회 오류: {}", e.getMessage());
-            throw new RuntimeException("체결내역 조회 중 오류가 발생했습니다.", e);
         }
+
+        throw new RuntimeException(apiName + " 중 오류가 발생했습니다. (" + MAX_RETRIES + "회 재시도 실패)", lastException);
     }
 
     /* ───── 유틸 ───── */
@@ -184,6 +202,14 @@ public class VirtKisApiClient {
         headers.set("appsecret", appsecret);
         headers.set("tr_id", trId);
         return headers;
+    }
+
+    private void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static class TokenEntry {

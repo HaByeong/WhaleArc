@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -28,6 +29,24 @@ public class VirtService {
     @Value("${virt.encryption-key:WhaleArcVirt2026SecretKey!!}")
     private String encryptionKey;
 
+    /* ───── 포트폴리오 응답 캐시 (10초 TTL) ───── */
+    private record CacheEntry<T>(T data, long expireAt) {
+        boolean isValid() { return System.currentTimeMillis() < expireAt; }
+    }
+    private static final long CACHE_TTL_MS = 10_000; // 10초
+    private final ConcurrentHashMap<String, CacheEntry<VirtPortfolioResponse>> portfolioCache = new ConcurrentHashMap<>();
+
+    @SuppressWarnings("unchecked")
+    private <T> T getCachedOrFetch(ConcurrentHashMap<String, CacheEntry<T>> cache, String key, java.util.function.Supplier<T> fetcher) {
+        CacheEntry<T> entry = cache.get(key);
+        if (entry != null && entry.isValid()) return entry.data();
+        T result = fetcher.get();
+        if (result != null) {
+            cache.put(key, new CacheEntry<>(result, System.currentTimeMillis() + CACHE_TTL_MS));
+        }
+        return result;
+    }
+
     /* ───── 자격증명 관리 ───── */
 
     public void saveCredential(String userId, VirtCredentialRequest req) {
@@ -42,6 +61,9 @@ public class VirtService {
 
         credentialRepo.save(cred);
         kisClient.evictToken(userId); // 키 변경 시 토큰 캐시 삭제
+        portfolioCache.remove("kis:" + userId);
+        portfolioCache.remove("upbit:" + userId);
+        portfolioCache.remove("bitget:" + userId);
         log.info("[Virt] 자격증명 저장: userId={}", userId);
     }
 
@@ -61,6 +83,7 @@ public class VirtService {
             credentialRepo.save(cred);
         });
         kisClient.evictToken(userId);
+        portfolioCache.remove("kis:" + userId);
         log.info("[Virt] KIS 자격증명 삭제: userId={}", userId);
     }
 
@@ -88,8 +111,12 @@ public class VirtService {
 
     /* ───── 실계좌 포트폴리오 조회 ───── */
 
-    @SuppressWarnings("unchecked")
     public VirtPortfolioResponse getPortfolio(String userId) {
+        return getCachedOrFetch(portfolioCache, "kis:" + userId, () -> fetchKisPortfolio(userId));
+    }
+
+    @SuppressWarnings("unchecked")
+    private VirtPortfolioResponse fetchKisPortfolio(String userId) {
         VirtCredential cred = getCredentialOrThrow(userId);
         String appkey = CryptoUtil.decrypt(cred.getEncryptedAppkey(), encryptionKey);
         String appsecret = CryptoUtil.decrypt(cred.getEncryptedAppsecret(), encryptionKey);
@@ -211,6 +238,7 @@ public class VirtService {
             cred.setUpdatedAt(java.time.LocalDateTime.now());
             credentialRepo.save(cred);
         });
+        portfolioCache.remove("upbit:" + userId);
         log.info("[Virt] 업비트 자격증명 삭제: userId={}", userId);
     }
 
@@ -226,8 +254,12 @@ public class VirtService {
     }
 
     /** 업비트 코인 포트폴리오 조회 */
-    @SuppressWarnings("unchecked")
     public VirtPortfolioResponse getUpbitPortfolio(String userId) {
+        return getCachedOrFetch(portfolioCache, "upbit:" + userId, () -> fetchUpbitPortfolio(userId));
+    }
+
+    @SuppressWarnings("unchecked")
+    private VirtPortfolioResponse fetchUpbitPortfolio(String userId) {
         VirtCredential cred = credentialRepo.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("업비트 API 키가 등록되지 않았습니다."));
 
@@ -346,6 +378,7 @@ public class VirtService {
             cred.setUpdatedAt(java.time.LocalDateTime.now());
             credentialRepo.save(cred);
         });
+        portfolioCache.remove("bitget:" + userId);
         log.info("[Virt] 비트겟 자격증명 삭제: userId={}", userId);
     }
 
@@ -361,6 +394,10 @@ public class VirtService {
 
     /** 비트겟 현물 포트폴리오 조회 */
     public VirtPortfolioResponse getBitgetPortfolio(String userId) {
+        return getCachedOrFetch(portfolioCache, "bitget:" + userId, () -> fetchBitgetPortfolio(userId));
+    }
+
+    private VirtPortfolioResponse fetchBitgetPortfolio(String userId) {
         VirtCredential cred = credentialRepo.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("비트겟 API 키가 등록되지 않았습니다."));
         if (cred.getEncryptedBitgetApiKey() == null) {

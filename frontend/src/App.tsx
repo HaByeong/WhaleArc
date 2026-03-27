@@ -1,4 +1,5 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
@@ -22,10 +23,27 @@ import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import GoldenCrossChart from './components/GoldenCrossChart';
 
+// non-Virt 경로에서 body에 다크 모드 클래스 적용
+const DarkModeController = () => {
+  const location = useLocation();
+  useEffect(() => {
+    const isVirtRoute = location.pathname.startsWith('/virt');
+    const isAuthRoute = ['/', '/login', '/signup', '/auth/callback', '/forgot-password', '/reset-password'].includes(location.pathname);
+    if (!isVirtRoute && !isAuthRoute) {
+      document.body.classList.add('whalearc-dark');
+    } else {
+      document.body.classList.remove('whalearc-dark');
+    }
+    return () => { document.body.classList.remove('whalearc-dark'); };
+  }, [location.pathname]);
+  return null;
+};
+
 function App() {
   return (
     <ErrorBoundary>
       <Router>
+        <DarkModeController />
         <AuthProvider>
         <Routes>
           <Route path="/" element={<LandingPage />} />

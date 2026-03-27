@@ -393,7 +393,8 @@ public class TurtleStrategyService {
     }
 
     /** shift(1) 적용 — 직전까지의 rolling min */
-    private double rollingMin(double[] data, int idx, int period) {
+    private 
+    double rollingMin(double[] data, int idx, int period) {
         double min = Double.MAX_VALUE;
         int start = Math.max(0, idx - period);
         for (int i = start; i < idx; i++) {
@@ -411,3 +412,4 @@ public class TurtleStrategyService {
         return names.getOrDefault(symbol, symbol);
     }
 }
+

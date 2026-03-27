@@ -6,6 +6,7 @@ interface RealtimeChartProps {
   symbol: string;
   price: number;
   className?: string;
+  isDark?: boolean;
 }
 
 const INTERVALS = [
@@ -16,7 +17,7 @@ const INTERVALS = [
   { label: '1일', value: '1d' },
 ];
 
-const RealtimeChart = ({ symbol, price, className = '' }: RealtimeChartProps) => {
+const RealtimeChart = ({ symbol, price, className = '', isDark = false }: RealtimeChartProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<typeof AreaSeries> | null>(null);
@@ -31,15 +32,15 @@ const RealtimeChart = ({ symbol, price, className = '' }: RealtimeChartProps) =>
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { color: '#ffffff' },
-        textColor: '#94a3b8',
+        background: { color: isDark ? '#0a1628' : '#ffffff' },
+        textColor: isDark ? '#475569' : '#94a3b8',
         fontFamily: "'Pretendard', sans-serif",
         fontSize: 11,
         attributionLogo: false,
       },
       grid: {
         vertLines: { visible: false },
-        horzLines: { color: '#f1f5f9', style: 0 },
+        horzLines: { color: isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9', style: 0 },
       },
       width: containerRef.current.clientWidth,
       height: 340,

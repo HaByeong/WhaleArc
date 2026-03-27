@@ -17,14 +17,15 @@ import java.util.*;
 /**
  * 비트겟 Open API 클라이언트.
  * - HMAC-SHA256 인증
- * - 현물 계좌 잔고 조회
- * - 현재가 조회
+ * - 리트라이 + 지수 백오프
  */
 @Slf4j
 @Service
 public class VirtBitgetClient {
 
     private static final String BASE_URL = "https://api.bitget.com";
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_DELAY_MS = 500;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -41,31 +42,50 @@ public class VirtBitgetClient {
      */
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getSpotAssets(String apiKey, String secretKey, String passphrase) {
-        String path = "/api/v2/spot/account/assets";
-        String timestamp = String.valueOf(Instant.now().toEpochMilli());
+        Exception lastException = null;
 
-        HttpHeaders headers = buildHeaders(apiKey, secretKey, passphrase, timestamp, "GET", path, "");
-        HttpEntity<Void> request = new HttpEntity<>(headers);
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                String path = "/api/v2/spot/account/assets";
+                String timestamp = String.valueOf(Instant.now().toEpochMilli());
 
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(
-                    BASE_URL + path, HttpMethod.GET, request, String.class);
+                HttpHeaders headers = buildHeaders(apiKey, secretKey, passphrase, timestamp, "GET", path, "");
+                HttpEntity<Void> request = new HttpEntity<>(headers);
 
-            Map<String, Object> result = objectMapper.readValue(response.getBody(),
-                    new TypeReference<>() {});
+                ResponseEntity<String> response = restTemplate.exchange(
+                        BASE_URL + path, HttpMethod.GET, request, String.class);
 
-            if (!"00000".equals(String.valueOf(result.get("code")))) {
-                log.warn("[Virt/Bitget] 자산 조회 실패: {}", result.get("msg"));
-                throw new RuntimeException("비트겟 자산 조회 실패: " + result.get("msg"));
+                Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<>() {});
+
+                if (!"00000".equals(String.valueOf(result.get("code")))) {
+                    log.warn("[Virt/Bitget] 자산 조회 실패: {}", result.get("msg"));
+                    throw new RuntimeException("비트겟 자산 조회 실패: " + result.get("msg"));
+                }
+
+                if (attempt > 1) {
+                    log.info("[Virt/Bitget] 자산 조회 성공 ({}번째 시도)", attempt);
+                }
+                return (List<Map<String, Object>>) result.get("data");
+            } catch (RuntimeException e) {
+                if (e.getMessage() != null && e.getMessage().startsWith("비트겟 자산 조회 실패:")) {
+                    throw e; // API 비즈니스 에러는 리트라이하지 않음
+                }
+                lastException = e;
+                log.warn("[Virt/Bitget] 자산 조회 오류 (시도 {}/{}): {}", attempt, MAX_RETRIES, e.getMessage());
+                if (attempt < MAX_RETRIES) {
+                    sleep(RETRY_DELAY_MS * attempt);
+                }
+            } catch (Exception e) {
+                lastException = e;
+                log.warn("[Virt/Bitget] 자산 조회 오류 (시도 {}/{}): {}", attempt, MAX_RETRIES, e.getMessage());
+                if (attempt < MAX_RETRIES) {
+                    sleep(RETRY_DELAY_MS * attempt);
+                }
             }
-
-            return (List<Map<String, Object>>) result.get("data");
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("[Virt/Bitget] 자산 조회 오류: {}", e.getMessage());
-            throw new RuntimeException("비트겟 자산 조회 실패: " + e.getMessage(), e);
         }
+
+        throw new RuntimeException("비트겟 자산 조회 실패 (" + MAX_RETRIES + "회 재시도 실패)", lastException);
     }
 
     /**
@@ -73,22 +93,37 @@ public class VirtBitgetClient {
      */
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getSpotTickers() {
-        try {
-            ResponseEntity<String> response = restTemplate.getForEntity(
-                    BASE_URL + "/api/v2/spot/market/tickers", String.class);
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                ResponseEntity<String> response = restTemplate.getForEntity(
+                        BASE_URL + "/api/v2/spot/market/tickers", String.class);
 
-            Map<String, Object> result = objectMapper.readValue(response.getBody(),
-                    new TypeReference<>() {});
+                Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<>() {});
 
-            if (!"00000".equals(String.valueOf(result.get("code")))) {
-                return List.of();
+                if (!"00000".equals(String.valueOf(result.get("code")))) {
+                    log.warn("[Virt/Bitget] 시세 응답 코드: {}", result.get("code"));
+                    if (attempt < MAX_RETRIES) {
+                        sleep(RETRY_DELAY_MS * attempt);
+                        continue;
+                    }
+                    return List.of();
+                }
+
+                if (attempt > 1) {
+                    log.info("[Virt/Bitget] 시세 조회 성공 ({}번째 시도)", attempt);
+                }
+                return (List<Map<String, Object>>) result.get("data");
+            } catch (Exception e) {
+                log.warn("[Virt/Bitget] 시세 조회 오류 (시도 {}/{}): {}", attempt, MAX_RETRIES, e.getMessage());
+                if (attempt < MAX_RETRIES) {
+                    sleep(RETRY_DELAY_MS * attempt);
+                }
             }
-
-            return (List<Map<String, Object>>) result.get("data");
-        } catch (Exception e) {
-            log.error("[Virt/Bitget] 시세 조회 오류: {}", e.getMessage());
-            return List.of();
         }
+
+        log.error("[Virt/Bitget] 시세 조회 최종 실패");
+        return List.of();
     }
 
     /* ───── HMAC-SHA256 서명 ───── */
@@ -116,6 +151,14 @@ public class VirtBitgetClient {
             return Base64.getEncoder().encodeToString(hash);
         } catch (Exception e) {
             throw new RuntimeException("HMAC-SHA256 서명 실패", e);
+        }
+    }
+
+    private void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }

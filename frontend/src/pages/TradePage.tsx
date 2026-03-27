@@ -2,7 +2,10 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
+import VirtSplashLoading from '../components/VirtSplashLoading';
+import SplashLoading from '../components/SplashLoading';
 import ErrorMessage from '../components/ErrorMessage';
+import UnstableCurrent from '../components/UnstableCurrent';
 import { usePolling } from '../hooks/usePolling';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
 import { useRoutePrefix, useVirtNavigate } from '../hooks/useRoutePrefix';
@@ -34,6 +37,7 @@ const assetName = (code: string, assetType?: string) => {
 
 const TradePage = () => {
   const { isVirt } = useRoutePrefix();
+  const d = !isVirt; // dark mode flag
   const virtNavigate = useVirtNavigate();
   const [searchParams] = useSearchParams();
   const urlCode = searchParams.get('code');
@@ -360,13 +364,18 @@ const TradePage = () => {
   };
 
   const getStatusLabel = (status: Order['status']) => {
-    const map: Record<string, { label: string; cls: string }> = {
+    const map: Record<string, { label: string; cls: string }> = d ? {
+      FILLED: { label: '체결', cls: 'bg-green-500/10 text-green-400' },
+      PENDING: { label: '대기', cls: 'bg-amber-500/10 text-amber-400' },
+      CANCELLED: { label: '취소', cls: 'bg-white/[0.04] text-slate-500' },
+      PARTIALLY_FILLED: { label: '부분체결', cls: 'bg-blue-500/10 text-blue-400' },
+    } : {
       FILLED: { label: '체결', cls: 'bg-green-50 text-green-700' },
       PENDING: { label: '대기', cls: 'bg-amber-50 text-amber-700' },
       CANCELLED: { label: '취소', cls: 'bg-gray-100 text-gray-500' },
       PARTIALLY_FILLED: { label: '부분체결', cls: 'bg-blue-50 text-blue-700' },
     };
-    return map[status] || { label: status, cls: 'bg-gray-100 text-gray-600' };
+    return map[status] || { label: status, cls: d ? 'bg-white/[0.04] text-slate-500' : 'bg-gray-100 text-gray-600' };
   };
 
   /* ─── 빠른 수량 버튼 계산 ─── */
@@ -428,28 +437,26 @@ const TradePage = () => {
 
   /* ─── 로딩/에러 ─── */
   if (loading && stockList.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header showNav />
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <LoadingSpinner fullScreen={false} message="시세 데이터를 불러오는 중..." />
-        </div>
-      </div>
-    );
+    if (!isVirt) return <SplashLoading message="거래 데이터를 불러오는 중..." />;
+    return <VirtSplashLoading message="거래 데이터를 불러오는 중..." />;
   }
   if (error && stockList.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className={`min-h-screen ${isVirt ? 'bg-gray-50' : 'bg-[#060d18] text-white'}`}>
         <Header showNav />
         <div className="max-w-7xl mx-auto px-4 py-8">
-          <ErrorMessage message={error} onRetry={loadInitialData} variant="offline" />
+          {!isVirt ? (
+            <UnstableCurrent message="해류가 불안정합니다" sub={error || '데이터를 다시 불러오고 있어요...'} />
+          ) : (
+            <ErrorMessage message={error} onRetry={loadInitialData} variant="offline" />
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${isVirt ? 'bg-gray-50' : 'bg-[#060d18] text-white'}`}>
       <Header showNav />
 
       {/* 토스트 */}
@@ -467,13 +474,13 @@ const TradePage = () => {
           {/* ━━━ 좌측: 종목 목록 (3칸) ━━━ */}
           <div className="md:col-span-1 lg:col-span-3 space-y-4">
             {/* 가상화폐/주식 탭 */}
-            <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+            <div className={`flex gap-1 rounded-xl p-1 ${d ? 'bg-white/[0.04]' : 'bg-gray-100'}`}>
               <button
                 onClick={() => setMarketTab('CRYPTO')}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
                   marketTab === 'CRYPTO'
-                    ? 'bg-white text-whale-dark shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600'
+                    ? (d ? 'bg-white/10 text-cyan-400' : 'bg-white text-whale-dark shadow-sm')
+                    : (d ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600')
                 }`}
               >
                 가상화폐
@@ -482,8 +489,8 @@ const TradePage = () => {
                 onClick={() => setMarketTab('STOCK')}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
                   marketTab === 'STOCK'
-                    ? 'bg-white text-whale-dark shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600'
+                    ? (d ? 'bg-white/10 text-cyan-400' : 'bg-white text-whale-dark shadow-sm')
+                    : (d ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600')
                 }`}
               >
                 주식
@@ -492,7 +499,7 @@ const TradePage = () => {
 
             {/* 검색 */}
             <div className="relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${d ? 'text-slate-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
@@ -500,10 +507,12 @@ const TradePage = () => {
                 value={searchQuery}
                 onChange={e => marketTab === 'STOCK' ? handleStockSearch(e.target.value) : setSearchQuery(e.target.value)}
                 placeholder={marketTab === 'CRYPTO' ? '가상화폐 검색 (비트코인, ETH...)' : '전체 KOSPI/KOSDAQ 종목 검색...'}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-whale-light/50 focus:border-whale-light"
+                className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-whale-light/50 focus:border-whale-light ${
+                  d ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-600' : 'border-gray-200'
+                }`}
               />
               {searchQuery && (
-                <button onClick={() => { setSearchQuery(''); setStockSearchResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <button onClick={() => { setSearchQuery(''); setStockSearchResults([]); }} className={`absolute right-3 top-1/2 -translate-y-1/2 ${d ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'}`}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               )}
@@ -515,18 +524,22 @@ const TradePage = () => {
 
               {/* 주식 검색 드롭다운 */}
               {marketTab === 'STOCK' && stockSearchResults.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-200 z-20 max-h-60 overflow-y-auto">
+                <div className={`absolute top-full left-0 right-0 mt-1 rounded-xl shadow-xl border z-20 max-h-60 overflow-y-auto ${
+                  d ? 'bg-[#0c1829] border-white/[0.06]' : 'bg-white border-gray-200'
+                }`}>
                   {stockSearchResults.map(r => (
                     <div
                       key={r.code}
                       onClick={() => handleSearchResultClick(r)}
-                      className="px-4 py-2.5 hover:bg-gray-50 cursor-pointer transition-colors flex justify-between items-center"
+                      className={`px-4 py-2.5 cursor-pointer transition-colors flex justify-between items-center ${
+                        d ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'
+                      }`}
                     >
                       <div>
-                        <span className="text-sm font-semibold text-gray-800">{r.name}</span>
-                        <span className="text-xs text-gray-400 ml-2">{r.code}</span>
+                        <span className={`text-sm font-semibold ${d ? 'text-slate-100' : 'text-gray-800'}`}>{r.name}</span>
+                        <span className={`text-xs ml-2 ${d ? 'text-slate-500' : 'text-gray-400'}`}>{r.code}</span>
                       </div>
-                      <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{r.market}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${d ? 'text-slate-500 bg-white/[0.04]' : 'text-gray-400 bg-gray-100'}`}>{r.market}</span>
                     </div>
                   ))}
                 </div>
@@ -534,14 +547,14 @@ const TradePage = () => {
             </div>
 
             {/* 종목 리스트 */}
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className={`rounded-xl shadow-lg overflow-hidden ${d ? 'border border-white/[0.06] bg-white/[0.02]' : 'bg-white'}`}>
               <div className="px-4 py-3 bg-gradient-to-r from-whale-dark to-whale-light">
                 <div className="flex items-center justify-between text-white">
                   <span className="text-sm font-semibold">{marketTab === 'CRYPTO' ? '가상화폐' : '주식'}</span>
                   <span className="text-xs opacity-80">{sortedStocks.length}개</span>
                 </div>
               </div>
-              <div className="max-h-[calc(100vh-320px)] overflow-y-auto divide-y divide-gray-50">
+              <div className={`max-h-[calc(100vh-320px)] overflow-y-auto divide-y ${d ? 'divide-white/[0.04]' : 'divide-gray-50'}`}>
                 {sortedStocks.map(stock => {
                   const isSelected = selectedStock?.stockCode === stock.stockCode;
                   const isPopular = marketTab === 'CRYPTO' && POPULAR_COINS.includes(stock.stockCode);
@@ -552,24 +565,24 @@ const TradePage = () => {
                       onClick={() => handleStockSelect(stock)}
                       className={`px-4 py-3 cursor-pointer transition-all ${
                         isSelected
-                          ? 'bg-whale-light/10 border-l-3 border-l-whale-light'
-                          : 'hover:bg-gray-50'
+                          ? (d ? 'bg-cyan-500/10 border-l-3 border-l-cyan-400' : 'bg-whale-light/10 border-l-3 border-l-whale-light')
+                          : (d ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50')
                       }`}
                     >
                       <div className="flex justify-between items-center">
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className={`font-semibold text-sm truncate ${isSelected ? 'text-whale-dark' : 'text-gray-800'}`}>
+                            <span className={`font-semibold text-sm truncate ${isSelected ? (d ? 'text-cyan-400' : 'text-whale-dark') : (d ? 'text-slate-100' : 'text-gray-800')}`}>
                               {name}
                             </span>
                             {isPopular && (
                               <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400" />
                             )}
                           </div>
-                          <span className="text-xs text-gray-400">{stock.stockCode}</span>
+                          <span className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>{stock.stockCode}</span>
                         </div>
                         <div className="text-right flex-shrink-0 ml-2">
-                          <div className="text-sm font-semibold text-gray-800">{fmt(stock.currentPrice)}</div>
+                          <div className={`text-sm font-semibold ${d ? 'text-slate-100' : 'text-gray-800'}`}>{fmt(stock.currentPrice)}</div>
                           <div className={`text-xs font-semibold ${stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
                             {stock.changeRate >= 0 ? '+' : ''}{stock.changeRate.toFixed(2)}%
                           </div>
@@ -579,11 +592,11 @@ const TradePage = () => {
                   );
                 })}
                 {sortedStocks.length === 0 && (
-                  <div className="p-6 text-center text-gray-400 text-sm">검색 결과가 없습니다</div>
+                  <div className={`p-6 text-center text-sm ${d ? 'text-slate-500' : 'text-gray-400'}`}>검색 결과가 없습니다</div>
                 )}
               </div>
               {marketTab === 'STOCK' && (
-                <p className="text-[10px] text-gray-400 text-right px-4 py-1.5">
+                <p className={`text-[10px] text-right px-4 py-1.5 ${d ? 'text-slate-600' : 'text-gray-400'}`}>
                   * 주식 시세는 KIS 모의투자 API 기준 약 15~20초 지연
                 </p>
               )}
@@ -593,31 +606,31 @@ const TradePage = () => {
           {/* ━━━ 중앙: 차트 + 탭 내용 (5칸) ━━━ */}
           <div className="md:col-span-1 lg:col-span-5 space-y-4">
             {!liveSelectedStock ? (
-              <div className="bg-white rounded-xl shadow-lg flex flex-col items-center justify-center py-24 px-6">
-                <svg className="w-16 h-16 text-gray-200 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className={`rounded-xl shadow-lg flex flex-col items-center justify-center py-24 px-6 ${d ? 'border border-white/[0.06] bg-white/[0.02]' : 'bg-white'}`}>
+                <svg className={`w-16 h-16 mb-4 ${d ? 'text-slate-700' : 'text-gray-200'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 13l4-4 4 4 4-8 4 4m1 7H4a1 1 0 01-1-1V4" />
                 </svg>
-                <p className="text-gray-400 text-sm font-semibold mb-1">종목이 선택되지 않았습니다</p>
-                <p className="text-gray-300 text-xs">좌측에서 종목을 선택해주세요</p>
+                <p className={`text-sm font-semibold mb-1 ${d ? 'text-slate-400' : 'text-gray-400'}`}>종목이 선택되지 않았습니다</p>
+                <p className={`text-xs ${d ? 'text-slate-600' : 'text-gray-300'}`}>좌측에서 종목을 선택해주세요</p>
               </div>
             ) : (
               <>
                 {/* 종목 헤더 */}
-                <div className="bg-white rounded-xl shadow-lg p-5">
+                <div className={`rounded-xl shadow-lg p-5 ${d ? 'border border-white/[0.06] bg-white/[0.02]' : 'bg-white'}`}>
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-bold text-whale-dark">{selectedDisplayName}</h2>
+                        <h2 className={`text-xl font-bold ${d ? 'text-white' : 'text-whale-dark'}`}>{selectedDisplayName}</h2>
                         {isSelectedStock && (
-                          <span className="text-[10px] font-semibold bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">주식</span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>
                         )}
                       </div>
-                      <span className="text-sm text-gray-400">
+                      <span className={`text-sm ${d ? 'text-slate-500' : 'text-gray-400'}`}>
                         {isSelectedStock ? `${liveSelectedStock.stockCode} · KRX` : `${liveSelectedStock.stockCode}/KRW`}
                       </span>
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-whale-dark">{fmt(liveSelectedStock.currentPrice)}</div>
+                      <div className={`text-2xl font-bold ${d ? 'text-white' : 'text-whale-dark'}`}>{fmt(liveSelectedStock.currentPrice)}</div>
                       <div className={`text-sm font-semibold ${liveSelectedStock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
                         {liveSelectedStock.changeRate >= 0 ? '+' : ''}{fmt(liveSelectedStock.change)}
                         <span className="ml-1">({liveSelectedStock.changeRate >= 0 ? '+' : ''}{liveSelectedStock.changeRate.toFixed(2)}%)</span>
@@ -631,11 +644,11 @@ const TradePage = () => {
                       {[
                         { label: '고가', value: fmt(liveSelectedStock.high), cls: 'text-red-500' },
                         { label: '저가', value: fmt(liveSelectedStock.low), cls: 'text-blue-500' },
-                        { label: '시가', value: fmt(liveSelectedStock.open), cls: 'text-gray-700' },
-                        { label: '거래량', value: fmtNum(liveSelectedStock.volume), cls: 'text-gray-700' },
+                        { label: '시가', value: fmt(liveSelectedStock.open), cls: d ? 'text-slate-300' : 'text-gray-700' },
+                        { label: '거래량', value: fmtNum(liveSelectedStock.volume), cls: d ? 'text-slate-300' : 'text-gray-700' },
                       ].map(item => (
-                        <div key={item.label} className="bg-gray-50 rounded-lg p-2 text-center">
-                          <div className="text-[10px] text-gray-400 mb-0.5">{item.label}</div>
+                        <div key={item.label} className={`rounded-lg p-2 text-center ${d ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
+                          <div className={`text-[10px] mb-0.5 ${d ? 'text-slate-500' : 'text-gray-400'}`}>{item.label}</div>
                           <div className={`text-xs font-semibold ${item.cls}`}>{item.value}</div>
                         </div>
                       ))}
@@ -644,11 +657,11 @@ const TradePage = () => {
                   {isSelectedStock && (
                     <div className="grid grid-cols-2 gap-3">
                       {[
-                        { label: '거래량', value: fmtNum(liveSelectedStock.volume), cls: 'text-gray-700' },
-                        { label: '전일 종가', value: fmt(liveSelectedStock.previousClose), cls: 'text-gray-700' },
+                        { label: '거래량', value: fmtNum(liveSelectedStock.volume), cls: d ? 'text-slate-300' : 'text-gray-700' },
+                        { label: '전일 종가', value: fmt(liveSelectedStock.previousClose), cls: d ? 'text-slate-300' : 'text-gray-700' },
                       ].map(item => (
-                        <div key={item.label} className="bg-gray-50 rounded-lg p-2 text-center">
-                          <div className="text-[10px] text-gray-400 mb-0.5">{item.label}</div>
+                        <div key={item.label} className={`rounded-lg p-2 text-center ${d ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
+                          <div className={`text-[10px] mb-0.5 ${d ? 'text-slate-500' : 'text-gray-400'}`}>{item.label}</div>
                           <div className={`text-xs font-semibold ${item.cls}`}>{item.value}</div>
                         </div>
                       ))}
@@ -657,8 +670,8 @@ const TradePage = () => {
                 </div>
 
                 {/* 탭 */}
-                <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-                  <div className="flex border-b border-gray-100">
+                <div className={`rounded-xl shadow-lg overflow-hidden ${d ? 'border border-white/[0.06] bg-white/[0.02]' : 'bg-white'}`}>
+                  <div className={`flex border-b ${d ? 'border-white/[0.06]' : 'border-gray-100'}`}>
                     {([
                       { key: 'chart', label: '차트' },
                       { key: 'orders', label: `주문 (${orders.length})` },
@@ -670,8 +683,8 @@ const TradePage = () => {
                         onClick={() => setActiveTab(tab.key)}
                         className={`flex-1 py-3 text-xs font-semibold transition-colors ${
                           activeTab === tab.key
-                            ? 'text-whale-light border-b-2 border-whale-light bg-whale-light/5'
-                            : 'text-gray-400 hover:text-gray-600'
+                            ? (d ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5' : 'text-whale-light border-b-2 border-whale-light bg-whale-light/5')
+                            : (d ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600')
                         }`}
                       >
                         {tab.label}
@@ -688,6 +701,7 @@ const TradePage = () => {
                           price={liveSelectedStock.currentPrice}
                           changeRate={liveSelectedStock.changeRate}
                           assetType={isSelectedStock ? 'STOCK' : undefined}
+                          isDark={!isVirt}
                         />
                       </>
                     )}
@@ -695,24 +709,26 @@ const TradePage = () => {
                     {/* 주문 내역 */}
                     {activeTab === 'orders' && (
                       orders.length === 0 ? (
-                        <div className="py-12 text-center text-gray-400 text-sm">주문 내역이 없습니다</div>
+                        <div className={`py-12 text-center text-sm ${d ? 'text-slate-500' : 'text-gray-400'}`}>주문 내역이 없습니다</div>
                       ) : (
                         <div className="space-y-2 max-h-80 overflow-y-auto">
                           {orders.map(order => {
                             const st = getStatusLabel(order.status);
                             const name = getDisplayName(order.stockCode, order.stockName, order.assetType);
                             return (
-                              <div key={order.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                              <div key={order.id} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                                d ? 'border-white/[0.06] hover:bg-white/[0.03]' : 'border-gray-100 hover:bg-gray-50'
+                              }`}>
                                 <div className="flex items-center gap-3">
-                                  <span className={`px-2 py-1 text-xs font-bold rounded ${order.orderType === 'BUY' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                                  <span className={`px-2 py-1 text-xs font-bold rounded ${order.orderType === 'BUY' ? (d ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600') : (d ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600')}`}>
                                     {order.orderType === 'BUY' ? '매수' : '매도'}
                                   </span>
                                   <div>
                                     <div className="flex items-center gap-1.5">
-                                      <span className="text-sm font-semibold">{name}</span>
-                                      {order.assetType === 'STOCK' && <span className="text-[9px] bg-indigo-50 text-indigo-600 px-1 py-0.5 rounded">주식</span>}
+                                      <span className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{name}</span>
+                                      {order.assetType === 'STOCK' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>}
                                     </div>
-                                    <div className="text-xs text-gray-400">
+                                    <div className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>
                                       {order.orderMethod === 'MARKET' ? '시장가' : '지정가'} · {order.assetType === 'STOCK' ? `${Math.floor(order.quantity)}주` : `${formatQuantity(order.quantity)}개`} · {fmt(order.price)}
                                     </div>
                                   </div>
@@ -733,30 +749,32 @@ const TradePage = () => {
                     {/* 체결 내역 */}
                     {activeTab === 'trades' && (
                       trades.length === 0 ? (
-                        <div className="py-12 text-center text-gray-400 text-sm">체결 내역이 없습니다</div>
+                        <div className={`py-12 text-center text-sm ${d ? 'text-slate-500' : 'text-gray-400'}`}>체결 내역이 없습니다</div>
                       ) : (
                         <div className="space-y-2 max-h-80 overflow-y-auto">
                           {trades.map(trade => {
                             const name = getDisplayName(trade.stockCode, trade.stockName, trade.assetType);
                             return (
-                              <div key={trade.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                              <div key={trade.id} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                                d ? 'border-white/[0.06] hover:bg-white/[0.03]' : 'border-gray-100 hover:bg-gray-50'
+                              }`}>
                                 <div className="flex items-center gap-3">
-                                  <span className={`px-2 py-1 text-xs font-bold rounded ${trade.orderType === 'BUY' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                                  <span className={`px-2 py-1 text-xs font-bold rounded ${trade.orderType === 'BUY' ? (d ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600') : (d ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600')}`}>
                                     {trade.orderType === 'BUY' ? '매수' : '매도'}
                                   </span>
                                   <div>
                                     <div className="flex items-center gap-1.5">
-                                      <span className="text-sm font-semibold">{name}</span>
-                                      {trade.assetType === 'STOCK' && <span className="text-[9px] bg-indigo-50 text-indigo-600 px-1 py-0.5 rounded">주식</span>}
+                                      <span className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{name}</span>
+                                      {trade.assetType === 'STOCK' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>}
                                     </div>
-                                    <div className="text-xs text-gray-400">
+                                    <div className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>
                                       {trade.assetType === 'STOCK' ? `${Math.floor(trade.quantity)}주` : `${formatQuantity(trade.quantity)}개`} · {fmt(trade.price)}
                                     </div>
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  <div className="text-sm font-semibold">{fmt(trade.totalAmount)}</div>
-                                  <div className="text-xs text-gray-400">
+                                  <div className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{fmt(trade.totalAmount)}</div>
+                                  <div className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>
                                     {new Date(trade.executedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                   </div>
                                 </div>
@@ -771,11 +789,11 @@ const TradePage = () => {
                     {activeTab === 'holdings' && portfolio && (
                       portfolio.holdings.length === 0 ? (
                         <div className="py-12 text-center">
-                          <svg className="w-10 h-10 text-gray-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className={`w-10 h-10 mx-auto mb-3 ${d ? 'text-slate-700' : 'text-gray-200'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                           </svg>
-                          <p className="text-gray-400 text-sm">보유 종목이 없습니다</p>
-                          <p className="text-gray-300 text-xs mt-1">시세 탭에서 종목을 검색하고 매수해보세요</p>
+                          <p className={`text-sm ${d ? 'text-slate-400' : 'text-gray-400'}`}>보유 종목이 없습니다</p>
+                          <p className={`text-xs mt-1 ${d ? 'text-slate-600' : 'text-gray-300'}`}>시세 탭에서 종목을 검색하고 매수해보세요</p>
                         </div>
                       ) : (
                         <div className="space-y-2 max-h-80 overflow-y-auto">
@@ -788,22 +806,24 @@ const TradePage = () => {
                                   const stock = mergedStockList.find(s => s.stockCode === h.stockCode);
                                   if (stock) handleStockSelect(stock);
                                 }}
-                                className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                                className={`flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer ${
+                                  d ? 'border-white/[0.06] hover:bg-white/[0.03]' : 'border-gray-100 hover:bg-gray-50'
+                                }`}
                               >
                                 <div>
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-sm font-semibold">{name}</span>
-                                    {h.assetType === 'STOCK' && <span className="text-[9px] bg-indigo-50 text-indigo-600 px-1 py-0.5 rounded">주식</span>}
+                                    <span className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{name}</span>
+                                    {h.assetType === 'STOCK' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>}
                                   </div>
-                                  <div className="text-xs text-gray-400">
+                                  <div className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>
                                     {h.assetType === 'STOCK' ? `${Math.floor(h.quantity)}주` : `${formatQuantity(h.quantity)}개`} · 평단 {fmt(h.averagePrice)}
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  <div className="text-sm font-semibold">{fmt(h.marketValue)}</div>
+                                  <div className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{fmt(h.marketValue)}</div>
                                   <div className={`text-xs font-semibold ${h.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
                                     {h.returnRate >= 0 ? '+' : ''}{h.returnRate.toFixed(2)}%
-                                    <span className="text-gray-400 font-normal ml-1">({h.profitLoss >= 0 ? '+' : ''}{fmt(Math.round(h.profitLoss))})</span>
+                                    <span className={`font-normal ml-1 ${d ? 'text-slate-500' : 'text-gray-400'}`}>({h.profitLoss >= 0 ? '+' : ''}{fmt(Math.round(h.profitLoss))})</span>
                                   </div>
                                 </div>
                               </div>
@@ -821,10 +841,10 @@ const TradePage = () => {
           {/* ━━━ 우측: 주문 폼 + 포트폴리오 (4칸) ━━━ */}
           <div className="md:col-span-2 lg:col-span-4 space-y-4">
             {!isVirt ? (
-              <div className="bg-white rounded-xl shadow-lg flex flex-col items-center justify-center py-16 px-6 text-center">
+              <div className={`rounded-xl shadow-lg flex flex-col items-center justify-center py-16 px-6 text-center ${d ? 'border border-white/[0.06] bg-white/[0.02]' : 'bg-white'}`}>
                 <img src="/whales/gray-whale.png" alt="" className="w-16 h-16 object-contain mb-4 opacity-60" />
-                <h3 className="text-lg font-bold text-whale-dark mb-2">가상 거래는 Virt에서 이용하세요</h3>
-                <p className="text-sm text-gray-400 mb-5">가상돈으로 매수/매도 주문을 체험하고 전략을 테스트해보세요</p>
+                <h3 className={`text-lg font-bold mb-2 ${d ? 'text-white' : 'text-whale-dark'}`}>가상 거래는 Virt에서 이용하세요</h3>
+                <p className={`text-sm mb-5 ${d ? 'text-slate-400' : 'text-gray-400'}`}>가상돈으로 매수/매도 주문을 체험하고 전략을 테스트해보세요</p>
                 <button
                   onClick={() => virtNavigate('/virt/trade' + (urlCode ? `?code=${urlCode}&type=${urlType || 'CRYPTO'}` : ''))}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-cyan-500 text-white font-bold rounded-xl hover:bg-cyan-600 transition-colors"
@@ -834,23 +854,23 @@ const TradePage = () => {
                 </button>
               </div>
             ) : !liveSelectedStock ? (
-              <div className="bg-white rounded-xl shadow-lg flex flex-col items-center justify-center py-16 px-6">
-                <svg className="w-12 h-12 text-gray-200 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className={`rounded-xl shadow-lg flex flex-col items-center justify-center py-16 px-6 ${d ? 'border border-white/[0.06] bg-white/[0.02]' : 'bg-white'}`}>
+                <svg className={`w-12 h-12 mb-3 ${d ? 'text-slate-700' : 'text-gray-200'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
                 </svg>
-                <p className="text-gray-400 text-sm font-semibold mb-1">주문 패널</p>
-                <p className="text-gray-300 text-xs">좌측에서 종목을 선택해주세요</p>
+                <p className={`text-sm font-semibold mb-1 ${d ? 'text-slate-400' : 'text-gray-400'}`}>주문 패널</p>
+                <p className={`text-xs ${d ? 'text-slate-600' : 'text-gray-300'}`}>좌측에서 종목을 선택해주세요</p>
               </div>
             ) : (
-              <div className="bg-white rounded-xl shadow-lg p-5">
+              <div className={`rounded-xl shadow-lg p-5 ${d ? 'border border-white/[0.06] bg-white/[0.02]' : 'bg-white'}`}>
                 {/* 매수/매도 토글 */}
                 <div className="flex gap-2 mb-4">
                   <button
                     onClick={() => { setOrderType('BUY'); setQuantity(''); setLimitPrice(''); }}
                     className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${
                       orderType === 'BUY'
-                        ? 'bg-red-500 text-white shadow-lg shadow-red-200'
-                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        ? (d ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'bg-red-500 text-white shadow-lg shadow-red-200')
+                        : (d ? 'bg-white/[0.04] text-slate-500 hover:bg-white/[0.06]' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')
                     }`}
                   >
                     매수
@@ -859,8 +879,8 @@ const TradePage = () => {
                     onClick={() => { setOrderType('SELL'); setQuantity(''); setLimitPrice(''); }}
                     className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${
                       orderType === 'SELL'
-                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-200'
-                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        ? (d ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-500 text-white shadow-lg shadow-blue-200')
+                        : (d ? 'bg-white/[0.04] text-slate-500 hover:bg-white/[0.06]' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')
                     }`}
                   >
                     매도
@@ -875,8 +895,8 @@ const TradePage = () => {
                       onClick={() => setOrderMethod(method)}
                       className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
                         orderMethod === method
-                          ? 'bg-whale-dark text-white'
-                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          ? (d ? 'bg-white/10 text-cyan-400' : 'bg-whale-dark text-white')
+                          : (d ? 'bg-white/[0.04] text-slate-500 hover:bg-white/[0.06]' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')
                       }`}
                     >
                       {method === 'MARKET' ? '시장가' : '지정가'}
@@ -886,29 +906,31 @@ const TradePage = () => {
 
                 <form onSubmit={handleOrderSubmit} className="space-y-3">
                   {/* 주문 가격 */}
-                  <div className="bg-gray-50 rounded-xl p-3">
-                    <div className="text-xs text-gray-400 mb-1">
+                  <div className={`rounded-xl p-3 ${d ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
+                    <div className={`text-xs mb-1 ${d ? 'text-slate-500' : 'text-gray-400'}`}>
                       {orderMethod === 'MARKET' ? '현재가 (시장가)' : '지정가'}
                     </div>
                     {orderMethod === 'MARKET' ? (
-                      <div className="text-lg font-bold text-whale-dark">{fmt(liveSelectedStock.currentPrice)}</div>
+                      <div className={`text-lg font-bold ${d ? 'text-white' : 'text-whale-dark'}`}>{fmt(liveSelectedStock.currentPrice)}</div>
                     ) : (
                       <input
                         type="number"
                         value={limitPrice}
                         onChange={e => setLimitPrice(e.target.value)}
                         placeholder="희망 가격 입력"
-                        className="w-full text-lg font-bold text-whale-dark bg-transparent border-none outline-none placeholder:text-gray-300 placeholder:font-normal"
+                        className={`w-full text-lg font-bold bg-transparent border-none outline-none placeholder:font-normal ${
+                          d ? 'text-white placeholder:text-slate-600' : 'text-whale-dark placeholder:text-gray-300'
+                        }`}
                         step={isSelectedStock ? '1' : '1'}
                       />
                     )}
                   </div>
 
                   {/* 수량 */}
-                  <div className="bg-gray-50 rounded-xl p-3">
+                  <div className={`rounded-xl p-3 ${d ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-gray-400">수량 {isSelectedStock ? '(주)' : ''}</span>
-                      <span className="text-xs text-gray-400">
+                      <span className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>수량 {isSelectedStock ? '(주)' : ''}</span>
+                      <span className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>
                         {orderType === 'BUY'
                           ? `잔고: ${fmt(portfolio?.cashBalance || 0)}`
                           : `보유: ${isSelectedStock ? `${Math.floor(getAvailableQuantity(liveSelectedStock.stockCode))}주` : `${formatQuantity(getAvailableQuantity(liveSelectedStock.stockCode))}개`}`
@@ -920,7 +942,9 @@ const TradePage = () => {
                       value={quantity}
                       onChange={e => setQuantity(e.target.value)}
                       placeholder={isSelectedStock ? '주 수 입력' : '수량 입력'}
-                      className="w-full text-lg font-bold text-whale-dark bg-transparent border-none outline-none placeholder:text-gray-300 placeholder:font-normal"
+                      className={`w-full text-lg font-bold bg-transparent border-none outline-none placeholder:font-normal ${
+                        d ? 'text-white placeholder:text-slate-600' : 'text-whale-dark placeholder:text-gray-300'
+                      }`}
                       min="0"
                       step={isSelectedStock ? '1' : 'any'}
                     />
@@ -936,7 +960,11 @@ const TradePage = () => {
                           key={btn.label}
                           type="button"
                           onClick={() => setQuickQuantity(btn.value)}
-                          className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-500 hover:border-whale-light hover:text-whale-light transition-colors"
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                            d
+                              ? 'bg-white/[0.02] border-white/10 text-slate-400 hover:border-cyan-400 hover:text-cyan-400'
+                              : 'bg-white border-gray-200 text-gray-500 hover:border-whale-light hover:text-whale-light'
+                          }`}
                         >
                           {btn.label}
                         </button>
@@ -946,19 +974,19 @@ const TradePage = () => {
 
                   {/* 예상 금액 */}
                   {estimatedTotal > 0 && (
-                    <div className={`rounded-xl p-3 ${orderType === 'BUY' ? 'bg-red-50' : 'bg-blue-50'}`}>
+                    <div className={`rounded-xl p-3 ${orderType === 'BUY' ? (d ? 'bg-red-500/10' : 'bg-red-50') : (d ? 'bg-blue-500/10' : 'bg-blue-50')}`}>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500">예상 금액</span>
-                        <span className={`text-lg font-bold ${orderType === 'BUY' ? 'text-red-600' : 'text-blue-600'}`}>
+                        <span className={`text-xs ${d ? 'text-slate-400' : 'text-gray-500'}`}>예상 금액</span>
+                        <span className={`text-lg font-bold ${orderType === 'BUY' ? (d ? 'text-red-400' : 'text-red-600') : (d ? 'text-blue-400' : 'text-blue-600')}`}>
                           {fmt(Math.round(estimatedTotal))}
                         </span>
                       </div>
-                      <div className="text-right text-[10px] text-gray-400 mt-0.5">수수료 0.1% 포함</div>
+                      <div className={`text-right text-[10px] mt-0.5 ${d ? 'text-slate-500' : 'text-gray-400'}`}>수수료 0.1% 포함</div>
                     </div>
                   )}
 
                   {/* 투자 유의사항 */}
-                  <p className="text-[10px] text-gray-400 leading-relaxed text-center px-2">
+                  <p className={`text-[10px] leading-relaxed text-center px-2 ${d ? 'text-slate-600' : 'text-gray-400'}`}>
                     투자 판단의 최종 책임은 본인에게 있으며, WhaleArc는 투자 손실에 대해 책임지지 않습니다.
                   </p>
 
@@ -968,8 +996,8 @@ const TradePage = () => {
                     disabled={isSubmitting || !quantity || parseFloat(quantity) <= 0}
                     className={`w-full py-3.5 rounded-xl font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                       orderType === 'BUY'
-                        ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg shadow-red-200'
-                        : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-200'
+                        ? `bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg ${d ? 'shadow-red-500/20' : 'shadow-red-200'}`
+                        : `bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg ${d ? 'shadow-blue-500/20' : 'shadow-blue-200'}`
                     }`}
                   >
                     {isSubmitting
@@ -983,38 +1011,38 @@ const TradePage = () => {
 
             {/* 포트폴리오 요약 */}
             {portfolio && (
-              <div className="bg-white rounded-xl shadow-lg p-5">
-                <h3 className="text-sm font-bold text-whale-dark mb-3">내 포트폴리오</h3>
+              <div className={`rounded-xl shadow-lg p-5 ${d ? 'border border-white/[0.06] bg-white/[0.02]' : 'bg-white'}`}>
+                <h3 className={`text-sm font-bold mb-3 ${d ? 'text-white' : 'text-whale-dark'}`}>내 포트폴리오</h3>
                 <div className="space-y-2.5">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-400">총 자산</span>
-                    <span className="text-sm font-bold text-whale-dark">{fmt(portfolio.totalValue)}</span>
+                    <span className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>총 자산</span>
+                    <span className={`text-sm font-bold ${d ? 'text-white' : 'text-whale-dark'}`}>{fmt(portfolio.totalValue)}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-400">현금</span>
-                    <span className="text-sm font-semibold">{fmt(portfolio.cashBalance)}</span>
+                    <span className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>현금</span>
+                    <span className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{fmt(portfolio.cashBalance)}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-400">평가 손익</span>
+                    <span className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>평가 손익</span>
                     <span className={`text-sm font-bold ${portfolio.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
                       {portfolio.returnRate >= 0 ? '+' : ''}{portfolio.returnRate.toFixed(2)}%
-                      <span className="text-gray-400 font-normal text-xs ml-1">
+                      <span className={`font-normal text-xs ml-1 ${d ? 'text-slate-500' : 'text-gray-400'}`}>
                         ({portfolio.returnRate >= 0 ? '+' : ''}{fmt(Math.round(portfolio.totalValue - (portfolio.initialCash || 10_000_000)))})
                       </span>
                     </span>
                   </div>
                   {(portfolio.turtleAllocated || 0) > 0 && (
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400">터틀 전략</span>
-                      <span className="text-sm font-semibold text-amber-600">{fmt(portfolio.turtleAllocated)}</span>
+                      <span className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>터틀 전략</span>
+                      <span className={`text-sm font-semibold ${d ? 'text-amber-400' : 'text-amber-600'}`}>{fmt(portfolio.turtleAllocated)}</span>
                     </div>
                   )}
                 </div>
 
                 {/* 보유 종목 미니 리스트 */}
                 {portfolio.holdings.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-100">
-                    <div className="text-xs text-gray-400 mb-2">보유 종목</div>
+                  <div className={`mt-3 pt-3 border-t ${d ? 'border-white/[0.06]' : 'border-gray-100'}`}>
+                    <div className={`text-xs mb-2 ${d ? 'text-slate-500' : 'text-gray-400'}`}>보유 종목</div>
                     <div className="space-y-1.5">
                       {portfolio.holdings.slice(0, 5).map(h => {
                         const name = getDisplayName(h.stockCode, h.stockName, h.assetType);
@@ -1025,11 +1053,11 @@ const TradePage = () => {
                               const stock = mergedStockList.find(s => s.stockCode === h.stockCode);
                               if (stock) handleStockSelect(stock);
                             }}
-                            className="flex justify-between items-center py-1 cursor-pointer hover:bg-gray-50 rounded px-1 -mx-1 transition-colors"
+                            className={`flex justify-between items-center py-1 cursor-pointer rounded px-1 -mx-1 transition-colors ${d ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'}`}
                           >
-                            <span className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+                            <span className={`text-xs font-semibold flex items-center gap-1 ${d ? 'text-slate-300' : 'text-gray-700'}`}>
                               {name}
-                              {h.assetType === 'STOCK' && <span className="text-[8px] bg-indigo-50 text-indigo-600 px-1 rounded">주식</span>}
+                              {h.assetType === 'STOCK' && <span className={`text-[8px] px-1 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>}
                             </span>
                             <span className={`text-xs font-semibold ${h.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
                               {h.returnRate >= 0 ? '+' : ''}{h.returnRate.toFixed(1)}%

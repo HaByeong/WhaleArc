@@ -774,7 +774,7 @@ export default function GoldenCrossChart() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
             <div className="flex items-center gap-2 mb-4">
               <img src="/whales/narwhal.png" alt="" className="w-6 h-6 object-contain" />
-              <h2 className="text-base font-bold text-gray-800">항로 상점</h2>
+              <h2 className="text-base font-bold text-gray-800">전략 학습</h2>
               {!loadingProducts && (
                 <span className="ml-auto text-xs text-gray-400">{products.length}개</span>
               )}

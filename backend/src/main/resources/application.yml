@@ -26,6 +26,8 @@ kis:
     appkey: ${KIS_APPKEY:}
     appsecret: ${KIS_APPSECRET:}
     cache-ttl-ms: 15000
+    max-retries: 3
+    retry-delay-ms: 500
 
 logging:
   level:

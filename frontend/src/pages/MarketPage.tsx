@@ -1,14 +1,18 @@
 import { useState, useEffect, useMemo, useRef, useCallback, type ReactNode } from 'react';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
+import VirtSplashLoading from '../components/VirtSplashLoading';
+import SplashLoading from '../components/SplashLoading';
 import ErrorMessage from '../components/ErrorMessage';
+import UnstableCurrent from '../components/UnstableCurrent';
 import RealtimeChart from '../components/RealtimeChart';
 import TradingChart from '../components/TradingChart';
 import { marketService, type MarketPrice, type AssetType } from '../services/marketService';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
+import { useRoutePrefix } from '../hooks/useRoutePrefix';
 
 /** 차트 로딩 래퍼: 데이터 로드 중일 때 placeholder를 보여주고, 로드 완료 후 차트를 표시 */
-const ChartLoadingWrapper = ({ symbol, children }: { symbol: string; children: ReactNode }) => {
+const ChartLoadingWrapper = ({ symbol, children, isVirt }: { symbol: string; children: ReactNode; isVirt: boolean }) => {
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -26,27 +30,30 @@ const ChartLoadingWrapper = ({ symbol, children }: { symbol: string; children: R
     };
   }, [symbol]);
 
-  return (
-    <div className="relative">
-      {/* 차트는 항상 렌더하되 준비 전에는 숨김 */}
-      <div className={ready ? '' : 'invisible h-0 overflow-hidden'}>{children}</div>
-      {!ready && (
-        <div className="bg-gray-50 rounded-xl p-10 text-center border border-gray-100">
-          <div className="inline-block w-5 h-5 border-2 border-whale-light border-t-transparent rounded-full animate-spin mb-3" />
-          <div className="text-gray-400 text-sm">차트 데이터를 불러오는 중입니다</div>
-          <div className="text-gray-300 text-xs mt-1">잠시만 기다려주세요. 자동으로 로드됩니다.</div>
+  if (!ready) {
+    return (
+      <div>
+        <div className={`rounded-xl p-10 text-center border ${isVirt ? 'bg-gray-50 border-gray-100' : 'bg-white/[0.02] border-white/[0.06]'}`}>
+          <div className={`inline-block w-5 h-5 border-2 border-t-transparent rounded-full animate-spin mb-3 ${isVirt ? 'border-whale-light' : 'border-cyan-400'}`} />
+          <div className={`text-sm ${isVirt ? 'text-gray-400' : 'text-slate-400'}`}>차트 데이터를 불러오는 중입니다</div>
+          <div className={`text-xs mt-1 ${isVirt ? 'text-gray-300' : 'text-slate-600'}`}>잠시만 기다려주세요.</div>
           {failed && (
             <div className="text-yellow-500 text-xs mt-2">
               로드가 지연되고 있습니다. 네트워크 상태를 확인해주세요.
             </div>
           )}
         </div>
-      )}
-    </div>
-  );
+        {/* 차트를 숨긴 상태로 미리 렌더 */}
+        <div className="h-0 overflow-hidden">{children}</div>
+      </div>
+    );
+  }
+
+  return <div>{children}</div>;
 };
 
 const MarketPage = () => {
+  const { isVirt } = useRoutePrefix();
   const [assetType, setAssetType] = useState<AssetType>('STOCK');
   const [selectedAsset, setSelectedAsset] = useState<MarketPrice | null>(null);
   const [assetList, setAssetList] = useState<MarketPrice[]>([]);
@@ -198,50 +205,50 @@ const MarketPage = () => {
     });
 
   if (loading && assetList.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header showNav={true} />
-        <LoadingSpinner fullScreen={false} message="시장 데이터를 불러오는 중..." />
-      </div>
-    );
+    if (!isVirt) return <SplashLoading message="시세 데이터를 불러오는 중..." />;
+    return <VirtSplashLoading message="시세 데이터를 불러오는 중..." />;
   }
 
   if (error && assetList.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className={`min-h-screen ${isVirt ? 'bg-gray-50' : 'bg-[#060d18] text-white'}`}>
         <Header showNav={true} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ErrorMessage message={error} onRetry={loadData} variant="offline" />
+          {!isVirt ? (
+            <UnstableCurrent message="해류가 불안정합니다" sub={error || '데이터를 다시 불러오고 있어요...'} />
+          ) : (
+            <ErrorMessage message={error} onRetry={loadData} variant="offline" />
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${isVirt ? 'bg-gray-50' : 'bg-[#060d18] text-white'}`}>
       <Header showNav={true} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
           <div className="flex items-center justify-between flex-wrap gap-3 mb-2">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-whale-dark">시장 현황</h1>
+            <h1 className={`text-2xl sm:text-3xl md:text-4xl font-bold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>시장 현황</h1>
             {assetType === 'CRYPTO' && (
               <div className="flex items-center space-x-2">
                 <span className={`inline-block w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-yellow-400 animate-pulse'}`} />
-                <span className={`text-sm font-medium ${connected ? 'text-green-600' : 'text-yellow-600'}`}>
+                <span className={`text-sm font-medium ${connected ? (isVirt ? 'text-green-600' : 'text-green-400') : (isVirt ? 'text-yellow-600' : 'text-yellow-400')}`}>
                   {connected ? '실시간' : '연결 중...'}
                 </span>
               </div>
             )}
           </div>
-          <p className="text-gray-600 mb-3">주식/가상화폐 시세를 한 곳에서 확인하세요</p>
+          <p className={`mb-3 ${isVirt ? 'text-gray-600' : 'text-slate-400'}`}>주식/가상화폐 시세를 한 곳에서 확인하세요</p>
           <div className="flex space-x-3">
             <button
               type="button"
               className={`px-4 py-2 rounded-lg text-sm font-semibold min-h-[44px] ${
                 assetType === 'STOCK'
-                  ? 'bg-whale-light text-white shadow-md'
-                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                  ? isVirt ? 'bg-whale-light text-white shadow-md' : 'bg-cyan-500 text-white shadow-md'
+                  : isVirt ? 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50' : 'bg-white/[0.04] text-slate-400 border border-white/[0.06] hover:bg-white/[0.06]'
               }`}
               onClick={() => { setAssetType('STOCK'); setSelectedAsset(null); setChartType('area'); }}
             >
@@ -251,8 +258,8 @@ const MarketPage = () => {
               type="button"
               className={`px-4 py-2 rounded-lg text-sm font-semibold min-h-[44px] ${
                 assetType === 'CRYPTO'
-                  ? 'bg-whale-light text-white shadow-md'
-                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                  ? isVirt ? 'bg-whale-light text-white shadow-md' : 'bg-cyan-500 text-white shadow-md'
+                  : isVirt ? 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50' : 'bg-white/[0.04] text-slate-400 border border-white/[0.06] hover:bg-white/[0.06]'
               }`}
               onClick={() => { setAssetType('CRYPTO'); setSelectedAsset(null); setChartType('area'); }}
             >
@@ -265,7 +272,7 @@ const MarketPage = () => {
           {/* 좌측: 종목 목록 */}
           <div className="lg:col-span-1 space-y-4">
             <div className="card">
-              <h2 className="text-xl font-bold text-whale-dark mb-4">종목 목록</h2>
+              <h2 className={`text-xl font-bold mb-4 ${isVirt ? 'text-whale-dark' : 'text-white'}`}>종목 목록</h2>
 
               <div className="mb-4 space-y-3">
                 <div className="relative">
@@ -283,21 +290,21 @@ const MarketPage = () => {
                   )}
                   {/* 서버 검색 결과 드롭다운 */}
                   {searchResults.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      <div className="px-3 py-1.5 text-[10px] text-gray-400 font-medium border-b">
+                    <div className={`absolute z-10 w-full mt-1 rounded-lg shadow-lg max-h-60 overflow-y-auto ${isVirt ? 'bg-white border border-gray-200' : 'bg-[#0c1a2e] border border-white/[0.06]'}`}>
+                      <div className={`px-3 py-1.5 text-[10px] font-medium border-b ${isVirt ? 'text-gray-400 border-gray-200' : 'text-slate-500 border-white/[0.06]'}`}>
                         검색 결과 ({searchResults.length}건) — 클릭하여 추가
                       </div>
                       {searchResults.map((r) => (
                         <div
                           key={r.code}
                           onClick={() => handleSearchResultClick(r)}
-                          className="px-3 py-2.5 hover:bg-blue-50 cursor-pointer flex justify-between items-center border-b border-gray-50 last:border-0"
+                          className={`px-3 py-2.5 cursor-pointer flex justify-between items-center last:border-0 ${isVirt ? 'hover:bg-blue-50 border-b border-gray-50' : 'hover:bg-white/[0.03] border-b border-white/[0.06]'}`}
                         >
                           <div>
-                            <span className="font-medium text-whale-dark">{r.name}</span>
-                            <span className="text-xs text-gray-400 ml-2">{r.code}</span>
+                            <span className={`font-medium ${isVirt ? 'text-whale-dark' : 'text-white'}`}>{r.name}</span>
+                            <span className={`text-xs ml-2 ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>{r.code}</span>
                           </div>
-                          <span className="text-[10px] text-gray-400">{r.market}</span>
+                          <span className={`text-[10px] ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>{r.market}</span>
                         </div>
                       ))}
                     </div>
@@ -306,7 +313,7 @@ const MarketPage = () => {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as 'name' | 'price' | 'change' | 'volume')}
-                  className="input-field bg-white"
+                  className={`input-field ${isVirt ? 'bg-white' : 'bg-white/[0.04]'}`}
                 >
                   <option value="volume">거래량순</option>
                   <option value="name">이름순</option>
@@ -318,8 +325,8 @@ const MarketPage = () => {
               <div className="space-y-2 max-h-[600px] overflow-y-auto">
                 {filteredAndSortedAssets.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="text-gray-400 font-medium">검색 결과가 없습니다</div>
-                    <div className="text-gray-300 text-sm mt-1">다른 키워드로 검색해보세요</div>
+                    <div className={`font-medium ${isVirt ? 'text-gray-400' : 'text-slate-400'}`}>검색 결과가 없습니다</div>
+                    <div className={`text-sm mt-1 ${isVirt ? 'text-gray-300' : 'text-slate-600'}`}>다른 키워드로 검색해보세요</div>
                   </div>
                 ) : (
                   filteredAndSortedAssets.map((asset) => (
@@ -334,19 +341,19 @@ const MarketPage = () => {
                     >
                       <div className="flex justify-between items-start">
                         <div>
-                          <div className="font-bold text-whale-dark">{asset.name}</div>
-                          <div className="text-sm text-gray-500">
+                          <div className={`font-bold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>{asset.name}</div>
+                          <div className={`text-sm ${isVirt ? 'text-gray-500' : 'text-slate-500'}`}>
                             {asset.symbol} {asset.assetType === 'CRYPTO' ? '/ KRW' : ''}
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-semibold text-whale-dark">
+                          <div className={`font-semibold ${isVirt ? 'text-whale-dark' : 'text-slate-100'}`}>
                             {formatCurrency(asset.price)}
                           </div>
                           <div className={`text-sm font-semibold ${asset.changeRate >= 0 ? 'price-up' : 'price-down'}`}>
                             {asset.changeRate >= 0 ? '+' : ''}{asset.changeRate.toFixed(2)}%
                           </div>
-                          <div className="text-xs text-gray-400">
+                          <div className={`text-xs ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>
                             Vol {formatVolume(asset.volume)}
                           </div>
                         </div>
@@ -356,7 +363,7 @@ const MarketPage = () => {
                 )}
               </div>
               {assetType === 'STOCK' && (
-                <p className="text-[10px] text-gray-400 text-right mt-2">
+                <p className={`text-[10px] text-right mt-2 ${isVirt ? 'text-gray-400' : 'text-slate-600'}`}>
                   * 주식 시세는 KIS 모의투자 API 기준 약 15~20초 지연
                 </p>
               )}
@@ -371,14 +378,14 @@ const MarketPage = () => {
                 <div className="card">
                   <div className="flex flex-col sm:flex-row justify-between items-start gap-2 mb-4">
                     <div>
-                      <h2 className="text-xl md:text-2xl font-bold text-whale-dark">{liveSelectedAsset.name}</h2>
-                      <p className="text-gray-500 text-sm">
+                      <h2 className={`text-xl md:text-2xl font-bold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>{liveSelectedAsset.name}</h2>
+                      <p className={`text-sm ${isVirt ? 'text-gray-500' : 'text-slate-500'}`}>
                         {liveSelectedAsset.symbol}
                         {liveSelectedAsset.assetType === 'CRYPTO' ? ' / KRW' : ''}
                       </p>
                     </div>
                     <div className="text-left sm:text-right">
-                      <div className="text-2xl md:text-3xl font-bold text-whale-dark mb-1">
+                      <div className={`text-2xl md:text-3xl font-bold mb-1 ${isVirt ? 'text-whale-dark' : 'text-white'}`}>
                         {formatCurrency(liveSelectedAsset.price)}
                       </div>
                       <div className={`text-sm md:text-lg font-semibold ${liveSelectedAsset.changeRate >= 0 ? 'price-up' : 'price-down'}`}>
@@ -398,8 +405,8 @@ const MarketPage = () => {
                           onClick={() => setChartType('area')}
                           className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
                             chartType === 'area'
-                              ? 'bg-whale-light text-white shadow-sm'
-                              : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                              ? isVirt ? 'bg-whale-light text-white shadow-sm' : 'bg-cyan-500 text-white shadow-sm'
+                              : isVirt ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100' : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.03]'
                           }`}
                         >
                           <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -411,8 +418,8 @@ const MarketPage = () => {
                           onClick={() => setChartType('candle')}
                           className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
                             chartType === 'candle'
-                              ? 'bg-whale-light text-white shadow-sm'
-                              : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                              ? isVirt ? 'bg-whale-light text-white shadow-sm' : 'bg-cyan-500 text-white shadow-sm'
+                              : isVirt ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100' : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.03]'
                           }`}
                         >
                           <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -429,30 +436,30 @@ const MarketPage = () => {
                             price={liveSelectedAsset.price}
                           />
                         ) : (
-                          <div className="bg-gray-50 rounded-xl p-8 text-center border border-gray-100">
-                            <div className="text-gray-400 text-sm">실시간 연결 중... 잠시 후 차트가 표시됩니다</div>
+                          <div className={`rounded-xl p-8 text-center border ${isVirt ? 'bg-gray-50 border-gray-100' : 'bg-white/[0.02] border-white/[0.06]'}`}>
+                            <div className={`text-sm ${isVirt ? 'text-gray-400' : 'text-slate-400'}`}>실시간 연결 중... 잠시 후 차트가 표시됩니다</div>
                           </div>
                         )
                       ) : (
-                        <ChartLoadingWrapper symbol={liveSelectedAsset.symbol}>
+                        <ChartLoadingWrapper symbol={liveSelectedAsset.symbol} isVirt={isVirt}>
                           <TradingChart
                             symbol={liveSelectedAsset.symbol}
                             price={liveSelectedAsset.price}
                             changeRate={liveSelectedAsset.changeRate}
+                            isDark={!isVirt}
                           />
                         </ChartLoadingWrapper>
                       )}
                     </div>
                   ) : (
                     <div className="mt-4">
-                      <ChartLoadingWrapper symbol={liveSelectedAsset.symbol}>
-                        <TradingChart
-                          symbol={liveSelectedAsset.symbol}
-                          price={liveSelectedAsset.price}
-                          changeRate={liveSelectedAsset.changeRate}
-                          assetType="STOCK"
-                        />
-                      </ChartLoadingWrapper>
+                      <TradingChart
+                        symbol={liveSelectedAsset.symbol}
+                        price={liveSelectedAsset.price}
+                        changeRate={liveSelectedAsset.changeRate}
+                        assetType="STOCK"
+                        isDark={!isVirt}
+                      />
                     </div>
                   )}
                 </div>
@@ -460,26 +467,26 @@ const MarketPage = () => {
                 {/* 시장 통계 */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="card text-center">
-                    <div className="text-sm text-gray-600 mb-1">전일 종가</div>
-                    <div className="text-lg md:text-xl font-bold text-whale-dark">
+                    <div className={`text-sm mb-1 ${isVirt ? 'text-gray-600' : 'text-slate-400'}`}>전일 종가</div>
+                    <div className={`text-lg md:text-xl font-bold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>
                       {formatCurrency(liveSelectedAsset.price - liveSelectedAsset.change)}
                     </div>
                   </div>
                   <div className="card text-center">
-                    <div className="text-sm text-gray-600 mb-1">등락률</div>
+                    <div className={`text-sm mb-1 ${isVirt ? 'text-gray-600' : 'text-slate-400'}`}>등락률</div>
                     <div className={`text-xl font-bold ${liveSelectedAsset.changeRate >= 0 ? 'price-up' : 'price-down'}`}>
                       {liveSelectedAsset.changeRate >= 0 ? '+' : ''}{liveSelectedAsset.changeRate.toFixed(2)}%
                     </div>
                   </div>
                   <div className="card text-center">
-                    <div className="text-sm text-gray-600 mb-1">등락액</div>
+                    <div className={`text-sm mb-1 ${isVirt ? 'text-gray-600' : 'text-slate-400'}`}>등락액</div>
                     <div className={`text-xl font-bold ${liveSelectedAsset.change >= 0 ? 'price-up' : 'price-down'}`}>
                       {liveSelectedAsset.change >= 0 ? '+' : ''}{formatCurrency(liveSelectedAsset.change)}
                     </div>
                   </div>
                   <div className="card text-center">
-                    <div className="text-sm text-gray-600 mb-1">거래량</div>
-                    <div className="text-xl font-bold text-whale-dark">
+                    <div className={`text-sm mb-1 ${isVirt ? 'text-gray-600' : 'text-slate-400'}`}>거래량</div>
+                    <div className={`text-xl font-bold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>
                       {formatVolume(liveSelectedAsset.volume)}
                     </div>
                   </div>
@@ -487,8 +494,8 @@ const MarketPage = () => {
               </>
             ) : (
               <div className="card text-center py-16">
-                <div className="text-gray-300 text-sm font-medium tracking-wide mb-2">종목을 선택해주세요</div>
-                <div className="text-gray-400 text-xs">좌측 목록에서 종목을 클릭하면 상세 정보를 확인할 수 있습니다</div>
+                <div className={`text-sm font-medium tracking-wide mb-2 ${isVirt ? 'text-gray-300' : 'text-slate-500'}`}>종목을 선택해주세요</div>
+                <div className={`text-xs ${isVirt ? 'text-gray-400' : 'text-slate-600'}`}>좌측 목록에서 종목을 클릭하면 상세 정보를 확인할 수 있습니다</div>
               </div>
             )}
           </div>

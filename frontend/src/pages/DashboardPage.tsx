@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import Header from '../components/Header';
-import LoadingSpinner from '../components/LoadingSpinner';
+import VirtSplashLoading from '../components/VirtSplashLoading';
 import ErrorMessage from '../components/ErrorMessage';
 import { tradeService, type Portfolio, type StockPrice } from '../services/tradeService';
 import { quantStoreService, type ProductPurchase, cryptoDisplayName, formatQuantity } from '../services/quantStoreService';
@@ -9,6 +10,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePolling } from '../hooks/usePolling';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
 import { useVirtNavigate, useRoutePrefix } from '../hooks/useRoutePrefix';
+import { virtService, type VirtCredentialInfo, type VirtPortfolio } from '../services/virtService';
+import SplashLoading from '../components/SplashLoading';
+import UnstableCurrent from '../components/UnstableCurrent';
+
+const CHART_COLORS = ['#3b82f6', '#22d3ee', '#818cf8', '#a78bfa', '#34d399', '#f472b6', '#fb923c', '#94a3b8'];
+
 const DashboardPage = () => {
   const navigate = useVirtNavigate();
   const { isVirt } = useRoutePrefix();
@@ -21,6 +28,84 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
+
+  // ── 실계좌 연동 (인라인) ──
+  const [apiPanelOpen, setApiPanelOpen] = useState(false);
+  const [apiTab, setApiTab] = useState<'kis' | 'upbit' | 'bitget'>('kis');
+  const [kisCredInfo, setKisCredInfo] = useState<VirtCredentialInfo | null>(null);
+  const [upbitCredInfo, setUpbitCredInfo] = useState<VirtCredentialInfo | null>(null);
+  const [bitgetCredInfo, setBitgetCredInfo] = useState<VirtCredentialInfo | null>(null);
+  const [apiForm, setApiForm] = useState<Record<string, string>>({});
+  const [apiSaving, setApiSaving] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [apiSuccess, setApiSuccess] = useState<string | null>(null);
+
+  // ── 실계좌 자산 데이터 ──
+  const [kisPortfolio, setKisPortfolio] = useState<VirtPortfolio | null>(null);
+  const [upbitPortfolio, setUpbitPortfolio] = useState<VirtPortfolio | null>(null);
+  const [bitgetPortfolio, setBitgetPortfolio] = useState<VirtPortfolio | null>(null);
+  const [realAssetLoading, setRealAssetLoading] = useState(false);
+
+  // 실계좌 연결 상태 로드 + 자산 조회
+  const loadApiStatus = useCallback(async () => {
+    try {
+      const [kis, upbit, bitget] = await Promise.all([
+        virtService.getCredentialInfo().catch(() => ({ connected: false } as VirtCredentialInfo)),
+        virtService.getUpbitCredentialInfo().catch(() => ({ connected: false } as VirtCredentialInfo)),
+        virtService.getBitgetCredentialInfo().catch(() => ({ connected: false } as VirtCredentialInfo)),
+      ]);
+      setKisCredInfo(kis); setUpbitCredInfo(upbit); setBitgetCredInfo(bitget);
+
+      // 연동된 거래소 자산 조회
+      const hasAny = kis.connected || upbit.connected || bitget.connected;
+      if (hasAny) {
+        setRealAssetLoading(true);
+        const [kisP, upbitP, bitgetP] = await Promise.all([
+          kis.connected ? virtService.getPortfolio().catch(() => null) : Promise.resolve(null),
+          upbit.connected ? virtService.getUpbitPortfolio().catch(() => null) : Promise.resolve(null),
+          bitget.connected ? virtService.getBitgetPortfolio().catch(() => null) : Promise.resolve(null),
+        ]);
+        if (kisP) setKisPortfolio(kisP);
+        if (upbitP) setUpbitPortfolio(upbitP);
+        if (bitgetP) setBitgetPortfolio(bitgetP);
+      }
+    } catch { /* ignore */ } finally {
+      setRealAssetLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (!isVirt) loadApiStatus(); }, [isVirt, loadApiStatus]);
+
+  const handleApiSave = async () => {
+    setApiSaving(true); setApiError(null); setApiSuccess(null);
+    try {
+      if (apiTab === 'kis') {
+        await virtService.saveCredential({ appkey: apiForm.appkey || '', appsecret: apiForm.appsecret || '', accountNumber: apiForm.accountNumber || '', accountProductCode: apiForm.accountProductCode || '01' });
+      } else if (apiTab === 'upbit') {
+        await virtService.saveUpbitCredential({ accessKey: apiForm.accessKey || '', secretKey: apiForm.secretKey || '' });
+      } else {
+        await virtService.saveBitgetCredential({ apiKey: apiForm.apiKey || '', secretKey: apiForm.secretKey || '', passphrase: apiForm.passphrase || '' });
+      }
+      setApiSuccess('연결 성공!');
+      setApiForm({});
+      await loadApiStatus();
+      setApiPanelOpen(false);
+    } catch (e: any) {
+      setApiError(e.response?.data?.message || e.message || '연결 실패');
+    } finally { setApiSaving(false); }
+  };
+
+  const handleApiDisconnect = async () => {
+    if (!window.confirm('연결을 해제하시겠습니까?')) return;
+    try {
+      if (apiTab === 'kis') { await virtService.deleteCredential(); setKisPortfolio(null); }
+      else if (apiTab === 'upbit') { await virtService.deleteUpbitCredential(); setUpbitPortfolio(null); }
+      else { await virtService.deleteBitgetCredential(); setBitgetPortfolio(null); }
+      await loadApiStatus();
+    } catch { /* ignore */ }
+  };
+
+  const apiConnected = apiTab === 'kis' ? kisCredInfo?.connected : apiTab === 'upbit' ? upbitCredInfo?.connected : bitgetCredInfo?.connected;
 
   // 실시간 WebSocket 시세
   const { prices: realtimePrices } = useRealtimePrice({ enabled: true });
@@ -170,28 +255,30 @@ const DashboardPage = () => {
     }).format(value);
   };
 
+  const pageBg = isVirt ? 'bg-gray-50' : 'bg-[#060d18] text-white';
+
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header showNav={true} />
-        <LoadingSpinner fullScreen={false} message="데이터를 불러오는 중..." />
-      </div>
-    );
+    if (!isVirt) return <SplashLoading message="실계좌 자산을 불러오는 중..." />;
+    return <VirtSplashLoading message="가상 투자 데이터를 불러오는 중..." />;
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className={`min-h-screen ${pageBg}`}>
         <Header showNav={true} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ErrorMessage message={error} onRetry={loadData} variant="error" />
+          {!isVirt ? (
+            <UnstableCurrent message="해류가 불안정합니다" sub={error || '데이터를 다시 불러오고 있어요...'} />
+          ) : (
+            <ErrorMessage message={error} onRetry={loadData} variant="error" />
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${pageBg}`}>
       <Header showNav={true} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -199,12 +286,22 @@ const DashboardPage = () => {
         <div className="mb-8 bg-gradient-to-r from-whale-dark to-whale-light rounded-2xl shadow-xl p-6 md:p-8 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-whale-accent opacity-10 rounded-full blur-2xl"></div>
+          {/* 거품 파티클 — 배너 전체 영역에 배치 */}
+          <div className="dash-banner-bubble dash-banner-bubble-1" />
+          <div className="dash-banner-bubble dash-banner-bubble-2" />
+          <div className="dash-banner-bubble dash-banner-bubble-3" />
+          <div className="dash-banner-bubble dash-banner-bubble-4" />
+          <div className="dash-banner-bubble dash-banner-bubble-5" />
 
           <div className="relative z-10">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center backdrop-blur-sm p-1.5">
-                  <img src="/whales/blue-whale.png" alt="고래" className="w-full h-full object-contain" />
+                <div className="relative w-14 h-14">
+                  <div className="absolute inset-0 rounded-full border border-white/20 dash-ripple-1" />
+                  <div className="absolute inset-0 rounded-full border border-white/10 dash-ripple-2" />
+                  <div className="w-full h-full bg-white bg-opacity-20 rounded-full flex items-center justify-center backdrop-blur-sm p-1.5 relative z-10 dash-whale-float">
+                    <img src="/whales/blue-whale.png" alt="고래" className="w-full h-full object-contain" />
+                  </div>
                 </div>
                 <div>
                   <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
@@ -237,41 +334,339 @@ const DashboardPage = () => {
                   </div>
                 </div>
               )}
+              {!isVirt && (() => {
+                const realTotal = (kisPortfolio?.totalValue || 0) + (upbitPortfolio?.totalValue || 0) + (bitgetPortfolio?.totalValue || 0);
+                const realPnl = (kisPortfolio?.totalPnl || 0) + (upbitPortfolio?.totalPnl || 0) + (bitgetPortfolio?.totalPnl || 0);
+                const invested = realTotal - realPnl;
+                const realReturn = invested !== 0 ? (realPnl / invested) * 100 : 0;
+                if (realTotal === 0) return null;
+                return (
+                  <div className="flex items-center gap-4 md:gap-6">
+                    <div className="text-center">
+                      <div className="text-xs md:text-sm text-blue-200 mb-1">실계좌 총 자산</div>
+                      <div className="text-lg md:text-2xl font-bold">
+                        {formatCurrency(realTotal)}
+                      </div>
+                    </div>
+                    <div className="h-10 md:h-12 w-px bg-white bg-opacity-30"></div>
+                    <div className="text-center">
+                      <div className="text-xs md:text-sm text-blue-200 mb-1">총 손익</div>
+                      <div className={`text-lg md:text-2xl font-bold ${realPnl >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                        {realPnl >= 0 ? '+' : ''}{formatCurrency(Math.round(realPnl))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
 
-        {/* 일반 모드: Virt 체험 + 실계좌 연동 안내 */}
+        {/* ═══ 일반 모드: 실계좌 자산 ═══ */}
         {!isVirt && (
-          <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mb-8 space-y-5">
+
+            {/* 서비스 탭 */}
+            <div className="flex items-center gap-2">
+              {([
+                { key: 'kis' as const, label: '주식', sub: 'KIS', connected: kisCredInfo?.connected },
+                { key: 'upbit' as const, label: '코인', sub: 'Upbit', connected: upbitCredInfo?.connected },
+                { key: 'bitget' as const, label: '코인', sub: 'Bitget', connected: bitgetCredInfo?.connected },
+              ]).map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setApiTab(t.key)}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
+                    apiTab === t.key
+                      ? 'bg-white/10 text-white border-cyan-500/40'
+                      : 'bg-white/[0.03] text-slate-500 border-white/[0.06] hover:text-slate-300'
+                  }`}
+                >
+                  {t.label} <span className="text-[10px] text-slate-600">{t.sub}</span>
+                  {t.connected && <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />}
+                </button>
+              ))}
+            </div>
+
+            {/* 지표 카드 + 보유 종목 */}
+            {(() => {
+              const ap = apiTab === 'kis' ? kisPortfolio : apiTab === 'upbit' ? upbitPortfolio : bitgetPortfolio;
+              const isConn = apiTab === 'kis' ? kisCredInfo?.connected : apiTab === 'upbit' ? upbitCredInfo?.connected : bitgetCredInfo?.connected;
+              const sign = (v: number) => (v > 0 ? '+' : '');
+              const rc = (v: number) => (v > 0 ? 'text-red-500' : v < 0 ? 'text-blue-500' : 'text-gray-400');
+
+              if (realAssetLoading) return (
+                <div className="card text-center py-16">
+                  <div className="w-12 h-12 border-[3px] border-gray-100 border-t-whale-light rounded-full animate-spin mx-auto mb-4" />
+                  <p className="text-gray-400 text-sm">실계좌 자산을 불러오는 중...</p>
+                </div>
+              );
+
+              if (isConn && ap) return (
+                <>
+                  {/* 총 자산 히어로 */}
+                  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                    <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 p-6 border-b border-white/[0.06]">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white/60 text-sm font-medium">
+                            {apiTab === 'kis' ? 'KIS 주식 계좌' : apiTab === 'upbit' ? '업비트 계좌' : '비트겟 계좌'}
+                          </span>
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold bg-white/20 text-white rounded">LIVE</span>
+                        </div>
+                        <button onClick={() => loadApiStatus()} className="text-white/50 hover:text-white text-xs transition-colors">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        </button>
+                      </div>
+                      <div className="text-3xl md:text-4xl font-bold text-white tracking-tight">
+                        {formatCurrency(ap.totalValue)}
+                      </div>
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className={`text-sm font-bold ${ap.totalPnl >= 0 ? 'text-red-300' : 'text-blue-300'}`}>
+                          {sign(ap.totalPnl)}{formatCurrency(Math.round(ap.totalPnl))}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                          ap.returnRate >= 0 ? 'bg-red-400/20 text-red-200' : 'bg-blue-400/20 text-blue-200'
+                        }`}>
+                          {sign(ap.returnRate)}{ap.returnRate.toFixed(2)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 divide-x divide-white/[0.06]">
+                      <div className="p-4 text-center">
+                        <div className="text-[11px] text-slate-500 mb-1">보유 평가</div>
+                        <div className="text-base font-bold text-white">{formatCurrency(ap.totalValue - ap.cashBalance)}</div>
+                      </div>
+                      <div className="p-4 text-center">
+                        <div className="text-[11px] text-slate-500 mb-1">{apiTab === 'kis' ? '예수금' : apiTab === 'upbit' ? 'KRW 잔고' : 'USDT'}</div>
+                        <div className="text-base font-bold text-white">{formatCurrency(ap.cashBalance)}</div>
+                      </div>
+                      <div className="p-4 text-center">
+                        <div className="text-[11px] text-slate-500 mb-1">보유 종목</div>
+                        <div className="text-base font-bold text-white">{ap.holdings.length}개</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 메인 콘텐츠: 12컬럼 그리드 */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                    {/* 왼쪽: 보유 종목 (8/12) */}
+                    <div className="lg:col-span-8">
+                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                        <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.06]">
+                          <span className="text-sm font-semibold text-cyan-400">
+                            보유 {apiTab === 'kis' ? '종목' : '코인'} ({ap.holdings.length})
+                          </span>
+                          {ap.holdings.length > 0 && (
+                            <span className="text-sm text-slate-400">
+                              평가금액 <span className="font-bold text-white">{formatCurrency(ap.totalValue - ap.cashBalance)}</span>
+                            </span>
+                          )}
+                        </div>
+                        {ap.holdings.length === 0 ? (
+                          <div className="text-center py-16 text-slate-500"><p>보유 종목이 없습니다</p></div>
+                        ) : (
+                          <div className="p-5">
+                            <div className="grid grid-cols-12 gap-2 px-3 py-2 text-[11px] font-medium text-slate-600 border-b border-white/[0.04] mb-1">
+                              <div className="col-span-4">종목</div>
+                              <div className="col-span-2 text-right">수량</div>
+                              <div className="col-span-3 text-right">평가금액</div>
+                              <div className="col-span-3 text-right">수익률</div>
+                            </div>
+                            {ap.holdings.map((h) => (
+                              <div key={h.stockCode} className="grid grid-cols-12 gap-2 px-3 py-3 rounded-lg hover:bg-white/[0.03] transition-colors">
+                                <div className="col-span-4">
+                                  <div className="font-semibold text-sm text-white">{h.stockName}</div>
+                                  <div className="text-[11px] text-slate-600">{h.stockCode}</div>
+                                </div>
+                                <div className="col-span-2 text-right self-center text-sm text-slate-300">
+                                  {apiTab === 'kis' ? `${h.quantity.toLocaleString()}주` : formatQuantity(h.quantity)}
+                                </div>
+                                <div className="col-span-3 text-right self-center text-sm font-medium text-white">{formatCurrency(h.marketValue)}</div>
+                                <div className="col-span-3 text-right self-center">
+                                  <div className={`text-sm font-bold ${rc(h.returnRate)}`}>{sign(h.returnRate)}{h.returnRate.toFixed(2)}%</div>
+                                  <div className={`text-[11px] ${rc(h.profitLoss)}`}>{sign(h.profitLoss)}{formatCurrency(Math.round(h.profitLoss))}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 오른쪽: 사이드바 (4/12) */}
+                    <div className="lg:col-span-4 space-y-5">
+                      {/* 자산 배분 차트 */}
+                      {ap.holdings.length > 0 && (
+                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                          <h3 className="text-sm font-bold text-white mb-3">자산 배분</h3>
+                          <div className="w-full h-44 mb-3">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={[
+                                    ...(ap.cashBalance > 0 ? [{ name: apiTab === 'kis' ? '예수금' : 'KRW', value: ap.cashBalance, color: '#475569' }] : []),
+                                    ...ap.holdings.map((h, i) => ({ name: h.stockName, value: h.marketValue, color: CHART_COLORS[i % CHART_COLORS.length] })),
+                                  ]}
+                                  dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2} stroke="none"
+                                >
+                                  {[
+                                    ...(ap.cashBalance > 0 ? [{ color: '#475569' }] : []),
+                                    ...ap.holdings.map((_, i) => ({ color: CHART_COLORS[i % CHART_COLORS.length] })),
+                                  ].map((e, i) => <Cell key={i} fill={e.color} />)}
+                                </Pie>
+                                <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', fontSize: '12px', color: '#e2e8f0' }} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="space-y-1.5">
+                            {ap.holdings.map((h, i) => (
+                              <div key={h.stockCode} className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                                <span className="text-xs text-slate-400 flex-1 truncate">{h.stockName}</span>
+                                <span className="text-xs text-slate-300">{formatCurrency(h.marketValue)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 투자 요약 */}
+                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                        <h3 className="text-sm font-bold text-white mb-3">투자 요약</h3>
+                        <div className="space-y-2.5 text-sm">
+                          <div className="flex justify-between"><span className="text-slate-500">{apiTab === 'kis' ? '예수금' : apiTab === 'upbit' ? 'KRW' : 'USDT'}</span><span className="text-white">{formatCurrency(ap.cashBalance)}</span></div>
+                          <div className="flex justify-between"><span className="text-slate-500">보유 평가</span><span className="text-white">{formatCurrency(ap.totalValue - ap.cashBalance)}</span></div>
+                          <div className="border-t border-white/[0.06] pt-2.5">
+                            <div className="flex justify-between"><span className="text-slate-400 font-medium">총 자산</span><span className="font-bold text-white">{formatCurrency(ap.totalValue)}</span></div>
+                            <div className="flex justify-between mt-1.5">
+                              <span className="text-slate-500">총 손익</span>
+                              <span className={`font-bold ${rc(ap.totalPnl)}`}>
+                                {sign(ap.totalPnl)}{formatCurrency(Math.round(ap.totalPnl))}
+                                <span className="text-xs font-normal ml-1">({sign(ap.returnRate)}{ap.returnRate.toFixed(2)}%)</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 연결 정보 */}
+                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                        <h3 className="text-sm font-bold text-white mb-3">연결 정보</h3>
+                        <div className="text-sm text-slate-400 space-y-1.5">
+                          {apiTab === 'kis' && kisCredInfo && (
+                            <>
+                              <div className="flex justify-between"><span>API Key</span><span className="font-mono text-xs text-slate-300">{(kisCredInfo as any)?.appkey || '-'}</span></div>
+                              <div className="flex justify-between"><span>계좌</span><span className="font-mono text-xs text-slate-300">{(kisCredInfo as any)?.accountNumber || '-'}</span></div>
+                            </>
+                          )}
+                          {apiTab === 'upbit' && upbitCredInfo && (
+                            <div className="flex justify-between"><span>Access Key</span><span className="font-mono text-xs text-slate-300">{(upbitCredInfo as any)?.accessKey || '-'}</span></div>
+                          )}
+                          {apiTab === 'bitget' && bitgetCredInfo && (
+                            <div className="flex justify-between"><span>API Key</span><span className="font-mono text-xs text-slate-300">{(bitgetCredInfo as any)?.apiKey || '-'}</span></div>
+                          )}
+                        </div>
+                        <button onClick={handleApiDisconnect} className="w-full mt-3 px-3 py-2 text-xs text-red-400/70 border border-red-500/20 rounded-lg hover:bg-red-500/10 hover:text-red-400 transition-colors">
+                          연결 해제
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+
+              if (!isConn) return (
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-8 text-center">
+                  <p className="text-slate-400 mb-4">
+                    {apiTab === 'kis' ? 'KIS API 키를 등록하면 보유 종목과 잔고를 확인할 수 있습니다'
+                      : apiTab === 'upbit' ? '업비트 API 키를 등록하면 코인 보유 현황을 확인할 수 있습니다'
+                      : '비트겟 API 키를 등록하면 코인 보유 현황을 확인할 수 있습니다'}
+                  </p>
+                  <button
+                    onClick={() => setApiPanelOpen(true)}
+                    className="px-6 py-2.5 bg-cyan-500/10 text-cyan-400 font-semibold text-sm rounded-lg border border-cyan-500/30 hover:bg-cyan-500/20 transition-colors"
+                  >
+                    API 키 등록하기
+                  </button>
+                </div>
+              );
+
+              return null;
+            })()}
+
+            {/* Virt 안내 배너 */}
             <button
               onClick={() => navigate('/virt/dashboard')}
-              className="text-left p-6 rounded-2xl border-2 border-dashed border-cyan-300/40 bg-gradient-to-br from-cyan-50 to-blue-50 hover:border-cyan-400 hover:shadow-md transition-all group"
+              className="w-full text-left px-5 py-4 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04] hover:bg-cyan-500/[0.08] transition-colors group"
             >
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-lg font-bold text-cyan-700">VIRT 가상 투자</span>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-cyan-500 text-white rounded-full">체험하기</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-bold text-cyan-400">VIRT 가상 투자</span>
+                  <span className="px-2 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-300 rounded-full border border-cyan-500/30">체험하기</span>
+                </div>
+                <svg className="w-4 h-4 text-slate-600 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </div>
-              <p className="text-sm text-gray-500">가상돈 1,000만원으로 주식·코인 매매를 체험해보세요. 전략 백테스팅, 자동 매매까지 무료로 이용 가능합니다.</p>
-              <div className="mt-3 text-sm font-semibold text-cyan-600 group-hover:text-cyan-700 flex items-center gap-1">
-                Virt 대시보드로 이동
-                <svg className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-              </div>
+              <p className="text-xs text-slate-500 mt-1.5">가상돈 1,000만원으로 주식·코인 매매 체험 · 전략 백테스팅 · 자동 매매</p>
             </button>
-            <button
-              onClick={() => navigate('/api-setting')}
-              className="text-left p-6 rounded-2xl border-2 border-dashed border-slate-300/40 bg-gradient-to-br from-slate-50 to-gray-50 hover:border-slate-400 hover:shadow-md transition-all group"
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-lg font-bold text-slate-700">실계좌 연동</span>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-500 text-white rounded-full">API</span>
+          </div>
+        )}
+
+        {/* API 설정 모달 */}
+        {!isVirt && apiPanelOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="bg-[#0c1a2e] border border-white/10 rounded-2xl shadow-2xl max-w-lg w-full">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-bold text-white">
+                    {apiTab === 'kis' ? 'KIS API 연결' : apiTab === 'upbit' ? '업비트 API 연결' : '비트겟 API 연결'}
+                  </h2>
+                  <button onClick={() => { setApiPanelOpen(false); setApiError(null); setApiSuccess(null); }} className="text-slate-500 hover:text-white">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                {/* 탭 */}
+                <div className="flex gap-1.5 mb-5">
+                  {([
+                    { key: 'kis' as const, label: 'KIS 한투' },
+                    { key: 'upbit' as const, label: '업비트' },
+                    { key: 'bitget' as const, label: '비트겟' },
+                  ]).map((t) => (
+                    <button key={t.key} onClick={() => { setApiTab(t.key); setApiForm({}); setApiError(null); setApiSuccess(null); }}
+                      className={`px-4 py-2 rounded-lg text-xs font-medium transition-colors ${apiTab === t.key ? 'bg-white/10 text-white' : 'bg-white/[0.03] text-slate-500 hover:text-slate-300'}`}
+                    >{t.label}</button>
+                  ))}
+                </div>
+                <div className="space-y-3">
+                  {apiTab === 'kis' && (
+                    <>
+                      <input placeholder="App Key" value={apiForm.appkey || ''} onChange={(e) => setApiForm({ ...apiForm, appkey: e.target.value })} className="w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 outline-none" />
+                      <input placeholder="App Secret" type="password" value={apiForm.appsecret || ''} onChange={(e) => setApiForm({ ...apiForm, appsecret: e.target.value })} className="w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 outline-none" />
+                      <input placeholder="계좌번호 (8자리)" value={apiForm.accountNumber || ''} onChange={(e) => setApiForm({ ...apiForm, accountNumber: e.target.value })} className="w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 outline-none" />
+                    </>
+                  )}
+                  {apiTab === 'upbit' && (
+                    <>
+                      <input placeholder="Access Key" value={apiForm.accessKey || ''} onChange={(e) => setApiForm({ ...apiForm, accessKey: e.target.value })} className="w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 outline-none" />
+                      <input placeholder="Secret Key" type="password" value={apiForm.secretKey || ''} onChange={(e) => setApiForm({ ...apiForm, secretKey: e.target.value })} className="w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 outline-none" />
+                    </>
+                  )}
+                  {apiTab === 'bitget' && (
+                    <>
+                      <input placeholder="API Key" value={apiForm.apiKey || ''} onChange={(e) => setApiForm({ ...apiForm, apiKey: e.target.value })} className="w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 outline-none" />
+                      <input placeholder="Secret Key" type="password" value={apiForm.secretKey || ''} onChange={(e) => setApiForm({ ...apiForm, secretKey: e.target.value })} className="w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 outline-none" />
+                      <input placeholder="Passphrase" type="password" value={apiForm.passphrase || ''} onChange={(e) => setApiForm({ ...apiForm, passphrase: e.target.value })} className="w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 outline-none" />
+                    </>
+                  )}
+                  {apiError && <p className="text-xs text-red-400">{apiError}</p>}
+                  {apiSuccess && <p className="text-xs text-emerald-400">{apiSuccess}</p>}
+                  <button onClick={handleApiSave} disabled={apiSaving}
+                    className="w-full py-3 bg-cyan-500 text-white text-sm font-semibold rounded-lg hover:bg-cyan-600 disabled:opacity-50 transition-colors">
+                    {apiSaving ? '연결 중...' : 'API 연결'}
+                  </button>
+                </div>
               </div>
-              <p className="text-sm text-gray-500">한국투자증권(KIS), 업비트, 비트겟 API를 연동하면 실제 보유 자산과 거래 내역을 확인할 수 있습니다.</p>
-              <div className="mt-3 text-sm font-semibold text-slate-600 group-hover:text-slate-700 flex items-center gap-1">
-                API 설정으로 이동
-                <svg className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-              </div>
-            </button>
+            </div>
           </div>
         )}
 
@@ -435,7 +830,7 @@ const DashboardPage = () => {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-whale-dark">항해 중인 항로</h2>
                 <button onClick={() => navigate('/store')} className="text-sm text-whale-light hover:text-whale-accent font-medium">
-                  항로 상점
+                  전략 학습
                 </button>
               </div>
               <div className="space-y-3">
@@ -462,14 +857,14 @@ const DashboardPage = () => {
                   거래하기
                 </button>
                 <button onClick={() => navigate('/store')} className="btn-secondary text-sm px-5 py-2">
-                  항로 상점
+                  전략 학습
                 </button>
               </div>
             </div>
           ) : null}
 
-          {/* 시세 변동 상위 */}
-          {liveTopMovers.length > 0 && (
+          {/* 시세 변동 상위 - Virt 모드에서만 표시 */}
+          {isVirt && liveTopMovers.length > 0 && (
             <div className="card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-whale-dark">시세 변동 상위</h2>
@@ -509,12 +904,12 @@ const DashboardPage = () => {
         {/* 하단: 관심 종목 + 빠른 액션 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* 관심 종목 */}
-          <div className="md:col-span-2 lg:col-span-2 card">
+          <div className={`md:col-span-2 lg:col-span-2 ${isVirt ? 'card' : 'rounded-xl border border-white/[0.06] bg-white/[0.02] p-6'}`}>
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-whale-dark">관심 종목</h2>
+              <h2 className={`text-lg font-bold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>관심 종목</h2>
               <button
                 onClick={() => navigate('/user')}
-                className="text-sm text-whale-light hover:text-whale-accent font-medium"
+                className={`text-sm font-medium ${isVirt ? 'text-whale-light hover:text-whale-accent' : 'text-cyan-400 hover:text-cyan-300'}`}
               >
                 종목 편집
               </button>
@@ -524,15 +919,17 @@ const DashboardPage = () => {
                 {liveWatchlist.map((stock) => (
                   <div
                     key={stock.stockCode}
-                    className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-whale-light/40 hover:shadow-sm cursor-pointer transition-all"
+                    className={`flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all ${
+                      isVirt ? 'border border-gray-100 hover:border-whale-light/40 hover:shadow-sm' : 'border border-white/[0.06] hover:bg-white/[0.04]'
+                    }`}
                     onClick={() => navigate(`/trade?code=${stock.stockCode}&type=${stock.assetType || 'CRYPTO'}`)}
                   >
                     <div>
-                      <div className="font-semibold text-sm text-gray-800">{stock.stockName}</div>
-                      <div className="text-xs text-gray-400">{stock.stockCode}</div>
+                      <div className={`font-semibold text-sm ${isVirt ? 'text-gray-800' : 'text-white'}`}>{stock.stockName}</div>
+                      <div className={`text-xs ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>{stock.stockCode}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-bold text-gray-800">{formatCurrency(stock.currentPrice)}</div>
+                      <div className={`text-sm font-bold ${isVirt ? 'text-gray-800' : 'text-white'}`}>{formatCurrency(stock.currentPrice)}</div>
                       <div className={`text-xs font-semibold ${
                         stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'
                       }`}>
@@ -544,14 +941,14 @@ const DashboardPage = () => {
               </div>
             ) : (
               <div className="text-center py-12">
-                <img src="/whales/beluga.png" alt="벨루가" className="w-16 h-16 object-contain mx-auto mb-3" />
-                <div className="text-gray-500 font-medium">관심 종목이 없습니다</div>
-                <div className="text-sm text-gray-400 mt-1">
+                {isVirt && <img src="/whales/beluga.png" alt="벨루가" className="w-16 h-16 object-contain mx-auto mb-3" />}
+                <div className={`font-medium ${isVirt ? 'text-gray-500' : 'text-slate-400'}`}>관심 종목이 없습니다</div>
+                <div className={`text-sm mt-1 ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>
                   프로필에서 관심 종목을 추가하면 여기에 실시간 시세가 표시됩니다
                 </div>
                 <button
                   onClick={() => navigate('/user')}
-                  className="mt-4 btn-secondary text-sm"
+                  className={`mt-4 text-sm ${isVirt ? 'btn-secondary' : 'px-4 py-2 border border-cyan-500/30 text-cyan-400 rounded-lg hover:bg-cyan-500/10 transition-colors'}`}
                 >
                   관심 종목 추가하기
                 </button>
@@ -562,8 +959,8 @@ const DashboardPage = () => {
           {/* 우측 사이드바 */}
           <div className="space-y-6">
             {/* 빠른 액션 */}
-            <div className="card !p-5">
-              <h2 className="text-lg font-bold text-whale-dark mb-3">어디로 항해할까요?</h2>
+            <div className={isVirt ? 'card !p-5' : 'rounded-xl border border-white/[0.06] bg-white/[0.02] p-5'}>
+              <h2 className={`text-lg font-bold mb-3 ${isVirt ? 'text-whale-dark' : 'text-white'}`}>어디로 항해할까요?</h2>
               <div className="space-y-2">
                 {isVirt && (
                 <button
@@ -582,31 +979,30 @@ const DashboardPage = () => {
                   <button
                     key={item.path}
                     onClick={() => navigate(item.path)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-white border border-gray-200 text-sm font-semibold text-whale-dark hover:border-whale-light/40 hover:bg-gray-50 transition-all min-h-[44px]"
+                    className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-semibold transition-all min-h-[44px] ${
+                      isVirt ? 'bg-white border border-gray-200 text-whale-dark hover:border-whale-light/40 hover:bg-gray-50' : 'bg-white/[0.03] border border-white/[0.06] text-slate-300 hover:bg-white/[0.06] hover:text-white'
+                    }`}
                   >
                     {item.label}
-                    <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    <svg className={`w-4 h-4 ${isVirt ? 'text-gray-300' : 'text-slate-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                   </button>
                 ))}
 
                 {/* API 설정 - 일반 모드에서만 표시 */}
                 {!isVirt && (
-                <div className="pt-2 mt-1 border-t border-gray-100">
+                <div className="pt-2 mt-1 border-t border-white/[0.06]">
                   <button
-                    onClick={() => navigate('/api-setting')}
-                    className="w-full relative overflow-hidden rounded-lg min-h-[44px] group"
+                    onClick={() => { setApiPanelOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-sm font-medium hover:bg-cyan-500/15 transition-colors min-h-[44px]"
                   >
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#0a1628] to-[#0c1a2e]" />
-                    <div className="relative flex items-center justify-between px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-white/80">API</span>
-                        <span className="text-white/20">|</span>
-                        <span className="text-xs text-slate-400">내 자산 연동</span>
-                      </div>
-                      <svg className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">API</span>
+                      <span className="text-cyan-500/30">|</span>
+                      <span className="text-xs text-slate-400">내 자산 연동</span>
                     </div>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </button>
                 </div>
                 )}

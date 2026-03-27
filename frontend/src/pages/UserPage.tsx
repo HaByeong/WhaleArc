@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
+import VirtSplashLoading from '../components/VirtSplashLoading';
+import SplashLoading from '../components/SplashLoading';
 import ErrorMessage from '../components/ErrorMessage';
+import UnstableCurrent from '../components/UnstableCurrent';
 import {
   userService,
   type UserProfile,
@@ -11,6 +14,7 @@ import {
 } from '../services/userService';
 import { useAuth } from '../contexts/AuthContext';
 import { validateNickname } from '../utils/nicknameFilter';
+import { useRoutePrefix } from '../hooks/useRoutePrefix';
 
 const INVESTMENT_STYLES: { value: InvestmentStyle; label: string; whale: string; desc: string; color: string; selectedBg: string; img: string }[] = [
   { value: 'AGGRESSIVE', label: '범고래', whale: 'Orca', desc: '바다의 최상위 포식자처럼, 과감한 공격으로 높은 수익을 노립니다', color: 'border-red-400', selectedBg: 'bg-gradient-to-r from-red-50 to-orange-50', img: '/whales/orca.png' },
@@ -27,6 +31,7 @@ const EXPERIENCE_LEVELS: { value: ExperienceLevel; label: string; whale: string;
 const POPULAR_ASSETS = ['BTC', 'ETH', 'XRP', 'SOL', 'DOGE', 'ADA', 'DOT', 'AVAX', 'MATIC', 'LINK'];
 
 const UserPage = () => {
+  const { isVirt } = useRoutePrefix();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isOnboarding = searchParams.get('onboarding') === 'true';
@@ -146,27 +151,27 @@ const UserPage = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header showNav />
-        <LoadingSpinner fullScreen={false} message="프로필을 불러오는 중..." />
-      </div>
-    );
+    if (!isVirt) return <SplashLoading message="프로필을 불러오는 중..." />;
+    return <VirtSplashLoading message="프로필을 불러오는 중..." />;
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className={`min-h-screen ${isVirt ? 'bg-gray-50' : 'bg-[#060d18] text-white'}`}>
         <Header showNav />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <ErrorMessage message={error} onRetry={() => window.location.reload()} variant="offline" />
+          {!isVirt ? (
+            <UnstableCurrent message="해류가 불안정합니다" sub={error || '데이터를 다시 불러오고 있어요...'} />
+          ) : (
+            <ErrorMessage message={error} onRetry={() => window.location.reload()} variant="offline" />
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${isVirt ? 'bg-gray-50' : 'bg-[#060d18] text-white'}`}>
       <Header showNav />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* 온보딩 환영 배너 */}
@@ -203,8 +208,8 @@ const UserPage = () => {
             {/* 좌측: 계정 정보 + 자기소개 */}
             <div className="lg:col-span-2 space-y-6">
               {/* 계정 정보 */}
-              <div className="card">
-                <h2 className="text-lg font-bold text-whale-dark mb-5">계정 정보</h2>
+              <div className={`card ${!isVirt ? 'border border-white/[0.06] bg-white/[0.02] !shadow-none' : ''}`}>
+                <h2 className={`text-lg font-bold mb-5 ${isVirt ? 'text-whale-dark' : 'text-white'}`}>계정 정보</h2>
 
                 {saveMessage && (
                   <div
@@ -221,18 +226,18 @@ const UserPage = () => {
 
                 <div className="space-y-5">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">아이디</label>
+                    <label className={`block text-sm font-medium mb-2 ${isVirt ? 'text-gray-700' : 'text-slate-400'}`}>아이디</label>
                     <input
                       type="text"
                       value={profile?.userId ?? ''}
                       readOnly
-                      className="input-field bg-gray-100 cursor-not-allowed"
+                      className={`input-field cursor-not-allowed ${!isVirt ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-gray-100'}`}
                     />
-                    <p className="mt-1 text-xs text-gray-500">로그인 아이디는 변경할 수 없습니다</p>
+                    <p className={`mt-1 text-xs ${isVirt ? 'text-gray-500' : 'text-slate-600'}`}>로그인 아이디는 변경할 수 없습니다</p>
                   </div>
 
                   <div>
-                    <label htmlFor="edit-name" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="edit-name" className={`block text-sm font-medium mb-2 ${isVirt ? 'text-gray-700' : 'text-slate-400'}`}>
                       닉네임
                     </label>
                     <input
@@ -240,16 +245,16 @@ const UserPage = () => {
                       type="text"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="input-field"
+                      className={`input-field ${!isVirt ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-600' : ''}`}
                       placeholder="닉네임을 입력하세요"
                       maxLength={50}
                     />
-                    <p className="mt-1 text-xs text-gray-500">랭킹 등에 표시되는 이름입니다</p>
+                    <p className={`mt-1 text-xs ${isVirt ? 'text-gray-500' : 'text-slate-600'}`}>랭킹 등에 표시되는 이름입니다</p>
                   </div>
 
                   {profile?.authProvider && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">로그인 방식</label>
+                      <label className={`block text-sm font-medium mb-2 ${isVirt ? 'text-gray-700' : 'text-slate-400'}`}>로그인 방식</label>
                       <div className="flex items-center gap-2">
                         <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${
                           profile.authProvider === 'google'
@@ -268,23 +273,23 @@ const UserPage = () => {
               </div>
 
               {/* 자기소개 */}
-              <div className="card">
-                <h2 className="text-lg font-bold text-whale-dark mb-5">자기소개</h2>
+              <div className={`card ${!isVirt ? 'border border-white/[0.06] bg-white/[0.02] !shadow-none' : ''}`}>
+                <h2 className={`text-lg font-bold mb-5 ${isVirt ? 'text-whale-dark' : 'text-white'}`}>자기소개</h2>
                 <textarea
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  className="input-field resize-none"
+                  className={`input-field resize-none ${!isVirt ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-600' : ''}`}
                   rows={4}
                   placeholder="자신의 투자 스타일이나 목표를 소개해보세요"
                   maxLength={200}
                 />
-                <p className="mt-1 text-xs text-gray-400 text-right">{bio.length}/200</p>
+                <p className={`mt-1 text-xs text-right ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>{bio.length}/200</p>
               </div>
 
               {/* 관심 종목 */}
-              <div className="card">
-                <h2 className="text-lg font-bold text-whale-dark mb-3">관심 종목</h2>
-                <p className="text-sm text-gray-500 mb-4">관심 있는 가상화폐를 선택하거나 직접 입력하세요 (최대 20개)</p>
+              <div className={`card ${!isVirt ? 'border border-white/[0.06] bg-white/[0.02] !shadow-none' : ''}`}>
+                <h2 className={`text-lg font-bold mb-3 ${isVirt ? 'text-whale-dark' : 'text-white'}`}>관심 종목</h2>
+                <p className={`text-sm mb-4 ${isVirt ? 'text-gray-500' : 'text-slate-400'}`}>관심 있는 가상화폐를 선택하거나 직접 입력하세요 (최대 20개)</p>
 
                 {/* 인기 종목 빠른 선택 */}
                 <div className="flex flex-wrap gap-2 mb-4">
@@ -298,7 +303,7 @@ const UserPage = () => {
                       className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                         favoriteAssets.includes(asset)
                           ? 'bg-whale-light text-white shadow-sm'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          : isVirt ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.06] border border-white/[0.06]'
                       }`}
                     >
                       {asset}
@@ -318,7 +323,7 @@ const UserPage = () => {
                         addAsset(customAsset);
                       }
                     }}
-                    className="input-field flex-1"
+                    className={`input-field flex-1 ${!isVirt ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-600' : ''}`}
                     placeholder="종목 코드 입력 (예: SHIB)"
                     maxLength={20}
                   />
@@ -361,9 +366,9 @@ const UserPage = () => {
             {/* 우측 사이드바 */}
             <div className="space-y-6">
               {/* 투자 성향 */}
-              <div className="card">
-                <h2 className="text-lg font-bold text-whale-dark mb-2">나는 어떤 고래?</h2>
-                <p className="text-sm text-gray-500 mb-4">투자 성향에 맞는 고래를 선택하세요</p>
+              <div className={`card ${!isVirt ? 'border border-white/[0.06] bg-white/[0.02] !shadow-none' : ''}`}>
+                <h2 className={`text-lg font-bold mb-2 ${isVirt ? 'text-whale-dark' : 'text-white'}`}>나는 어떤 고래?</h2>
+                <p className={`text-sm mb-4 ${isVirt ? 'text-gray-500' : 'text-slate-400'}`}>투자 성향에 맞는 고래를 선택하세요</p>
                 <div className="space-y-3">
                   {INVESTMENT_STYLES.map((style) => {
                     const isSelected = investmentStyle === style.value;
@@ -374,18 +379,18 @@ const UserPage = () => {
                         onClick={() => setInvestmentStyle(style.value)}
                         className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
                           isSelected
-                            ? `${style.color} ${style.selectedBg} shadow-md scale-[1.02]`
-                            : 'border-gray-100 hover:border-gray-200 hover:shadow-sm'
+                            ? `${style.color} ${isVirt ? style.selectedBg : 'bg-white/[0.04]'} shadow-md scale-[1.02]`
+                            : isVirt ? 'border-gray-100 hover:border-gray-200 hover:shadow-sm' : 'border-white/[0.06] hover:border-white/10 hover:bg-white/[0.03]'
                         }`}
                       >
                         <div className="flex items-center gap-3">
                           <img src={style.img} alt={style.label} className="w-10 h-10 object-contain flex-shrink-0" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
-                              <span className={`font-bold text-sm ${isSelected ? 'text-whale-dark' : 'text-gray-700'}`}>{style.label}</span>
-                              <span className="text-[11px] text-gray-400 italic">{style.whale}</span>
+                              <span className={`font-bold text-sm ${isSelected ? (isVirt ? 'text-whale-dark' : 'text-cyan-400') : (isVirt ? 'text-gray-700' : 'text-slate-300')}`}>{style.label}</span>
+                              <span className={`text-[11px] italic ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>{style.whale}</span>
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">{style.desc}</div>
+                            <div className={`text-xs mt-1 ${isVirt ? 'text-gray-500' : 'text-slate-500'}`}>{style.desc}</div>
                           </div>
                         </div>
                       </button>
@@ -395,9 +400,9 @@ const UserPage = () => {
               </div>
 
               {/* 투자 경험 */}
-              <div className="card">
-                <h2 className="text-lg font-bold text-whale-dark mb-2">항해 경험</h2>
-                <p className="text-sm text-gray-500 mb-4">바다에서 얼마나 헤엄쳤나요?</p>
+              <div className={`card ${!isVirt ? 'border border-white/[0.06] bg-white/[0.02] !shadow-none' : ''}`}>
+                <h2 className={`text-lg font-bold mb-2 ${isVirt ? 'text-whale-dark' : 'text-white'}`}>항해 경험</h2>
+                <p className={`text-sm mb-4 ${isVirt ? 'text-gray-500' : 'text-slate-400'}`}>바다에서 얼마나 헤엄쳤나요?</p>
                 <div className="space-y-3">
                   {EXPERIENCE_LEVELS.map((level) => {
                     const isSelected = experienceLevel === level.value;
@@ -408,18 +413,18 @@ const UserPage = () => {
                         onClick={() => setExperienceLevel(level.value)}
                         className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
                           isSelected
-                            ? 'border-whale-light bg-gradient-to-r from-sky-50 to-blue-50 shadow-md scale-[1.02]'
-                            : 'border-gray-100 hover:border-gray-200 hover:shadow-sm'
+                            ? isVirt ? 'border-whale-light bg-gradient-to-r from-sky-50 to-blue-50 shadow-md scale-[1.02]' : 'border-cyan-400 bg-white/[0.04] shadow-md scale-[1.02]'
+                            : isVirt ? 'border-gray-100 hover:border-gray-200 hover:shadow-sm' : 'border-white/[0.06] hover:border-white/10 hover:bg-white/[0.03]'
                         }`}
                       >
                         <div className="flex items-center gap-3">
                           <img src={level.img} alt={level.label} className="w-10 h-10 object-contain flex-shrink-0" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
-                              <span className={`font-bold text-sm ${isSelected ? 'text-whale-dark' : 'text-gray-700'}`}>{level.label}</span>
-                              <span className="text-[11px] text-gray-400 italic">{level.whale}</span>
+                              <span className={`font-bold text-sm ${isSelected ? (isVirt ? 'text-whale-dark' : 'text-cyan-400') : (isVirt ? 'text-gray-700' : 'text-slate-300')}`}>{level.label}</span>
+                              <span className={`text-[11px] italic ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>{level.whale}</span>
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">{level.desc}</div>
+                            <div className={`text-xs mt-1 ${isVirt ? 'text-gray-500' : 'text-slate-500'}`}>{level.desc}</div>
                           </div>
                         </div>
                       </button>
@@ -429,17 +434,17 @@ const UserPage = () => {
               </div>
 
               {/* 저장 버튼 */}
-              <div className="card !p-5">
+              <div className={`card !p-5 ${!isVirt ? 'border border-white/[0.06] bg-white/[0.02] !shadow-none' : ''}`}>
                 <button
                   type="submit"
-                  className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`w-full disabled:opacity-50 disabled:cursor-not-allowed ${isVirt ? 'btn-primary' : 'py-2.5 px-4 rounded-lg font-semibold text-sm bg-cyan-500 hover:bg-cyan-400 text-white transition-colors'}`}
                   disabled={saving || !editName.trim()}
                 >
                   {saving ? '저장 중...' : '프로필 저장'}
                 </button>
                 <button
                   type="button"
-                  className="w-full btn-secondary mt-3"
+                  className={`w-full mt-3 ${isVirt ? 'btn-secondary' : 'py-2.5 px-4 rounded-lg font-semibold text-sm border border-white/[0.06] text-slate-400 hover:bg-white/[0.03] transition-colors'}`}
                   onClick={() => navigate('/dashboard')}
                 >
                   {isOnboarding ? '건너뛰기' : '대시보드로 이동'}

@@ -10,13 +10,15 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 한국투자증권 Open API 클라이언트.
  * - OAuth 토큰 자동 발급/갱신
- * - 국내주식 현재가 조회
+ * - 국내주식 현재가 조회 (리트라이 + 캐시 폴백)
  * - 국내주식 기간별 시세 (캔들스틱) 조회
  */
 @Slf4j
@@ -32,6 +34,15 @@ public class KisApiClient {
     @Value("${kis.api.appsecret:}")
     private String appsecret;
 
+    @Value("${kis.api.max-retries:3}")
+    private int maxRetries;
+
+    @Value("${kis.api.retry-delay-ms:500}")
+    private long retryDelayMs;
+
+    @Value("${kis.api.cache-ttl-ms:15000}")
+    private long cacheTtlMs;
+
     private RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -39,16 +50,21 @@ public class KisApiClient {
     private final AtomicReference<String> accessToken = new AtomicReference<>(null);
     private volatile long tokenExpiresAt = 0;
 
+    // 응답 캐시: key → {data, expireAt}
+    private final ConcurrentHashMap<String, CacheEntry<?>> responseCache = new ConcurrentHashMap<>();
+
     @PostConstruct
     public void init() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(10_000);
-        factory.setReadTimeout(10_000);
+        factory.setConnectTimeout(5_000);
+        factory.setReadTimeout(8_000);
         this.restTemplate = new RestTemplate(factory);
-        log.info("KIS API 클라이언트 초기화: baseUrl={}", baseUrl);
+        log.info("KIS API 클라이언트 초기화: baseUrl={}, maxRetries={}, retryDelay={}ms, cacheTTL={}ms",
+                baseUrl, maxRetries, retryDelayMs, cacheTtlMs);
     }
 
-    /** 유효한 액세스 토큰 반환 (만료 시 자동 갱신) */
+    /* ───── 토큰 관리 ───── */
+
     public String getAccessToken() {
         if (accessToken.get() != null && System.currentTimeMillis() < tokenExpiresAt - 60_000) {
             return accessToken.get();
@@ -58,7 +74,6 @@ public class KisApiClient {
 
     @SuppressWarnings("unchecked")
     private synchronized String refreshToken() {
-        // 더블 체크
         if (accessToken.get() != null && System.currentTimeMillis() < tokenExpiresAt - 60_000) {
             return accessToken.get();
         }
@@ -70,130 +85,209 @@ public class KisApiClient {
                 "appsecret", appsecret
         );
 
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, String>> request = new HttpEntity<>(body, headers);
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpEntity<Map<String, String>> request = new HttpEntity<>(body, headers);
 
-            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
-            Map<String, Object> result = objectMapper.readValue(response.getBody(),
-                    new TypeReference<Map<String, Object>>() {});
+                ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+                Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<Map<String, Object>>() {});
 
-            String token = (String) result.get("access_token");
-            // 모의투자 토큰은 약 24시간 유효
-            tokenExpiresAt = System.currentTimeMillis() + 23 * 60 * 60 * 1000L;
-            accessToken.set(token);
-            log.info("KIS API 토큰 발급 성공");
-            return token;
-        } catch (Exception e) {
-            log.error("KIS API 토큰 발급 실패: {}", e.getMessage());
-            // 이전 토큰이 완전 만료 전이면 재사용 (갱신 마진 60초 이내)
-            String existing = accessToken.get();
-            if (existing != null && System.currentTimeMillis() < tokenExpiresAt) {
-                log.warn("KIS API 이전 토큰 재사용 (만료까지 {}초)", (tokenExpiresAt - System.currentTimeMillis()) / 1000);
-                return existing;
+                String token = (String) result.get("access_token");
+                tokenExpiresAt = System.currentTimeMillis() + 23 * 60 * 60 * 1000L;
+                accessToken.set(token);
+                log.info("KIS API 토큰 발급 성공");
+                return token;
+            } catch (Exception e) {
+                log.warn("KIS API 토큰 발급 실패 (시도 {}/{}): {}", attempt, maxRetries, e.getMessage());
+                if (attempt < maxRetries) {
+                    sleep(retryDelayMs * attempt);
+                }
             }
-            throw new RuntimeException("KIS 토큰 발급 실패", e);
         }
+
+        // 모든 리트라이 실패 → 이전 토큰 재사용 시도
+        String existing = accessToken.get();
+        if (existing != null && System.currentTimeMillis() < tokenExpiresAt) {
+            log.warn("KIS API 이전 토큰 재사용 (만료까지 {}초)", (tokenExpiresAt - System.currentTimeMillis()) / 1000);
+            return existing;
+        }
+        throw new RuntimeException("KIS 토큰 발급 실패: " + maxRetries + "회 재시도 후 실패");
     }
 
-    /**
-     * 국내주식 현재가 조회
-     * @param stockCode 종목코드 (예: 005930)
-     * @return API 응답의 output 맵
-     */
+    /* ───── 국내주식 현재가 조회 ───── */
+
     @SuppressWarnings("unchecked")
     public Map<String, String> getStockPrice(String stockCode) {
-        String url = baseUrl + "/uapi/domestic-stock/v1/quotations/inquire-price"
-                + "?FID_COND_MRKT_DIV_CODE=J"
-                + "&FID_INPUT_ISCD=" + stockCode;
+        String cacheKey = "price:" + stockCode;
 
-        HttpHeaders headers = buildHeaders("FHKST01010100");
-        HttpEntity<Void> request = new HttpEntity<>(headers);
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String url = baseUrl + "/uapi/domestic-stock/v1/quotations/inquire-price"
+                        + "?FID_COND_MRKT_DIV_CODE=J"
+                        + "&FID_INPUT_ISCD=" + stockCode;
 
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-            Map<String, Object> result = objectMapper.readValue(response.getBody(),
-                    new TypeReference<Map<String, Object>>() {});
+                HttpHeaders headers = buildHeaders("FHKST01010100");
+                HttpEntity<Void> request = new HttpEntity<>(headers);
 
-            if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
-                log.warn("KIS 현재가 조회 실패 [{}]: {}", stockCode, result.get("msg1"));
-                return null;
+                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
+                Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<Map<String, Object>>() {});
+
+                if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
+                    log.warn("KIS 현재가 조회 실패 [{}]: {}", stockCode, result.get("msg1"));
+                    return getCachedOrNull(cacheKey);
+                }
+
+                Map<String, String> output = objectMapper.convertValue(result.get("output"),
+                        new TypeReference<Map<String, String>>() {});
+                putCache(cacheKey, output);
+
+                if (attempt > 1) {
+                    log.info("KIS 현재가 조회 성공 [{}] ({}번째 시도)", stockCode, attempt);
+                }
+                return output;
+            } catch (Exception e) {
+                log.warn("KIS 현재가 조회 오류 [{}] (시도 {}/{}): {}", stockCode, attempt, maxRetries, e.getMessage());
+                if (attempt < maxRetries) {
+                    sleep(retryDelayMs * attempt);
+                }
             }
-
-            return objectMapper.convertValue(result.get("output"), new TypeReference<Map<String, String>>() {});
-        } catch (Exception e) {
-            log.error("KIS 현재가 조회 오류 [{}]: {}", stockCode, e.getMessage());
-            return null;
         }
+
+        // 모든 리트라이 실패 → 캐시 폴백
+        Map<String, String> cached = getCachedOrNull(cacheKey);
+        if (cached != null) {
+            log.warn("KIS 현재가 [{}]: API 실패, 캐시 폴백 사용", stockCode);
+        }
+        return cached;
     }
 
-    /**
-     * 국내주식 기간별 시세 조회 (일봉)
-     * @param stockCode 종목코드
-     * @param startDate 시작일 (YYYYMMDD)
-     * @param endDate 종료일 (YYYYMMDD)
-     * @return output2 리스트 (일봉 데이터)
-     */
+    /* ───── 국내주식 일봉 조회 ───── */
+
     @SuppressWarnings("unchecked")
-    public java.util.List<Map<String, String>> getStockDailyCandles(String stockCode, String startDate, String endDate) {
-        String url = baseUrl + "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
-                + "?FID_COND_MRKT_DIV_CODE=J"
-                + "&FID_INPUT_ISCD=" + stockCode
-                + "&FID_INPUT_DATE_1=" + startDate
-                + "&FID_INPUT_DATE_2=" + endDate
-                + "&FID_PERIOD_DIV_CODE=D"
-                + "&FID_ORG_ADJ_PRC=0";
+    public List<Map<String, String>> getStockDailyCandles(String stockCode, String startDate, String endDate) {
+        String cacheKey = "candle:" + stockCode + ":" + startDate + ":" + endDate;
 
-        HttpHeaders headers = buildHeaders("FHKST03010100");
-        HttpEntity<Void> request = new HttpEntity<>(headers);
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String url = baseUrl + "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
+                        + "?FID_COND_MRKT_DIV_CODE=J"
+                        + "&FID_INPUT_ISCD=" + stockCode
+                        + "&FID_INPUT_DATE_1=" + startDate
+                        + "&FID_INPUT_DATE_2=" + endDate
+                        + "&FID_PERIOD_DIV_CODE=D"
+                        + "&FID_ORG_ADJ_PRC=0";
 
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-            Map<String, Object> result = objectMapper.readValue(response.getBody(),
-                    new TypeReference<Map<String, Object>>() {});
+                HttpHeaders headers = buildHeaders("FHKST03010100");
+                HttpEntity<Void> request = new HttpEntity<>(headers);
 
-            if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
-                log.warn("KIS 일봉 조회 실패 [{}]: {}", stockCode, result.get("msg1"));
-                return java.util.List.of();
+                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
+                Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<Map<String, Object>>() {});
+
+                if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
+                    log.warn("KIS 일봉 조회 실패 [{}]: {}", stockCode, result.get("msg1"));
+                    List<Map<String, String>> cached = getCachedOrNull(cacheKey);
+                    return cached != null ? cached : List.of();
+                }
+
+                List<Map<String, String>> output = objectMapper.convertValue(result.get("output2"),
+                        new TypeReference<List<Map<String, String>>>() {});
+                putCache(cacheKey, output);
+
+                if (attempt > 1) {
+                    log.info("KIS 일봉 조회 성공 [{}] ({}번째 시도)", stockCode, attempt);
+                }
+                return output;
+            } catch (Exception e) {
+                log.warn("KIS 일봉 조회 오류 [{}] (시도 {}/{}): {}", stockCode, attempt, maxRetries, e.getMessage());
+                if (attempt < maxRetries) {
+                    sleep(retryDelayMs * attempt);
+                }
             }
-
-            return objectMapper.convertValue(result.get("output2"),
-                    new TypeReference<java.util.List<Map<String, String>>>() {});
-        } catch (Exception e) {
-            log.error("KIS 일봉 조회 오류 [{}]: {}", stockCode, e.getMessage());
-            return java.util.List.of();
         }
+
+        List<Map<String, String>> cached = getCachedOrNull(cacheKey);
+        if (cached != null) {
+            log.warn("KIS 일봉 [{}]: API 실패, 캐시 폴백 사용", stockCode);
+            return cached;
+        }
+        return List.of();
     }
 
-    /**
-     * 업종(지수) 현재가 조회 (KOSPI: 0001, KOSDAQ: 1001)
-     */
+    /* ───── 업종(지수) 현재가 조회 ───── */
+
     @SuppressWarnings("unchecked")
     public Map<String, String> getIndexPrice(String indexCode) {
-        String url = baseUrl + "/uapi/domestic-stock/v1/quotations/inquire-index-price"
-                + "?FID_COND_MRKT_DIV_CODE=U"
-                + "&FID_INPUT_ISCD=" + indexCode;
+        String cacheKey = "index:" + indexCode;
 
-        HttpHeaders headers = buildHeaders("FHPUP02100000");
-        HttpEntity<Void> request = new HttpEntity<>(headers);
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String url = baseUrl + "/uapi/domestic-stock/v1/quotations/inquire-index-price"
+                        + "?FID_COND_MRKT_DIV_CODE=U"
+                        + "&FID_INPUT_ISCD=" + indexCode;
 
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-            Map<String, Object> result = objectMapper.readValue(response.getBody(),
-                    new TypeReference<Map<String, Object>>() {});
+                HttpHeaders headers = buildHeaders("FHPUP02100000");
+                HttpEntity<Void> request = new HttpEntity<>(headers);
 
-            if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
-                log.warn("KIS 지수 조회 실패 [{}]: {}", indexCode, result.get("msg1"));
-                return null;
+                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
+                Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<Map<String, Object>>() {});
+
+                if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
+                    log.warn("KIS 지수 조회 실패 [{}]: {}", indexCode, result.get("msg1"));
+                    return getCachedOrNull(cacheKey);
+                }
+
+                Map<String, String> output = objectMapper.convertValue(result.get("output"),
+                        new TypeReference<Map<String, String>>() {});
+                putCache(cacheKey, output);
+
+                if (attempt > 1) {
+                    log.info("KIS 지수 조회 성공 [{}] ({}번째 시도)", indexCode, attempt);
+                }
+                return output;
+            } catch (Exception e) {
+                log.warn("KIS 지수 조회 오류 [{}] (시도 {}/{}): {}", indexCode, attempt, maxRetries, e.getMessage());
+                if (attempt < maxRetries) {
+                    sleep(retryDelayMs * attempt);
+                }
             }
-
-            return objectMapper.convertValue(result.get("output"), new TypeReference<Map<String, String>>() {});
-        } catch (Exception e) {
-            log.error("KIS 지수 조회 오류 [{}]: {}", indexCode, e.getMessage());
-            return null;
         }
+
+        Map<String, String> cached = getCachedOrNull(cacheKey);
+        if (cached != null) {
+            log.warn("KIS 지수 [{}]: API 실패, 캐시 폴백 사용", indexCode);
+        }
+        return cached;
     }
+
+    /* ───── 캐시 유틸 ───── */
+
+    private <T> void putCache(String key, T data) {
+        responseCache.put(key, new CacheEntry<>(data, System.currentTimeMillis() + cacheTtlMs));
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T getCachedOrNull(String key) {
+        CacheEntry<?> entry = responseCache.get(key);
+        // 캐시가 있으면 만료와 관계없이 폴백으로 반환 (stale cache 허용)
+        if (entry != null) {
+            return (T) entry.data;
+        }
+        return null;
+    }
+
+    /** 주기적 캐시 정리 (TTL의 10배 초과 항목 제거) */
+    public void evictStaleCache() {
+        long threshold = System.currentTimeMillis() - (cacheTtlMs * 10);
+        responseCache.entrySet().removeIf(e -> e.getValue().expireAt < threshold);
+    }
+
+    /* ───── 유틸 ───── */
 
     private HttpHeaders buildHeaders(String trId) {
         HttpHeaders headers = new HttpHeaders();
@@ -205,7 +299,17 @@ public class KisApiClient {
         return headers;
     }
 
+    private void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     public boolean isConfigured() {
         return appkey != null && !appkey.isEmpty() && appsecret != null && !appsecret.isEmpty();
     }
+
+    private record CacheEntry<T>(T data, long expireAt) {}
 }

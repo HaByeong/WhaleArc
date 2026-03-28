@@ -24,6 +24,7 @@ export interface OrderRequest {
   quantity: number;
   price?: number; // 지정가 주문일 때만 필요
   assetType?: 'STOCK' | 'CRYPTO';
+  memo?: string;
 }
 
 export interface Order {
@@ -39,6 +40,7 @@ export interface Order {
   filledQuantity: number;
   filledPrice: number | null;
   assetType?: string;
+  memo?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,6 +57,7 @@ export interface Trade {
   commission: number;
   netAmount: number;
   assetType?: string;
+  memo?: string;
   executedAt: string;
 }
 
@@ -197,6 +200,28 @@ export const tradeService = {
   // 주문 취소
   cancelOrder: async (orderId: string): Promise<void> => {
     await apiClient.delete(`/api/orders/${orderId}`);
+  },
+
+  // 거래 메모 수정
+  updateTradeMemo: async (tradeId: string, memo: string) => {
+    return apiClient.put(`/api/trades/${tradeId}/memo`, { memo });
+  },
+
+  // 가격 알림 생성
+  createPriceAlert: async (data: { stockCode: string; stockName: string; assetType: string; condition: string; targetPrice: number }) => {
+    const response = await apiClient.post('/api/notifications/price-alerts', data);
+    return response.data.data;
+  },
+
+  // 가격 알림 조회
+  getPriceAlerts: async () => {
+    const response = await apiClient.get('/api/notifications/price-alerts');
+    return response.data.data;
+  },
+
+  // 가격 알림 삭제
+  deletePriceAlert: async (alertId: string) => {
+    await apiClient.delete(`/api/notifications/price-alerts/${alertId}`);
   },
 
   // 모의투자 초기화

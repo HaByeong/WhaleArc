@@ -59,6 +59,14 @@ const TradePage = () => {
   const [limitPrice, setLimitPrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [orderMemo, setOrderMemo] = useState('');
+
+  // 가격 알림
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertTargetPrice, setAlertTargetPrice] = useState('');
+  const [alertCondition, setAlertCondition] = useState<'ABOVE' | 'BELOW'>('ABOVE');
+  const [priceAlerts, setPriceAlerts] = useState<any[]>([]);
+
   const [activeTab, setActiveTab] = useState<'chart' | 'orders' | 'trades' | 'holdings'>('chart');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -311,10 +319,12 @@ const TradePage = () => {
         quantity: qty,
         price: orderMethod === 'LIMIT' ? parseFloat(limitPrice) : undefined,
         assetType: isStock ? 'STOCK' : 'CRYPTO',
+        memo: orderMemo || undefined,
       };
       await tradeService.createOrder(orderRequest);
       setQuantity('');
       setLimitPrice('');
+      setOrderMemo('');
       showToast(
         `${displayName} ${orderType === 'BUY' ? '매수' : '매도'} 주문 완료!`,
         'success'
@@ -623,6 +633,24 @@ const TradePage = () => {
                         {isSelectedStock && (
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>
                         )}
+                        <button
+                          onClick={() => {
+                            const next = !showAlertModal;
+                            setShowAlertModal(next);
+                            setAlertTargetPrice('');
+                            if (next) { tradeService.getPriceAlerts().then(a => setPriceAlerts(a || [])).catch(() => {}); }
+                          }}
+                          title="가격 알림 설정"
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            showAlertModal
+                              ? (d ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-600')
+                              : (d ? 'hover:bg-white/[0.06] text-slate-500 hover:text-yellow-400' : 'hover:bg-gray-100 text-gray-400 hover:text-yellow-500')
+                          }`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                          </svg>
+                        </button>
                       </div>
                       <span className={`text-sm ${d ? 'text-slate-500' : 'text-gray-400'}`}>
                         {isSelectedStock ? `${liveSelectedStock.stockCode} · KRX` : `${liveSelectedStock.stockCode}/KRW`}
@@ -664,6 +692,91 @@ const TradePage = () => {
                           <div className={`text-xs font-semibold ${item.cls}`}>{item.value}</div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {/* 가격 알림 패널 */}
+                  {showAlertModal && (
+                    <div className={`mt-3 rounded-xl p-4 ${d ? 'bg-white/[0.04] border border-white/[0.08]' : 'bg-yellow-50 border border-yellow-100'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className={`text-sm font-bold ${d ? 'text-yellow-400' : 'text-yellow-700'}`}>가격 알림 설정</h4>
+                        <button onClick={() => setShowAlertModal(false)} className={`text-xs ${d ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'}`}>닫기</button>
+                      </div>
+                      <div className="flex gap-2 mb-3">
+                        <input
+                          type="number"
+                          placeholder="목표 가격"
+                          value={alertTargetPrice}
+                          onChange={(e) => setAlertTargetPrice(e.target.value)}
+                          className={`flex-1 text-sm rounded-lg px-3 py-2 outline-none ${
+                            d ? 'bg-white/[0.06] text-slate-200 border border-white/[0.08] focus:border-yellow-500/40'
+                              : 'bg-white text-gray-700 border border-gray-200 focus:border-yellow-400'
+                          }`}
+                        />
+                        <div className="flex rounded-lg overflow-hidden">
+                          {(['ABOVE', 'BELOW'] as const).map(cond => (
+                            <button
+                              key={cond}
+                              type="button"
+                              onClick={() => setAlertCondition(cond)}
+                              className={`px-3 py-2 text-xs font-semibold transition-colors ${
+                                alertCondition === cond
+                                  ? (d ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-200 text-yellow-800')
+                                  : (d ? 'bg-white/[0.04] text-slate-500 hover:bg-white/[0.06]' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')
+                              }`}
+                            >
+                              {cond === 'ABOVE' ? '이상' : '이하'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!alertTargetPrice || parseFloat(alertTargetPrice) <= 0 || !liveSelectedStock) return;
+                          try {
+                            await tradeService.createPriceAlert({
+                              stockCode: liveSelectedStock.stockCode,
+                              stockName: isSelectedStock ? liveSelectedStock.stockName : assetName(liveSelectedStock.stockCode),
+                              assetType: isSelectedStock ? 'STOCK' : 'CRYPTO',
+                              condition: alertCondition,
+                              targetPrice: parseFloat(alertTargetPrice),
+                            });
+                            showToast('가격 알림이 설정되었습니다.', 'success');
+                            setAlertTargetPrice('');
+                            try { const alerts = await tradeService.getPriceAlerts(); setPriceAlerts(alerts || []); } catch {}
+                          } catch { showToast('알림 설정에 실패했습니다.', 'error'); }
+                        }}
+                        disabled={!alertTargetPrice || parseFloat(alertTargetPrice) <= 0}
+                        className={`w-full py-2 rounded-lg text-sm font-bold transition-all disabled:opacity-40 ${
+                          d ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30' : 'bg-yellow-400 text-yellow-900 hover:bg-yellow-500'
+                        }`}
+                      >
+                        알림 설정
+                      </button>
+                      {priceAlerts.filter((a: any) => a.stockCode === liveSelectedStock.stockCode).length > 0 && (
+                        <div className="mt-3 space-y-1.5">
+                          <div className={`text-[10px] font-semibold ${d ? 'text-slate-500' : 'text-gray-400'}`}>설정된 알림</div>
+                          {priceAlerts.filter((a: any) => a.stockCode === liveSelectedStock.stockCode).map((alert: any) => (
+                            <div key={alert.id} className={`flex items-center justify-between text-xs px-2 py-1.5 rounded-lg ${d ? 'bg-white/[0.04]' : 'bg-white'}`}>
+                              <span className={d ? 'text-slate-300' : 'text-gray-600'}>
+                                {fmt(alert.targetPrice)} {alert.condition === 'ABOVE' ? '이상' : '이하'}
+                              </span>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await tradeService.deletePriceAlert(alert.id);
+                                    setPriceAlerts(prev => prev.filter((a: any) => a.id !== alert.id));
+                                    showToast('알림이 삭제되었습니다.');
+                                  } catch {}
+                                }}
+                                className={`text-[10px] ${d ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-600'}`}
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -754,29 +867,36 @@ const TradePage = () => {
                           {trades.map(trade => {
                             const name = getDisplayName(trade.stockCode, trade.stockName, trade.assetType);
                             return (
-                              <div key={trade.id} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                              <div key={trade.id} className={`p-3 rounded-lg border transition-colors ${
                                 d ? 'border-white/[0.06] hover:bg-white/[0.03]' : 'border-gray-100 hover:bg-gray-50'
                               }`}>
-                                <div className="flex items-center gap-3">
-                                  <span className={`px-2 py-1 text-xs font-bold rounded ${trade.orderType === 'BUY' ? (d ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600') : (d ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600')}`}>
-                                    {trade.orderType === 'BUY' ? '매수' : '매도'}
-                                  </span>
-                                  <div>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{name}</span>
-                                      {trade.assetType === 'STOCK' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>}
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <span className={`px-2 py-1 text-xs font-bold rounded ${trade.orderType === 'BUY' ? (d ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600') : (d ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600')}`}>
+                                      {trade.orderType === 'BUY' ? '매수' : '매도'}
+                                    </span>
+                                    <div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{name}</span>
+                                        {trade.assetType === 'STOCK' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>}
+                                      </div>
+                                      <div className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>
+                                        {trade.assetType === 'STOCK' ? `${Math.floor(trade.quantity)}주` : `${formatQuantity(trade.quantity)}개`} · {fmt(trade.price)}
+                                      </div>
                                     </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{fmt(trade.totalAmount)}</div>
                                     <div className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>
-                                      {trade.assetType === 'STOCK' ? `${Math.floor(trade.quantity)}주` : `${formatQuantity(trade.quantity)}개`} · {fmt(trade.price)}
+                                      {new Date(trade.executedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                     </div>
                                   </div>
                                 </div>
-                                <div className="text-right">
-                                  <div className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{fmt(trade.totalAmount)}</div>
-                                  <div className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>
-                                    {new Date(trade.executedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                {trade.memo && (
+                                  <div className={`mt-1.5 text-[11px] italic ${d ? 'text-slate-500' : 'text-gray-400'}`}>
+                                    {'\u{1F4DD}'} {trade.memo}
                                   </div>
-                                </div>
+                                )}
                               </div>
                             );
                           })}
@@ -983,6 +1103,27 @@ const TradePage = () => {
                       <div className={`text-right text-[10px] mt-0.5 ${d ? 'text-slate-500' : 'text-gray-400'}`}>수수료 0.1% 포함</div>
                     </div>
                   )}
+
+                  {/* 메모 입력 */}
+                  <details className={`rounded-xl overflow-hidden ${d ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
+                    <summary className={`cursor-pointer px-3 py-2 text-xs font-semibold select-none ${d ? 'text-slate-400 hover:text-slate-300' : 'text-gray-500 hover:text-gray-600'}`}>
+                      메모 추가 (선택)
+                    </summary>
+                    <div className="px-3 pb-3">
+                      <textarea
+                        placeholder="이 거래에 대한 메모를 남겨보세요"
+                        value={orderMemo}
+                        onChange={(e) => setOrderMemo(e.target.value)}
+                        maxLength={500}
+                        rows={2}
+                        className={`w-full text-xs rounded-lg p-2 resize-none outline-none transition-colors ${
+                          d ? 'bg-white/[0.06] text-slate-200 placeholder-slate-600 border border-white/[0.08] focus:border-cyan-500/40'
+                            : 'bg-white text-gray-700 placeholder-gray-400 border border-gray-200 focus:border-whale-dark/40'
+                        }`}
+                      />
+                      <div className={`text-right text-[10px] mt-0.5 ${d ? 'text-slate-600' : 'text-gray-400'}`}>{orderMemo.length}/500</div>
+                    </div>
+                  </details>
 
                   {/* 투자 유의사항 */}
                   <p className={`text-[10px] leading-relaxed text-center px-2 ${d ? 'text-slate-600' : 'text-gray-400'}`}>

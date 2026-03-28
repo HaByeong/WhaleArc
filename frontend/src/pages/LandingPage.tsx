@@ -376,7 +376,7 @@ const LandingPage = () => {
               <span className="text-white/20">|</span>
               <a href="#" className="hover:text-white transition-colors">개인정보처리방침</a>
               <span className="text-white/20">|</span>
-              <a href="mailto:khyun1109@gmail.com" className="hover:text-white transition-colors">문의하기</a>
+              <a href="mailto:khyun1109@gmail.com,jhschris8080@naver.com" className="hover:text-white transition-colors">문의하기</a>
             </div>
             <p className="text-gray-500 italic">
               고래처럼, 시장을 유영하듯

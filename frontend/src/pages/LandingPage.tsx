@@ -372,10 +372,6 @@ const LandingPage = () => {
               &copy; 2025 WhaleArc. All rights reserved.
             </p>
             <div className="flex items-center gap-4 text-gray-300">
-              <a href="#" className="hover:text-white transition-colors">이용약관</a>
-              <span className="text-white/20">|</span>
-              <a href="#" className="hover:text-white transition-colors">개인정보처리방침</a>
-              <span className="text-white/20">|</span>
               <a href="mailto:khyun1109@gmail.com,jhschris8080@naver.com" className="hover:text-white transition-colors">문의하기</a>
             </div>
             <p className="text-gray-500 italic">

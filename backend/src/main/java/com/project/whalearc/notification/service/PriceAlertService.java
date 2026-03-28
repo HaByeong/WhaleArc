@@ -65,12 +65,24 @@ public class PriceAlertService {
 
         // 현재 가격 수집 (실시간 + REST)
         Map<String, Double> priceMap = new HashMap<>();
-        for (MarketPriceResponse p : realtimePriceHolder.getAllLatestPrices()) {
-            priceMap.put(p.getSymbol(), p.getPrice());
+        try {
+            List<MarketPriceResponse> realtime = realtimePriceHolder.getAllLatestPrices();
+            if (realtime != null) {
+                for (MarketPriceResponse p : realtime) {
+                    priceMap.put(p.getSymbol(), p.getPrice());
+                }
+            }
+            List<MarketPriceResponse> rest = cryptoPriceProvider.getAllKrwTickers();
+            if (rest != null) {
+                for (MarketPriceResponse p : rest) {
+                    priceMap.putIfAbsent(p.getSymbol(), p.getPrice());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("가격 알림 체크용 시세 수집 실패: {}", e.getMessage());
+            return;
         }
-        for (MarketPriceResponse p : cryptoPriceProvider.getAllKrwTickers()) {
-            priceMap.putIfAbsent(p.getSymbol(), p.getPrice());
-        }
+        if (priceMap.isEmpty()) return;
 
         int triggered = 0;
         for (PriceAlert alert : activeAlerts) {

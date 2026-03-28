@@ -31,6 +31,9 @@ public class TradeController {
             @RequestBody Map<String, String> body) {
         String userId = jwt.getSubject();
         String memo = body.get("memo");
+        if (memo != null && memo.length() > 500) {
+            throw new IllegalArgumentException("메모는 500자 이하로 입력해주세요.");
+        }
         return ApiResponse.ok(orderService.updateTradeMemo(userId, tradeId, memo));
     }
 }

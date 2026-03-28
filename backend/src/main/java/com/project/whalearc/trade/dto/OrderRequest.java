@@ -3,6 +3,7 @@ package com.project.whalearc.trade.dto;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -33,5 +34,6 @@ public class OrderRequest {
 
     private String assetType; // "STOCK" or "CRYPTO" (기본: CRYPTO)
 
+    @Size(max = 500, message = "메모는 500자 이하로 입력해주세요.")
     private String memo;
 }

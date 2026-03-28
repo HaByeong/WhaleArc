@@ -59,8 +59,25 @@ public class NotificationController {
         String stockCode = (String) body.get("stockCode");
         String stockName = (String) body.get("stockName");
         String assetType = (String) body.getOrDefault("assetType", "CRYPTO");
-        String condition = (String) body.get("condition"); // ABOVE or BELOW
-        double targetPrice = Double.parseDouble(String.valueOf(body.get("targetPrice")));
+        String condition = (String) body.get("condition");
+
+        if (stockCode == null || stockCode.isBlank()) {
+            throw new IllegalArgumentException("종목 코드를 입력해주세요.");
+        }
+        if (stockName == null || stockName.isBlank()) {
+            throw new IllegalArgumentException("종목 이름을 입력해주세요.");
+        }
+        if (condition == null || (!condition.equals("ABOVE") && !condition.equals("BELOW"))) {
+            throw new IllegalArgumentException("조건은 ABOVE 또는 BELOW만 가능합니다.");
+        }
+
+        double targetPrice;
+        try {
+            targetPrice = Double.parseDouble(String.valueOf(body.get("targetPrice")));
+            if (targetPrice <= 0) throw new NumberFormatException();
+        } catch (Exception e) {
+            throw new IllegalArgumentException("유효한 목표가를 입력해주세요.");
+        }
 
         PriceAlert alert = priceAlertService.createAlert(
                 userId, stockCode, stockName, assetType,

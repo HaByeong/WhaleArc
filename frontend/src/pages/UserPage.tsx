@@ -449,6 +449,26 @@ const UserPage = () => {
                   {isOnboarding ? '건너뛰기' : '대시보드로 이동'}
                 </button>
               </div>
+
+              {/* 문의하기 */}
+              {!isOnboarding && (
+                <div className={`card !p-5 ${!isVirt ? 'border border-white/[0.06] bg-white/[0.02] !shadow-none' : ''}`}>
+                  <h3 className={`text-sm font-bold mb-3 ${isVirt ? 'text-whale-dark' : 'text-white'}`}>문의 · 피드백</h3>
+                  <p className={`text-xs mb-3 ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>
+                    버그 신고, 기능 제안, 또는 궁금한 점이 있으시면 편하게 연락해주세요.
+                  </p>
+                  <div className="space-y-2">
+                    <a href="mailto:khyun1109@gmail.com" className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${isVirt ? 'bg-gray-50 border border-gray-200 text-whale-dark hover:bg-gray-100' : 'bg-white/[0.03] border border-white/[0.06] text-slate-300 hover:bg-white/[0.06]'}`}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                      khyun1109@gmail.com
+                    </a>
+                    <a href="mailto:jhschris8080@naver.com" className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${isVirt ? 'bg-gray-50 border border-gray-200 text-whale-dark hover:bg-gray-100' : 'bg-white/[0.03] border border-white/[0.06] text-slate-300 hover:bg-white/[0.06]'}`}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                      jhschris8080@naver.com
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </form>

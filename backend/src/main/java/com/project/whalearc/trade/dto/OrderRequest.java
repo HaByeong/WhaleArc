@@ -32,4 +32,6 @@ public class OrderRequest {
     private BigDecimal price; // 지정가일 때만
 
     private String assetType; // "STOCK" or "CRYPTO" (기본: CRYPTO)
+
+    private String memo;
 }

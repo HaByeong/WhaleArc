@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useVirtNavigate, useRoutePrefix } from '../hooks/useRoutePrefix';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Area, AreaChart } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Area, ComposedChart, Line } from 'recharts';
+import apiClient from '../utils/api';
 import Header from '../components/Header';
 import VirtSplashLoading from '../components/VirtSplashLoading';
 import SplashLoading from '../components/SplashLoading';
@@ -518,6 +519,7 @@ const MyPortfolioPage = () => {
   const [activeTab, setActiveTab] = useState<'holdings' | 'trades'>('holdings');
   const [settingRoute, setSettingRoute] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
+  const [kospiBenchmark, setKospiBenchmark] = useState<{ price: number; change: number } | null>(null);
 
   const displayName =
     profileName || user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
@@ -550,6 +552,17 @@ const MyPortfolioPage = () => {
   useEffect(() => {
     loadPortfolio();
   }, [loadPortfolio]);
+
+  // KOSPI 현재가 조회 (벤치마크용)
+  useEffect(() => {
+    apiClient.get('/api/market/indices')
+      .then((res) => {
+        const kospi = (res.data as Array<{ code: string; name: string; price: number; change: number; changeRate: number }>)
+          ?.find((d) => d.code === 'KOSPI' || d.name === 'KOSPI' || d.code === '0001');
+        if (kospi) setKospiBenchmark({ price: kospi.price, change: kospi.change });
+      })
+      .catch(() => { /* graceful degradation */ });
+  }, []);
 
   const handleSetRepresentativeRoute = async (purchaseId: string) => {
     try {
@@ -729,69 +742,118 @@ const MyPortfolioPage = () => {
                 <span className="text-xs text-gray-400">최근 30일</span>
               </div>
               {historyData.length >= 2 ? (() => {
-                const chartData = historyData.map((s) => ({
-                  date: s.date,
-                  label: new Date(s.date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
-                  totalValue: Math.round(s.totalValue),
-                  returnRate: Number(s.returnRate.toFixed(2)),
-                }));
+                // KOSPI 벤치마크: 포트폴리오 시작값 기준으로 정규화
+                // change = 오늘 등락폭이므로 KOSPI 전일가 = price - change
+                // 30일 전 KOSPI는 알 수 없으므로 일일 변동을 기간에 비례 외삽
+                const startValue = historyData[0].totalValue;
+                const hasKospi = kospiBenchmark != null;
+
+                // KOSPI 정규화: 시작값을 포트폴리오와 동일하게 맞추고
+                // 현재 KOSPI 등락률을 기간에 걸쳐 선형 보간
+                const kospiDailyRate = hasKospi ? (kospiBenchmark.change / (kospiBenchmark.price - kospiBenchmark.change)) : 0;
+                const totalDays = historyData.length - 1;
+                // 30일간 누적 변동을 단순 선형 보간 (일별 데이터 미제공)
+                const kospiTotalReturn = kospiDailyRate * totalDays;
+                const kospiEndValue = Math.round(startValue * (1 + kospiTotalReturn));
+
+                const chartData = historyData.map((s, i) => {
+                  const base: Record<string, any> = {
+                    date: s.date,
+                    label: new Date(s.date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+                    totalValue: Math.round(s.totalValue),
+                    returnRate: Number(s.returnRate.toFixed(2)),
+                  };
+                  if (hasKospi && totalDays > 0) {
+                    const progress = i / totalDays;
+                    base.kospi = Math.round(startValue + progress * (kospiEndValue - startValue));
+                  }
+                  return base;
+                });
                 const values = chartData.map((d) => d.totalValue);
-                const minVal = Math.min(...values);
-                const maxVal = Math.max(...values);
+                const allValues = hasKospi ? [...values, startValue, kospiEndValue] : values;
+                const minVal = Math.min(...allValues);
+                const maxVal = Math.max(...allValues);
                 const padding = Math.max((maxVal - minVal) * 0.1, 10000);
                 const trend = chartData[chartData.length - 1].totalValue - chartData[0].totalValue;
                 const gradientColor = trend >= 0 ? '#ef4444' : '#3b82f6';
                 const lineColor = trend >= 0 ? '#ef4444' : '#3b82f6';
 
                 return (
-                  <div className="h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                        <defs>
-                          <linearGradient id="assetGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={gradientColor} stopOpacity={0.15} />
-                            <stop offset="100%" stopColor={gradientColor} stopOpacity={0.02} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis
-                          dataKey="label"
-                          tick={{ fontSize: 11, fill: '#9ca3af' }}
-                          tickLine={false}
-                          axisLine={false}
-                        />
-                        <YAxis
-                          domain={[Math.floor(minVal - padding), Math.ceil(maxVal + padding)]}
-                          tick={{ fontSize: 11, fill: '#9ca3af' }}
-                          tickLine={false}
-                          axisLine={false}
-                          tickFormatter={(v: number) => {
-                            if (v >= 1_0000_0000) return `${(v / 1_0000_0000).toFixed(1)}억`;
-                            if (v >= 1_0000) return `${(v / 1_0000).toFixed(0)}만`;
-                            return `${v}`;
-                          }}
-                          width={50}
-                        />
-                        <Tooltip
-                          contentStyle={{ borderRadius: '10px', fontSize: '13px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                          formatter={(value: number, name: string) => {
-                            if (name === 'totalValue') return [fmt(value), '총 자산'];
-                            return [value, name];
-                          }}
-                          labelFormatter={(label: string) => label}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="totalValue"
-                          stroke={lineColor}
-                          strokeWidth={2.5}
-                          fill="url(#assetGradient)"
-                          dot={false}
-                          activeDot={{ r: 4, fill: lineColor, strokeWidth: 2, stroke: '#fff' }}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <>
+                    {/* 범례 */}
+                    <div className="flex items-center gap-4 mb-2 justify-end">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-3 h-0.5 rounded-full" style={{ backgroundColor: lineColor }} />
+                        <span className="text-[11px] text-gray-500">내 포트폴리오</span>
+                      </div>
+                      {hasKospi && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-3 h-0.5 rounded-full border-t border-dashed border-gray-400" style={{ borderTopWidth: 2 }} />
+                          <span className="text-[11px] text-gray-400">KOSPI</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="h-56">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                          <defs>
+                            <linearGradient id="assetGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={gradientColor} stopOpacity={0.15} />
+                              <stop offset="100%" stopColor={gradientColor} stopOpacity={0.02} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis
+                            dataKey="label"
+                            tick={{ fontSize: 11, fill: '#9ca3af' }}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <YAxis
+                            domain={[Math.floor(minVal - padding), Math.ceil(maxVal + padding)]}
+                            tick={{ fontSize: 11, fill: '#9ca3af' }}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(v: number) => {
+                              if (v >= 1_0000_0000) return `${(v / 1_0000_0000).toFixed(1)}억`;
+                              if (v >= 1_0000) return `${(v / 1_0000).toFixed(0)}만`;
+                              return `${v}`;
+                            }}
+                            width={50}
+                          />
+                          <Tooltip
+                            contentStyle={{ borderRadius: '10px', fontSize: '13px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                            formatter={(value: number, name: string) => {
+                              if (name === 'totalValue') return [fmt(value), '내 포트폴리오'];
+                              if (name === 'kospi') return [fmt(value), 'KOSPI 벤치마크'];
+                              return [value, name];
+                            }}
+                            labelFormatter={(label: string) => label}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="totalValue"
+                            stroke={lineColor}
+                            strokeWidth={2.5}
+                            fill="url(#assetGradient)"
+                            dot={false}
+                            activeDot={{ r: 4, fill: lineColor, strokeWidth: 2, stroke: '#fff' }}
+                          />
+                          {hasKospi && (
+                            <Line
+                              type="monotone"
+                              dataKey="kospi"
+                              stroke="#9ca3af"
+                              strokeWidth={1.5}
+                              strokeDasharray="6 3"
+                              dot={false}
+                              activeDot={{ r: 3, fill: '#9ca3af', strokeWidth: 1, stroke: '#fff' }}
+                            />
+                          )}
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </>
                 );
               })() : (
                 <div className="h-56 flex flex-col items-center justify-center text-gray-400">

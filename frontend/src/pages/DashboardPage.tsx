@@ -4,7 +4,7 @@ import Header from '../components/Header';
 import VirtSplashLoading from '../components/VirtSplashLoading';
 import ErrorMessage from '../components/ErrorMessage';
 import { tradeService, type Portfolio, type StockPrice } from '../services/tradeService';
-import { quantStoreService, type ProductPurchase, cryptoDisplayName, formatQuantity } from '../services/quantStoreService';
+import { quantStoreService, type ProductPurchase, type PurchasePerformance, cryptoDisplayName, formatQuantity } from '../services/quantStoreService';
 import { userService } from '../services/userService';
 import { useAuth } from '../contexts/AuthContext';
 import { usePolling } from '../hooks/usePolling';
@@ -26,9 +26,18 @@ const DashboardPage = () => {
   const [topMovers, setTopMovers] = useState<StockPrice[]>([]);
   const [favoriteAssets, setFavoriteAssets] = useState<string[]>([]);
   const [activePurchases, setActivePurchases] = useState<ProductPurchase[]>([]);
+  const [_purchasePerformance, setPurchasePerformance] = useState<PurchasePerformance[]>([]);
+  void _purchasePerformance;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
+
+  // 일반 모드 가이드 투어
+  const [showNormalTour, setShowNormalTour] = useState(false);
+  const normalTourSteps: TourStep[] = [
+    { target: 'normal-api-panel', title: '실계좌 자산 연동', description: 'KIS, 업비트, 비트겟 API를 연동하면\n내 실제 자산을 한눈에 확인할 수 있습니다.\n\n읽기 전용 API 키만 사용하므로 안전합니다.', position: 'bottom' },
+    { target: 'virt-actions', title: '빠른 항해', description: '거래하기 — 주식·코인 매수/매도\n시세 확인하기 — 실시간 시장 시세\n내 포트폴리오 — 자산 추이·배분 분석\n전략 백테스트 — 과거 데이터로 전략 검증\n전략 학습 — 검증된 퀀트 전략 탐색\n투자 현황 보기 — 다른 투자자 랭킹\n\n각 버튼을 눌러 원하는 페이지로 바로 이동하세요!', position: 'left' },
+  ];
 
   // Virt 가이드 투어
   const [showVirtTour, setShowVirtTour] = useState(false);
@@ -226,7 +235,13 @@ const DashboardPage = () => {
         isVirt ? quantStoreService.getMyPurchases().catch(() => ({ purchases: [], purchasedProductIds: [] })) : Promise.resolve({ purchases: [], purchasedProductIds: [] }),
       ]);
 
-      setActivePurchases(purchaseData.purchases.filter((p) => p.status === 'ACTIVE'));
+      const actives = purchaseData.purchases.filter((p) => p.status === 'ACTIVE');
+      setActivePurchases(actives);
+      if (isVirt && actives.length > 0) {
+        quantStoreService.getMyPurchasesPerformance()
+          .then((perf) => setPurchasePerformance(perf))
+          .catch(() => setPurchasePerformance([]));
+      }
       setIsDemo(portfolioFallback);
 
       const favAssets = profile?.favoriteAssets?.length ? profile.favoriteAssets : [];
@@ -375,7 +390,7 @@ const DashboardPage = () => {
 
         {/* ═══ 일반 모드: 실계좌 자산 ═══ */}
         {!isVirt && (
-          <div className="mb-8 space-y-5">
+          <div data-tour="normal-api-panel" className="mb-8 space-y-5">
 
             {/* 서비스 탭 */}
             <div className="flex items-center gap-2">
@@ -705,6 +720,20 @@ const DashboardPage = () => {
             </div>
           </div>
         )}
+
+        {/* 일반 모드 가이드 투어 버튼 */}
+        {!isVirt && (
+          <button
+            onClick={() => setShowNormalTour(true)}
+            className="mb-4 w-full flex items-center justify-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04] px-4 py-3 text-sm text-cyan-400 hover:bg-cyan-500/[0.08] transition-colors"
+          >
+            <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-bold">?</span>
+            <span className="font-medium">처음이신가요? 화면 가이드 받기</span>
+          </button>
+        )}
+
+        {/* 일반 모드 가이드 투어 */}
+        <GuideTour steps={normalTourSteps} isActive={showNormalTour} onFinish={() => setShowNormalTour(false)} />
 
         {/* Virt 가이드 투어 버튼 */}
         {isVirt && (

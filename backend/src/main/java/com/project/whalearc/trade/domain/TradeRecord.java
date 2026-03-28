@@ -35,6 +35,7 @@ public class TradeRecord {
     private BigDecimal commission;
     private BigDecimal netAmount;
     private Instant executedAt;
+    private String memo;
 
     private static final BigDecimal COMMISSION_RATE = new BigDecimal("0.001");
 
@@ -53,5 +54,6 @@ public class TradeRecord {
                 ? this.totalAmount.add(this.commission)
                 : this.totalAmount.subtract(this.commission);
         this.executedAt = Instant.now();
+        this.memo = order.getMemo();
     }
 }

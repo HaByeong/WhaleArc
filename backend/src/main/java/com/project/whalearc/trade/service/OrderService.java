@@ -54,6 +54,13 @@ public class OrderService {
     public Order createOrder(String userId, String stockCode, String stockName,
                              Order.OrderType orderType, Order.OrderMethod orderMethod,
                              BigDecimal quantity, BigDecimal limitPrice, String assetType) {
+        return createOrder(userId, stockCode, stockName, orderType, orderMethod, quantity, limitPrice, assetType, null);
+    }
+
+    public Order createOrder(String userId, String stockCode, String stockName,
+                             Order.OrderType orderType, Order.OrderMethod orderMethod,
+                             BigDecimal quantity, BigDecimal limitPrice, String assetType,
+                             String memo) {
 
         if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("수량은 0보다 커야 합니다.");
@@ -80,6 +87,7 @@ public class OrderService {
             validateOrder(orderType, stockCode, stockName, quantity, executionPrice, portfolio);
 
             Order order = new Order(userId, stockCode, stockName, orderType, orderMethod, quantity, executionPrice, assetType);
+            order.setMemo(memo);
             order = orderRepository.save(order);
 
             // 시장가 주문은 즉시 체결
@@ -317,6 +325,16 @@ public class OrderService {
         } finally {
             lock.unlock();
         }
+    }
+
+    public TradeRecord updateTradeMemo(String userId, String tradeId, String memo) {
+        TradeRecord trade = tradeRecordRepository.findById(tradeId)
+                .orElseThrow(() -> new IllegalArgumentException("거래 기록을 찾을 수 없습니다."));
+        if (!trade.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("본인의 거래 기록만 수정할 수 있습니다.");
+        }
+        trade.setMemo(memo);
+        return tradeRecordRepository.save(trade);
     }
 
     public List<Order> getPendingLimitOrders() {

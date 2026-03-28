@@ -34,7 +34,8 @@ public class Notification {
         LIMIT_ORDER_FILLED,      // 지정가 주문 체결
         MARKET_ORDER_FILLED,     // 시장가 주문 체결
         STRATEGY_EXECUTED,       // 전략(항로) 적용/해제
-        TURTLE_TRADE             // 터틀 전략 매매 실행
+        TURTLE_TRADE,            // 터틀 전략 매매 실행
+        PRICE_ALERT              // 가격 알림 도달
     }
 
     public Notification(String userId, NotificationType type, String title, String message) {

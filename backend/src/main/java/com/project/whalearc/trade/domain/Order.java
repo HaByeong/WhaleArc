@@ -38,6 +38,7 @@ public class Order {
     private BigDecimal filledQuantity;
     private BigDecimal filledPrice;
     private String assetType; // "STOCK" or "CRYPTO"
+    private String memo;
     private Instant createdAt;
     private Instant updatedAt;
 

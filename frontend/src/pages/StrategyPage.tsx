@@ -700,7 +700,7 @@ const StrategyPage = () => {
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-rsi-reversal', name: 'RSI 반전 스캘핑', description: 'RSI 과매도 구간(30 이하) 진입 후 반등 시 매수, 과매수 구간(70 이상) 도달 시 매도하는 평균회귀 전략입니다.',
+      id: 'preset-rsi-reversal', name: 'RSI 반전 매매', description: 'RSI 과매도 구간(30 이하) 진입 후 반등 시 매수, 과매수 구간(70 이상) 도달 시 매도하는 평균회귀 전략입니다.',
       beginnerTip: '쉽게 말하면: 가격이 너무 많이 떨어져서 "이제 반등할 때가 됐다" 싶을 때 사고, 너무 올라서 "이제 내려갈 때" 싶으면 파는 전략이에요.',
       whyUse: '급락 후 반등을 잡아내는 전략이라, 하락장에서도 수익 기회를 만들 수 있어요.',
       difficulty: '초급',
@@ -724,7 +724,7 @@ const StrategyPage = () => {
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-macd-divergence', name: 'MACD 다이버전스', description: 'MACD 시그널 크로스와 히스토그램 전환을 활용한 추세 전환 포착 전략입니다.',
+      id: 'preset-macd-divergence', name: 'MACD 크로스오버', description: 'MACD 시그널 크로스와 히스토그램 전환을 활용한 추세 전환 포착 전략입니다.',
       beginnerTip: '쉽게 말하면: 두 개의 추세선이 교차하는 순간을 포착해서 "추세가 바뀌고 있다"는 신호를 잡아내는 전략이에요.',
       whyUse: '상승↔하락 전환 시점을 미리 감지할 수 있어서, 큰 흐름의 시작에 올라탈 수 있어요.',
       difficulty: '중급',

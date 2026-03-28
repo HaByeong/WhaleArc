@@ -370,10 +370,9 @@ const LandingPage = () => {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm">
             <p className="text-gray-400">
               &copy; 2025 WhaleArc. All rights reserved.
+              <span className="mx-2 text-white/20">|</span>
+              <a href="mailto:khyun1109@gmail.com,jhschris8080@naver.com" className="text-gray-300 hover:text-white transition-colors underline underline-offset-4 decoration-gray-500 hover:decoration-white">문의하기</a>
             </p>
-            <div className="flex items-center gap-4 text-gray-300">
-              <a href="mailto:khyun1109@gmail.com,jhschris8080@naver.com" className="hover:text-white transition-colors">문의하기</a>
-            </div>
             <p className="text-gray-500 italic">
               고래처럼, 시장을 유영하듯
             </p>

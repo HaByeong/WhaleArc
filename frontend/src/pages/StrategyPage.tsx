@@ -689,6 +689,9 @@ const StrategyPage = () => {
   const PRESET_STRATEGIES: Strategy[] = [
     {
       id: 'preset-golden-cross', name: '골든크로스 추종 전략', description: '20일/60일 이동평균선 골든크로스 발생 시 매수, 데드크로스 시 매도하는 추세추종 전략입니다. 중장기 상승 추세에서 안정적인 수익을 추구합니다.',
+      beginnerTip: '쉽게 말하면: 최근 흐름이 장기 흐름을 앞지르면 "오르는 중"이라 판단하고 사는 전략이에요.',
+      whyUse: '가장 기본적인 전략으로, 큰 상승장을 놓치지 않으면서도 하락장에서 빠져나올 수 있어요. 초보자가 처음 배우기에 가장 좋은 전략입니다.',
+      difficulty: '초급',
       strategyLogic: 'MA(20) > MA(60) → 매수 / MA(20) < MA(60) → 매도',
       assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW', 'SOL_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)', SOL_KRW: '솔라나(SOL)' },
       indicators: [{ type: 'MA', parameters: { period: 20 } }, { type: 'MA', parameters: { period: 60 } }],
@@ -698,6 +701,9 @@ const StrategyPage = () => {
     },
     {
       id: 'preset-rsi-reversal', name: 'RSI 반전 스캘핑', description: 'RSI 과매도 구간(30 이하) 진입 후 반등 시 매수, 과매수 구간(70 이상) 도달 시 매도하는 평균회귀 전략입니다.',
+      beginnerTip: '쉽게 말하면: 가격이 너무 많이 떨어져서 "이제 반등할 때가 됐다" 싶을 때 사고, 너무 올라서 "이제 내려갈 때" 싶으면 파는 전략이에요.',
+      whyUse: '급락 후 반등을 잡아내는 전략이라, 하락장에서도 수익 기회를 만들 수 있어요.',
+      difficulty: '초급',
       strategyLogic: 'RSI < 30 → 매수 / RSI > 70 → 매도',
       assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW', 'XRP_KRW', 'DOGE_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)', XRP_KRW: '리플(XRP)', DOGE_KRW: '도지코인(DOGE)' },
       indicators: [{ type: 'RSI', parameters: { period: 14 } }],
@@ -707,6 +713,9 @@ const StrategyPage = () => {
     },
     {
       id: 'preset-bollinger-squeeze', name: '볼린저 밴드 수축 돌파', description: '볼린저 밴드 수축 구간에서 상단 돌파 시 매수, 중심선 하락 시 손절. 변동성 확대 구간을 노리는 전략입니다.',
+      beginnerTip: '쉽게 말하면: 가격이 한동안 조용하다가 갑자기 위로 터지면 "폭발적 상승 시작"이라 보고 올라타는 전략이에요.',
+      whyUse: '횡보장에서 기다리다가 큰 움직임이 시작될 때만 거래해서, 불필요한 매매를 줄여줘요.',
+      difficulty: '중급',
       strategyLogic: '%B > 1 → 매수 (상단 돌파) / %B < 0 → 매도 (하단 이탈)',
       assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW', 'SOL_KRW', 'AVAX_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)', SOL_KRW: '솔라나(SOL)', AVAX_KRW: '아발란체(AVAX)' },
       indicators: [{ type: 'BOLLINGER_BANDS', parameters: { period: 20, stdDev: 2 } }],
@@ -716,6 +725,9 @@ const StrategyPage = () => {
     },
     {
       id: 'preset-macd-divergence', name: 'MACD 다이버전스', description: 'MACD 시그널 크로스와 히스토그램 전환을 활용한 추세 전환 포착 전략입니다.',
+      beginnerTip: '쉽게 말하면: 두 개의 추세선이 교차하는 순간을 포착해서 "추세가 바뀌고 있다"는 신호를 잡아내는 전략이에요.',
+      whyUse: '상승↔하락 전환 시점을 미리 감지할 수 있어서, 큰 흐름의 시작에 올라탈 수 있어요.',
+      difficulty: '중급',
       strategyLogic: 'MACD 골든크로스 → 매수 / MACD 데드크로스 → 매도',
       assetType: 'MIXED', targetAssets: ['BTC_KRW', 'ETH_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)' },
       indicators: [{ type: 'MACD', parameters: { fast: 12, slow: 26, signal: 9 } }],
@@ -725,6 +737,9 @@ const StrategyPage = () => {
     },
     {
       id: 'preset-stochastic', name: '스토캐스틱 크로스', description: '스토캐스틱 %K가 %D를 상향 돌파할 때 매수, 하향 돌파할 때 매도하는 모멘텀 전략입니다.',
+      beginnerTip: '쉽게 말하면: "지금 가격이 최근 범위에서 어디쯤인지" 보고, 바닥 근처에서 사고 천장 근처에서 파는 전략이에요.',
+      whyUse: '단기 매매에 적합하고, 매수/매도 타이밍을 비교적 명확하게 잡아줘요.',
+      difficulty: '중급',
       strategyLogic: '%K ↑ %D 크로스 → 매수 / %K ↓ %D 크로스 → 매도',
       assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW', 'XRP_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)', XRP_KRW: '리플(XRP)' },
       indicators: [{ type: 'STOCHASTIC', parameters: { kPeriod: 14, dPeriod: 3 } }],
@@ -734,6 +749,9 @@ const StrategyPage = () => {
     },
     {
       id: 'preset-connors-rsi2', name: '래리 코너스 RSI(2)', description: '초단기 RSI(2일)를 사용하여 급락 후 반등을 포착하는 단기 매매 전략입니다. 래리 코너스가 개발한 전략으로, 상승 추세 종목에서 일시적 과매도 구간을 노립니다.',
+      beginnerTip: '쉽게 말하면: 평소 잘 오르던 종목이 갑자기 2~3일 급락했을 때 "일시적 할인"이라 보고 사는 전략이에요.',
+      whyUse: '실제 월가에서 검증된 전략으로, 높은 승률이 특징이에요. 단, 단기 매매라 잦은 거래가 발생해요.',
+      difficulty: '고급',
       strategyLogic: 'RSI(2) < 5 → 매수 (초단기 과매도) / RSI(2) > 60 → 매도 (반등 확인)',
       assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)' },
       indicators: [{ type: 'RSI', parameters: { period: 2 } }],
@@ -743,6 +761,9 @@ const StrategyPage = () => {
     },
     {
       id: 'preset-volatility-breakout', name: '변동성 돌파 전략', description: '래리 윌리엄스의 변동성 돌파 전략입니다. 전일 변동폭(고가-저가)의 일정 비율만큼 당일 시가에서 상승하면 매수하고, 다음 날 청산합니다.',
+      beginnerTip: '쉽게 말하면: 어제 가격이 많이 흔들렸는데, 오늘 그 흔들림의 절반만큼 올라가면 "오늘은 오르는 날"이라 보고 사는 전략이에요.',
+      whyUse: '하루 단위로 매매해서 리스크가 제한적이고, 코인처럼 변동성 큰 자산에 잘 맞아요.',
+      difficulty: '고급',
       strategyLogic: 'CLOSE > OPEN + (전일고가 - 전일저가) × 0.5 → 매수 / 다음날 시가 매도',
       assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)' },
       indicators: [{ type: 'ATR', parameters: { period: 1 } }],
@@ -752,6 +773,9 @@ const StrategyPage = () => {
     },
     {
       id: 'preset-safe-rebalancing', name: '안전 자산 리밸런싱', description: 'BTC 60% + ETH 30% + 스테이블 10% 비율을 매주 리밸런싱하는 보수적 전략입니다. 장기 안정적 수익을 추구합니다.',
+      beginnerTip: '쉽게 말하면: "달걀을 한 바구니에 담지 마라"를 자동으로 실행하는 전략이에요. 비율이 틀어지면 알아서 맞춰줘요.',
+      whyUse: '가장 안전한 전략이에요. 복잡한 매매 타이밍 없이, 분산 투자를 자동으로 유지해줘요. 장기 투자자에게 추천!',
+      difficulty: '초급',
       strategyLogic: '목표 비율 유지: BTC 60%, ETH 30%, USDT 10%',
       assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW', 'USDT_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)', USDT_KRW: 'USDT' },
       indicators: [],
@@ -921,6 +945,13 @@ const StrategyPage = () => {
                           {isPreset && (
                             <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-whale-light/10 text-whale-light">기본</span>
                           )}
+                          {strategy.difficulty && (
+                            <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              strategy.difficulty === '초급' ? 'bg-emerald-100 text-emerald-600' :
+                              strategy.difficulty === '중급' ? 'bg-amber-100 text-amber-600' :
+                              'bg-red-100 text-red-600'
+                            }`}>{strategy.difficulty}</span>
+                          )}
                           {strategy.applied && (
                             <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-600">적용중</span>
                           )}
@@ -1062,6 +1093,19 @@ const StrategyPage = () => {
                     </div>
                     {selectedStrategy.description && (
                       <p className={`text-sm leading-relaxed ${isVirt ? 'text-gray-500' : 'text-slate-400'}`}>{selectedStrategy.description}</p>
+                    )}
+                    {/* 초보자 가이드 */}
+                    {selectedStrategy.beginnerTip && (
+                      <div className={`rounded-lg p-3.5 mt-3 ${isVirt ? 'bg-blue-50 border border-blue-200' : 'bg-cyan-500/5 border border-cyan-500/20'}`}>
+                        <p className={`text-xs font-semibold mb-1.5 ${isVirt ? 'text-blue-600' : 'text-cyan-400'}`}>💡 쉽게 이해하기</p>
+                        <p className={`text-xs leading-relaxed ${isVirt ? 'text-blue-700/80' : 'text-cyan-300/80'}`}>{selectedStrategy.beginnerTip}</p>
+                      </div>
+                    )}
+                    {selectedStrategy.whyUse && (
+                      <div className={`rounded-lg p-3.5 mt-2 ${isVirt ? 'bg-emerald-50 border border-emerald-200' : 'bg-emerald-500/5 border border-emerald-500/20'}`}>
+                        <p className={`text-xs font-semibold mb-1.5 ${isVirt ? 'text-emerald-600' : 'text-emerald-400'}`}>왜 이 전략을 쓸까요?</p>
+                        <p className={`text-xs leading-relaxed ${isVirt ? 'text-emerald-700/80' : 'text-emerald-300/80'}`}>{selectedStrategy.whyUse}</p>
+                      </div>
                     )}
                   </div>
 

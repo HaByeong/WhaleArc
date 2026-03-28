@@ -15,6 +15,9 @@ export interface Strategy {
   applied: boolean;
   appliedSuccessCount?: number;
   appliedTotalCount?: number;
+  beginnerTip?: string;
+  whyUse?: string;
+  difficulty?: '초급' | '중급' | '고급';
   createdAt: string;
   updatedAt: string;
 }

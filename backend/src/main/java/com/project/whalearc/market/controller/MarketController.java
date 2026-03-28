@@ -7,6 +7,7 @@ import com.project.whalearc.market.dto.IndexPriceResponse;
 import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.*;
 import com.project.whalearc.market.websocket.RealtimePriceHolder;
+import com.project.whalearc.virt.service.VirtUpbitClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +27,7 @@ public class MarketController {
     private final CandlestickService candlestickService;
     private final StockMasterService stockMasterService;
     private final KisApiClient kisApiClient;
+    private final VirtUpbitClient upbitClient;
 
     // 지수 캐시 (30초)
     private volatile List<IndexPriceResponse> cachedIndices = List.of();
@@ -154,6 +156,20 @@ public class MarketController {
                     parseDouble(kosdaq.get("bstp_nmix_prdy_vrss")),
                     parseDouble(kosdaq.get("bstp_nmix_prdy_ctrt"))
             ));
+        }
+
+        // USDT/KRW 환율 (업비트 공개 API)
+        try {
+            List<Map<String, Object>> ticker = upbitClient.getTicker("KRW-USDT");
+            if (!ticker.isEmpty()) {
+                Map<String, Object> t = ticker.get(0);
+                double price = Double.parseDouble(String.valueOf(t.get("trade_price")));
+                double change = Double.parseDouble(String.valueOf(t.get("signed_change_price")));
+                double changeRate = Double.parseDouble(String.valueOf(t.get("signed_change_rate"))) * 100;
+                indices.add(new IndexPriceResponse("USDT/KRW", "테더 환율", price, change, changeRate));
+            }
+        } catch (Exception e) {
+            log.debug("[Market] USDT/KRW 환율 조회 실패: {}", e.getMessage());
         }
 
         if (!indices.isEmpty()) {

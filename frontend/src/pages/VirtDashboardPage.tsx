@@ -118,7 +118,7 @@ const VirtDashboardPage = () => {
       if (type === 'kis') { await virtService.deleteCredential(); setCredInfo(null); setPortfolio(null); setTrades([]); }
       else if (type === 'upbit') { await virtService.deleteUpbitCredential(); setUpbitCredInfo(null); setUpbitPortfolio(null); }
       else { await virtService.deleteBitgetCredential(); setBitgetCredInfo(null); setBitgetPortfolio(null); }
-    } catch { alert('연결 해제에 실패했습니다.'); }
+    } catch { setError('연결 해제에 실패했습니다.'); }
   };
 
   // 유틸
@@ -251,6 +251,12 @@ const VirtDashboardPage = () => {
                 <div className={`text-lg font-bold ${m.color}`}>{m.value}</div>
               </div>
             ))}
+            {serviceTab === 'bitget' && activePortfolio.usdtKrwRate && (
+              <div className="col-span-4 flex items-center gap-1.5 text-[11px] text-slate-500">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                적용 환율: 1 USDT = {activePortfolio.usdtKrwRate.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}원 (업비트 실시간)
+              </div>
+            )}
           </div>
         ) : isConnected && !activePortfolio && !error ? (
           <div className="text-center py-12 mb-8">

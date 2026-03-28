@@ -98,6 +98,15 @@ const StrategyPage = () => {
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [_showBacktestForm, setShowBacktestForm] = useState(false);
 
+  // 토스트
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 3500);
+  };
+
   // 가이드 투어
   const [showTour, setShowTour] = useState(false);
   const tourSteps: TourStep[] = [
@@ -176,15 +185,15 @@ const StrategyPage = () => {
     }
 
     try {
-      await strategyService.deleteStrategy(strategyId).catch(() => {});
+      await strategyService.deleteStrategy(strategyId).catch(e => console.error('항로 삭제 API 실패:', e));
       const updatedStrategies = strategies.filter(s => s.id !== strategyId);
       setStrategies(updatedStrategies);
       if (selectedStrategy?.id === strategyId) {
         setSelectedStrategy(null);
       }
-      alert('항로가 삭제되었습니다.');
+      showToast('항로가 삭제되었습니다.', 'success');
     } catch (error: any) {
-      alert('항로 삭제에 실패했습니다: ' + (error.message || '알 수 없는 오류'));
+      showToast('항로 삭제에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
     }
   };
 
@@ -335,11 +344,11 @@ const StrategyPage = () => {
 
   const handleSaveStrategy = async () => {
     if (!newStrategyName.trim()) {
-      alert('항로 이름을 입력해주세요.');
+      showToast('항로 이름을 입력해주세요.', 'error');
       return;
     }
     if (selectedAssets.length === 0) {
-      alert('투자 대상 자산을 1개 이상 선택해주세요.');
+      showToast('투자 대상 자산을 1개 이상 선택해주세요.', 'error');
       return;
     }
 
@@ -364,7 +373,7 @@ const StrategyPage = () => {
         });
         closeStrategyModal();
         await loadStrategies();
-        alert('항로가 수정되었습니다!');
+        showToast('항로가 수정되었습니다!', 'success');
       } else {
         await strategyService.createStrategy({
           name: newStrategyName,
@@ -379,10 +388,10 @@ const StrategyPage = () => {
         });
         closeStrategyModal();
         await loadStrategies();
-        alert('항로가 생성되었습니다!');
+        showToast('항로가 생성되었습니다!', 'success');
       }
     } catch (error: any) {
-      alert(error.response?.data?.message || error.response?.data?.error || '저장에 실패했습니다.');
+      showToast(error.response?.data?.message || error.response?.data?.error || '저장에 실패했습니다.', 'error');
     }
   };
 
@@ -390,7 +399,7 @@ const StrategyPage = () => {
     if (!selectedStrategy) return;
     const amount = parseInt(applyAmount);
     if (!amount || amount <= 0) {
-      alert('투자 금액을 입력해주세요.');
+      showToast('투자 금액을 입력해주세요.', 'error');
       return;
     }
 
@@ -400,15 +409,15 @@ const StrategyPage = () => {
       const success = result.appliedSuccessCount || selectedStrategy.targetAssets?.length || 0;
       const total = result.appliedTotalCount || selectedStrategy.targetAssets?.length || 0;
       if (success < total) {
-        alert(`항로 "${selectedStrategy.name}" 적용 완료!\n${total}개 자산 중 ${success}개 매수 성공, ${total - success}개 실패.\n실패한 자산은 시세 조회 불가 또는 금액 부족일 수 있습니다.`);
+        showToast(`항로 "${selectedStrategy.name}" 적용 완료! ${total}개 자산 중 ${success}개 매수 성공, ${total - success}개 실패.`, 'info');
       } else {
-        alert(`항로 "${selectedStrategy.name}"이(가) 포트폴리오에 적용되었습니다!\n${success}개 자산에 균등 투자 완료.`);
+        showToast(`항로 "${selectedStrategy.name}" 포트폴리오 적용 완료! ${success}개 자산에 균등 투자.`, 'success');
       }
       setShowApplyModal(false);
       await loadStrategies();
     } catch (error: any) {
       const msg = error.response?.data?.error || error.response?.data?.message || '항로 적용에 실패했습니다.';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setIsApplying(false);
     }
@@ -462,24 +471,24 @@ const StrategyPage = () => {
 
   const handleRunBacktest = async () => {
     if (backtestMode === 'strategy' && !selectedStrategy) {
-      alert('항로를 선택해주세요.');
+      showToast('항로를 선택해주세요.', 'error');
       return;
     }
 
     if (backtestMode === 'strategy' && selectedStrategy
         && (!selectedStrategy.entryConditions || selectedStrategy.entryConditions.length === 0)
         && (!selectedStrategy.exitConditions || selectedStrategy.exitConditions.length === 0)) {
-      alert('선택한 항로에 진입/청산 조건이 설정되어 있지 않습니다.\n항로 관리에서 조건을 먼저 추가해주세요.');
+      showToast('선택한 항로에 진입/청산 조건이 설정되어 있지 않습니다. 항로 관리에서 조건을 먼저 추가해주세요.', 'error');
       return;
     }
 
     if (!backtestStockCode || !backtestStartDate || !backtestEndDate) {
-      alert('종목, 시작일, 종료일을 모두 입력해주세요.');
+      showToast('종목, 시작일, 종료일을 모두 입력해주세요.', 'error');
       return;
     }
 
     if (backtestMode === 'stock' && directEntryConditions.length === 0 && directExitConditions.length === 0) {
-      alert('진입 조건 또는 청산 조건을 최소 1개 설정해주세요.');
+      showToast('진입 조건 또는 청산 조건을 최소 1개 설정해주세요.', 'error');
       return;
     }
 
@@ -592,7 +601,7 @@ const StrategyPage = () => {
       } else if (!msg) {
         msg = '백테스팅 실행에 실패했습니다. 잠시 후 다시 시도해주세요.';
       }
-      alert(msg);
+      showToast(msg.replace(/\n/g, ' '), 'error');
     } finally {
       setIsBacktesting(false);
     }
@@ -792,6 +801,17 @@ const StrategyPage = () => {
 
   return (
     <div className={`min-h-screen ${isVirt ? 'bg-gray-50' : 'bg-[#060d18] text-white'}`}>
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 max-w-sm animate-in slide-in-from-top">
+          <div className={`px-4 py-3 rounded-xl shadow-lg border-l-4 backdrop-blur-sm ${
+            toast.type === 'success' ? 'bg-emerald-50 border-l-emerald-500 text-emerald-800' :
+            toast.type === 'error' ? 'bg-red-50 border-l-red-500 text-red-800' :
+            'bg-blue-50 border-l-blue-500 text-blue-800'
+          }`}>
+            <p className="text-sm">{toast.message}</p>
+          </div>
+        </div>
+      )}
       <style>{`
         @keyframes float { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
         @keyframes wave { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }

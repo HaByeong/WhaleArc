@@ -42,8 +42,10 @@ public class UserSyncService {
                         provider = (String) appMetadata.get("provider");
                     }
 
-                    if (name == null && email != null) {
-                        name = email.split("@")[0];
+                    if (name == null) {
+                        name = (email != null && email.contains("@"))
+                                ? email.split("@")[0]
+                                : "사용자";
                     }
 
                     try {

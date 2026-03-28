@@ -351,42 +351,69 @@ const LoginPage = () => {
 
           {/* Right Side - Market + Features */}
           <div className="space-y-6">
-            {/* KOSPI / KOSDAQ 실시간 지수 */}
-            {indices.length > 0 && (
-              <div className="grid grid-cols-2 gap-4">
-                {indices.map((idx) => {
-                  const isUp = idx.change >= 0;
-                  return (
-                    <div key={idx.code} className={`rounded-2xl p-4 sm:p-5 ${isVirtLogin ? (isUp ? 'bg-red-50' : 'bg-blue-50') : (isUp ? 'bg-red-500/10 border border-red-500/10' : 'bg-blue-500/10 border border-blue-500/10')}`}>
-                      <div className="flex items-center space-x-1.5 sm:space-x-2 mb-2 sm:mb-3">
-                        <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded ${isVirtLogin ? (isUp ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700') : (isUp ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400')}`}>
-                          {idx.code}
-                        </span>
-                        <span className={`text-xs sm:text-sm font-medium ${isVirtLogin ? 'text-gray-500' : 'text-slate-400'}`}>{idx.name}</span>
+            {/* KOSPI / KOSDAQ / USDT 실시간 지수 */}
+            {indices.length > 0 && (() => {
+              const marketIndices = indices.filter(i => i.code !== 'USDT/KRW');
+              const usdtIndex = indices.find(i => i.code === 'USDT/KRW');
+              return (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    {marketIndices.map((idx) => {
+                      const isUp = idx.change >= 0;
+                      return (
+                        <div key={idx.code} className={`rounded-2xl p-4 sm:p-5 ${isVirtLogin ? (isUp ? 'bg-red-50' : 'bg-blue-50') : (isUp ? 'bg-red-500/10 border border-red-500/10' : 'bg-blue-500/10 border border-blue-500/10')}`}>
+                          <div className="flex items-center space-x-1.5 sm:space-x-2 mb-2 sm:mb-3">
+                            <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded ${isVirtLogin ? (isUp ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700') : (isUp ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400')}`}>
+                              {idx.code}
+                            </span>
+                            <span className={`text-xs sm:text-sm font-medium ${isVirtLogin ? 'text-gray-500' : 'text-slate-400'}`}>{idx.name}</span>
+                          </div>
+                          <div className={`text-xl sm:text-2xl font-bold ${isVirtLogin ? 'text-whale-dark' : 'text-white'}`}>
+                            {idx.price.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                          <div className={`flex items-center space-x-1 mt-1 text-xs sm:text-sm font-semibold ${isVirtLogin ? (isUp ? 'text-red-600' : 'text-blue-600') : (isUp ? 'text-red-400' : 'text-blue-400')}`}>
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              {isUp
+                                ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                                : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                              }
+                            </svg>
+                            <span>{Math.abs(idx.changeRate).toFixed(2)}%</span>
+                            <span className={`text-[10px] sm:text-xs font-normal ${isVirtLogin ? 'text-gray-400' : 'text-slate-500'}`}>
+                              ({isUp ? '+' : ''}{idx.change.toFixed(2)})
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {usdtIndex && (() => {
+                    const isUp = usdtIndex.change >= 0;
+                    return (
+                      <div className={`rounded-2xl px-4 py-3 flex items-center justify-between ${isVirtLogin ? 'bg-gray-50 border border-gray-100' : 'bg-white/[0.02] border border-white/[0.06]'}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded ${isVirtLogin ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                            USDT
+                          </span>
+                          <span className={`text-xs sm:text-sm font-medium ${isVirtLogin ? 'text-gray-500' : 'text-slate-400'}`}>테더 환율</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-base sm:text-lg font-bold ${isVirtLogin ? 'text-whale-dark' : 'text-white'}`}>
+                            ₩{usdtIndex.price.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
+                          </span>
+                          <span className={`text-xs font-semibold ${isVirtLogin ? (isUp ? 'text-red-600' : 'text-blue-600') : (isUp ? 'text-red-400' : 'text-blue-400')}`}>
+                            {isUp ? '▲' : '▼'} {Math.abs(usdtIndex.changeRate).toFixed(2)}%
+                          </span>
+                        </div>
                       </div>
-                      <div className={`text-xl sm:text-2xl font-bold ${isVirtLogin ? 'text-whale-dark' : 'text-white'}`}>
-                        {idx.price.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                      <div className={`flex items-center space-x-1 mt-1 text-xs sm:text-sm font-semibold ${isVirtLogin ? (isUp ? 'text-red-600' : 'text-blue-600') : (isUp ? 'text-red-400' : 'text-blue-400')}`}>
-                        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          {isUp
-                            ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
-                            : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                          }
-                        </svg>
-                        <span>{Math.abs(idx.changeRate).toFixed(2)}%</span>
-                        <span className={`text-[10px] sm:text-xs font-normal ${isVirtLogin ? 'text-gray-400' : 'text-slate-500'}`}>
-                          ({isUp ? '+' : ''}{idx.change.toFixed(2)})
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              <p className={`text-[10px] text-right mt-1.5 ${isVirtLogin ? 'text-gray-400' : 'text-slate-600'}`}>
-                * KIS 모의투자 API 기준, 약 15~20초 지연 시세
-              </p>
-              </div>
-            )}
+                    );
+                  })()}
+                  <p className={`text-[10px] text-right ${isVirtLogin ? 'text-gray-400' : 'text-slate-600'}`}>
+                    * 지수: KIS API 기준 (15~20초 지연) · 환율: 업비트 실시간
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* WhaleArc를 만든 이유 */}
             <div className={isVirtLogin ? 'card border-l-4 border-l-whale-dark' : 'rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 border-l-4 border-l-cyan-500/40'}>

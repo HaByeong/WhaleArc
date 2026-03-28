@@ -279,6 +279,13 @@ const QuantStorePage = () => {
   // 취소 확인 모달
   const [cancelTarget, setCancelTarget] = useState<ProductPurchase | null>(null);
 
+  // 토스트
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const showToast = (message: string, type: 'success' | 'error' = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
   useEffect(() => { loadProducts(); loadPurchases(); }, []);
   useEffect(() => { loadProducts(); }, [selectedCategory]);
 
@@ -310,7 +317,7 @@ const QuantStorePage = () => {
 
   const goToConfirmStep = () => {
     const amount = Number(investmentAmount.replace(/,/g, ''));
-    if (!amount || amount <= 0) { alert('투자 금액을 입력해주세요.'); return; }
+    if (!amount || amount <= 0) { showToast('투자 금액을 입력해주세요.'); return; }
     setConfirmStep(true);
   };
 
@@ -326,7 +333,7 @@ const QuantStorePage = () => {
       setSelectedProduct(null);
       await loadPurchases();
     } catch (err: any) {
-      alert(err.response?.data?.message || '항로 구매에 실패했습니다.');
+      showToast(err.response?.data?.message || '항로 구매에 실패했습니다.');
     } finally { setPurchasing(false); }
   };
 
@@ -339,7 +346,7 @@ const QuantStorePage = () => {
       setCancelTarget(null);
       await loadPurchases();
     } catch (err: any) {
-      alert(err.response?.data?.message || '취소에 실패했습니다.');
+      showToast(err.response?.data?.message || '취소에 실패했습니다.');
     } finally { setCancelling(null); }
   };
 
@@ -406,6 +413,15 @@ const QuantStorePage = () => {
 
   return (
     <div className={`min-h-screen ${isVirt ? 'bg-gradient-to-b from-sky-50/50 via-white to-sky-50/30' : 'bg-[#060d18] text-white'}`}>
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 max-w-sm">
+          <div className={`px-4 py-3 rounded-xl shadow-lg border-l-4 ${
+            toast.type === 'error' ? 'bg-red-50 border-l-red-500 text-red-800' : 'bg-emerald-50 border-l-emerald-500 text-emerald-800'
+          }`}>
+            <p className="text-sm">{toast.message}</p>
+          </div>
+        </div>
+      )}
       <Header showNav={true} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

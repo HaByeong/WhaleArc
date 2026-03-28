@@ -33,6 +33,7 @@ export interface VirtPortfolio {
   holdingsValue: number;
   totalPnl: number;
   returnRate: number;
+  usdtKrwRate?: number;
   holdings: VirtHolding[];
 }
 

@@ -13,6 +13,7 @@ public class VirtPortfolioResponse {
     private long holdingsValue;       // 보유종목 평가금액
     private long totalPnl;            // 총 손익
     private double returnRate;        // 수익률 %
+    private Double usdtKrwRate;       // USDT/KRW 환율 (비트겟 전용, null이면 미사용)
     private List<VirtHolding> holdings;
 
     @Getter

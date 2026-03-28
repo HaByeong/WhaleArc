@@ -638,7 +638,7 @@ const TradePage = () => {
                             const next = !showAlertModal;
                             setShowAlertModal(next);
                             setAlertTargetPrice('');
-                            if (next) { tradeService.getPriceAlerts().then(a => setPriceAlerts(a || [])).catch(() => {}); }
+                            if (next) { tradeService.getPriceAlerts().then(a => setPriceAlerts(a || [])).catch(e => console.error('알림 로드 실패:', e)); }
                           }}
                           title="가격 알림 설정"
                           className={`p-1.5 rounded-lg transition-colors ${
@@ -743,7 +743,7 @@ const TradePage = () => {
                             });
                             showToast('가격 알림이 설정되었습니다.', 'success');
                             setAlertTargetPrice('');
-                            try { const alerts = await tradeService.getPriceAlerts(); setPriceAlerts(alerts || []); } catch {}
+                            try { const alerts = await tradeService.getPriceAlerts(); setPriceAlerts(alerts || []); } catch (e) { console.error('알림 갱신 실패:', e); }
                           } catch { showToast('알림 설정에 실패했습니다.', 'error'); }
                         }}
                         disabled={!alertTargetPrice || parseFloat(alertTargetPrice) <= 0}
@@ -767,7 +767,7 @@ const TradePage = () => {
                                     await tradeService.deletePriceAlert(alert.id);
                                     setPriceAlerts(prev => prev.filter((a: any) => a.id !== alert.id));
                                     showToast('알림이 삭제되었습니다.');
-                                  } catch {}
+                                  } catch (e) { console.error('알림 삭제 실패:', e); }
                                 }}
                                 className={`text-[10px] ${d ? 'text-red-400 hover:text-red-300' : 'text-red-500 hover:text-red-600'}`}
                               >
@@ -1040,7 +1040,7 @@ const TradePage = () => {
                         className={`w-full text-lg font-bold bg-transparent border-none outline-none placeholder:font-normal ${
                           d ? 'text-white placeholder:text-slate-600' : 'text-whale-dark placeholder:text-gray-300'
                         }`}
-                        step={isSelectedStock ? '1' : '1'}
+                        step={isSelectedStock ? '1' : 'any'}
                       />
                     )}
                   </div>

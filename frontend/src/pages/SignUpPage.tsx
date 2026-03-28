@@ -40,8 +40,7 @@ const SignUpPage = () => {
       if (user?.identities?.length === 0) {
         setError('이미 가입된 이메일입니다.');
       } else {
-        alert('새로운 고래가 바다에 합류했습니다! 이메일을 확인해주세요.');
-        navigate('/login');
+        navigate('/login', { state: { message: '새로운 고래가 바다에 합류했습니다! 이메일을 확인해주세요.' } });
       }
     } catch (err: any) {
       const msg = err.message || '';

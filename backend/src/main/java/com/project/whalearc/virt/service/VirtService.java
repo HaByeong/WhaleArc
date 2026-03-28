@@ -29,6 +29,9 @@ public class VirtService {
     @Value("${virt.encryption-key:#{null}}")
     private String encryptionKey;
 
+    @Value("${virt.default-usdt-krw:1380.0}")
+    private double defaultUsdtKrw;
+
     @jakarta.annotation.PostConstruct
     public void validateEncryptionKey() {
         if (encryptionKey == null || encryptionKey.isBlank()) {
@@ -40,6 +43,29 @@ public class VirtService {
         if (encryptionKey == null || encryptionKey.isBlank()) {
             throw new IllegalStateException("실거래 연동 기능을 사용하려면 virt.encryption-key 환경변수를 설정해야 합니다.");
         }
+    }
+
+    /* ───── USDT/KRW 환율 캐시 (30초 TTL) ───── */
+    private volatile double cachedUsdtKrw = 0;
+    private volatile long usdtKrwExpireAt = 0;
+
+    private double fetchUsdtKrwRate() {
+        long now = System.currentTimeMillis();
+        if (cachedUsdtKrw > 0 && now < usdtKrwExpireAt) {
+            return cachedUsdtKrw;
+        }
+        try {
+            List<Map<String, Object>> ticker = upbitClient.getTicker("KRW-USDT");
+            if (!ticker.isEmpty()) {
+                double rate = Double.parseDouble(String.valueOf(ticker.get(0).get("trade_price")));
+                cachedUsdtKrw = rate;
+                usdtKrwExpireAt = now + 30_000; // 30초 캐시
+                return rate;
+            }
+        } catch (Exception e) {
+            log.warn("[Virt] USDT/KRW 실시간 환율 조회 실패, fallback 사용: {}", e.getMessage());
+        }
+        return cachedUsdtKrw > 0 ? cachedUsdtKrw : defaultUsdtKrw;
     }
 
     /* ───── 포트폴리오 응답 캐시 (10초 TTL) ───── */
@@ -434,8 +460,8 @@ public class VirtService {
             priceMap.put(symbol, lastPrice);
         }
 
-        // USDT/KRW 환율 (업비트 시세 참조 또는 고정값)
-        double usdtKrw = priceMap.getOrDefault("USDTKRW", 1380.0); // 기본 환율
+        // USDT/KRW 환율 (업비트 실시간 시세)
+        double usdtKrw = fetchUsdtKrwRate();
 
         long cashBalance = 0;
         List<VirtPortfolioResponse.VirtHolding> holdings = new ArrayList<>();
@@ -480,6 +506,7 @@ public class VirtService {
                 .holdingsValue(holdingsValue)
                 .totalPnl(0)
                 .returnRate(0)
+                .usdtKrwRate(usdtKrw)
                 .holdings(holdings)
                 .build();
     }

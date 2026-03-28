@@ -252,6 +252,12 @@ const RealPortfolioPage = () => {
                     <div className={`text-lg font-bold ${m.color}`}>{m.value}</div>
                   </div>
                 ))}
+                {serviceTab === 'bitget' && activePortfolio.usdtKrwRate && (
+                  <div className="col-span-full flex items-center gap-1.5 text-[11px] text-slate-500">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    적용 환율: 1 USDT = {activePortfolio.usdtKrwRate.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}원 (업비트 실시간)
+                  </div>
+                )}
               </div>
 
               {/* 보유 종목 / 체결 내역 탭 */}
@@ -520,6 +526,11 @@ const MyPortfolioPage = () => {
   const [settingRoute, setSettingRoute] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
   const [kospiBenchmark, setKospiBenchmark] = useState<{ price: number; change: number } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const showToast = (message: string, type: 'success' | 'error' = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   const displayName =
     profileName || user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
@@ -676,6 +687,15 @@ const MyPortfolioPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 max-w-sm">
+          <div className={`px-4 py-3 rounded-xl shadow-lg border-l-4 ${
+            toast.type === 'error' ? 'bg-red-50 border-l-red-500 text-red-800' : 'bg-emerald-50 border-l-emerald-500 text-emerald-800'
+          }`}>
+            <p className="text-sm">{toast.message}</p>
+          </div>
+        </div>
+      )}
       <Header showNav />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1288,7 +1308,7 @@ const MyPortfolioPage = () => {
                       try {
                         await tradeService.exportTradesCsv();
                       } catch {
-                        alert('CSV 다운로드에 실패했습니다. 데이터가 없거나 네트워크 문제일 수 있습니다.');
+                        showToast('CSV 다운로드에 실패했습니다. 데이터가 없거나 네트워크 문제일 수 있습니다.');
                       } finally {
                         setExporting(null);
                       }
@@ -1307,7 +1327,7 @@ const MyPortfolioPage = () => {
                       try {
                         await tradeService.exportPortfolioCsv();
                       } catch {
-                        alert('CSV 다운로드에 실패했습니다. 데이터가 없거나 네트워크 문제일 수 있습니다.');
+                        showToast('CSV 다운로드에 실패했습니다. 데이터가 없거나 네트워크 문제일 수 있습니다.');
                       } finally {
                         setExporting(null);
                       }
@@ -1342,15 +1362,15 @@ const MyPortfolioPage = () => {
                       '정말로 초기화할까요?'
                     )) return;
                     if (prompt('초기화를 진행하려면 "초기화"를 입력하세요.') !== '초기화') {
-                      alert('초기화가 취소되었습니다.');
+                      showToast('초기화가 취소되었습니다.', 'error');
                       return;
                     }
                     try {
                       await tradeService.resetPortfolio();
-                      alert('새 항해가 시작되었습니다! 모의투자가 초기화되었습니다.');
+                      showToast('새 항해가 시작되었습니다! 모의투자가 초기화되었습니다.', 'success');
                       loadPortfolio();
                     } catch {
-                      alert('초기화에 실패했습니다.');
+                      showToast('초기화에 실패했습니다.');
                     }
                   }}
                   className="w-full text-left flex items-center justify-between text-sm text-red-500 hover:bg-red-50 border border-red-200 rounded-lg py-2.5 px-4 transition-colors"

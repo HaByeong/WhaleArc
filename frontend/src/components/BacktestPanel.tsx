@@ -67,8 +67,8 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
 
   /* 초기 데이터 로드 */
   useEffect(() => {
-    strategyService.getStrategies().then(setStrategies).catch(() => {});
-    tradeService.getStockList().then(setCryptoList).catch(() => {});
+    strategyService.getStrategies().then(setStrategies).catch(e => console.error('전략 로드 실패:', e));
+    tradeService.getStockList().then(setCryptoList).catch(e => console.error('종목 로드 실패:', e));
   }, []);
 
   /* 드롭다운 외부 클릭 닫기 */

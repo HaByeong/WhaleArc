@@ -37,7 +37,7 @@ const assetName = (code: string, assetType?: string) => {
 const TradePage = () => {
   const { isVirt } = useRoutePrefix();
   const d = !isVirt; // dark mode flag
-  const virtNavigate = useVirtNavigate();
+  const _virtNavigate = useVirtNavigate(); void _virtNavigate;
   const [searchParams] = useSearchParams();
   const urlCode = searchParams.get('code');
   const urlType = searchParams.get('type') as 'CRYPTO' | 'STOCK' | null;
@@ -965,7 +965,7 @@ const TradePage = () => {
                 <h3 className={`text-lg font-bold mb-2 ${d ? 'text-white' : 'text-whale-dark'}`}>가상 거래는 Virt에서 이용하세요</h3>
                 <p className={`text-sm mb-5 ${d ? 'text-slate-400' : 'text-gray-400'}`}>가상돈으로 매수/매도 주문을 체험하고 전략을 테스트해보세요</p>
                 <button
-                  onClick={() => virtNavigate('/virt/trade' + (urlCode ? `?code=${urlCode}&type=${urlType || 'CRYPTO'}` : ''))}
+                  onClick={() => window.location.href = '/virt/trade' + (urlCode ? `?code=${urlCode}&type=${urlType || 'CRYPTO'}` : '')}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-cyan-500 text-white font-bold rounded-xl hover:bg-cyan-600 transition-colors"
                 >
                   Virt에서 거래하기

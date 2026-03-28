@@ -16,6 +16,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -33,6 +34,15 @@ public class CandlestickService {
     private RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /* ───── 캔들스틱 캐시 (주식 10분, 암호화폐 1분) ───── */
+    private record CandleCache(List<CandlestickResponse> data, long expireAt) {
+        boolean isValid() { return System.currentTimeMillis() < expireAt; }
+    }
+    private static final long STOCK_CACHE_TTL = 10 * 60 * 1000L;  // 10분
+    private static final long CRYPTO_CACHE_TTL = 60 * 1000L;       // 1분
+    private static final int MAX_CACHE_SIZE = 100;
+    private final ConcurrentHashMap<String, CandleCache> candleCache = new ConcurrentHashMap<>();
+
     @PostConstruct
     public void init() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -48,15 +58,40 @@ public class CandlestickService {
      * @param assetType "STOCK" 또는 null(=CRYPTO)
      */
     public List<CandlestickResponse> getCandlesticks(String symbol, String interval, String assetType) {
-        if ("STOCK".equalsIgnoreCase(assetType)) {
-            return getStockCandlesticks(symbol);
+        boolean isStock = "STOCK".equalsIgnoreCase(assetType);
+        String cacheKey = symbol + ":" + interval + ":" + (isStock ? "STOCK" : "CRYPTO");
+
+        // 캐시 확인
+        CandleCache cached = candleCache.get(cacheKey);
+        if (cached != null && cached.isValid()) {
+            log.debug("캔들스틱 캐시 히트: {}", cacheKey);
+            return cached.data();
         }
-        return getCryptoCandlesticks(symbol, interval);
+
+        // API 조회
+        List<CandlestickResponse> result = isStock
+                ? getStockCandlesticks(symbol)
+                : getCryptoCandlesticks(symbol, interval);
+
+        // 빈 응답은 캐시하지 않음
+        if (!result.isEmpty()) {
+            long ttl = isStock ? STOCK_CACHE_TTL : CRYPTO_CACHE_TTL;
+            candleCache.put(cacheKey, new CandleCache(result, System.currentTimeMillis() + ttl));
+
+            // 캐시 크기 제한
+            if (candleCache.size() > MAX_CACHE_SIZE) {
+                candleCache.entrySet().stream()
+                        .min(java.util.Comparator.comparingLong(e -> e.getValue().expireAt()))
+                        .ifPresent(e -> candleCache.remove(e.getKey()));
+            }
+        }
+
+        return result;
     }
 
     /** 기존 빗썸 캔들스틱 (하위 호환) */
     public List<CandlestickResponse> getCandlesticks(String symbol, String interval) {
-        return getCryptoCandlesticks(symbol, interval);
+        return getCandlesticks(symbol, interval, null);
     }
 
     /** 국내주식 일봉 (KIS API) — 최대 2년치 데이터를 3개월 단위로 반복 조회 */

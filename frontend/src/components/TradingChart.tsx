@@ -599,6 +599,16 @@ const TradingChart = ({
       {/* 메인 차트 */}
       <div className="relative">
         <div ref={containerRef} className={`rounded-lg overflow-hidden border ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`} />
+        {!historyLoaded && !chartError && (
+          <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg z-10 ${
+            isDark ? 'bg-[#0a1628]' : 'bg-white'
+          }`}>
+            <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin mb-3 ${
+              isDark ? 'border-cyan-400' : 'border-blue-400'
+            }`} />
+            <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>차트 데이터를 불러오는 중...</p>
+          </div>
+        )}
         {chartError && (
           <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg z-10 ${
             isDark ? 'bg-[#0a1628]/95' : 'bg-white/90'

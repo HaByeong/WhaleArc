@@ -965,16 +965,54 @@ const DashboardPage = () => {
               </div>
             </div>
           ) : isVirt ? (
-            <div className="card flex flex-col items-center justify-center text-center py-10">
-              <img src="/whales/gray-whale.png" alt="회색고래" className="w-16 h-16 object-contain mb-4 opacity-60" />
-              <h3 className="text-lg font-bold text-whale-dark mb-1">아직 보유 종목이 없어요</h3>
-              <p className="text-sm text-gray-400 mb-5">거래 또는 항로를 통해 첫 투자를 시작해보세요</p>
-              <div className="flex gap-3">
-                <button onClick={() => navigate('/trade')} className="btn-primary text-sm px-5 py-2">
-                  거래하기
+            <div className="card py-8">
+              <div className="text-center mb-6">
+                <img src="/whales/beluga.png" alt="벨루가" className="w-14 h-14 object-contain mx-auto mb-3" />
+                <h3 className="text-lg font-bold text-whale-dark mb-1">첫 항해를 시작해볼까요?</h3>
+                <p className="text-sm text-gray-400">가상 자금 1,000만원으로 부담 없이 체험해보세요</p>
+              </div>
+
+              <div className="space-y-2.5 max-w-sm mx-auto">
+                <button
+                  onClick={() => navigate('/trade?code=005930&type=STOCK')}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-blue-100 bg-blue-50/50 hover:bg-blue-50 transition-colors text-left group"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <img src="/whales/spotted-dolphin.png" alt="" className="w-6 h-6 object-contain" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-whale-dark">삼성전자 1주 사보기</div>
+                    <div className="text-xs text-gray-400">국내 대표 주식으로 첫 매수 체험</div>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-300 group-hover:text-whale-light group-hover:translate-x-0.5 transition-all flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                 </button>
-                <button onClick={() => navigate('/store')} className="btn-secondary text-sm px-5 py-2">
-                  전략 학습
+
+                <button
+                  onClick={() => navigate('/trade?code=BTC&type=CRYPTO')}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-amber-100 bg-amber-50/50 hover:bg-amber-50 transition-colors text-left group"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <img src="/whales/wild-cat-whale.png" alt="" className="w-6 h-6 object-contain" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-whale-dark">비트코인 소량 사보기</div>
+                    <div className="text-xs text-gray-400">가상화폐 매수를 체험해보세요</div>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-300 group-hover:text-whale-light group-hover:translate-x-0.5 transition-all flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </button>
+
+                <button
+                  onClick={() => navigate('/store')}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-purple-100 bg-purple-50/50 hover:bg-purple-50 transition-colors text-left group"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                    <img src="/whales/narwhal.png" alt="" className="w-6 h-6 object-contain" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-whale-dark">전략으로 자동 매매 시작</div>
+                    <div className="text-xs text-gray-400">검증된 퀀트 전략이 대신 매매해줍니다</div>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-300 group-hover:text-whale-light group-hover:translate-x-0.5 transition-all flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                 </button>
               </div>
             </div>

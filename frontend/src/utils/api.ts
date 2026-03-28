@@ -5,7 +5,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localho
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000, // 10초 타임아웃
+  timeout: 15000, // 15초 타임아웃 (주식 캔들 조회 시 시간 소요)
   headers: {
     'Content-Type': 'application/json',
   },
@@ -23,11 +23,13 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - 토큰 만료 시 자동 갱신 (1회만 재시도)
+// Response interceptor - 토큰 만료 시 자동 갱신 + GET 요청 자동 재시도
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    // 401: 토큰 만료 시 자동 갱신 (1회만 재시도)
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       const { data, error: refreshError } = await supabase.auth.refreshSession();
@@ -35,12 +37,27 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${data.session.access_token}`;
         return apiClient.request(originalRequest);
       }
-      // 콜백 페이지에서는 리다이렉트하지 않음
       if (!window.location.pathname.startsWith('/auth/')) {
         await supabase.auth.signOut().catch(() => {});
         window.location.href = '/login';
       }
     }
+
+    // GET 요청: 네트워크 에러 또는 타임아웃 시 최대 2회 재시도
+    if (originalRequest.method === 'get' && !originalRequest._retryCount) {
+      originalRequest._retryCount = 0;
+    }
+    if (
+      originalRequest.method === 'get' &&
+      originalRequest._retryCount < 2 &&
+      (!error.response || error.response.status >= 500 || error.code === 'ECONNABORTED')
+    ) {
+      originalRequest._retryCount++;
+      const delay = 1000 * originalRequest._retryCount;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return apiClient.request(originalRequest);
+    }
+
     return Promise.reject(error);
   }
 );

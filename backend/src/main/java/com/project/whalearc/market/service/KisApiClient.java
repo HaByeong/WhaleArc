@@ -108,12 +108,15 @@ public class KisApiClient {
             }
         }
 
-        // 모든 리트라이 실패 → 이전 토큰 재사용 시도
+        // 모든 리트라이 실패 → 이전 토큰은 아직 유효한 경우에만 재사용 (최소 1분 이상 남아야 함)
         String existing = accessToken.get();
-        if (existing != null && System.currentTimeMillis() < tokenExpiresAt) {
+        if (existing != null && System.currentTimeMillis() < tokenExpiresAt - 60_000) {
             log.warn("KIS API 이전 토큰 재사용 (만료까지 {}초)", (tokenExpiresAt - System.currentTimeMillis()) / 1000);
             return existing;
         }
+        // 만료된 토큰은 제거하여 이후 요청에서 재발급 시도하도록 함
+        accessToken.set(null);
+        tokenExpiresAt = 0;
         throw new RuntimeException("KIS 토큰 발급 실패: " + maxRetries + "회 재시도 후 실패");
     }
 

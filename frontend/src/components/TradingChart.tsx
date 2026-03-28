@@ -116,6 +116,8 @@ const TradingChart = ({
   const [interval, setInterval] = useState('10m');
   const [stockPeriod, setStockPeriod] = useState(3);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [chartError, setChartError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // 활성 서브차트 목록
   const activeSubCharts = activeIndicators.filter(k =>
@@ -448,6 +450,7 @@ const TradingChart = ({
     if (candleSeriesRef.current) candleSeriesRef.current.setData([]);
     if (volumeSeriesRef.current) volumeSeriesRef.current.setData([]);
 
+    setChartError(null);
     marketService.getCandlesticks(symbol, interval, assetType)
       .then((candles: Candlestick[]) => {
         if (!candleSeriesRef.current || prevSymbolRef.current !== symbol) return;
@@ -458,6 +461,12 @@ const TradingChart = ({
           seen.add(c.time);
           return true;
         });
+
+        if (uniqueCandles.length === 0) {
+          setChartError('차트 데이터를 불러올 수 없습니다.');
+          setHistoryLoaded(true);
+          return;
+        }
 
         rawCandlesRef.current = uniqueCandles;
 
@@ -491,10 +500,17 @@ const TradingChart = ({
         } else {
           chartRef.current?.timeScale().fitContent();
         }
+        setChartError(null);
         setHistoryLoaded(true);
       })
-      .catch(() => setHistoryLoaded(true));
-  }, [symbol, interval, assetType]);
+      .catch((err) => {
+        const msg = err?.code === 'ECONNABORTED'
+          ? '서버 응답 시간이 초과되었습니다.'
+          : '차트 데이터를 불러오지 못했습니다.';
+        setChartError(msg);
+        setHistoryLoaded(true);
+      });
+  }, [symbol, interval, assetType, retryCount]);
 
   // ─── 주식 기간 변경 시 visible range 업데이트 ──────────
   useEffect(() => {
@@ -582,7 +598,29 @@ const TradingChart = ({
 
       {/* 메인 차트 */}
       <div className="relative">
-        <div ref={containerRef} className="rounded-lg overflow-hidden border border-gray-100" />
+        <div ref={containerRef} className={`rounded-lg overflow-hidden border ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`} />
+        {chartError && (
+          <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-lg z-10 ${
+            isDark ? 'bg-[#0a1628]/95' : 'bg-white/90'
+          }`}>
+            <svg className={`w-8 h-8 mb-2 ${isDark ? 'text-slate-600' : 'text-gray-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+            <p className={`text-sm mb-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{chartError}</p>
+            <button
+              onClick={() => {
+                prevSymbolRef.current = '';
+                prevIntervalRef.current = '';
+                setRetryCount(c => c + 1);
+              }}
+              className={`px-4 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                isDark ? 'text-cyan-400 bg-cyan-400/10 hover:bg-cyan-400/20 border border-cyan-400/20' : 'text-white bg-blue-500 hover:bg-blue-600'
+              }`}
+            >
+              다시 시도
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 서브차트 (제네릭 렌더링) */}

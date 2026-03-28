@@ -61,6 +61,15 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         } else if (path.startsWith("/api/strategies/backtest") && "POST".equals(method)) {
             limit = BACKTEST_LIMIT;
             key = clientIp + ":backtest";
+        } else if (path.startsWith("/api/virt/credentials") && "POST".equals(method)) {
+            limit = REFRESH_LIMIT; // 자격증명 등록: 분당 10회
+            key = clientIp + ":virt-cred";
+        } else if (path.startsWith("/api/virt/test-connection") || path.contains("/test-connection")) {
+            limit = REFRESH_LIMIT; // 연결 테스트: 분당 10회
+            key = clientIp + ":virt-test";
+        } else if (path.startsWith("/api/rankings")) {
+            limit = TRADE_LIMIT; // 랭킹 조회: 분당 30회
+            key = clientIp + ":rankings";
         }
 
         RequestCounter counter = requestCounters.computeIfAbsent(key, k -> new RequestCounter());

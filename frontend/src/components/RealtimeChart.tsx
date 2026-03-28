@@ -68,19 +68,20 @@ const RealtimeChart = ({ symbol, price, className = '', isDark = false }: Realti
       },
     });
 
+    const lineColor = isDark ? '#22d3ee' : '#4a90e2';
     const series = chart.addSeries(AreaSeries, {
-      lineColor: '#4a90e2',
+      lineColor,
       lineWidth: 2,
-      topColor: 'rgba(74, 144, 226, 0.2)',
-      bottomColor: 'rgba(74, 144, 226, 0.01)',
+      topColor: isDark ? 'rgba(34, 211, 238, 0.15)' : 'rgba(74, 144, 226, 0.2)',
+      bottomColor: isDark ? 'rgba(34, 211, 238, 0.01)' : 'rgba(74, 144, 226, 0.01)',
       crosshairMarkerVisible: true,
       crosshairMarkerRadius: 4,
-      crosshairMarkerBackgroundColor: '#4a90e2',
-      crosshairMarkerBorderColor: '#ffffff',
+      crosshairMarkerBackgroundColor: lineColor,
+      crosshairMarkerBorderColor: isDark ? '#0a1628' : '#ffffff',
       crosshairMarkerBorderWidth: 2,
       lastValueVisible: true,
       priceLineVisible: true,
-      priceLineColor: 'rgba(74, 144, 226, 0.3)',
+      priceLineColor: isDark ? 'rgba(34, 211, 238, 0.3)' : 'rgba(74, 144, 226, 0.3)',
       priceLineWidth: 1,
       priceLineStyle: 2,
       priceFormat: { type: 'price', precision: 0, minMove: 1 },
@@ -161,8 +162,8 @@ const RealtimeChart = ({ symbol, price, className = '', isDark = false }: Realti
               onClick={() => setInterval(iv.value)}
               className={`px-3 py-1.5 text-xs rounded-full font-medium transition-all ${
                 interval === iv.value
-                  ? 'bg-whale-light text-white shadow-sm'
-                  : 'text-gray-400 hover:text-whale-dark hover:bg-gray-100'
+                  ? isDark ? 'bg-white/10 text-cyan-400' : 'bg-whale-light text-white shadow-sm'
+                  : isDark ? 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.05]' : 'text-gray-400 hover:text-whale-dark hover:bg-gray-100'
               }`}
             >
               {iv.label}
@@ -171,13 +172,13 @@ const RealtimeChart = ({ symbol, price, className = '', isDark = false }: Realti
         </div>
         <div className="flex items-center space-x-1.5">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-[10px] text-gray-400 font-medium">LIVE</span>
+          <span className={`text-[10px] font-medium ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>LIVE</span>
         </div>
       </div>
 
       {/* 차트 */}
       <div className="relative">
-        <div ref={containerRef} className="rounded-xl overflow-hidden border border-gray-100" />
+        <div ref={containerRef} className={`rounded-xl overflow-hidden border ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`} />
       </div>
     </div>
   );

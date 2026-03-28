@@ -62,6 +62,7 @@ public class CandlestickService {
     /** 국내주식 일봉 (KIS API) — 최대 2년치 데이터를 3개월 단위로 반복 조회 */
     private List<CandlestickResponse> getStockCandlesticks(String stockCode) {
         if (!kisApiClient.isConfigured()) {
+            log.warn("KIS API 미설정 — 주식 캔들스틱 조회 불가: {}", stockCode);
             return List.of();
         }
 
@@ -69,16 +70,33 @@ public class CandlestickService {
             DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
             LocalDate now = LocalDate.now();
             List<CandlestickResponse> allResults = new ArrayList<>();
+            int consecutiveEmpty = 0;
 
             // 3개월 단위로 최대 2년(8구간) 반복 조회
             for (int i = 0; i < 8; i++) {
                 LocalDate chunkEnd = now.minusMonths(3L * i);
                 LocalDate chunkStart = now.minusMonths(3L * (i + 1)).plusDays(1);
 
-                List<Map<String, String>> candles = kisApiClient.getStockDailyCandles(
-                        stockCode, chunkStart.format(fmt), chunkEnd.format(fmt));
+                // 개별 청크에 대해 최대 2회 재시도
+                List<Map<String, String>> candles = null;
+                for (int retry = 0; retry < 2; retry++) {
+                    candles = kisApiClient.getStockDailyCandles(
+                            stockCode, chunkStart.format(fmt), chunkEnd.format(fmt));
+                    if (candles != null && !candles.isEmpty()) break;
+                    // 재시도 전 대기
+                    try { Thread.sleep(1000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                }
 
-                if (candles == null || candles.isEmpty()) break;
+                if (candles == null || candles.isEmpty()) {
+                    consecutiveEmpty++;
+                    // 연속 2번 빈 응답이면 더 이상 과거 데이터 없다고 판단
+                    if (consecutiveEmpty >= 2) {
+                        log.debug("주식 일봉 [{}]: 연속 빈 응답 {}회, 과거 데이터 조회 중단", stockCode, consecutiveEmpty);
+                        break;
+                    }
+                    continue; // 한 번 빈 응답은 건너뛰고 다음 구간 시도
+                }
+                consecutiveEmpty = 0;
 
                 for (Map<String, String> c : candles) {
                     String dateStr = c.get("stck_bsop_date");
@@ -95,9 +113,9 @@ public class CandlestickService {
                     allResults.add(new CandlestickResponse(time, open, high, low, close, volume));
                 }
 
-                // KIS API 호출 간격 제한 준수 (초당 제한 방지)
+                // KIS API 속도 제한 준수 (초당 1회 이하)
                 if (i < 7) {
-                    try { Thread.sleep(200); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                    try { Thread.sleep(1000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
                 }
             }
 
@@ -129,45 +147,55 @@ public class CandlestickService {
         };
     }
 
-    /** 빗썸 캔들스틱 API 호출 */
+    /** 빗썸 캔들스틱 API 호출 (최대 3회 재시도) */
     @SuppressWarnings("unchecked")
     private List<CandlestickResponse> getCryptoCandlesticks(String symbol, String interval) {
         String bithumbInterval = toBithumbInterval(interval);
         String url = baseUrl + "/public/candlestick/" + symbol + "_KRW/" + bithumbInterval;
 
-        try {
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                Map<String, Object> response = restTemplate.getForObject(url, Map.class);
 
-            if (response == null || !"0000".equals(response.get("status"))) {
-                log.warn("빗썸 캔들스틱 API 오류: symbol={}, interval={} (bithumb={})", symbol, interval, bithumbInterval);
-                return List.of();
+                if (response == null || !"0000".equals(response.get("status"))) {
+                    log.warn("빗썸 캔들스틱 API 오류 (시도 {}/3): symbol={}, interval={}", attempt, symbol, bithumbInterval);
+                    if (attempt < 3) {
+                        try { Thread.sleep(500L * attempt); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                        continue;
+                    }
+                    return List.of();
+                }
+
+                List<List<Object>> data = objectMapper.convertValue(
+                        response.get("data"), new TypeReference<List<List<Object>>>() {}
+                );
+
+                if (data == null) return List.of();
+
+                List<CandlestickResponse> result = new ArrayList<>();
+                for (List<Object> candle : data) {
+                    long time = ((Number) candle.get(0)).longValue() / 1000;
+                    double open = parseDouble(candle.get(1));
+                    double close = parseDouble(candle.get(2));
+                    double high = parseDouble(candle.get(3));
+                    double low = parseDouble(candle.get(4));
+                    double volume = parseDouble(candle.get(5));
+
+                    result.add(new CandlestickResponse(time, open, high, low, close, volume));
+                }
+
+                log.debug("캔들스틱 {}개 조회: {} / {}", result.size(), symbol, interval);
+                return result;
+            } catch (Exception e) {
+                log.warn("캔들스틱 조회 오류 [{}/{}] (시도 {}/3): {}", symbol, interval, attempt, e.getMessage());
+                if (attempt < 3) {
+                    try { Thread.sleep(500L * attempt); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                }
             }
-
-            List<List<Object>> data = objectMapper.convertValue(
-                    response.get("data"), new TypeReference<List<List<Object>>>() {}
-            );
-
-            if (data == null) return List.of();
-
-            List<CandlestickResponse> result = new ArrayList<>();
-            for (List<Object> candle : data) {
-                // [timestamp, open, close, high, low, volume]
-                long time = ((Number) candle.get(0)).longValue() / 1000; // ms -> seconds
-                double open = parseDouble(candle.get(1));
-                double close = parseDouble(candle.get(2));
-                double high = parseDouble(candle.get(3));
-                double low = parseDouble(candle.get(4));
-                double volume = parseDouble(candle.get(5));
-
-                result.add(new CandlestickResponse(time, open, high, low, close, volume));
-            }
-
-            log.debug("캔들스틱 {}개 조회: {} / {}", result.size(), symbol, interval);
-            return result;
-        } catch (Exception e) {
-            log.error("캔들스틱 조회 실패 [{}/{}]: {}", symbol, interval, e.getMessage());
-            return List.of();
         }
+
+        log.error("캔들스틱 조회 최종 실패 [{}/{}]: 3회 재시도 후 실패", symbol, interval);
+        return List.of();
     }
 
     private long parseLong(Object value) {

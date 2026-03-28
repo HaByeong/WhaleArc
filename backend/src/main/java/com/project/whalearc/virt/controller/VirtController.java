@@ -8,6 +8,7 @@ import com.project.whalearc.virt.dto.VirtBitgetCredentialRequest;
 import com.project.whalearc.virt.dto.VirtUpbitCredentialRequest;
 import com.project.whalearc.virt.service.VirtService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/virt")
 @RequiredArgsConstructor
@@ -62,8 +64,12 @@ public class VirtController {
         String userId = userSyncService.getOrCreateUser(jwt).getId();
         try {
             return ResponseEntity.ok(virtService.getPortfolio(userId));
+        } catch (IllegalStateException e) {
+            // 설정 관련 에러는 사용자에게 안내
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("message", e.getMessage() != null ? e.getMessage() : "알 수 없는 오류"));
+            log.error("[Virt] 포트폴리오 조회 실패 [{}]: {}", userId, e.getMessage());
+            return ResponseEntity.status(500).body(Map.of("message", "포트폴리오 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."));
         }
     }
 
@@ -91,7 +97,7 @@ public class VirtController {
         } catch (Exception e) {
             return ResponseEntity.ok(Map.of(
                     "success", false,
-                    "message", "연결 실패: " + e.getMessage()
+                    "message", "연결에 실패했습니다. API 키와 계좌 정보를 확인해주세요."
             ));
         }
     }
@@ -144,7 +150,7 @@ public class VirtController {
         } catch (Exception e) {
             return ResponseEntity.ok(Map.of(
                     "success", false,
-                    "message", "연결 실패: " + e.getMessage()
+                    "message", "연결에 실패했습니다. API 키와 계좌 정보를 확인해주세요."
             ));
         }
     }
@@ -192,7 +198,7 @@ public class VirtController {
         } catch (Exception e) {
             return ResponseEntity.ok(Map.of(
                     "success", false,
-                    "message", "연결 실패: " + e.getMessage()
+                    "message", "연결에 실패했습니다. API 키와 계좌 정보를 확인해주세요."
             ));
         }
     }

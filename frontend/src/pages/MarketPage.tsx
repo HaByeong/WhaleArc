@@ -22,8 +22,8 @@ const ChartLoadingWrapper = ({ symbol, children, isVirt }: { symbol: string; chi
     setFailed(false);
     // 차트가 내부적으로 데이터를 로드할 시간을 확보한 뒤 표시
     timerRef.current = setTimeout(() => setReady(true), 600);
-    // 8초 내에 차트가 렌더되지 않으면 실패로 간주 (별도 재시도 안내)
-    const failTimer = setTimeout(() => setFailed(true), 8000);
+    // 12초 내에 차트가 렌더되지 않으면 지연 안내 (주식은 API 응답이 느릴 수 있음)
+    const failTimer = setTimeout(() => setFailed(true), 12000);
     return () => {
       clearTimeout(timerRef.current);
       clearTimeout(failTimer);
@@ -100,7 +100,7 @@ const MarketPage = () => {
       setSelectedAsset(price);
       setSearchResults([]);
     } catch {
-      // 조회 실패 시 무시
+      setError('종목 시세 조회에 실패했습니다. 잠시 후 다시 시도해주세요.');
     }
   };
 
@@ -114,18 +114,23 @@ const MarketPage = () => {
 
     // 주식 탭: 10초마다 시세 갱신 (가상화폐는 WebSocket 사용)
     if (assetType === 'STOCK') {
+      let consecutiveFails = 0;
       const interval = setInterval(async () => {
         try {
           const prices = await marketService.getPrices('STOCK');
           setAssetList(prices);
-          // 선택된 종목도 갱신
           setSelectedAsset(prev => {
             if (!prev) return prev;
             const updated = prices.find(p => p.symbol === prev.symbol);
             return updated || prev;
           });
+          consecutiveFails = 0;
+          setError(null);
         } catch {
-          // 갱신 실패 시 기존 데이터 유지
+          consecutiveFails++;
+          if (consecutiveFails >= 3) {
+            setError('시세 갱신에 실패하고 있습니다. 네트워크 상태를 확인해주세요.');
+          }
         }
       }, 10_000);
       return () => clearInterval(interval);
@@ -412,7 +417,7 @@ const MarketPage = () => {
                           <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4" />
                           </svg>
-                          영역
+                          라인
                         </button>
                         <button
                           onClick={() => setChartType('candle')}
@@ -434,6 +439,7 @@ const MarketPage = () => {
                           <RealtimeChart
                             symbol={liveSelectedAsset.symbol}
                             price={liveSelectedAsset.price}
+                            isDark={!isVirt}
                           />
                         ) : (
                           <div className={`rounded-xl p-8 text-center border ${isVirt ? 'bg-gray-50 border-gray-100' : 'bg-white/[0.02] border-white/[0.06]'}`}>

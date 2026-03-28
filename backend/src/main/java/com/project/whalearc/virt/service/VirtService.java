@@ -26,8 +26,21 @@ public class VirtService {
     private final VirtUpbitClient upbitClient;
     private final VirtBitgetClient bitgetClient;
 
-    @Value("${virt.encryption-key:WhaleArcVirt2026SecretKey!!}")
+    @Value("${virt.encryption-key:#{null}}")
     private String encryptionKey;
+
+    @jakarta.annotation.PostConstruct
+    public void validateEncryptionKey() {
+        if (encryptionKey == null || encryptionKey.isBlank()) {
+            log.warn("[Virt] virt.encryption-key 미설정 — 실거래 연동 기능이 비활성화됩니다.");
+        }
+    }
+
+    private void requireEncryptionKey() {
+        if (encryptionKey == null || encryptionKey.isBlank()) {
+            throw new IllegalStateException("실거래 연동 기능을 사용하려면 virt.encryption-key 환경변수를 설정해야 합니다.");
+        }
+    }
 
     /* ───── 포트폴리오 응답 캐시 (10초 TTL) ───── */
     private record CacheEntry<T>(T data, long expireAt) {
@@ -50,6 +63,7 @@ public class VirtService {
     /* ───── 자격증명 관리 ───── */
 
     public void saveCredential(String userId, VirtCredentialRequest req) {
+        requireEncryptionKey();
         VirtCredential cred = credentialRepo.findByUserId(userId)
                 .orElse(new VirtCredential(userId));
 

@@ -8,6 +8,7 @@ import com.project.whalearc.strategy.dto.StrategyResponse;
 import com.project.whalearc.strategy.service.BacktestService;
 import com.project.whalearc.strategy.service.StrategyService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/strategies")
 @RequiredArgsConstructor
@@ -72,7 +74,8 @@ public class StrategyController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(Map.of("error", "백테스팅 실행 중 오류: " + e.getMessage()));
+            log.error("백테스팅 실행 실패: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("error", "백테스팅 실행 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."));
         }
     }
 

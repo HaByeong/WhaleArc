@@ -37,7 +37,7 @@ const LandingPage = () => {
                 to="/dashboard"
                 className="px-6 py-2 bg-whale-light border border-whale-light text-white font-semibold rounded-lg hover:bg-whale-accent transition-colors"
               >
-                대시보드
+                항해 이어가기
               </Link>
             ) : (
               <Link

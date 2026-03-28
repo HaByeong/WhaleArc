@@ -61,11 +61,13 @@ public class CryptoUtil {
         }
     }
 
-    /** 키를 32바이트(256비트)로 정규화 */
+    /** 키를 SHA-256 해시로 32바이트(256비트) 키 도출 */
     private static byte[] normalizeKey(String key) {
-        byte[] raw = key.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        byte[] result = new byte[32];
-        System.arraycopy(raw, 0, result, 0, Math.min(raw.length, 32));
-        return result;
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            return digest.digest(key.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
+        }
     }
 }

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
-import LoadingSpinner from '../components/LoadingSpinner';
 import VirtSplashLoading from '../components/VirtSplashLoading';
 import SplashLoading from '../components/SplashLoading';
 import ErrorMessage from '../components/ErrorMessage';

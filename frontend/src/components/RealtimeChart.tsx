@@ -20,7 +20,7 @@ const INTERVALS = [
 const RealtimeChart = ({ symbol, price, className = '', isDark = false }: RealtimeChartProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<typeof AreaSeries> | null>(null);
+  const seriesRef = useRef<ISeriesApi<'Area'> | null>(null);
   const dataRef = useRef<AreaData<Time>[]>([]);
   const prevSymbolRef = useRef<string>('');
   const prevIntervalRef = useRef<string>('');
@@ -88,7 +88,7 @@ const RealtimeChart = ({ symbol, price, className = '', isDark = false }: Realti
     });
 
     chartRef.current = chart;
-    seriesRef.current = series;
+    seriesRef.current = series as unknown as ISeriesApi<'Area'>;
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {

@@ -46,17 +46,13 @@ public class RankingService {
      * type: all(전체 수익률), daily(일간 변화), weekly(주간 변화), monthly(월간 변화)
      */
     public RankingResponseDto getRankings(String currentUserId, String type, int page, int size) {
-        List<Portfolio> rawPortfolios = portfolioRepository.findAll();
         size = Math.min(Math.max(size, 1), 100);
         page = Math.max(page, 0);
 
-        // Supabase에서 삭제된 유저 필터링 (탈퇴/밴 유저 랭킹 제외)
-        Set<String> allUserIds = rawPortfolios.stream().map(Portfolio::getUserId).collect(Collectors.toSet());
-        Set<String> validUserIds = userRepository.findAllBySupabaseIdIn(allUserIds).stream()
+        // 유효한 유저 ID 먼저 조회 → 해당 유저의 포트폴리오만 DB에서 가져옴
+        Set<String> validUserIds = userRepository.findAll().stream()
                 .map(User::getSupabaseId).collect(Collectors.toSet());
-        List<Portfolio> allPortfolios = rawPortfolios.stream()
-                .filter(p -> validUserIds.contains(p.getUserId()))
-                .toList();
+        List<Portfolio> allPortfolios = portfolioRepository.findByUserIdIn(validUserIds);
 
         // 기간별 스냅샷 기준 수익률 변화 계산
         Map<String, Double> periodReturnMap = null;

@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import Header from '../components/Header';
-import { useAuth } from '../contexts/AuthContext';
 import { usePolling } from '../hooks/usePolling';
 import {
   virtService,
@@ -16,9 +14,6 @@ const CHART_COLORS = ['#38bdf8', '#22d3ee', '#818cf8', '#a78bfa', '#34d399', '#f
 
 const VirtDashboardPage = () => {
   const navigate = useNavigate();
-  const { profileName, user } = useAuth();
-  const displayName = profileName || user?.user_metadata?.name || user?.email?.split('@')[0] || '선원';
-
   // 서비스 탭
   const [serviceTab, setServiceTab] = useState<'stock' | 'upbit' | 'bitget'>('stock');
 

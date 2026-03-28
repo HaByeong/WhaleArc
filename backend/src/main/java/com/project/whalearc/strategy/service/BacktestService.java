@@ -89,6 +89,10 @@ public class BacktestService {
             throw new IllegalArgumentException("캔들스틱 데이터를 가져올 수 없습니다: " + request.getStockCode());
         }
 
+        if (allCandles.size() > 50_000) {
+            throw new IllegalArgumentException("데이터 범위가 너무 큽니다. 기간을 줄여주세요. (최대 약 5년)");
+        }
+
         allCandles = allCandles.stream()
                 .sorted(Comparator.comparingLong(CandlestickResponse::getTime))
                 .toList();

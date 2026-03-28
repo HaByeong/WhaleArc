@@ -7,11 +7,12 @@ import {
 import { tradeService, type StockPrice } from '../services/tradeService';
 
 /* 숫자 포맷 */
-const fmtPct  = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
-const fmtCur  = (v: number) => new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', minimumFractionDigits: 0 }).format(v);
+const _fmtPct  = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+const _fmtCur  = (v: number) => new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', minimumFractionDigits: 0 }).format(v);
+void _fmtPct; void _fmtCur;
 
-/* ── KPI 카드 ── */
-function KpiCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+/* ── KPI 카드 (reserved for future use) ── */
+function _KpiCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div className="bg-gray-50 rounded-lg p-2.5 text-center">
       <div className="text-[10px] text-gray-400 mb-0.5">{label}</div>
@@ -20,6 +21,7 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string; s
     </div>
   );
 }
+void _KpiCard;
 
 /* ── 메인 컴포넌트 ── */
 export default function BacktestPanel({ onResult }: { onResult?: (result: BacktestResult) => void } = {}) {

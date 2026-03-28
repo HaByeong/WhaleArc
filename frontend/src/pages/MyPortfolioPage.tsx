@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useVirtNavigate, useRoutePrefix } from '../hooks/useRoutePrefix';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Area, AreaChart } from 'recharts';
 import Header from '../components/Header';
-import LoadingSpinner from '../components/LoadingSpinner';
 import VirtSplashLoading from '../components/VirtSplashLoading';
 import SplashLoading from '../components/SplashLoading';
 import ErrorMessage from '../components/ErrorMessage';
@@ -12,7 +11,6 @@ import { tradeService, portfolioService, type Portfolio, type Trade, type Portfo
 import {
   quantStoreService,
   type PurchasePerformance,
-  cryptoDisplayName,
   formatQuantity,
   CRYPTO_NAMES,
 } from '../services/quantStoreService';
@@ -27,7 +25,6 @@ const CHART_COLORS = ['#4a90e2', '#50c878', '#f5a623', '#e74c3c', '#9b59b6', '#1
    실계좌 포트폴리오 (일반 모드 전용)
    ═══════════════════════════════════════════════════ */
 const RealPortfolioPage = () => {
-  const navigate = useVirtNavigate();
   const [serviceTab, setServiceTab] = useState<'kis' | 'upbit' | 'bitget'>('kis');
   const [activeTab, setActiveTab] = useState<'holdings' | 'trades'>('holdings');
   const [kisCredInfo, setKisCredInfo] = useState<VirtCredentialInfo | null>(null);

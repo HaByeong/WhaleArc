@@ -4,7 +4,6 @@ import Header from '../components/Header';
 import SplashLoading from '../components/SplashLoading';
 import VirtSplashLoading from '../components/VirtSplashLoading';
 import { Term } from '../components/TermTooltip';
-import WhaleCharacterLogo from '../components/WhaleCharacterLogo';
 import {
   quantStoreService,
   type QuantProduct,
@@ -794,11 +793,7 @@ const QuantStorePage = () => {
                 ))}
               </div>
 
-              {false && investModal.price > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
-                  전략 이용료: {formatCurrency(investModal.price)} (별도)
-                </div>
-              )}
+              {/* investModal.price 이용료 표시 (비활성) */}
 
               <div className="flex gap-3">
                 <button onClick={() => setInvestModal(null)} className={`flex-1 py-3 rounded-xl font-medium transition-colors ${isVirt ? 'text-gray-600 bg-gray-100 hover:bg-gray-200' : 'text-slate-400 bg-white/[0.04] hover:bg-white/[0.06]'}`}>
@@ -844,12 +839,7 @@ const QuantStorePage = () => {
                     ~{formatCurrency(Math.floor(Number(investmentAmount.replace(/,/g, '')) / investModal.targetAssets.length))}
                   </span>
                 </div>
-                {false && investModal.price > 0 && (
-                  <div className="flex justify-between pt-2 border-t border-gray-200">
-                    <span className="text-sm text-amber-700">전략 이용료</span>
-                    <span className="text-sm font-bold text-amber-700">{formatCurrency(investModal.price)}</span>
-                  </div>
-                )}
+                {/* investModal.price 이용료 표시 (비활성) */}
               </div>
 
               <div className={`border rounded-lg p-3 mb-5 ${investModal.strategyType === 'TURTLE' ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>

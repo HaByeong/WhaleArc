@@ -32,7 +32,7 @@ export function useNotifications(enabled = true) {
           switch (type) {
             case 'LIMIT_ORDER_FILLED':
             case 'MARKET_ORDER_FILLED': return 'success';
-            case 'TURTLE_TRADE': return 'warning';
+            case 'TURTLE_TRADE': return 'info';
             case 'STRATEGY_EXECUTED': return 'info';
             default: return 'info';
           }

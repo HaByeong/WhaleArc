@@ -306,7 +306,7 @@ export default function GoldenCrossChart() {
   const showRsi = selectedProduct ? isRsiProduct(selectedProduct) : false;
   const showBollinger = selectedProduct ? isBollingerProduct(selectedProduct) : false;
   const showMacd = selectedProduct ? isMacdProduct(selectedProduct) : false;
-  const hasChart = showGoldenCross || showRsi || showBollinger || showMacd;
+  const _hasChart = showGoldenCross || showRsi || showBollinger || showMacd; void _hasChart;
 
   /* ─── 캔버스 드로잉 ─── */
   const draw = useCallback(() => {

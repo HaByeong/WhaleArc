@@ -116,7 +116,7 @@ const DashboardPage = () => {
     } catch { /* ignore */ }
   };
 
-  const apiConnected = apiTab === 'kis' ? kisCredInfo?.connected : apiTab === 'upbit' ? upbitCredInfo?.connected : bitgetCredInfo?.connected;
+  const _apiConnected = apiTab === 'kis' ? kisCredInfo?.connected : apiTab === 'upbit' ? upbitCredInfo?.connected : bitgetCredInfo?.connected; void _apiConnected;
 
   // 실시간 WebSocket 시세
   const { prices: realtimePrices } = useRealtimePrice({ enabled: true });
@@ -153,7 +153,7 @@ const DashboardPage = () => {
   }, []);
 
   // 일반 모드에서는 가상 포트폴리오 로드 생략
-  const shouldLoadVirtData = isVirt;
+  void isVirt;
 
   const pollData = useCallback(async () => {
     try {
@@ -349,7 +349,7 @@ const DashboardPage = () => {
                 const realTotal = (kisPortfolio?.totalValue || 0) + (upbitPortfolio?.totalValue || 0) + (bitgetPortfolio?.totalValue || 0);
                 const realPnl = (kisPortfolio?.totalPnl || 0) + (upbitPortfolio?.totalPnl || 0) + (bitgetPortfolio?.totalPnl || 0);
                 const invested = realTotal - realPnl;
-                const realReturn = invested !== 0 ? (realPnl / invested) * 100 : 0;
+                const _realReturn = invested !== 0 ? (realPnl / invested) * 100 : 0; void _realReturn;
                 if (realTotal === 0) return null;
                 return (
                   <div className="flex items-center gap-4 md:gap-6">

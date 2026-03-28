@@ -73,7 +73,7 @@ const StrategyPage = () => {
   const [isApplying, setIsApplying] = useState(false);
 
   // 백테스팅 가이드
-  const [showBacktestGuide, setShowBacktestGuide] = useState(false);
+  const [_showBacktestGuide, _setShowBacktestGuide] = useState(false);
 
   // 백테스팅 폼 상태
   const [backtestMode, _setBacktestMode] = useState<'strategy' | 'stock'>('strategy');
@@ -91,12 +91,12 @@ const StrategyPage = () => {
   const [trailingStopPercent, setTrailingStopPercent] = useState('');
   const [slippagePercent, setSlippagePercent] = useState('0.1');
   const [commissionRate, setCommissionRate] = useState('0.1');
-  const [positionSizing, setPositionSizing] = useState('ALL_IN');
-  const [positionValue, setPositionValue] = useState('');
+  const [positionSizing, _setPositionSizing] = useState('ALL_IN');
+  const [positionValue, _setPositionValue] = useState('');
   const [tradeDirection, setTradeDirection] = useState<'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT'>('LONG_ONLY');
-  const [maxPositions, setMaxPositions] = useState('1');
+  const [maxPositions, _setMaxPositions] = useState('1');
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
-  const [showBacktestForm, setShowBacktestForm] = useState(false);
+  const [_showBacktestForm, setShowBacktestForm] = useState(false);
 
   // 가이드 투어
   const [showTour, setShowTour] = useState(false);
@@ -386,24 +386,6 @@ const StrategyPage = () => {
     }
   };
 
-  const handleUnapplyStrategy = async () => {
-    if (!selectedStrategy) return;
-    if (!window.confirm(
-      `"${selectedStrategy.name}" 항로의 적용을 해제합니다.\n\n` +
-      '이미 매수된 자산은 그대로 유지되며,\n' +
-      '항로를 수정 후 다시 적용할 수 있습니다.\n\n' +
-      '적용을 해제하시겠습니까?'
-    )) return;
-
-    try {
-      await strategyService.unapplyStrategy(selectedStrategy.id);
-      await loadStrategies();
-      alert('항로 적용이 해제되었습니다.');
-    } catch (error: any) {
-      alert(error.response?.data?.error || '적용 해제에 실패했습니다.');
-    }
-  };
-
   const handleApplyStrategy = async () => {
     if (!selectedStrategy) return;
     const amount = parseInt(applyAmount);
@@ -617,58 +599,7 @@ const StrategyPage = () => {
   };
 
   // 종목 분석 모드 프리셋
-  const [activePreset, setActivePreset] = useState<string>('');
-  const applyDirectPreset = (preset: string) => {
-    setActivePreset(preset);
-    switch (preset) {
-      case 'RSI':
-        setDirectEntryConditions([{ indicator: 'RSI', operator: 'LT', value: 30, logic: 'AND' }]);
-        setDirectExitConditions([{ indicator: 'RSI', operator: 'GT', value: 70, logic: 'AND' }]);
-        break;
-      case 'MACD':
-        setDirectEntryConditions([{ indicator: 'MACD_CROSS_MACD_SIGNAL', operator: 'GT', value: 0, logic: 'AND' }]);
-        setDirectExitConditions([{ indicator: 'MACD_CROSSUNDER_MACD_SIGNAL', operator: 'GT', value: 0, logic: 'AND' }]);
-        break;
-      case 'BOLLINGER':
-        setDirectEntryConditions([{ indicator: 'BOLLINGER_PCT_B', operator: 'LT', value: 0, logic: 'AND' }]);
-        setDirectExitConditions([{ indicator: 'BOLLINGER_PCT_B', operator: 'GT', value: 1, logic: 'AND' }]);
-        break;
-      case 'RSI_CONSERVATIVE':
-        setDirectEntryConditions([{ indicator: 'RSI', operator: 'LT', value: 40, logic: 'AND' }]);
-        setDirectExitConditions([{ indicator: 'RSI', operator: 'GT', value: 60, logic: 'AND' }]);
-        break;
-      case 'STOCHASTIC':
-        setDirectEntryConditions([{ indicator: 'STOCH_K_CROSS_STOCH_D', operator: 'GT', value: 0, logic: 'AND' }]);
-        setDirectExitConditions([{ indicator: 'STOCH_K_CROSSUNDER_STOCH_D', operator: 'GT', value: 0, logic: 'AND' }]);
-        break;
-      case 'GOLDEN_CROSS':
-        setDirectEntryConditions([{ indicator: 'EMA_CROSS_MA', operator: 'GT', value: 0, logic: 'AND' }]);
-        setDirectExitConditions([{ indicator: 'EMA_CROSSUNDER_MA', operator: 'GT', value: 0, logic: 'AND' }]);
-        break;
-    }
-  };
-
-  // 종목 분석 조건 편집
-  const updateDirectCondition = (type: 'entry' | 'exit', index: number, field: string, val: any) => {
-    const setter = type === 'entry' ? setDirectEntryConditions : setDirectExitConditions;
-    const conditions = type === 'entry' ? [...directEntryConditions] : [...directExitConditions];
-    conditions[index] = { ...conditions[index], [field]: val };
-    setter(conditions);
-    setActivePreset('');
-  };
-
-  const addDirectCondition = (type: 'entry' | 'exit') => {
-    const newCond: Condition = { indicator: 'RSI', operator: 'LT', value: 30, logic: 'AND' };
-    if (type === 'entry') setDirectEntryConditions([...directEntryConditions, newCond]);
-    else setDirectExitConditions([...directExitConditions, newCond]);
-    setActivePreset('');
-  };
-
-  const removeDirectCondition = (type: 'entry' | 'exit', index: number) => {
-    if (type === 'entry') setDirectEntryConditions(directEntryConditions.filter((_, i) => i !== index));
-    else setDirectExitConditions(directExitConditions.filter((_, i) => i !== index));
-    setActivePreset('');
-  };
+  const [_activePreset, _setActivePreset] = useState<string>('');
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('ko-KR', {
@@ -831,39 +762,6 @@ const StrategyPage = () => {
 
   // 프리셋 + 사용자 항로 합치기
   const allStrategies = [...PRESET_STRATEGIES, ...strategies];
-
-  const INDICATORS_LIST = [
-    { group: '이동평균', icon: '〰️', items: [
-      { key: 'MA', name: '이동평균선 (MA)', eng: 'Moving Average', color: '#3b82f6', range: '가격과 동일', difficulty: '초급',
-        desc: '일정 기간 동안의 평균 가격을 선으로 연결한 것입니다.',
-        how: '단기 MA(5일)가 장기 MA(20일) 위로 올라가면 "골든크로스"로 매수 신호입니다.',
-        tip: '처음에는 MA20과 MA60 두 개만 켜보세요.' },
-      { key: 'EMA', name: '지수이동평균 (EMA)', eng: 'Exponential Moving Average', color: '#10b981', range: '가격과 동일', difficulty: '초급',
-        desc: '일반 이동평균(MA)과 비슷하지만, 최근 가격에 더 큰 비중을 둡니다.',
-        how: '가격이 EMA를 위로 돌파하면 상승 전환, 아래로 돌파하면 하락 전환 가능성이 있습니다.',
-        tip: 'MA보다 민감하게 반응하므로 단기 매매에 유리합니다.' },
-    ]},
-    { group: '추세 · 밴드', icon: '📊', items: [
-      { key: 'BOLLINGER_BANDS', name: '볼린저 밴드', eng: 'Bollinger Bands', color: '#6366f1', range: '가격 중심 ± 표준편차', difficulty: '초급',
-        desc: '가격의 "정상 범위"를 상단·하단 밴드로 보여줍니다.',
-        how: '가격이 상단 밴드를 터치하면 과매수, 하단 밴드를 터치하면 과매도일 수 있습니다.',
-        tip: '밴드가 좁아지면("스퀴즈") 곧 큰 움직임이 올 수 있다는 신호입니다.' },
-    ]},
-    { group: '오실레이터', icon: '📈', items: [
-      { key: 'RSI', name: '상대강도지수 (RSI)', eng: 'Relative Strength Index', color: '#8b5cf6', range: '0 ~ 100', difficulty: '초급',
-        desc: '가격이 최근에 얼마나 올랐는지/내렸는지를 0~100 사이의 수치로 나타냅니다.',
-        how: '70 이상이면 "과매수" — 가격이 너무 올라서 곧 조정이 올 수 있습니다.\n30 이하면 "과매도" — 가격이 너무 내려서 곧 반등할 수 있습니다.',
-        tip: '가장 먼저 배우기 좋은 지표입니다.' },
-      { key: 'MACD', name: 'MACD', eng: 'Moving Average Convergence Divergence', color: '#3b82f6', range: '중심선(0) 기준 위/아래', difficulty: '초급',
-        desc: '두 이동평균의 차이를 분석하여 추세의 방향과 전환 시점을 알려줍니다.',
-        how: 'MACD선이 시그널선을 위로 돌파하면 매수 신호, 아래로 돌파하면 매도 신호입니다.',
-        tip: 'RSI와 함께 사용하면 더 정확합니다.' },
-      { key: 'STOCHASTIC', name: '스토캐스틱', eng: 'Stochastic Oscillator', color: '#2563eb', range: '0 ~ 100', difficulty: '중급',
-        desc: '일정 기간 동안의 최고가·최저가 범위에서 현재 가격이 어디에 위치하는지를 나타냅니다.',
-        how: '80 이상이면 과매수, 20 이하면 과매도입니다.',
-        tip: 'RSI와 비슷하지만 더 민감하게 반응합니다.' },
-    ]},
-  ];
 
   if (pageLoading && !isVirt) return <SplashLoading message="전략 데이터를 불러오는 중..." />;
   if (pageLoading && isVirt) return <VirtSplashLoading message="전략 데이터를 불러오는 중..." />;

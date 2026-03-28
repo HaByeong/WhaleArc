@@ -86,10 +86,12 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     }
 
     private String getClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isEmpty()) {
-            return xff.split(",")[0].trim();
+        // 인증된 사용자는 userId 기반 제한 (IP 우회 불가)
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt jwt) {
+            return "user:" + jwt.getSubject();
         }
+        // 비인증 요청은 RemoteAddr 사용 (X-Forwarded-For는 프록시 환경에서만 신뢰)
         return request.getRemoteAddr();
     }
 

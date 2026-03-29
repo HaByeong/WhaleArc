@@ -224,9 +224,41 @@ const TradePage = () => {
 
   usePolling(pollStockPrices, 10000);
 
+  /* ─── 최근 본 종목 ─── */
+  type RecentStock = { stockCode: string; stockName: string; assetType: string };
+  const [recentStocks, setRecentStocks] = useState<RecentStock[]>(() => {
+    try {
+      const saved = localStorage.getItem('whalearc_recent_stocks');
+      if (saved) return JSON.parse(saved) as RecentStock[];
+    } catch { /* ignore */ }
+    return [];
+  });
+
+  const saveRecentStock = useCallback((stock: StockPrice) => {
+    setRecentStocks(prev => {
+      const entry: RecentStock = { stockCode: stock.stockCode, stockName: stock.stockName || stock.stockCode, assetType: stock.assetType || 'CRYPTO' };
+      const filtered = prev.filter(r => r.stockCode !== entry.stockCode);
+      const next = [entry, ...filtered].slice(0, 8);
+      localStorage.setItem('whalearc_recent_stocks', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const handleRecentStockClick = useCallback((recent: RecentStock) => {
+    const list = recent.assetType === 'STOCK' ? krxStockList : stockList;
+    const found = list.find(s => s.stockCode === recent.stockCode);
+    if (found) {
+      setSelectedStock(found);
+      setActiveTab('chart');
+      setQuantity('');
+      setLimitPrice('');
+    }
+  }, [krxStockList, stockList]);
+
   /* ─── 종목 선택 ─── */
   const handleStockSelect = (stock: StockPrice) => {
     setSelectedStock(stock);
+    saveRecentStock(stock);
     setActiveTab('chart');
     setQuantity('');
     setLimitPrice('');
@@ -414,6 +446,83 @@ const TradePage = () => {
     }
   };
 
+  /* ─── 키보드 단축키 ─── */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // input/textarea에 포커스되어 있으면 무시
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+      switch (e.key) {
+        case 'b':
+        case 'B':
+          setOrderType('BUY');
+          setQuantity('');
+          setLimitPrice('');
+          break;
+        case 's':
+        case 'S':
+          setOrderType('SELL');
+          setQuantity('');
+          setLimitPrice('');
+          break;
+        case 'Escape':
+          setQuantity('');
+          setLimitPrice('');
+          setOrderMemo('');
+          break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  /* ─── 종목 메모/일지 ─── */
+  const MEMO_STORAGE_KEY = 'whalearc_stock_memos';
+  const [stockMemo, setStockMemo] = useState('');
+  const memoTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // 종목 변경 시 메모 로드
+  useEffect(() => {
+    if (!liveSelectedStock) {
+      setStockMemo('');
+      return;
+    }
+    try {
+      const stored = localStorage.getItem(MEMO_STORAGE_KEY);
+      const memos: Record<string, { memo: string; updatedAt: string }> = stored ? JSON.parse(stored) : {};
+      setStockMemo(memos[liveSelectedStock.stockCode]?.memo || '');
+    } catch {
+      setStockMemo('');
+    }
+  }, [liveSelectedStock?.stockCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 메모 자동 저장 (debounce 500ms)
+  const handleMemoChange = (value: string) => {
+    if (value.length > 200) return;
+    setStockMemo(value);
+    if (memoTimerRef.current) clearTimeout(memoTimerRef.current);
+    memoTimerRef.current = setTimeout(() => {
+      if (!liveSelectedStock) return;
+      try {
+        const stored = localStorage.getItem(MEMO_STORAGE_KEY);
+        const memos: Record<string, { memo: string; updatedAt: string }> = stored ? JSON.parse(stored) : {};
+        if (value.trim()) {
+          memos[liveSelectedStock.stockCode] = { memo: value, updatedAt: new Date().toISOString() };
+        } else {
+          delete memos[liveSelectedStock.stockCode];
+        }
+        localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memos));
+      } catch { /* localStorage 쓰기 실패 무시 */ }
+    }, 500);
+  };
+
+  // cleanup memo timer
+  useEffect(() => () => { if (memoTimerRef.current) clearTimeout(memoTimerRef.current); }, []);
+
+  // 현재 종목 메모 존재 여부
+  const hasMemo = stockMemo.trim().length > 0;
+
   /* ─── 종목 필터 ─── */
   const filteredStocks = mergedStockList.filter(s => {
     if (!searchQuery) return true;
@@ -506,6 +615,28 @@ const TradePage = () => {
                 주식
               </button>
             </div>
+
+            {/* 최근 본 종목 */}
+            {recentStocks.length > 0 && (
+              <div className="mb-2">
+                <div className={`text-[10px] font-semibold mb-1.5 ${d ? 'text-slate-500' : 'text-gray-400'}`}>최근 본 종목</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {recentStocks.map(r => (
+                    <button
+                      key={r.stockCode}
+                      onClick={() => handleRecentStockClick(r)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all truncate max-w-[120px] ${
+                        d
+                          ? 'bg-white/[0.06] text-slate-300 hover:bg-white/[0.12] border border-white/[0.08]'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                      }`}
+                    >
+                      {r.stockName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* 검색 */}
             <div className="relative">
@@ -633,6 +764,11 @@ const TradePage = () => {
                         <h2 className={`text-xl font-bold ${d ? 'text-white' : 'text-whale-dark'}`}>{selectedDisplayName}</h2>
                         {isSelectedStock && (
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>
+                        )}
+                        {hasMemo && (
+                          <span className={`text-xs ${d ? 'text-amber-400' : 'text-amber-500'}`} title="메모 있음">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
+                          </span>
                         )}
                         <button
                           onClick={() => {
@@ -982,6 +1118,30 @@ const TradePage = () => {
                     )}
                   </div>
                 </div>
+
+                {/* 종목 메모/일지 */}
+                <div className={`rounded-xl shadow-lg p-4 ${d ? 'border border-white/[0.06] bg-white/[0.02]' : 'bg-white'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <svg className={`w-3.5 h-3.5 ${hasMemo ? (d ? 'text-amber-400' : 'text-amber-500') : (d ? 'text-slate-500' : 'text-gray-400')}`} fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                      </svg>
+                      <span className={`text-xs font-semibold ${d ? 'text-slate-400' : 'text-gray-500'}`}>종목 메모</span>
+                    </div>
+                    <span className={`text-[10px] ${d ? 'text-slate-600' : 'text-gray-400'}`}>{stockMemo.length}/200</span>
+                  </div>
+                  <textarea
+                    value={stockMemo}
+                    onChange={e => handleMemoChange(e.target.value)}
+                    placeholder={`${selectedDisplayName}에 대한 메모를 남겨보세요 (자동 저장)`}
+                    maxLength={200}
+                    rows={3}
+                    className={`w-full text-xs rounded-lg p-2.5 resize-none outline-none transition-colors ${
+                      d ? 'bg-white/[0.04] text-slate-200 placeholder-slate-600 border border-white/[0.08] focus:border-cyan-500/40'
+                        : 'bg-gray-50 text-gray-700 placeholder-gray-400 border border-gray-200 focus:border-whale-dark/40'
+                    }`}
+                  />
+                </div>
               </>
             )}
           </div>
@@ -1175,6 +1335,11 @@ const TradePage = () => {
                     }
                   </button>
                 </form>
+
+                {/* 단축키 안내 */}
+                <div className={`mt-3 text-center text-[10px] ${d ? 'text-slate-600' : 'text-gray-400'}`}>
+                  단축키: <kbd className={`px-1 py-0.5 rounded ${d ? 'bg-white/[0.06] text-slate-400' : 'bg-gray-100 text-gray-500'}`}>B</kbd> 매수 · <kbd className={`px-1 py-0.5 rounded ${d ? 'bg-white/[0.06] text-slate-400' : 'bg-gray-100 text-gray-500'}`}>S</kbd> 매도 · <kbd className={`px-1 py-0.5 rounded ${d ? 'bg-white/[0.06] text-slate-400' : 'bg-gray-100 text-gray-500'}`}>Esc</kbd> 초기화
+                </div>
               </div>
             )}
 

@@ -70,6 +70,28 @@ const DashboardPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
 
+  // ── 목표 수익률 설정 ──
+  const [targetReturn, setTargetReturn] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('whalearc_target_return');
+      if (saved) return parseFloat(saved);
+    } catch { /* ignore */ }
+    return 10;
+  });
+  const [editingTarget, setEditingTarget] = useState(false);
+  const [targetInput, setTargetInput] = useState(String(targetReturn));
+
+  const handleTargetSave = () => {
+    const val = parseFloat(targetInput);
+    if (!isNaN(val) && val > 0) {
+      setTargetReturn(val);
+      localStorage.setItem('whalearc_target_return', String(val));
+    } else {
+      setTargetInput(String(targetReturn));
+    }
+    setEditingTarget(false);
+  };
+
   // ── 카드 순서 드래그 앤 드롭 (Virt 모드) ──
   const CARD_ORDER_KEY = 'whalearc_dashboard_order';
   const DEFAULT_CARD_ORDER: string[] = ['portfolio', 'holdings', 'routes', 'watchlist', 'actions'];
@@ -963,6 +985,62 @@ const DashboardPage = () => {
                         {portfolio.returnRate.toFixed(2)}%
                       </div>
                     </div>
+                  </div>
+                  {/* 목표 수익률 프로그레스 바 */}
+                  <div className="mt-4 pt-4 border-t border-gray-100" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-gray-500">목표 수익률</span>
+                      <div className="flex items-center gap-1">
+                        {editingTarget ? (
+                          <>
+                            <input
+                              type="number"
+                              value={targetInput}
+                              onChange={e => setTargetInput(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') handleTargetSave(); if (e.key === 'Escape') { setEditingTarget(false); setTargetInput(String(targetReturn)); } }}
+                              onBlur={handleTargetSave}
+                              className="w-16 px-1.5 py-0.5 text-xs border border-gray-300 rounded text-right focus:outline-none focus:ring-1 focus:ring-whale-light"
+                              autoFocus
+                              min="0.1"
+                              step="0.1"
+                            />
+                            <span className="text-xs text-gray-500">%</span>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => { setEditingTarget(true); setTargetInput(String(targetReturn)); }}
+                            className="text-xs text-whale-light hover:text-whale-accent font-medium flex items-center gap-0.5"
+                          >
+                            {targetReturn}%
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {(() => {
+                      const progress = targetReturn > 0 ? Math.min(Math.max(portfolio.returnRate / targetReturn * 100, 0), 100) : 0;
+                      const achieved = portfolio.returnRate >= targetReturn;
+                      return (
+                        <div>
+                          <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${achieved ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 'bg-gradient-to-r from-whale-light to-blue-400'}`}
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-[10px] text-gray-400">
+                              {portfolio.returnRate >= 0 ? '+' : ''}{portfolio.returnRate.toFixed(2)}% / {targetReturn}%
+                            </span>
+                            {achieved && (
+                              <span className="text-[11px] font-bold text-emerald-500 animate-pulse">
+                                목표 달성!
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </DragWrap>

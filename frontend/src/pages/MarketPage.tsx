@@ -98,6 +98,15 @@ const MarketPage = () => {
       setAssetList(prev => [price, ...prev]);
       setSelectedAsset(price);
       setSearchResults([]);
+      // 최근 본 종목 저장
+      try {
+        const entry = { stockCode: price.symbol, stockName: price.name, assetType: price.assetType };
+        const saved = localStorage.getItem('whalearc_recent_stocks');
+        const prev2: { stockCode: string; stockName: string; assetType: string }[] = saved ? JSON.parse(saved) : [];
+        const filtered = prev2.filter(r => r.stockCode !== entry.stockCode);
+        const next = [entry, ...filtered].slice(0, 8);
+        localStorage.setItem('whalearc_recent_stocks', JSON.stringify(next));
+      } catch { /* ignore */ }
     } catch {
       setError('종목 시세 조회에 실패했습니다. 잠시 후 다시 시도해주세요.');
     }
@@ -188,6 +197,15 @@ const MarketPage = () => {
 
   const handleAssetSelect = (asset: MarketPrice) => {
     setSelectedAsset(asset);
+    // 최근 본 종목 저장
+    try {
+      const entry = { stockCode: asset.symbol, stockName: asset.name, assetType: asset.assetType };
+      const saved = localStorage.getItem('whalearc_recent_stocks');
+      const prev: { stockCode: string; stockName: string; assetType: string }[] = saved ? JSON.parse(saved) : [];
+      const filtered = prev.filter(r => r.stockCode !== entry.stockCode);
+      const next = [entry, ...filtered].slice(0, 8);
+      localStorage.setItem('whalearc_recent_stocks', JSON.stringify(next));
+    } catch { /* ignore */ }
   };
 
   const filteredAndSortedAssets = mergedAssetList

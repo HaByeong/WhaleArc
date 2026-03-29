@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import SignUpPage from './pages/SignUpPage';
@@ -44,6 +45,7 @@ function App() {
     <ErrorBoundary>
       <Router>
         <DarkModeController />
+        <ThemeProvider>
         <AuthProvider>
         <Routes>
           <Route path="/" element={<LandingPage />} />
@@ -147,6 +149,7 @@ function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
         </AuthProvider>
+        </ThemeProvider>
       </Router>
     </ErrorBoundary>
   );

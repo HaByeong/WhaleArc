@@ -1387,11 +1387,10 @@ const DashboardPage = () => {
               )}
 
               {/* 카드 순서대로 렌더링 */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 {cardOrder.map((cardId) => {
                   const node = cardMap[cardId];
                   if (!node) return null;
-                  // portfolio, watchlist 카드는 전체 너비
                   const isFullWidth = cardId === 'portfolio' || cardId === 'watchlist';
                   return (
                     <div key={cardId} className={isFullWidth ? 'lg:col-span-2' : ''}>

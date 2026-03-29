@@ -343,6 +343,7 @@ export function saveBacktestHistory(result: BacktestResult): void {
   } catch {
     // localStorage 용량 초과 시 오래된 절반 삭제 후 재시도
     history.length = Math.floor(MAX_HISTORY / 2);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); }
+    catch { localStorage.removeItem(HISTORY_KEY); }
   }
 }

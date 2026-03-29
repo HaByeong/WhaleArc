@@ -29,7 +29,8 @@ self.addEventListener('fetch', (event) => {
 
 // PWA 푸시 알림 수신
 self.addEventListener('push', (event) => {
-  const data = event.data ? event.data.json() : {};
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (_) { /* 파싱 실패 시 기본값 */ }
   event.waitUntil(
     self.registration.showNotification(data.title || 'WhaleArc', {
       body: data.body || '새로운 알림이 있습니다',

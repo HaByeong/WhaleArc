@@ -523,6 +523,7 @@ const MyPortfolioPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'holdings' | 'trades'>('holdings');
+  const [chartMode, setChartMode] = useState<'value' | 'return'>('value');
   const [settingRoute, setSettingRoute] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
   const [kospiBenchmark, setKospiBenchmark] = useState<{ price: number; change: number } | null>(null);
@@ -755,24 +756,45 @@ const MyPortfolioPage = () => {
           {/* ─── 메인 영역 (2/3) ─── */}
           <div className="lg:col-span-2 space-y-6">
 
-            {/* 자산 추이 차트 */}
+            {/* 자산 추이 차트 + 벤치마크 */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-whale-dark">자산 추이</h2>
-                <span className="text-xs text-gray-400">최근 30일</span>
+                <h2 className="text-lg font-bold text-whale-dark">
+                  {chartMode === 'value' ? '자산 추이' : '수익률 비교'}
+                </h2>
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-gray-100 rounded-lg p-0.5">
+                    <button
+                      onClick={() => setChartMode('value')}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                        chartMode === 'value'
+                          ? 'bg-white text-whale-dark shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      총 자산
+                    </button>
+                    <button
+                      onClick={() => setChartMode('return')}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                        chartMode === 'return'
+                          ? 'bg-white text-whale-dark shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      수익률 %
+                    </button>
+                  </div>
+                  <span className="text-xs text-gray-400">최근 30일</span>
+                </div>
               </div>
               {historyData.length >= 2 ? (() => {
-                // KOSPI 벤치마크: 포트폴리오 시작값 기준으로 정규화
-                // change = 오늘 등락폭이므로 KOSPI 전일가 = price - change
-                // 30일 전 KOSPI는 알 수 없으므로 일일 변동을 기간에 비례 외삽
                 const startValue = historyData[0].totalValue;
                 const hasKospi = kospiBenchmark != null;
 
-                // KOSPI 정규화: 시작값을 포트폴리오와 동일하게 맞추고
-                // 현재 KOSPI 등락률을 기간에 걸쳐 선형 보간
+                // KOSPI: 현재 등락률을 기간에 걸쳐 선형 보간
                 const kospiDailyRate = hasKospi ? (kospiBenchmark.change / (kospiBenchmark.price - kospiBenchmark.change)) : 0;
                 const totalDays = historyData.length - 1;
-                // 30일간 누적 변동을 단순 선형 보간 (일별 데이터 미제공)
                 const kospiTotalReturn = kospiDailyRate * totalDays;
                 const kospiEndValue = Math.round(startValue * (1 + kospiTotalReturn));
 
@@ -782,13 +804,120 @@ const MyPortfolioPage = () => {
                     label: new Date(s.date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
                     totalValue: Math.round(s.totalValue),
                     returnRate: Number(s.returnRate.toFixed(2)),
+                    // 시작값 대비 수익률 (%) - 차트 시작점 기준 정규화
+                    myReturn: Number((((s.totalValue - startValue) / startValue) * 100).toFixed(2)),
                   };
                   if (hasKospi && totalDays > 0) {
                     const progress = i / totalDays;
                     base.kospi = Math.round(startValue + progress * (kospiEndValue - startValue));
+                    base.kospiReturn = Number((kospiTotalReturn * progress * 100).toFixed(2));
                   }
                   return base;
                 });
+
+                if (chartMode === 'return') {
+                  // ── 수익률 비교 모드 ──
+                  const returnValues = chartData.map((d) => d.myReturn as number);
+                  const kospiReturns = hasKospi ? chartData.map((d) => (d.kospiReturn ?? 0) as number) : [];
+                  const allReturns = [...returnValues, ...kospiReturns];
+                  const minR = Math.min(...allReturns);
+                  const maxR = Math.max(...allReturns);
+                  const rPadding = Math.max((maxR - minR) * 0.15, 0.5);
+                  const latestReturn = returnValues[returnValues.length - 1];
+                  const myLineColor = latestReturn >= 0 ? '#ef4444' : '#3b82f6';
+                  const myGradientColor = latestReturn >= 0 ? '#ef4444' : '#3b82f6';
+
+                  return (
+                    <>
+                      {/* 범례 */}
+                      <div className="flex items-center gap-4 mb-2 justify-end">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-3 h-0.5 rounded-full" style={{ backgroundColor: myLineColor }} />
+                          <span className="text-[11px] text-gray-500">내 수익률</span>
+                        </div>
+                        {hasKospi && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-3 h-0.5 rounded-full border-t border-dashed border-gray-400" style={{ borderTopWidth: 2 }} />
+                            <span className="text-[11px] text-gray-400">KOSPI 수익률</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-56">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                            <defs>
+                              <linearGradient id="returnGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={myGradientColor} stopOpacity={0.12} />
+                                <stop offset="100%" stopColor={myGradientColor} stopOpacity={0.01} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis
+                              dataKey="label"
+                              tick={{ fontSize: 11, fill: '#9ca3af' }}
+                              tickLine={false}
+                              axisLine={false}
+                            />
+                            <YAxis
+                              domain={[
+                                Number((minR - rPadding).toFixed(1)),
+                                Number((maxR + rPadding).toFixed(1)),
+                              ]}
+                              tick={{ fontSize: 11, fill: '#9ca3af' }}
+                              tickLine={false}
+                              axisLine={false}
+                              tickFormatter={(v: number) => `${v}%`}
+                              width={50}
+                            />
+                            {/* 0% 기준선 */}
+                            <CartesianGrid
+                              horizontal={false}
+                              vertical={false}
+                            />
+                            <Tooltip
+                              contentStyle={{ borderRadius: '10px', fontSize: '13px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                              formatter={(value: number, name: string) => {
+                                if (name === 'myReturn') return [`${value >= 0 ? '+' : ''}${value.toFixed(2)}%`, '내 수익률'];
+                                if (name === 'kospiReturn') return [`${value >= 0 ? '+' : ''}${value.toFixed(2)}%`, 'KOSPI 수익률'];
+                                return [value, name];
+                              }}
+                              labelFormatter={(label: string) => label}
+                            />
+                            <Area
+                              type="monotone"
+                              dataKey="myReturn"
+                              stroke={myLineColor}
+                              strokeWidth={2.5}
+                              fill="url(#returnGradient)"
+                              dot={false}
+                              activeDot={{ r: 4, fill: myLineColor, strokeWidth: 2, stroke: '#fff' }}
+                            />
+                            {hasKospi && (
+                              <Line
+                                type="monotone"
+                                dataKey="kospiReturn"
+                                stroke="#9ca3af"
+                                strokeWidth={1.5}
+                                strokeDasharray="6 3"
+                                dot={false}
+                                activeDot={{ r: 3, fill: '#9ca3af', strokeWidth: 1, stroke: '#fff' }}
+                              />
+                            )}
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                      {/* 벤치마크 안내 */}
+                      <div className="mt-3 px-1">
+                        <p className="text-[11px] text-gray-400 leading-relaxed">
+                          * 수익률은 차트 시작일 자산 기준으로 계산됩니다. KOSPI 수익률은 현재 일일 등락률을 기간에 걸쳐 선형 보간한 추정치입니다.
+                          BTC 벤치마크는 준비 중입니다.
+                        </p>
+                      </div>
+                    </>
+                  );
+                }
+
+                // ── 총 자산 모드 (기존) ──
                 const values = chartData.map((d) => d.totalValue);
                 const allValues = hasKospi ? [...values, startValue, kospiEndValue] : values;
                 const minVal = Math.min(...allValues);

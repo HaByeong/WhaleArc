@@ -64,7 +64,8 @@ const TradePage = () => {
   // 가격 알림
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [alertTargetPrice, setAlertTargetPrice] = useState('');
-  const [alertCondition, setAlertCondition] = useState<'ABOVE' | 'BELOW'>('ABOVE');
+  const [alertCondition, setAlertCondition] = useState<'ABOVE' | 'BELOW' | 'CHANGE_UP' | 'CHANGE_DOWN'>('ABOVE');
+  const [alertChangePercent, setAlertChangePercent] = useState('');
   const [priceAlerts, setPriceAlerts] = useState<any[]>([]);
 
   const [activeTab, setActiveTab] = useState<'chart' | 'orders' | 'trades' | 'holdings'>('chart');
@@ -637,7 +638,7 @@ const TradePage = () => {
                           onClick={() => {
                             const next = !showAlertModal;
                             setShowAlertModal(next);
-                            setAlertTargetPrice('');
+                            setAlertTargetPrice(''); setAlertChangePercent('');
                             if (next) { tradeService.getPriceAlerts().then(a => setPriceAlerts(a || [])).catch(e => console.error('알림 로드 실패:', e)); }
                           }}
                           title="가격 알림 설정"
@@ -701,52 +702,80 @@ const TradePage = () => {
                         <h4 className={`text-sm font-bold ${d ? 'text-yellow-400' : 'text-yellow-700'}`}>가격 알림 설정</h4>
                         <button onClick={() => setShowAlertModal(false)} className={`text-xs ${d ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'}`}>닫기</button>
                       </div>
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {([
+                          { key: 'ABOVE', label: '이상' },
+                          { key: 'BELOW', label: '이하' },
+                          { key: 'CHANGE_UP', label: '급등' },
+                          { key: 'CHANGE_DOWN', label: '급락' },
+                        ] as const).map(({ key, label }) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => { setAlertCondition(key); setAlertTargetPrice(''); setAlertChangePercent(''); }}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                              alertCondition === key
+                                ? (d ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-200 text-yellow-800')
+                                : (d ? 'bg-white/[0.04] text-slate-500 hover:bg-white/[0.06]' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                       <div className="flex gap-2 mb-3">
-                        <input
-                          type="number"
-                          placeholder="목표 가격"
-                          value={alertTargetPrice}
-                          onChange={(e) => setAlertTargetPrice(e.target.value)}
-                          className={`flex-1 text-sm rounded-lg px-3 py-2 outline-none ${
-                            d ? 'bg-white/[0.06] text-slate-200 border border-white/[0.08] focus:border-yellow-500/40'
-                              : 'bg-white text-gray-700 border border-gray-200 focus:border-yellow-400'
-                          }`}
-                        />
-                        <div className="flex rounded-lg overflow-hidden">
-                          {(['ABOVE', 'BELOW'] as const).map(cond => (
-                            <button
-                              key={cond}
-                              type="button"
-                              onClick={() => setAlertCondition(cond)}
-                              className={`px-3 py-2 text-xs font-semibold transition-colors ${
-                                alertCondition === cond
-                                  ? (d ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-200 text-yellow-800')
-                                  : (d ? 'bg-white/[0.04] text-slate-500 hover:bg-white/[0.06]' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')
-                              }`}
-                            >
-                              {cond === 'ABOVE' ? '이상' : '이하'}
-                            </button>
-                          ))}
-                        </div>
+                        {(alertCondition === 'CHANGE_UP' || alertCondition === 'CHANGE_DOWN') ? (
+                          <input
+                            type="number"
+                            placeholder="변동률 (%)"
+                            value={alertChangePercent}
+                            onChange={(e) => setAlertChangePercent(e.target.value)}
+                            className={`flex-1 text-sm rounded-lg px-3 py-2 outline-none ${
+                              d ? 'bg-white/[0.06] text-slate-200 border border-white/[0.08] focus:border-yellow-500/40'
+                                : 'bg-white text-gray-700 border border-gray-200 focus:border-yellow-400'
+                            }`}
+                          />
+                        ) : (
+                          <input
+                            type="number"
+                            placeholder="목표 가격"
+                            value={alertTargetPrice}
+                            onChange={(e) => setAlertTargetPrice(e.target.value)}
+                            className={`flex-1 text-sm rounded-lg px-3 py-2 outline-none ${
+                              d ? 'bg-white/[0.06] text-slate-200 border border-white/[0.08] focus:border-yellow-500/40'
+                                : 'bg-white text-gray-700 border border-gray-200 focus:border-yellow-400'
+                            }`}
+                          />
+                        )}
                       </div>
                       <button
                         type="button"
                         onClick={async () => {
-                          if (!alertTargetPrice || parseFloat(alertTargetPrice) <= 0 || !liveSelectedStock) return;
+                          if (!liveSelectedStock) return;
+                          const isChangeAlert = alertCondition === 'CHANGE_UP' || alertCondition === 'CHANGE_DOWN';
+                          if (isChangeAlert && (!alertChangePercent || parseFloat(alertChangePercent) <= 0)) return;
+                          if (!isChangeAlert && (!alertTargetPrice || parseFloat(alertTargetPrice) <= 0)) return;
                           try {
                             await tradeService.createPriceAlert({
                               stockCode: liveSelectedStock.stockCode,
                               stockName: isSelectedStock ? liveSelectedStock.stockName : assetName(liveSelectedStock.stockCode),
                               assetType: isSelectedStock ? 'STOCK' : 'CRYPTO',
                               condition: alertCondition,
-                              targetPrice: parseFloat(alertTargetPrice),
+                              ...(isChangeAlert
+                                ? { changePercent: parseFloat(alertChangePercent) }
+                                : { targetPrice: parseFloat(alertTargetPrice) }),
                             });
                             showToast('가격 알림이 설정되었습니다.', 'success');
                             setAlertTargetPrice('');
+                            setAlertChangePercent('');
                             try { const alerts = await tradeService.getPriceAlerts(); setPriceAlerts(alerts || []); } catch (e) { console.error('알림 갱신 실패:', e); }
                           } catch { showToast('알림 설정에 실패했습니다.', 'error'); }
                         }}
-                        disabled={!alertTargetPrice || parseFloat(alertTargetPrice) <= 0}
+                        disabled={
+                          (alertCondition === 'CHANGE_UP' || alertCondition === 'CHANGE_DOWN')
+                            ? (!alertChangePercent || parseFloat(alertChangePercent) <= 0)
+                            : (!alertTargetPrice || parseFloat(alertTargetPrice) <= 0)
+                        }
                         className={`w-full py-2 rounded-lg text-sm font-bold transition-all disabled:opacity-40 ${
                           d ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30' : 'bg-yellow-400 text-yellow-900 hover:bg-yellow-500'
                         }`}
@@ -759,7 +788,7 @@ const TradePage = () => {
                           {priceAlerts.filter((a: any) => a.stockCode === liveSelectedStock.stockCode).map((alert: any) => (
                             <div key={alert.id} className={`flex items-center justify-between text-xs px-2 py-1.5 rounded-lg ${d ? 'bg-white/[0.04]' : 'bg-white'}`}>
                               <span className={d ? 'text-slate-300' : 'text-gray-600'}>
-                                {fmt(alert.targetPrice)} {alert.condition === 'ABOVE' ? '이상' : '이하'}
+                                {alert.condition === 'CHANGE_UP' ? `${alert.changePercent}% 이상 급등` : alert.condition === 'CHANGE_DOWN' ? `${alert.changePercent}% 이상 급락` : `${fmt(alert.targetPrice)} ${alert.condition === 'ABOVE' ? '이상' : '이하'}`}
                               </span>
                               <button
                                 onClick={async () => {

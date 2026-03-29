@@ -26,3 +26,22 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
 });
+
+// PWA 푸시 알림 수신
+self.addEventListener('push', (event) => {
+  const data = event.data ? event.data.json() : {};
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'WhaleArc', {
+      body: data.body || '새로운 알림이 있습니다',
+      icon: '/favicon.svg',
+      badge: '/favicon.svg',
+      data: data,
+    })
+  );
+});
+
+// 알림 클릭 시 대시보드로 이동
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(clients.openWindow('/dashboard'));
+});

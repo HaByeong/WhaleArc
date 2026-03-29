@@ -67,21 +67,37 @@ public class NotificationController {
         if (stockName == null || stockName.isBlank()) {
             throw new IllegalArgumentException("종목 이름을 입력해주세요.");
         }
-        if (condition == null || (!condition.equals("ABOVE") && !condition.equals("BELOW"))) {
-            throw new IllegalArgumentException("조건은 ABOVE 또는 BELOW만 가능합니다.");
+        PriceAlert.AlertCondition alertCondition;
+        try {
+            alertCondition = PriceAlert.AlertCondition.valueOf(condition);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("조건은 ABOVE, BELOW, CHANGE_UP, CHANGE_DOWN 중 하나여야 합니다.");
         }
 
-        double targetPrice;
-        try {
-            targetPrice = Double.parseDouble(String.valueOf(body.get("targetPrice")));
-            if (targetPrice <= 0) throw new NumberFormatException();
-        } catch (Exception e) {
-            throw new IllegalArgumentException("유효한 목표가를 입력해주세요.");
+        double targetPrice = 0;
+        double changePercent = 0;
+
+        if (alertCondition == PriceAlert.AlertCondition.CHANGE_UP || alertCondition == PriceAlert.AlertCondition.CHANGE_DOWN) {
+            // 급등/급락 알림: changePercent 필수
+            try {
+                changePercent = Double.parseDouble(String.valueOf(body.get("changePercent")));
+                if (changePercent <= 0) throw new NumberFormatException();
+            } catch (Exception e) {
+                throw new IllegalArgumentException("유효한 변동률(%)을 입력해주세요.");
+            }
+        } else {
+            // 목표가 알림: targetPrice 필수
+            try {
+                targetPrice = Double.parseDouble(String.valueOf(body.get("targetPrice")));
+                if (targetPrice <= 0) throw new NumberFormatException();
+            } catch (Exception e) {
+                throw new IllegalArgumentException("유효한 목표가를 입력해주세요.");
+            }
         }
 
         PriceAlert alert = priceAlertService.createAlert(
                 userId, stockCode, stockName, assetType,
-                PriceAlert.AlertCondition.valueOf(condition), targetPrice
+                alertCondition, targetPrice, changePercent
         );
         return ApiResponse.ok(alert);
     }

@@ -256,4 +256,93 @@ export const strategyService = {
   },
 };
 
+// ── 백테스트 결과 CSV 내보내기 ──
+export function exportBacktestCsv(result: BacktestResult): void {
+  const BOM = '\uFEFF';
+  const lines: string[] = [];
 
+  // 요약 헤더
+  lines.push('전략명,종목,기간,초기자본,최종가치,수익률,최대낙폭,샤프비율,승률');
+  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  lines.push([
+    esc(result.strategyName || '-'),
+    esc(`${result.stockName || ''}(${result.stockCode || ''})`),
+    esc(`${result.startDate} ~ ${result.endDate}`),
+    result.initialCapital,
+    Math.round(result.finalValue),
+    `${result.totalReturnRate.toFixed(2)}%`,
+    `${result.maxDrawdown.toFixed(2)}%`,
+    result.sharpeRatio.toFixed(2),
+    `${result.winRate.toFixed(1)}%`,
+  ].join(','));
+
+  // 빈 줄 구분
+  lines.push('');
+
+  // 거래 내역
+  lines.push('날짜,타입,가격,수량,손익,사유');
+  (result.trades || []).forEach(t => {
+    lines.push([
+      t.date,
+      t.type,
+      t.price,
+      t.quantity,
+      t.pnl,
+      esc(t.reason || ''),
+    ].join(','));
+  });
+
+  const blob = new Blob([BOM + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `backtest_${result.stockCode}_${result.startDate}_${result.endDate}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── 백테스트 히스토리 (localStorage) ──
+const HISTORY_KEY = 'whalearc_backtest_history';
+const MAX_HISTORY = 20;
+
+export interface BacktestHistoryEntry {
+  id: string;
+  strategyName: string;
+  stockCode: string;
+  date: string;
+  totalReturnRate: number;
+  result: BacktestResult;
+}
+
+export function loadBacktestHistory(): BacktestHistoryEntry[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as BacktestHistoryEntry[];
+  } catch {
+    return [];
+  }
+}
+
+export function saveBacktestHistory(result: BacktestResult): void {
+  const history = loadBacktestHistory();
+  const entry: BacktestHistoryEntry = {
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    strategyName: result.strategyName || '-',
+    stockCode: result.stockCode || '-',
+    date: new Date().toISOString(),
+    totalReturnRate: result.totalReturnRate,
+    result,
+  };
+  history.unshift(entry);
+  if (history.length > MAX_HISTORY) history.length = MAX_HISTORY;
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch {
+    // localStorage 용량 초과 시 오래된 절반 삭제 후 재시도
+    history.length = Math.floor(MAX_HISTORY / 2);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  }
+}

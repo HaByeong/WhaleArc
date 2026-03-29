@@ -29,8 +29,9 @@ public class PriceAlert {
     private String stockName;
     private String assetType;        // STOCK, CRYPTO
 
-    private AlertCondition condition; // ABOVE, BELOW
+    private AlertCondition condition; // ABOVE, BELOW, CHANGE_UP, CHANGE_DOWN
     private double targetPrice;
+    private double changePercent;     // 변동률 기준 (예: 5.0 = 5%) - CHANGE_UP/CHANGE_DOWN 전용
     private boolean triggered;
     private boolean active;
 
@@ -38,18 +39,26 @@ public class PriceAlert {
     private Instant triggeredAt;
 
     public enum AlertCondition {
-        ABOVE,  // 목표가 이상 도달
-        BELOW   // 목표가 이하 도달
+        ABOVE,       // 목표가 이상 도달
+        BELOW,       // 목표가 이하 도달
+        CHANGE_UP,   // 급등: N% 이상 상승
+        CHANGE_DOWN  // 급락: N% 이상 하락
     }
 
     public PriceAlert(String userId, String stockCode, String stockName, String assetType,
                       AlertCondition condition, double targetPrice) {
+        this(userId, stockCode, stockName, assetType, condition, targetPrice, 0);
+    }
+
+    public PriceAlert(String userId, String stockCode, String stockName, String assetType,
+                      AlertCondition condition, double targetPrice, double changePercent) {
         this.userId = userId;
         this.stockCode = stockCode;
         this.stockName = stockName;
         this.assetType = assetType;
         this.condition = condition;
         this.targetPrice = targetPrice;
+        this.changePercent = changePercent;
         this.triggered = false;
         this.active = true;
         this.createdAt = Instant.now();

@@ -208,7 +208,7 @@ export const tradeService = {
   },
 
   // 가격 알림 생성
-  createPriceAlert: async (data: { stockCode: string; stockName: string; assetType: string; condition: string; targetPrice: number }) => {
+  createPriceAlert: async (data: { stockCode: string; stockName: string; assetType: string; condition: string; targetPrice?: number; changePercent?: number }) => {
     const response = await apiClient.post('/api/notifications/price-alerts', data);
     return response.data.data;
   },

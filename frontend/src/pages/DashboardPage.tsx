@@ -200,6 +200,7 @@ const DashboardPage = () => {
   void isVirt;
 
   const pollData = useCallback(async () => {
+    if (showVirtTour || showNormalTour) return; // 가이드 중 폴링 중지
     try {
       const [portfolioData, stocksData] = await Promise.all([
         isVirt ? tradeService.getPortfolio().catch(() => null) : Promise.resolve(null),
@@ -235,7 +236,7 @@ const DashboardPage = () => {
     } catch {
       // 폴링 실패는 무시
     }
-  }, [favoriteAssets]);
+  }, [favoriteAssets, showVirtTour, showNormalTour]);
   usePolling(pollData, 15000);
 
   const getDemoPortfolio = (): Portfolio => ({

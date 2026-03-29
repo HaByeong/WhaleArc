@@ -951,62 +951,67 @@ const DashboardPage = () => {
                       </div>
                     </div>
                   </div>
-                  {/* 목표 수익률 프로그레스 바 */}
-                  <div className="mt-4 pt-4 border-t border-gray-100" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold text-gray-500">목표 수익률</span>
-                      <div className="flex items-center gap-1">
-                        {editingTarget ? (
-                          <>
-                            <input
-                              type="number"
-                              value={targetInput}
-                              onChange={e => setTargetInput(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter') handleTargetSave(); if (e.key === 'Escape') { setEditingTarget(false); setTargetInput(String(targetReturn)); } }}
-                              onBlur={handleTargetSave}
-                              className="w-16 px-1.5 py-0.5 text-xs border border-gray-300 rounded text-right focus:outline-none focus:ring-1 focus:ring-whale-light"
-                              autoFocus
-                              min="0.1"
-                              step="0.1"
-                            />
-                            <span className="text-xs text-gray-500">%</span>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => { setEditingTarget(true); setTargetInput(String(targetReturn)); }}
-                            className="text-xs text-whale-light hover:text-whale-accent font-medium flex items-center gap-0.5"
-                          >
-                            {targetReturn}%
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {(() => {
-                      const progress = targetReturn > 0 ? Math.min(Math.max(portfolio.returnRate / targetReturn * 100, 0), 100) : 0;
-                      const achieved = portfolio.returnRate >= targetReturn;
-                      return (
-                        <div>
-                          <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${achieved ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 'bg-gradient-to-r from-whale-light to-blue-400'}`}
-                              style={{ width: `${progress}%` }}
-                            />
+                  {/* 목표 수익률 */}
+                  {(() => {
+                    const progress = targetReturn > 0 ? Math.min(Math.max(portfolio.returnRate / targetReturn * 100, 0), 100) : 0;
+                    const achieved = portfolio.returnRate >= targetReturn;
+                    return (
+                      <div className={`mt-4 rounded-xl p-4 ${achieved ? 'bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200' : 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200'}`} onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${achieved ? 'bg-emerald-100' : 'bg-blue-100'}`}>
+                              {achieved ? (
+                                <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                              ) : (
+                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                              )}
+                            </div>
+                            <span className={`text-sm font-bold ${achieved ? 'text-emerald-700' : 'text-blue-700'}`}>목표 수익률</span>
                           </div>
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="text-[10px] text-gray-400">
-                              {portfolio.returnRate >= 0 ? '+' : ''}{portfolio.returnRate.toFixed(2)}% / {targetReturn}%
-                            </span>
-                            {achieved && (
-                              <span className="text-[11px] font-bold text-emerald-500 animate-pulse">
-                                목표 달성!
-                              </span>
+                          <div className="flex items-center gap-1">
+                            {editingTarget ? (
+                              <>
+                                <input
+                                  type="number"
+                                  value={targetInput}
+                                  onChange={e => setTargetInput(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') handleTargetSave(); if (e.key === 'Escape') { setEditingTarget(false); setTargetInput(String(targetReturn)); } }}
+                                  onBlur={handleTargetSave}
+                                  className="w-16 px-2 py-1 text-sm border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-whale-light"
+                                  autoFocus min="0.1" step="0.1"
+                                />
+                                <span className="text-sm text-gray-500">%</span>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => { setEditingTarget(true); setTargetInput(String(targetReturn)); }}
+                                className={`text-sm font-bold flex items-center gap-1 px-2 py-1 rounded-lg transition-colors ${achieved ? 'text-emerald-600 hover:bg-emerald-100' : 'text-blue-600 hover:bg-blue-100'}`}
+                              >
+                                {targetReturn}%
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                              </button>
                             )}
                           </div>
                         </div>
-                      );
-                    })()}
-                  </div>
+                        <div className="w-full h-3 bg-white/60 rounded-full overflow-hidden shadow-inner">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${achieved ? 'bg-gradient-to-r from-emerald-400 to-green-500 shadow-sm shadow-emerald-300' : 'bg-gradient-to-r from-blue-400 to-indigo-500 shadow-sm shadow-blue-300'}`}
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className={`text-xs font-medium ${achieved ? 'text-emerald-600' : 'text-blue-600'}`}>
+                            {portfolio.returnRate >= 0 ? '▲ +' : '▼ '}{portfolio.returnRate.toFixed(2)}% / {targetReturn}%
+                          </span>
+                          {achieved && (
+                            <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                              목표 달성!
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </DragWrap>
             ) : null,

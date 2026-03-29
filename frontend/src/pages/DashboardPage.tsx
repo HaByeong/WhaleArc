@@ -1085,42 +1085,6 @@ const DashboardPage = () => {
 
               {/* 관심 종목 카드 */}
               <div data-tour="virt-watchlist">
-                {/* 시세 변동 상위 */}
-                {liveTopMovers.length > 0 && (
-                  <div className="card mb-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-lg font-bold text-whale-dark">시세 변동 상위</h2>
-                      <button
-                        onClick={() => navigate('/market')}
-                        className="text-sm text-whale-light hover:text-whale-accent font-medium"
-                      >
-                        전체 시세
-                      </button>
-                    </div>
-                    <div className="space-y-3">
-                      {liveTopMovers.map((stock) => (
-                        <div
-                          key={stock.stockCode}
-                          className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 rounded-lg px-2 -mx-2"
-                          onClick={() => navigate(`/trade?code=${stock.stockCode}&type=${stock.assetType || 'CRYPTO'}`)}
-                        >
-                          <div>
-                            <div className="font-semibold text-sm text-gray-800">{stock.stockName}</div>
-                            <div className="text-xs text-gray-400">{stock.stockCode}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-semibold text-gray-800">{formatCurrency(stock.currentPrice)}</div>
-                            <div className={`text-xs font-semibold ${
-                              stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'
-                            }`}>
-                              {stock.changeRate >= 0 ? '▲ +' : '▼ '}{stock.changeRate.toFixed(2)}%
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 {/* 관심 종목 */}
                 <div className="card">
                   <div className="flex items-center justify-between mb-5">
@@ -1231,7 +1195,7 @@ const DashboardPage = () => {
                             투자: {formatCurrency(p.investmentAmount)} · {p.purchasedAssets?.map(a => cryptoDisplayName(a.code)).join(', ')}
                           </div>
                         </div>
-                        <span className="px-2 py-1 text-xs font-semibold bg-green-50 text-green-600 rounded-full">항해 중</span>
+                        <span className="shrink-0 px-2 py-1 text-[10px] font-semibold bg-green-50 text-green-600 rounded-full whitespace-nowrap">운항중</span>
                       </div>
                     ))}
                   </div>

@@ -201,7 +201,12 @@ const Header = ({ showNav = false }: HeaderProps) => {
                     {/* 브라우저 알림 권한 요청 버튼 */}
                     {notificationPermission === 'default' && (
                       <button
-                        onClick={requestNotificationPermission}
+                        onClick={async () => {
+                          const result = await requestNotificationPermission();
+                          if (result === 'granted') alert('알림이 활성화되었습니다!');
+                          else if (result === 'denied') alert('알림이 차단되었습니다. 브라우저 설정에서 변경할 수 있습니다.');
+                          else if (result === 'unsupported') alert('이 브라우저는 알림을 지원하지 않습니다.');
+                        }}
                         className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                           isDarkNav
                             ? 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 border border-cyan-500/20'

@@ -23,8 +23,8 @@ export function useNotifications(enabled = true) {
   const initialLoadRef = useRef(true);
 
   // 브라우저 알림 권한 요청
-  const requestNotificationPermission = useCallback(async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
+  const requestNotificationPermission = useCallback(async (): Promise<string> => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
     try {
       const permission = await window.Notification.requestPermission();
       setNotificationPermission(permission as NotificationPermissionState);
@@ -45,8 +45,9 @@ export function useNotifications(enabled = true) {
           }
         }
       }
+      return permission;
     } catch {
-      // 권한 요청 실패 시 무시
+      return 'denied';
     }
   }, []);
 

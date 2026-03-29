@@ -57,58 +57,6 @@ const DashboardPage = () => {
     setEditingTarget(false);
   };
 
-  // ── 카드 순서 드래그 앤 드롭 (Virt 모드) ──
-  const DEFAULT_CARD_ORDER: string[] = ['portfolio', 'holdings', 'routes', 'watchlist', 'actions'];
-  const [cardOrder, setCardOrder] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('whalearc_dashboard_order');
-      if (saved) {
-        const parsed = JSON.parse(saved) as string[];
-        // 유효성: 기본 카드가 모두 포함되어야 함
-        if (DEFAULT_CARD_ORDER.every(k => parsed.includes(k)) && parsed.length === DEFAULT_CARD_ORDER.length) {
-          return parsed;
-        }
-      }
-    } catch { /* ignore */ }
-    return DEFAULT_CARD_ORDER;
-  });
-  const [draggedCard, setDraggedCard] = useState<string | null>(null);
-  const [dragOverCard, setDragOverCard] = useState<string | null>(null);
-
-  const handleCardDragStart = useCallback((cardId: string) => {
-    setDraggedCard(cardId);
-  }, []);
-
-  const handleCardDragOver = useCallback((e: React.DragEvent, cardId: string) => {
-    e.preventDefault();
-    if (draggedCard && draggedCard !== cardId) {
-      setDragOverCard(cardId);
-    }
-  }, [draggedCard]);
-
-  const handleCardDragEnd = useCallback(() => {
-    if (draggedCard && dragOverCard && draggedCard !== dragOverCard) {
-      setCardOrder(prev => {
-        const newOrder = [...prev];
-        const fromIdx = newOrder.indexOf(draggedCard);
-        const toIdx = newOrder.indexOf(dragOverCard);
-        if (fromIdx !== -1 && toIdx !== -1) {
-          newOrder.splice(fromIdx, 1);
-          newOrder.splice(toIdx, 0, draggedCard);
-        }
-        localStorage.setItem('whalearc_dashboard_order', JSON.stringify(newOrder));
-        return newOrder;
-      });
-    }
-    setDraggedCard(null);
-    setDragOverCard(null);
-  }, [draggedCard, dragOverCard]);
-
-  const handleResetCardOrder = useCallback(() => {
-    setCardOrder(DEFAULT_CARD_ORDER);
-    localStorage.setItem('whalearc_dashboard_order', JSON.stringify(DEFAULT_CARD_ORDER));
-  }, []);
-
   // 일반 모드 가이드 투어
   const [showNormalTour, setShowNormalTour] = useState(false);
   const normalTourSteps: TourStep[] = [
@@ -872,152 +820,125 @@ const DashboardPage = () => {
           </div>
         )}
 
-        {/* ═══ Virt 모드: 드래그 앤 드롭 카드 섹션 ═══ */}
-        {isVirt && (() => {
-          const isDefaultOrder = JSON.stringify(cardOrder) === JSON.stringify(DEFAULT_CARD_ORDER);
-
-          // 드래그 가능한 카드 래퍼
-          const DragWrap = ({ id, children, className = '' }: { id: string; children: React.ReactNode; className?: string }) => (
-            <div
-              draggable
-              onDragStart={() => handleCardDragStart(id)}
-              onDragOver={(e) => handleCardDragOver(e, id)}
-              onDragEnd={handleCardDragEnd}
-              className={`relative transition-all duration-200 ${
-                draggedCard === id ? 'opacity-40 scale-[0.98]' : ''
-              } ${dragOverCard === id && draggedCard !== id ? 'ring-2 ring-whale-light/50 ring-offset-2 rounded-2xl' : ''} ${className}`}
-              style={{ cursor: 'grab' }}
-            >
-              {/* 드래그 핸들 표시 */}
-              <div className="absolute top-2 right-2 z-10 opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
-                <div className="flex flex-col gap-0.5 p-1.5 rounded bg-gray-100/80 backdrop-blur-sm">
-                  <div className="w-4 h-0.5 bg-gray-400 rounded-full" />
-                  <div className="w-4 h-0.5 bg-gray-400 rounded-full" />
-                  <div className="w-4 h-0.5 bg-gray-400 rounded-full" />
+        {/* ═══ Virt 모드: 카드 섹션 ═══ */}
+        {isVirt && (
+          <>
+            {/* 포트폴리오 요약 카드 (전체 너비) */}
+            {portfolio && (
+              <div
+                data-tour="virt-portfolio"
+                className="mb-6 card card-hover cursor-pointer group"
+                onClick={() => navigate('/my-portfolio')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/my-portfolio'); }}
+                aria-label="내 포트폴리오 상세 보기"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-whale-dark group-hover:text-whale-light transition-colors">
+                    포트폴리오 요약
+                  </h2>
+                  <div className="flex items-center text-whale-light font-semibold text-sm group-hover:text-whale-accent transition-colors">
+                    상세 보기
+                    <svg className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </div>
-              </div>
-              {children}
-            </div>
-          );
-
-          // 카드 컴포넌트 맵
-          const cardMap: Record<string, React.ReactNode> = {
-            portfolio: portfolio ? (
-              <DragWrap id="portfolio" key="portfolio">
-                <div
-                  data-tour="virt-portfolio"
-                  className="mb-6 card card-hover cursor-pointer group"
-                  onClick={() => navigate('/my-portfolio')}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/my-portfolio'); }}
-                  aria-label="내 포트폴리오 상세 보기"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-whale-dark group-hover:text-whale-light transition-colors">
-                      포트폴리오 요약
-                    </h2>
-                    <div className="flex items-center text-whale-light font-semibold text-sm group-hover:text-whale-accent transition-colors">
-                      상세 보기
-                      <svg className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-5 border border-blue-200/50">
+                    <div className="text-sm text-gray-500 mb-1">총 자산</div>
+                    <div className="text-2xl font-bold text-whale-dark">
+                      {formatCurrency(portfolio.totalValue)}
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-5 border border-blue-200/50">
-                      <div className="text-sm text-gray-500 mb-1">총 자산</div>
-                      <div className="text-2xl font-bold text-whale-dark">
-                        {formatCurrency(portfolio.totalValue)}
-                      </div>
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-5 border border-gray-200/50">
+                    <div className="text-sm text-gray-500 mb-1">현금</div>
+                    <div className="text-2xl font-bold text-whale-dark">
+                      {formatCurrency(portfolio.cashBalance)}
                     </div>
-                    <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-5 border border-gray-200/50">
-                      <div className="text-sm text-gray-500 mb-1">현금</div>
-                      <div className="text-2xl font-bold text-whale-dark">
-                        {formatCurrency(portfolio.cashBalance)}
-                      </div>
-                    </div>
-                    <div className={`bg-gradient-to-br rounded-xl p-5 border ${
-                      portfolio.returnRate >= 0
-                        ? 'from-red-50 to-red-100/50 border-red-200/50'
-                        : 'from-blue-50 to-blue-100/50 border-blue-200/50'
+                  </div>
+                  <div className={`bg-gradient-to-br rounded-xl p-5 border ${
+                    portfolio.returnRate >= 0
+                      ? 'from-red-50 to-red-100/50 border-red-200/50'
+                      : 'from-blue-50 to-blue-100/50 border-blue-200/50'
+                  }`}>
+                    <div className="text-sm text-gray-500 mb-1">수익률</div>
+                    <div className={`text-2xl font-bold ${
+                      portfolio.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'
                     }`}>
-                      <div className="text-sm text-gray-500 mb-1">수익률</div>
-                      <div className={`text-2xl font-bold ${
-                        portfolio.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'
-                      }`}>
-                        {portfolio.returnRate >= 0 ? '▲ +' : '▼ '}
-                        {portfolio.returnRate.toFixed(2)}%
-                      </div>
+                      {portfolio.returnRate >= 0 ? '▲ +' : '▼ '}
+                      {portfolio.returnRate.toFixed(2)}%
                     </div>
                   </div>
-                  {/* 목표 수익률 */}
-                  {(() => {
-                    const progress = targetReturn > 0 ? Math.min(Math.max(portfolio.returnRate / targetReturn * 100, 0), 100) : 0;
-                    const achieved = portfolio.returnRate >= targetReturn;
-                    return (
-                      <div className={`mt-4 rounded-xl p-4 ${achieved ? 'bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200' : 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200'}`} onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${achieved ? 'bg-emerald-100' : 'bg-blue-100'}`}>
-                              {achieved ? (
-                                <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                              ) : (
-                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                              )}
-                            </div>
-                            <span className={`text-sm font-bold ${achieved ? 'text-emerald-700' : 'text-blue-700'}`}>목표 수익률</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {editingTarget ? (
-                              <>
-                                <input
-                                  type="number"
-                                  value={targetInput}
-                                  onChange={e => setTargetInput(e.target.value)}
-                                  onKeyDown={e => { if (e.key === 'Enter') handleTargetSave(); if (e.key === 'Escape') { setEditingTarget(false); setTargetInput(String(targetReturn)); } }}
-                                  onBlur={handleTargetSave}
-                                  className="w-16 px-2 py-1 text-sm border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-whale-light"
-                                  autoFocus min="0.1" step="0.1"
-                                />
-                                <span className="text-sm text-gray-500">%</span>
-                              </>
+                </div>
+                {/* 목표 수익률 */}
+                {(() => {
+                  const progress = targetReturn > 0 ? Math.min(Math.max(portfolio.returnRate / targetReturn * 100, 0), 100) : 0;
+                  const achieved = portfolio.returnRate >= targetReturn;
+                  return (
+                    <div className={`mt-4 rounded-xl p-4 ${achieved ? 'bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200' : 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200'}`} onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${achieved ? 'bg-emerald-100' : 'bg-blue-100'}`}>
+                            {achieved ? (
+                              <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                             ) : (
-                              <button
-                                onClick={() => { setEditingTarget(true); setTargetInput(String(targetReturn)); }}
-                                className={`text-sm font-bold flex items-center gap-1 px-2 py-1 rounded-lg transition-colors ${achieved ? 'text-emerald-600 hover:bg-emerald-100' : 'text-blue-600 hover:bg-blue-100'}`}
-                              >
-                                {targetReturn}%
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                              </button>
+                              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
                             )}
                           </div>
+                          <span className={`text-sm font-bold ${achieved ? 'text-emerald-700' : 'text-blue-700'}`}>목표 수익률</span>
                         </div>
-                        <div className="w-full h-3 bg-white/60 rounded-full overflow-hidden shadow-inner">
-                          <div
-                            className={`h-full rounded-full transition-all duration-700 ${achieved ? 'bg-gradient-to-r from-emerald-400 to-green-500 shadow-sm shadow-emerald-300' : 'bg-gradient-to-r from-blue-400 to-indigo-500 shadow-sm shadow-blue-300'}`}
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className={`text-xs font-medium ${achieved ? 'text-emerald-600' : 'text-blue-600'}`}>
-                            {portfolio.returnRate >= 0 ? '▲ +' : '▼ '}{portfolio.returnRate.toFixed(2)}% / {targetReturn}%
-                          </span>
-                          {achieved && (
-                            <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
-                              목표 달성!
-                            </span>
+                        <div className="flex items-center gap-1">
+                          {editingTarget ? (
+                            <>
+                              <input
+                                type="number"
+                                value={targetInput}
+                                onChange={e => setTargetInput(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleTargetSave(); if (e.key === 'Escape') { setEditingTarget(false); setTargetInput(String(targetReturn)); } }}
+                                onBlur={handleTargetSave}
+                                className="w-16 px-2 py-1 text-sm border border-gray-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-whale-light"
+                                autoFocus min="0.1" step="0.1"
+                              />
+                              <span className="text-sm text-gray-500">%</span>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => { setEditingTarget(true); setTargetInput(String(targetReturn)); }}
+                              className={`text-sm font-bold flex items-center gap-1 px-2 py-1 rounded-lg transition-colors ${achieved ? 'text-emerald-600 hover:bg-emerald-100' : 'text-blue-600 hover:bg-blue-100'}`}
+                            >
+                              {targetReturn}%
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                            </button>
                           )}
                         </div>
                       </div>
-                    );
-                  })()}
-                </div>
-              </DragWrap>
-            ) : null,
+                      <div className="w-full h-3 bg-white/60 rounded-full overflow-hidden shadow-inner">
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${achieved ? 'bg-gradient-to-r from-emerald-400 to-green-500 shadow-sm shadow-emerald-300' : 'bg-gradient-to-r from-blue-400 to-indigo-500 shadow-sm shadow-blue-300'}`}
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className={`text-xs font-medium ${achieved ? 'text-emerald-600' : 'text-blue-600'}`}>
+                          {portfolio.returnRate >= 0 ? '▲ +' : '▼ '}{portfolio.returnRate.toFixed(2)}% / {targetReturn}%
+                        </span>
+                        {achieved && (
+                          <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                            목표 달성!
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
 
-            holdings: portfolio && portfolio.holdings.length > 0 ? (
-              <DragWrap id="holdings" key="holdings">
+            {/* 보유 종목 + 항로 (2컬럼 grid) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {portfolio && portfolio.holdings.length > 0 && (
                 <div data-tour="virt-holdings" className="card mb-6">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-bold text-whale-dark">보유 종목</h2>
@@ -1107,11 +1028,9 @@ const DashboardPage = () => {
                     ) : null;
                   })()}
                 </div>
-              </DragWrap>
-            ) : null,
+              )}
 
-            routes: activePurchases.length > 0 ? (
-              <DragWrap id="routes" key="routes">
+              {activePurchases.length > 0 ? (
                 <div data-tour="virt-routes" className="card mb-6">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-bold text-whale-dark">항해 중인 항로</h2>
@@ -1133,9 +1052,7 @@ const DashboardPage = () => {
                     ))}
                   </div>
                 </div>
-              </DragWrap>
-            ) : (!portfolio || portfolio.holdings.length === 0) ? (
-              <DragWrap id="routes" key="routes">
+              ) : (!portfolio || portfolio.holdings.length === 0) ? (
                 <div className="card py-8 mb-6">
                   <div className="text-center mb-6">
                     <img src="/whales/beluga.png" alt="벨루가" className="w-14 h-14 object-contain mx-auto mb-3" loading="lazy" />
@@ -1184,229 +1101,192 @@ const DashboardPage = () => {
                     </button>
                   </div>
                 </div>
-              </DragWrap>
-            ) : null,
+              ) : null}
+            </div>
 
-            watchlist: (
-              <DragWrap id="watchlist" key="watchlist">
-                <div className="mb-6">
-                  {/* 시세 변동 상위 */}
-                  {liveTopMovers.length > 0 && (
-                    <div data-tour="virt-watchlist" className="card mb-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-bold text-whale-dark">시세 변동 상위</h2>
-                        <button
-                          onClick={() => navigate('/market')}
-                          className="text-sm text-whale-light hover:text-whale-accent font-medium"
-                        >
-                          전체 시세
-                        </button>
-                      </div>
-                      <div className="space-y-3">
-                        {liveTopMovers.map((stock) => (
-                          <div
-                            key={stock.stockCode}
-                            className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 rounded-lg px-2 -mx-2"
-                            onClick={() => navigate(`/trade?code=${stock.stockCode}&type=${stock.assetType || 'CRYPTO'}`)}
-                          >
-                            <div>
-                              <div className="font-semibold text-sm text-gray-800">{stock.stockName}</div>
-                              <div className="text-xs text-gray-400">{stock.stockCode}</div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-semibold text-gray-800">{formatCurrency(stock.currentPrice)}</div>
-                              <div className={`text-xs font-semibold ${
-                                stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'
-                              }`}>
-                                {stock.changeRate >= 0 ? '▲ +' : '▼ '}{stock.changeRate.toFixed(2)}%
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {/* 관심 종목 */}
-                  <div className="card">
-                    <div className="flex items-center justify-between mb-5">
-                      <h2 className="text-lg font-bold text-whale-dark">관심 종목</h2>
-                      <button
-                        onClick={() => navigate('/user')}
-                        className="text-sm font-medium text-whale-light hover:text-whale-accent"
+            {/* 관심 종목 (전체 너비) */}
+            <div className="mb-6">
+              {/* 시세 변동 상위 */}
+              {liveTopMovers.length > 0 && (
+                <div data-tour="virt-watchlist" className="card mb-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-bold text-whale-dark">시세 변동 상위</h2>
+                    <button
+                      onClick={() => navigate('/market')}
+                      className="text-sm text-whale-light hover:text-whale-accent font-medium"
+                    >
+                      전체 시세
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {liveTopMovers.map((stock) => (
+                      <div
+                        key={stock.stockCode}
+                        className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 rounded-lg px-2 -mx-2"
+                        onClick={() => navigate(`/trade?code=${stock.stockCode}&type=${stock.assetType || 'CRYPTO'}`)}
                       >
-                        종목 편집
-                      </button>
-                    </div>
-                    {liveWatchlist.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {liveWatchlist.map((stock) => (
-                          <div
-                            key={stock.stockCode}
-                            className="flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all border border-gray-100 hover:border-whale-light/40 hover:shadow-sm"
-                            onClick={() => navigate(`/trade?code=${stock.stockCode}&type=${stock.assetType || 'CRYPTO'}`)}
-                          >
-                            <div>
-                              <div className="font-semibold text-sm text-gray-800">{stock.stockName}</div>
-                              <div className="text-xs text-gray-400">{stock.stockCode}</div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-bold text-gray-800">{formatCurrency(stock.currentPrice)}</div>
-                              <div className={`text-xs font-semibold ${
-                                stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'
-                              }`}>
-                                {stock.changeRate >= 0 ? '▲ +' : '▼ '}{stock.changeRate.toFixed(2)}%
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-12">
-                        <img src="/whales/beluga.png" alt="벨루가" className="w-16 h-16 object-contain mx-auto mb-3" loading="lazy" />
-                        <div className="font-medium text-gray-500">관심 종목이 없습니다</div>
-                        <div className="text-sm mt-1 text-gray-400">
-                          프로필에서 관심 종목을 추가하면 여기에 실시간 시세가 표시됩니다
+                        <div>
+                          <div className="font-semibold text-sm text-gray-800">{stock.stockName}</div>
+                          <div className="text-xs text-gray-400">{stock.stockCode}</div>
                         </div>
-                        <button
-                          onClick={() => navigate('/user')}
-                          className="mt-4 text-sm btn-secondary"
-                        >
-                          관심 종목 추가하기
-                        </button>
+                        <div className="text-right">
+                          <div className="text-sm font-semibold text-gray-800">{formatCurrency(stock.currentPrice)}</div>
+                          <div className={`text-xs font-semibold ${
+                            stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'
+                          }`}>
+                            {stock.changeRate >= 0 ? '▲ +' : '▼ '}{stock.changeRate.toFixed(2)}%
+                          </div>
+                        </div>
                       </div>
-                    )}
+                    ))}
                   </div>
-                </div>
-              </DragWrap>
-            ),
-
-            actions: (
-              <DragWrap id="actions" key="actions">
-                <div className="mb-6 space-y-6">
-                  <div data-tour="virt-actions" className="card !p-5">
-                    <h2 className="text-lg font-bold mb-3 text-whale-dark">어디로 항해할까요?</h2>
-                    <div className="space-y-2">
-                      <button
-                        onClick={() => navigate('/trade')}
-                        className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-gradient-to-r from-whale-light to-whale-accent text-white font-semibold text-sm shadow-sm hover:shadow-md hover:opacity-95 transition-all min-h-[44px] border border-transparent"
-                      >
-                        거래하기
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                      </button>
-                      {[
-                        { path: '/market', label: '시세 확인하기' },
-                        { path: '/my-portfolio', label: '내 포트폴리오' },
-                        { path: '/strategy', label: '전략 백테스트' },
-                        { path: '/store', label: '전략 학습' },
-                        { path: '/ranking', label: '투자 현황 보기' },
-                      ].map((item) => (
-                        <button
-                          key={item.path}
-                          onClick={() => navigate(item.path)}
-                          className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-semibold transition-all min-h-[44px] bg-white border border-gray-200 text-whale-dark hover:border-whale-light/40 hover:bg-gray-50"
-                        >
-                          {item.label}
-                          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 깊은 바다로 — WhaleArc 전환 배너 */}
-                  <button
-                    onClick={() => window.location.href = '/dashboard'}
-                    className="w-full text-left px-5 py-4 rounded-xl border border-whale-light/30 bg-gradient-to-r from-whale-dark/[0.08] to-whale-light/[0.10] hover:from-whale-dark/[0.14] hover:to-whale-light/[0.16] transition-all group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-bold text-whale-dark">더 깊은 바다로</span>
-                        <span className="px-2 py-0.5 text-[10px] font-bold bg-whale-light/15 text-whale-light rounded-full border border-whale-light/30">WhaleArc</span>
-                      </div>
-                      <svg className="w-4 h-4 text-whale-light/40 group-hover:text-whale-light group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1.5">실계좌 자산 연동 · 포트폴리오 관리 · 실전 투자 대시보드</p>
-                  </button>
-
-                  {/* 포트폴리오 통계 */}
-                  {portfolio && (
-                    <div className="card">
-                      <h2 className="text-lg font-bold text-whale-dark mb-4">포트폴리오 통계</h2>
-                      <div className="space-y-3.5">
-                        {(() => {
-                          const initial = portfolio.initialCash || 10_000_000;
-                          const pnl = portfolio.totalValue - initial;
-                          return (
-                            <>
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-gray-500">초기 자본</span>
-                                <span className="text-sm font-bold text-whale-dark">{formatCurrency(initial)}</span>
-                              </div>
-                              <div className="h-px bg-gray-100" />
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-gray-500">총 손익</span>
-                                <span className={`text-sm font-bold ${pnl >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                                  {pnl >= 0 ? '+' : ''}{formatCurrency(Math.round(pnl))}
-                                </span>
-                              </div>
-                              <div className="h-px bg-gray-100" />
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-gray-500">보유 종목 수</span>
-                                <span className="text-sm font-bold text-whale-dark">
-                                  {portfolio.holdings.length}개
-                                  {(() => {
-                                    const stockCount = portfolio.holdings.filter(h => h.assetType === 'STOCK').length;
-                                    const cryptoCount = portfolio.holdings.length - stockCount;
-                                    if (stockCount > 0 && cryptoCount > 0) {
-                                      return <span className="text-xs font-normal text-gray-400 ml-1">(주식 {stockCount} · 가상화폐 {cryptoCount})</span>;
-                                    }
-                                    return null;
-                                  })()}
-                                </span>
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </DragWrap>
-            ),
-          };
-
-          return (
-            <>
-              {/* 카드 순서 리셋 버튼 */}
-              {!isDefaultOrder && (
-                <div className="mb-4 flex justify-end">
-                  <button
-                    onClick={handleResetCardOrder}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    기본 순서로 되돌리기
-                  </button>
                 </div>
               )}
-
-              {/* 카드 순서대로 렌더링 */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {cardOrder.map((cardId) => {
-                  const node = cardMap[cardId];
-                  if (!node) return null;
-                  const isFullWidth = cardId === 'portfolio' || cardId === 'watchlist';
-                  return (
-                    <div key={cardId} className={isFullWidth ? 'lg:col-span-2' : ''}>
-                      {node}
+              {/* 관심 종목 */}
+              <div className="card">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="text-lg font-bold text-whale-dark">관심 종목</h2>
+                  <button
+                    onClick={() => navigate('/user')}
+                    className="text-sm font-medium text-whale-light hover:text-whale-accent"
+                  >
+                    종목 편집
+                  </button>
+                </div>
+                {liveWatchlist.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {liveWatchlist.map((stock) => (
+                      <div
+                        key={stock.stockCode}
+                        className="flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all border border-gray-100 hover:border-whale-light/40 hover:shadow-sm"
+                        onClick={() => navigate(`/trade?code=${stock.stockCode}&type=${stock.assetType || 'CRYPTO'}`)}
+                      >
+                        <div>
+                          <div className="font-semibold text-sm text-gray-800">{stock.stockName}</div>
+                          <div className="text-xs text-gray-400">{stock.stockCode}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-bold text-gray-800">{formatCurrency(stock.currentPrice)}</div>
+                          <div className={`text-xs font-semibold ${
+                            stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'
+                          }`}>
+                            {stock.changeRate >= 0 ? '▲ +' : '▼ '}{stock.changeRate.toFixed(2)}%
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <img src="/whales/beluga.png" alt="벨루가" className="w-16 h-16 object-contain mx-auto mb-3" loading="lazy" />
+                    <div className="font-medium text-gray-500">관심 종목이 없습니다</div>
+                    <div className="text-sm mt-1 text-gray-400">
+                      프로필에서 관심 종목을 추가하면 여기에 실시간 시세가 표시됩니다
                     </div>
-                  );
-                })}
+                    <button
+                      onClick={() => navigate('/user')}
+                      className="mt-4 text-sm btn-secondary"
+                    >
+                      관심 종목 추가하기
+                    </button>
+                  </div>
+                )}
               </div>
-            </>
-          );
-        })()}
+            </div>
+
+            {/* 빠른 항해 + 포트폴리오 통계 (2컬럼 grid) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-6">
+                <div data-tour="virt-actions" className="card !p-5">
+                  <h2 className="text-lg font-bold mb-3 text-whale-dark">어디로 항해할까요?</h2>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => navigate('/trade')}
+                      className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-gradient-to-r from-whale-light to-whale-accent text-white font-semibold text-sm shadow-sm hover:shadow-md hover:opacity-95 transition-all min-h-[44px] border border-transparent"
+                    >
+                      거래하기
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                    {[
+                      { path: '/market', label: '시세 확인하기' },
+                      { path: '/my-portfolio', label: '내 포트폴리오' },
+                      { path: '/strategy', label: '전략 백테스트' },
+                      { path: '/store', label: '전략 학습' },
+                      { path: '/ranking', label: '투자 현황 보기' },
+                    ].map((item) => (
+                      <button
+                        key={item.path}
+                        onClick={() => navigate(item.path)}
+                        className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-semibold transition-all min-h-[44px] bg-white border border-gray-200 text-whale-dark hover:border-whale-light/40 hover:bg-gray-50"
+                      >
+                        {item.label}
+                        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 깊은 바다로 — WhaleArc 전환 배너 */}
+                <button
+                  onClick={() => window.location.href = '/dashboard'}
+                  className="w-full text-left px-5 py-4 rounded-xl border border-whale-light/30 bg-gradient-to-r from-whale-dark/[0.08] to-whale-light/[0.10] hover:from-whale-dark/[0.14] hover:to-whale-light/[0.16] transition-all group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-whale-dark">더 깊은 바다로</span>
+                      <span className="px-2 py-0.5 text-[10px] font-bold bg-whale-light/15 text-whale-light rounded-full border border-whale-light/30">WhaleArc</span>
+                    </div>
+                    <svg className="w-4 h-4 text-whale-light/40 group-hover:text-whale-light group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1.5">실계좌 자산 연동 · 포트폴리오 관리 · 실전 투자 대시보드</p>
+                </button>
+              </div>
+
+              {/* 포트폴리오 통계 */}
+              {portfolio && (
+                <div className="card">
+                  <h2 className="text-lg font-bold text-whale-dark mb-4">포트폴리오 통계</h2>
+                  <div className="space-y-3.5">
+                    {(() => {
+                      const initial = portfolio.initialCash || 10_000_000;
+                      const pnl = portfolio.totalValue - initial;
+                      return (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-500">초기 자본</span>
+                            <span className="text-sm font-bold text-whale-dark">{formatCurrency(initial)}</span>
+                          </div>
+                          <div className="h-px bg-gray-100" />
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-500">총 손익</span>
+                            <span className={`text-sm font-bold ${pnl >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                              {pnl >= 0 ? '+' : ''}{formatCurrency(Math.round(pnl))}
+                            </span>
+                          </div>
+                          <div className="h-px bg-gray-100" />
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-500">보유 종목 수</span>
+                            <span className="text-sm font-bold text-whale-dark">
+                              {portfolio.holdings.length}개
+                              {(() => {
+                                const stockCount = portfolio.holdings.filter(h => h.assetType === 'STOCK').length;
+                                const cryptoCount = portfolio.holdings.length - stockCount;
+                                if (stockCount > 0 && cryptoCount > 0) {
+                                  return <span className="text-xs font-normal text-gray-400 ml-1">(주식 {stockCount} · 가상화폐 {cryptoCount})</span>;
+                                }
+                                return null;
+                              })()}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {/* ═══ 일반 모드: 관심 종목 + 빠른 액션 ═══ */}
         {!isVirt && (

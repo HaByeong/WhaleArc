@@ -26,7 +26,6 @@ const DashboardPage = () => {
   const { resolvePageDark } = useTheme();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [watchlist, setWatchlist] = useState<StockPrice[]>([]);
-  const [topMovers, setTopMovers] = useState<StockPrice[]>([]);
   const [favoriteAssets, setFavoriteAssets] = useState<string[]>([]);
   const [activePurchases, setActivePurchases] = useState<ProductPurchase[]>([]);
   const [_purchasePerformance, setPurchasePerformance] = useState<PurchasePerformance[]>([]);
@@ -178,17 +177,6 @@ const DashboardPage = () => {
     });
   }, [watchlist, realtimePrices]);
 
-  // 시세 변동 상위에도 실시간 반영
-  const liveTopMovers = useMemo(() => {
-    if (realtimePrices.size === 0) return topMovers;
-    return topMovers.map((stock) => {
-      const rt = realtimePrices.get(stock.stockCode);
-      if (rt) {
-        return { ...stock, currentPrice: rt.price, change: rt.change, changeRate: rt.changeRate, volume: rt.volume };
-      }
-      return stock;
-    });
-  }, [topMovers, realtimePrices]);
 
   const displayName = profileName || user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';
 
@@ -213,12 +201,6 @@ const DashboardPage = () => {
         });
       }
       if (stocksData.length) {
-        const sorted = [...stocksData].sort((a, b) => Math.abs(b.changeRate) - Math.abs(a.changeRate));
-        setTopMovers(prev => {
-          const next = sorted.slice(0, 5);
-          if (prev.length === next.length && prev.every((p, i) => p.stockCode === next[i].stockCode && p.currentPrice === next[i].currentPrice)) return prev;
-          return next;
-        });
         if (favoriteAssets.length > 0) {
           const favSet = new Set(favoriteAssets);
           const SYMBOL_ALIASES: Record<string, string> = { MATIC: 'POL', POL: 'MATIC' };
@@ -297,8 +279,6 @@ const DashboardPage = () => {
       setFavoriteAssets(favAssets);
       setPortfolio(portfolioData);
       if (stocksData.length) {
-        const sorted = [...stocksData].sort((a, b) => Math.abs(b.changeRate) - Math.abs(a.changeRate));
-        setTopMovers(sorted.slice(0, 5));
         if (favAssets.length > 0) {
           const favSet = new Set(favAssets);
           // MATIC↔POL 등 리브랜딩 심볼 양방향 매핑

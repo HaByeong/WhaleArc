@@ -22,7 +22,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
-  const { unreadCount, notifications, toasts, dismissToast, markAsRead, markAllAsRead, refreshNotifications, notificationPermission, requestNotificationPermission } = useNotifications(isAuthenticated && showNav);
+  const { unreadCount, notifications, toasts, dismissToast, markAsRead, markAllAsRead, refreshNotifications } = useNotifications(isAuthenticated && showNav);
 
   // 알림 패널 외부 클릭 시 닫기
   useEffect(() => {

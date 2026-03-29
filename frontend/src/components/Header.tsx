@@ -77,8 +77,8 @@ const Header = ({ showNav = false }: HeaderProps) => {
           
           {showNav ? (
             <>
-              {/* 데스크톱 네비게이션 */}
-              <nav className="hidden lg:flex items-center space-x-1" aria-label="주요 네비게이션">
+              {/* 데스크톱 네비게이션 (중앙) */}
+              <nav className="hidden lg:flex items-center space-x-1 flex-1 justify-center" aria-label="주요 네비게이션">
                 {[
                   { to: `${prefix}/dashboard`, label: '내 투자' },
                   { to: `${prefix}/my-portfolio`, label: '포트폴리오' },
@@ -102,8 +102,9 @@ const Header = ({ showNav = false }: HeaderProps) => {
                   </Link>
                 ))}
               </nav>
+              {/* 오른쪽 아이콘 영역 */}
               {isAuthenticated && (
-                <div className="hidden lg:flex items-center space-x-2">
+                <div className="hidden lg:flex items-center space-x-2 shrink-0">
                     <button
                       onClick={toggleTheme}
                       title={theme === 'light' ? '라이트 모드' : theme === 'dark' ? '다크 모드' : '시스템 설정'}

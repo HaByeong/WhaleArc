@@ -104,7 +104,6 @@ const Header = ({ showNav = false }: HeaderProps) => {
               </nav>
               {isAuthenticated && (
                 <div className="hidden lg:flex items-center space-x-2">
-                    {/* 테마 토글 */}
                     <button
                       onClick={toggleTheme}
                       title={theme === 'light' ? '라이트 모드' : theme === 'dark' ? '다크 모드' : '시스템 설정'}
@@ -201,7 +200,6 @@ const Header = ({ showNav = false }: HeaderProps) => {
                     >
                       로그아웃
                     </button>
-                  </div>
                 </div>
               )}
 

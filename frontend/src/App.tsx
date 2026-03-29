@@ -1,7 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
-import { ThemeProvider } from './contexts/ThemeContext';
 import SplashLoading from './components/SplashLoading';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -46,7 +45,7 @@ function App() {
     <ErrorBoundary>
       <Router>
         <DarkModeController />
-        <ThemeProvider>
+
         <AuthProvider>
         <Suspense fallback={<SplashLoading />}>
         <Routes>
@@ -152,7 +151,7 @@ function App() {
         </Routes>
         </Suspense>
         </AuthProvider>
-        </ThemeProvider>
+
       </Router>
     </ErrorBoundary>
   );

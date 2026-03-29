@@ -5,7 +5,6 @@ import Header from '../components/Header';
 import SplashLoading from '../components/SplashLoading';
 import VirtSplashLoading from '../components/VirtSplashLoading';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
-import { useTheme } from '../contexts/ThemeContext';
 import { GLOSSARY, Term } from '../components/TermTooltip';
 import GuideTour, { type TourStep } from '../components/GuideTour';
 import {
@@ -42,8 +41,6 @@ import {
 
 const StrategyPage = () => {
   const { isVirt } = useRoutePrefix();
-  const { resolvePageDark } = useTheme();
-  const pageDark = resolvePageDark(isVirt);
   // 상태 관리
   const [_activeTab] = useState<'strategies' | 'backtest' | 'indicators'>('strategies');
   const [pageLoading, setPageLoading] = useState(true);
@@ -705,8 +702,8 @@ const StrategyPage = () => {
     return (
       <>
         <span className={`px-2 py-0.5 rounded text-xs font-semibold bg-${color}-100 text-${color}-600`}>{ind}</span>
-        <span className={`font-bold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{opMap[c.operator || ''] || c.operator}</span>
-        <span className={`font-semibold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{c.value}</span>
+        <span className={`font-bold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{opMap[c.operator || ''] || c.operator}</span>
+        <span className={`font-semibold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{c.value}</span>
       </>
     );
   };
@@ -724,8 +721,8 @@ const StrategyPage = () => {
             <svg className="w-12 h-12 text-whale-light/30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
             </svg>
-            <p className={`text-sm ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>차트 준비 중</p>
-            <p className={`text-xs mt-1 ${pageDark ? 'text-slate-600' : 'text-gray-300'}`}>이 전략의 시각화 차트가 곧 추가됩니다</p>
+            <p className={`text-sm ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>차트 준비 중</p>
+            <p className={`text-xs mt-1 ${!isVirt ? 'text-slate-600' : 'text-gray-300'}`}>이 전략의 시각화 차트가 곧 추가됩니다</p>
           </div>
         );
     }
@@ -837,7 +834,7 @@ const StrategyPage = () => {
   if (pageLoading && isVirt) return <VirtSplashLoading message="전략 데이터를 불러오는 중..." />;
 
   return (
-    <div className={`min-h-screen ${pageDark ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen ${!isVirt ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
       {toast && (
         <div className="fixed top-4 right-4 z-50 max-w-sm animate-in slide-in-from-top">
           <div className={`px-4 py-3 rounded-xl shadow-lg border-l-4 backdrop-blur-sm ${
@@ -861,13 +858,13 @@ const StrategyPage = () => {
 
       {/* 풀 와이드 3-컬럼 레이아웃 */}
       <div className="max-w-[1600px] mx-auto px-4 py-4">
-      <div className={`flex flex-col lg:flex-row w-full min-h-[calc(100vh-96px)] rounded-2xl overflow-hidden shadow-sm ${pageDark ? 'border border-white/[0.06]' : 'border border-gray-200'}`}>
+      <div className={`flex flex-col lg:flex-row w-full min-h-[calc(100vh-96px)] rounded-2xl overflow-hidden shadow-sm ${!isVirt ? 'border border-white/[0.06]' : 'border border-gray-200'}`}>
 
         {/* ===== LEFT SIDEBAR: 전략 라이브러리 ===== */}
-        <div data-tour="strategy-library" className={`lg:flex-[3] flex flex-col min-w-0 shadow-sm ${pageDark ? 'bg-white/[0.02] border-r border-white/[0.06]' : 'bg-gray-50 border-r border-gray-200'}`}>
+        <div data-tour="strategy-library" className={`lg:flex-[3] flex flex-col min-w-0 shadow-sm ${!isVirt ? 'bg-white/[0.02] border-r border-white/[0.06]' : 'bg-gray-50 border-r border-gray-200'}`}>
 
           {/* ---- 헤더: 타이틀 + 새 항로 버튼 ---- */}
-          <div className={`relative px-5 py-4 border-b flex items-center justify-between shrink-0 h-[72px] ${pageDark ? 'border-white/[0.06] bg-gradient-to-r from-whale-dark to-whale-light' : 'border-gray-200 bg-gradient-to-r from-whale-dark to-whale-light'}`}>
+          <div className={`relative px-5 py-4 border-b flex items-center justify-between shrink-0 h-[72px] ${!isVirt ? 'border-white/[0.06] bg-gradient-to-r from-whale-dark to-whale-light' : 'border-gray-200 bg-gradient-to-r from-whale-dark to-whale-light'}`}>
             <div>
               <h2 className="text-sm font-bold text-white">전략 라이브러리</h2>
               <p className="text-xs text-white/60 mt-0.5">전략을 선택하고 백테스트로 검증하세요</p>
@@ -881,13 +878,13 @@ const StrategyPage = () => {
             </button>
             <div className="absolute bottom-0 left-0 right-0 overflow-hidden" style={{ height: '6px' }}>
               <svg viewBox="0 0 1200 20" preserveAspectRatio="none" className="w-full h-full">
-                <path d="M0,10 C150,20 350,0 500,10 C650,20 850,0 1000,10 C1100,15 1150,5 1200,10 L1200,20 L0,20 Z" fill={pageDark ? '#060d18' : 'white'} />
+                <path d="M0,10 C150,20 350,0 500,10 C650,20 850,0 1000,10 C1100,15 1150,5 1200,10 L1200,20 L0,20 Z" fill={!isVirt ? '#060d18' : 'white'} />
               </svg>
             </div>
           </div>
 
           {/* ---- 필터 탭 ---- */}
-          <div data-tour="strategy-filter" className={`px-5 pt-3 pb-0 shrink-0 ${pageDark ? 'bg-white/[0.02] border-b border-white/[0.06]' : 'bg-slate-50/80 border-b border-gray-200'}`}>
+          <div data-tour="strategy-filter" className={`px-5 pt-3 pb-0 shrink-0 ${!isVirt ? 'bg-white/[0.02] border-b border-white/[0.06]' : 'bg-slate-50/80 border-b border-gray-200'}`}>
             <div className="flex gap-1">
               {([
                 { tab: '전체' as const, glossaryKey: '' },
@@ -900,16 +897,16 @@ const StrategyPage = () => {
                   onClick={() => setStrategyFilter(tab)}
                   className={`group relative px-3.5 py-2 rounded-t-lg text-xs font-semibold transition-all duration-200 border-b-2 ${
                     strategyFilter === tab
-                      ? pageDark ? 'text-cyan-400 bg-white/10 border-cyan-400' : 'text-white bg-gradient-to-r from-whale-light to-blue-500 border-whale-light shadow-sm'
-                      : pageDark ? 'text-slate-500 border-transparent hover:text-slate-300 hover:bg-white/[0.03]' : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-white/80'
+                      ? !isVirt ? 'text-cyan-400 bg-white/10 border-cyan-400' : 'text-white bg-gradient-to-r from-whale-light to-blue-500 border-whale-light shadow-sm'
+                      : !isVirt ? 'text-slate-500 border-transparent hover:text-slate-300 hover:bg-white/[0.03]' : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-white/80'
                   }`}
                 >
                   {tab}
                   {glossaryKey && GLOSSARY[glossaryKey] && (
-                    <span className={`hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50 w-56 px-3 py-2 rounded-lg shadow-xl border text-left pointer-events-none ${pageDark ? 'border-white/[0.06] bg-[#0a1628]' : 'border-gray-200 bg-white'}`}>
-                      <span className={`block text-[10px] font-bold mb-0.5 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{GLOSSARY[glossaryKey].title}</span>
-                      <span className={`block text-[10px] leading-relaxed font-normal ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>{GLOSSARY[glossaryKey].desc}</span>
-                      <span className={`absolute left-1/2 -translate-x-1/2 top-[-4px] w-2 h-2 rotate-45 ${pageDark ? 'bg-[#0a1628] border-l border-t border-white/[0.06]' : 'bg-white border-l border-t border-gray-200'}`} />
+                    <span className={`hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50 w-56 px-3 py-2 rounded-lg shadow-xl border text-left pointer-events-none ${!isVirt ? 'border-white/[0.06] bg-[#0a1628]' : 'border-gray-200 bg-white'}`}>
+                      <span className={`block text-[10px] font-bold mb-0.5 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{GLOSSARY[glossaryKey].title}</span>
+                      <span className={`block text-[10px] leading-relaxed font-normal ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>{GLOSSARY[glossaryKey].desc}</span>
+                      <span className={`absolute left-1/2 -translate-x-1/2 top-[-4px] w-2 h-2 rotate-45 ${!isVirt ? 'bg-[#0a1628] border-l border-t border-white/[0.06]' : 'bg-white border-l border-t border-gray-200'}`} />
                     </span>
                   )}
                 </button>
@@ -943,12 +940,12 @@ const StrategyPage = () => {
               if (filtered.length === 0) {
                 return (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ${pageDark ? 'bg-white/[0.04]' : 'bg-gray-100'}`}>
-                      <svg className={`w-6 h-6 ${pageDark ? 'text-slate-600' : 'text-gray-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ${!isVirt ? 'bg-white/[0.04]' : 'bg-gray-100'}`}>
+                      <svg className={`w-6 h-6 ${!isVirt ? 'text-slate-600' : 'text-gray-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                       </svg>
                     </div>
-                    <p className={`text-sm font-medium ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>해당 전략이 없습니다</p>
+                    <p className={`text-sm font-medium ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>해당 전략이 없습니다</p>
                     <button onClick={openCreateModal}
                       className="mt-3 px-4 py-1.5 rounded-lg text-xs font-semibold text-whale-light bg-whale-light/10 border border-whale-light/30 hover:bg-whale-light hover:text-white transition-all">
                       + 새 항로 만들기
@@ -981,10 +978,10 @@ const StrategyPage = () => {
                     }}
                     className={`relative rounded-xl cursor-pointer transition-all duration-200 overflow-hidden border border-l-[3px] ${categoryBorderColor} ${
                       isSelected
-                        ? pageDark
+                        ? !isVirt
                           ? 'bg-white/[0.06] border-cyan-400/40 border-l-cyan-400 shadow-lg ring-1 ring-cyan-400/20 shadow-[0_0_15px_rgba(34,211,238,0.1)]'
                           : 'bg-gradient-to-r from-whale-light/5 to-blue-50 border-whale-light border-l-whale-light shadow-lg ring-1 ring-whale-light/30 shadow-[0_0_15px_rgba(74,144,226,0.15)]'
-                        : pageDark
+                        : !isVirt
                           ? 'bg-white/[0.02] border-white/[0.06] hover:border-white/10 hover:bg-white/[0.03] hover:scale-[1.01]'
                           : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md hover:scale-[1.01]'
                     }`}
@@ -998,7 +995,7 @@ const StrategyPage = () => {
                       {/* 이름 행 */}
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className={`font-bold text-sm truncate ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{strategy.name}</span>
+                          <span className={`font-bold text-sm truncate ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{strategy.name}</span>
                           {isPreset && (
                             <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-whale-light/10 text-whale-light">기본</span>
                           )}
@@ -1018,7 +1015,7 @@ const StrategyPage = () => {
                           {!isPreset && (
                             <button
                               onClick={(e) => handleDeleteStrategy(strategy.id, e)}
-                              className={`p-1 rounded transition-colors ${pageDark ? 'text-slate-600 hover:text-red-400' : 'text-gray-300 hover:text-red-400'}`}>
+                              className={`p-1 rounded transition-colors ${!isVirt ? 'text-slate-600 hover:text-red-400' : 'text-gray-300 hover:text-red-400'}`}>
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                               </svg>
@@ -1028,7 +1025,7 @@ const StrategyPage = () => {
                       </div>
 
                       {/* 한 줄 설명 */}
-                      <p className={`text-sm line-clamp-1 mb-2 ${pageDark ? 'text-slate-400' : 'text-gray-400'}`}>
+                      <p className={`text-sm line-clamp-1 mb-2 ${!isVirt ? 'text-slate-400' : 'text-gray-400'}`}>
                         {strategy.description || strategy.strategyLogic || '사용자 전략'}
                       </p>
 
@@ -1037,13 +1034,13 @@ const StrategyPage = () => {
                         <div className="flex items-center gap-1.5">
                           {strategy.assetType && (
                             <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                              strategy.assetType === 'CRYPTO' ? (pageDark ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600') :
-                              strategy.assetType === 'STOCK' ? (pageDark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') :
-                              (pageDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600')
+                              strategy.assetType === 'CRYPTO' ? (!isVirt ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600') :
+                              strategy.assetType === 'STOCK' ? (!isVirt ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') :
+                              (!isVirt ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600')
                             }`}>{assetTypeLabel(strategy.assetType)}</span>
                           )}
                           {(strategy.entryConditions?.length || 0) > 0 && (
-                            <span className={`text-[9px] ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                            <span className={`text-[9px] ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>
                               조건 {(strategy.entryConditions?.length || 0) + (strategy.exitConditions?.length || 0)}개
                             </span>
                           )}
@@ -1066,25 +1063,25 @@ const StrategyPage = () => {
         </div>
 
         {/* ===== CENTER PANEL: 차트 영역 ===== */}
-        <div className={`flex flex-col lg:flex-[5.5] min-w-0 shadow-sm ${pageDark ? 'bg-white/[0.01] border-r border-white/[0.06]' : 'bg-white border-r border-gray-100'}`}>
+        <div className={`flex flex-col lg:flex-[5.5] min-w-0 shadow-sm ${!isVirt ? 'bg-white/[0.01] border-r border-white/[0.06]' : 'bg-white border-r border-gray-100'}`}>
           {/* 선택된 전략 바 or 페이지 타이틀 */}
-          <div data-tour="center-panel" className={`px-6 py-4 border-b flex items-center justify-between h-[72px] ${pageDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-gradient-to-r from-slate-50 to-blue-50/50'}`}>
+          <div data-tour="center-panel" className={`px-6 py-4 border-b flex items-center justify-between h-[72px] ${!isVirt ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-200 bg-gradient-to-r from-slate-50 to-blue-50/50'}`}>
             {selectedStrategy ? (
               <div className="flex items-center gap-3 min-w-0">
-                <div className={`w-2 h-8 rounded-full shrink-0 ${pageDark ? 'bg-cyan-400' : 'bg-whale-light'}`} />
+                <div className={`w-2 h-8 rounded-full shrink-0 ${!isVirt ? 'bg-cyan-400' : 'bg-whale-light'}`} />
                 <div className="min-w-0">
-                  <h1 className={`text-lg font-bold truncate ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{selectedStrategy.name}</h1>
-                  <p className={`text-xs truncate ${pageDark ? 'text-slate-400' : 'text-gray-400'}`}>{selectedStrategy.description?.slice(0, 60) || selectedStrategy.strategyLogic?.slice(0, 60) || '전략 상세'}</p>
+                  <h1 className={`text-lg font-bold truncate ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{selectedStrategy.name}</h1>
+                  <p className={`text-xs truncate ${!isVirt ? 'text-slate-400' : 'text-gray-400'}`}>{selectedStrategy.description?.slice(0, 60) || selectedStrategy.strategyLogic?.slice(0, 60) || '전략 상세'}</p>
                 </div>
               </div>
             ) : (
               <div>
-                <h1 className={`text-lg font-bold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>항로 분석 스테이션</h1>
-                <p className={`text-xs ${pageDark ? 'text-slate-400' : 'text-gray-400'}`}>전략을 선택하고 과거 데이터로 검증하세요</p>
+                <h1 className={`text-lg font-bold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>항로 분석 스테이션</h1>
+                <p className={`text-xs ${!isVirt ? 'text-slate-400' : 'text-gray-400'}`}>전략을 선택하고 과거 데이터로 검증하세요</p>
               </div>
             )}
             {backtestResult && (
-              <div className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 ${backtestResult.totalReturnRate >= 0 ? (pageDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : (pageDark ? 'bg-red-500/10 text-red-400' : 'bg-red-100 text-red-700')}`}>
+              <div className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 ${backtestResult.totalReturnRate >= 0 ? (!isVirt ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : (!isVirt ? 'bg-red-500/10 text-red-400' : 'bg-red-100 text-red-700')}`}>
                 {backtestResult.totalReturnRate >= 0 ? '수익' : '손실'} {formatPercent(backtestResult.totalReturnRate)}
               </div>
             )}
@@ -1094,15 +1091,15 @@ const StrategyPage = () => {
           <div className="flex-1 px-6 pb-4 overflow-y-auto">
             {isBacktesting ? (
               /* 로딩 */
-              <div className={`w-full h-full min-h-[400px] rounded-xl flex flex-col items-center justify-center ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+              <div className={`w-full h-full min-h-[400px] rounded-xl flex flex-col items-center justify-center ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
                 <div className="sail-animation">
                   <div className="w-14 h-14 border-4 border-whale-light border-t-transparent rounded-full animate-spin mb-5" />
                 </div>
-                <p className={`text-lg font-bold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>항로 분석 중...</p>
-                <p className={`text-sm mt-2 ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                <p className={`text-lg font-bold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>항로 분석 중...</p>
+                <p className={`text-sm mt-2 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>
                   {backtestStockName || backtestStockCode} · {backtestStartDate?.slice(5)} ~ {backtestEndDate?.slice(5)}
                 </p>
-                <p className={`text-xs mt-1 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>과거 데이터를 항해하고 있습니다</p>
+                <p className={`text-xs mt-1 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>과거 데이터를 항해하고 있습니다</p>
                 <div className="w-32 h-4 mt-4 overflow-hidden opacity-30">
                   <div className="wave-animation" style={{ width: '200%' }}>
                     <svg viewBox="0 0 1200 20" className="w-full h-4">
@@ -1116,26 +1113,26 @@ const StrategyPage = () => {
               selectedStrategy ? (
                 <div className="space-y-5">
                   {/* 전략 헤더 */}
-                  <div className={`rounded-xl p-6 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gradient-to-r from-slate-50 to-blue-50/50 border border-gray-200'}`}>
+                  <div className={`rounded-xl p-6 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gradient-to-r from-slate-50 to-blue-50/50 border border-gray-200'}`}>
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <div className="flex items-center gap-2 mb-2">
                           {selectedStrategy.assetType && (
                             <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                              selectedStrategy.assetType === 'CRYPTO' ? (pageDark ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-100 text-orange-700') :
-                              selectedStrategy.assetType === 'STOCK' ? (pageDark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-100 text-indigo-700') :
-                              (pageDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-100 text-purple-700')
+                              selectedStrategy.assetType === 'CRYPTO' ? (!isVirt ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-100 text-orange-700') :
+                              selectedStrategy.assetType === 'STOCK' ? (!isVirt ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-100 text-indigo-700') :
+                              (!isVirt ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-100 text-purple-700')
                             }`}>{assetTypeLabel(selectedStrategy.assetType)}</span>
                           )}
                           {selectedStrategy.applied && (
-                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${pageDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>적용됨</span>
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${!isVirt ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>적용됨</span>
                           )}
                         </div>
-                        <h2 className={`text-2xl font-bold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{selectedStrategy.name}</h2>
+                        <h2 className={`text-2xl font-bold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{selectedStrategy.name}</h2>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => openEditModal(selectedStrategy)}
-                          className={`p-2 rounded-lg transition-all hover:shadow-sm ${pageDark ? 'bg-white/[0.04] hover:bg-white/[0.08] text-white' : 'bg-gray-100 hover:bg-gray-200 text-whale-dark'}`} title="수정">
+                          className={`p-2 rounded-lg transition-all hover:shadow-sm ${!isVirt ? 'bg-white/[0.04] hover:bg-white/[0.08] text-white' : 'bg-gray-100 hover:bg-gray-200 text-whale-dark'}`} title="수정">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
@@ -1149,28 +1146,28 @@ const StrategyPage = () => {
                       </div>
                     </div>
                     {selectedStrategy.description && (
-                      <p className={`text-sm leading-relaxed ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>{selectedStrategy.description}</p>
+                      <p className={`text-sm leading-relaxed ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>{selectedStrategy.description}</p>
                     )}
                     {/* 초보자 가이드 */}
                     {selectedStrategy.beginnerTip && (
-                      <div className={`rounded-lg p-3.5 mt-3 ${pageDark ? 'bg-cyan-500/5 border border-cyan-500/20' : 'bg-blue-50 border border-blue-200'}`}>
-                        <p className={`text-xs font-semibold mb-1.5 ${pageDark ? 'text-cyan-400' : 'text-blue-600'}`}>💡 쉽게 이해하기</p>
-                        <p className={`text-xs leading-relaxed ${pageDark ? 'text-cyan-300/80' : 'text-blue-700/80'}`}>{selectedStrategy.beginnerTip}</p>
+                      <div className={`rounded-lg p-3.5 mt-3 ${!isVirt ? 'bg-cyan-500/5 border border-cyan-500/20' : 'bg-blue-50 border border-blue-200'}`}>
+                        <p className={`text-xs font-semibold mb-1.5 ${!isVirt ? 'text-cyan-400' : 'text-blue-600'}`}>💡 쉽게 이해하기</p>
+                        <p className={`text-xs leading-relaxed ${!isVirt ? 'text-cyan-300/80' : 'text-blue-700/80'}`}>{selectedStrategy.beginnerTip}</p>
                       </div>
                     )}
                     {selectedStrategy.whyUse && (
-                      <div className={`rounded-lg p-3.5 mt-2 ${pageDark ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`}>
-                        <p className={`text-xs font-semibold mb-1.5 ${pageDark ? 'text-emerald-400' : 'text-emerald-600'}`}>왜 이 전략을 쓸까요?</p>
-                        <p className={`text-xs leading-relaxed ${pageDark ? 'text-emerald-300/80' : 'text-emerald-700/80'}`}>{selectedStrategy.whyUse}</p>
+                      <div className={`rounded-lg p-3.5 mt-2 ${!isVirt ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`}>
+                        <p className={`text-xs font-semibold mb-1.5 ${!isVirt ? 'text-emerald-400' : 'text-emerald-600'}`}>왜 이 전략을 쓸까요?</p>
+                        <p className={`text-xs leading-relaxed ${!isVirt ? 'text-emerald-300/80' : 'text-emerald-700/80'}`}>{selectedStrategy.whyUse}</p>
                       </div>
                     )}
                   </div>
 
                   {/* 항로 로직 */}
                   {selectedStrategy.strategyLogic && (
-                    <div className={`rounded-xl p-5 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gradient-to-r from-whale-dark/5 to-blue-50/50 border border-whale-light/20'}`}>
-                      <h3 className={`text-xs font-bold mb-3 tracking-wide uppercase ${pageDark ? 'text-cyan-400' : 'text-whale-light'}`}>Trading Logic</h3>
-                      <div className={`px-4 py-3 rounded-xl text-sm font-mono shadow-sm ${pageDark ? 'text-white bg-white/[0.04] border border-white/[0.06]' : 'text-whale-dark bg-white border border-gray-200'}`}>
+                    <div className={`rounded-xl p-5 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gradient-to-r from-whale-dark/5 to-blue-50/50 border border-whale-light/20'}`}>
+                      <h3 className={`text-xs font-bold mb-3 tracking-wide uppercase ${!isVirt ? 'text-cyan-400' : 'text-whale-light'}`}>Trading Logic</h3>
+                      <div className={`px-4 py-3 rounded-xl text-sm font-mono shadow-sm ${!isVirt ? 'text-white bg-white/[0.04] border border-white/[0.06]' : 'text-whale-dark bg-white border border-gray-200'}`}>
                         {selectedStrategy.strategyLogic}
                       </div>
                     </div>
@@ -1180,15 +1177,15 @@ const StrategyPage = () => {
                   {((selectedStrategy.entryConditions?.length || 0) > 0 || (selectedStrategy.exitConditions?.length || 0) > 0) && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {selectedStrategy.entryConditions && selectedStrategy.entryConditions.length > 0 && (
-                        <div className={`rounded-xl p-5 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                        <div className={`rounded-xl p-5 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
                           <h3 className="text-xs font-semibold mb-3 flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-red-400" />
-                            <span className={pageDark ? 'text-red-400' : 'text-red-600'}>매수 조건 (진입)</span>
+                            <span className={!isVirt ? 'text-red-400' : 'text-red-600'}>매수 조건 (진입)</span>
                           </h3>
                           <div className="space-y-2">
                             {selectedStrategy.entryConditions.map((c, i) => (
                               <div key={i} className="flex items-center gap-2 text-sm">
-                                {i > 0 && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${pageDark ? 'bg-white/[0.06] text-slate-400' : 'bg-gray-200 text-gray-600'}`}>{c.logic}</span>}
+                                {i > 0 && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${!isVirt ? 'bg-white/[0.06] text-slate-400' : 'bg-gray-200 text-gray-600'}`}>{c.logic}</span>}
                                 {formatCondition(c, 'entry')}
                               </div>
                             ))}
@@ -1196,15 +1193,15 @@ const StrategyPage = () => {
                         </div>
                       )}
                       {selectedStrategy.exitConditions && selectedStrategy.exitConditions.length > 0 && (
-                        <div className={`rounded-xl p-5 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                        <div className={`rounded-xl p-5 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
                           <h3 className="text-xs font-semibold mb-3 flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-blue-400" />
-                            <span className={pageDark ? 'text-blue-400' : 'text-blue-600'}>매도 조건 (청산)</span>
+                            <span className={!isVirt ? 'text-blue-400' : 'text-blue-600'}>매도 조건 (청산)</span>
                           </h3>
                           <div className="space-y-2">
                             {selectedStrategy.exitConditions.map((c, i) => (
                               <div key={i} className="flex items-center gap-2 text-sm">
-                                {i > 0 && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${pageDark ? 'bg-white/[0.06] text-slate-400' : 'bg-gray-200 text-gray-600'}`}>{c.logic}</span>}
+                                {i > 0 && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${!isVirt ? 'bg-white/[0.06] text-slate-400' : 'bg-gray-200 text-gray-600'}`}>{c.logic}</span>}
                                 {formatCondition(c, 'exit')}
                               </div>
                             ))}
@@ -1216,10 +1213,10 @@ const StrategyPage = () => {
 
                   {/* 전략 시각화 차트 */}
                   {selectedStrategy.id.startsWith('preset-') && (
-                    <div className={`rounded-xl overflow-hidden ${pageDark ? 'border border-white/[0.06] bg-white/[0.02]' : 'border border-gray-200 bg-white'}`}>
-                      <div className={`px-5 py-3.5 flex items-center justify-between ${pageDark ? 'border-b border-white/[0.06]' : 'border-b border-gray-200'}`}>
-                        <h3 className={`text-base font-bold border-l-4 pl-3 ${pageDark ? 'text-white border-cyan-400' : 'text-whale-dark border-whale-light'}`}>전략 시각화</h3>
-                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${pageDark ? 'bg-cyan-500/10 text-cyan-400' : 'bg-blue-50 text-blue-500'}`}>실시간 차트</span>
+                    <div className={`rounded-xl overflow-hidden ${!isVirt ? 'border border-white/[0.06] bg-white/[0.02]' : 'border border-gray-200 bg-white'}`}>
+                      <div className={`px-5 py-3.5 flex items-center justify-between ${!isVirt ? 'border-b border-white/[0.06]' : 'border-b border-gray-200'}`}>
+                        <h3 className={`text-base font-bold border-l-4 pl-3 ${!isVirt ? 'text-white border-cyan-400' : 'text-whale-dark border-whale-light'}`}>전략 시각화</h3>
+                        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${!isVirt ? 'bg-cyan-500/10 text-cyan-400' : 'bg-blue-50 text-blue-500'}`}>실시간 차트</span>
                       </div>
                       <div className="p-4">
                         <StrategyChart strategyId={selectedStrategy.id} />
@@ -1228,10 +1225,10 @@ const StrategyPage = () => {
                   )}
 
                   {/* 이 전략 이해하기 — 초보자 교육 콘텐츠 */}
-                  <div className={`rounded-xl p-5 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gradient-to-br from-blue-50/50 to-slate-50 border border-gray-200'}`}>
-                    <h3 className={`text-base font-bold mb-4 pb-2 border-l-4 pl-3 ${pageDark ? 'text-white border-b border-white/[0.06] border-l-cyan-400' : 'text-whale-dark border-b border-gray-200 border-l-whale-light'}`}>
+                  <div className={`rounded-xl p-5 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gradient-to-br from-blue-50/50 to-slate-50 border border-gray-200'}`}>
+                    <h3 className={`text-base font-bold mb-4 pb-2 border-l-4 pl-3 ${!isVirt ? 'text-white border-b border-white/[0.06] border-l-cyan-400' : 'text-whale-dark border-b border-gray-200 border-l-whale-light'}`}>
                       이 전략 이해하기
-                      <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-medium ${pageDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-600'}`}>초보자 가이드</span>
+                      <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-medium ${!isVirt ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-600'}`}>초보자 가이드</span>
                     </h3>
 
                     {/* 전략별 상세 교육 콘텐츠 */}
@@ -1247,33 +1244,33 @@ const StrategyPage = () => {
                         return (
                           <div className="space-y-4">
                             <div className="flex items-start gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${pageDark ? 'bg-blue-500/10' : 'bg-blue-100'}`}>
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${!isVirt ? 'bg-blue-500/10' : 'bg-blue-100'}`}>
                                 <span className="text-base">📈</span>
                               </div>
                               <div>
-                                <p className={`text-sm font-semibold mb-1 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: <Term k="이동평균선">이동평균선</Term>과 <Term k="골든크로스">골든크로스</Term></p>
-                                <p className={`text-sm leading-relaxed ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                                <p className={`text-sm font-semibold mb-1 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: <Term k="이동평균선">이동평균선</Term>과 <Term k="골든크로스">골든크로스</Term></p>
+                                <p className={`text-sm leading-relaxed ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>
                                   <Term k="이동평균선">이동평균선(MA)</Term>은 일정 기간의 평균 가격을 매일 계산해 선으로 연결한 것입니다.
                                   이 선의 방향이 위를 향하면 상승 추세, 아래를 향하면 하락 추세입니다.
                                 </p>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-4 ${pageDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                              <p className={`text-xs font-bold mb-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>이 전략의 매매 원리</p>
+                            <div className={`rounded-lg p-4 ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                              <p className={`text-xs font-bold mb-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>이 전략의 매매 원리</p>
                               <div className="space-y-2">
                                 <div className="flex items-start gap-2">
                                   <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-bold shrink-0 mt-0.5">매수</span>
-                                  <p className={`text-xs ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>단기 평균(20일)이 장기 평균(60일) <Term k="골든크로스">위로 돌파</Term>하면 → 상승 추세 시작으로 판단하고 매수합니다</p>
+                                  <p className={`text-xs ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>단기 평균(20일)이 장기 평균(60일) <Term k="골든크로스">위로 돌파</Term>하면 → 상승 추세 시작으로 판단하고 매수합니다</p>
                                 </div>
                                 <div className="flex items-start gap-2">
                                   <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">매도</span>
-                                  <p className={`text-xs ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>단기 평균(20일)이 장기 평균(60일) <Term k="데드크로스">아래로 돌파</Term>하면 → 하락 추세로 전환되었다고 판단하고 매도합니다</p>
+                                  <p className={`text-xs ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>단기 평균(20일)이 장기 평균(60일) <Term k="데드크로스">아래로 돌파</Term>하면 → 하락 추세로 전환되었다고 판단하고 매도합니다</p>
                                 </div>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-3 ${pageDark ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
-                              <p className={`text-xs font-semibold mb-1 ${pageDark ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
-                              <p className={`text-xs ${pageDark ? 'text-amber-400/80' : 'text-amber-600'}`}>이 전략은 <Term k="추세추종">추세추종</Term> 전략의 대표격입니다. 큰 상승장에서는 높은 수익을 내지만, 횡보장(가격이 오르락내리락 반복)에서는 잦은 손절이 발생할 수 있습니다. <Term k="MDD">MDD(최대 낙폭)</Term>을 확인하여 내가 감당할 수 있는 수준인지 반드시 체크하세요.</p>
+                            <div className={`rounded-lg p-3 ${!isVirt ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
+                              <p className={`text-xs font-semibold mb-1 ${!isVirt ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
+                              <p className={`text-xs ${!isVirt ? 'text-amber-400/80' : 'text-amber-600'}`}>이 전략은 <Term k="추세추종">추세추종</Term> 전략의 대표격입니다. 큰 상승장에서는 높은 수익을 내지만, 횡보장(가격이 오르락내리락 반복)에서는 잦은 손절이 발생할 수 있습니다. <Term k="MDD">MDD(최대 낙폭)</Term>을 확인하여 내가 감당할 수 있는 수준인지 반드시 체크하세요.</p>
                             </div>
                           </div>
                         );
@@ -1281,19 +1278,19 @@ const StrategyPage = () => {
                         return (
                           <div className="space-y-4">
                             <div className="flex items-start gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${pageDark ? 'bg-purple-500/10' : 'bg-purple-100'}`}>
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${!isVirt ? 'bg-purple-500/10' : 'bg-purple-100'}`}>
                                 <span className="text-base">🔄</span>
                               </div>
                               <div>
-                                <p className={`text-sm font-semibold mb-1 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: <Term k="RSI">RSI (상대강도지수)</Term></p>
-                                <p className={`text-sm leading-relaxed ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                                <p className={`text-sm font-semibold mb-1 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: <Term k="RSI">RSI (상대강도지수)</Term></p>
+                                <p className={`text-sm leading-relaxed ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>
                                   <Term k="RSI">RSI</Term>는 최근 가격의 상승/하락 강도를 0~100 사이의 숫자로 보여줍니다.
                                   마치 "가격 체온계"처럼, 시장이 과열인지 냉각인지를 한눈에 알 수 있습니다.
                                 </p>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-4 ${pageDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                              <p className={`text-xs font-bold mb-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>RSI 수치별 의미</p>
+                            <div className={`rounded-lg p-4 ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                              <p className={`text-xs font-bold mb-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>RSI 수치별 의미</p>
                               <div className="flex items-center gap-1 mb-3">
                                 <div className="flex-1 h-3 rounded-l-full bg-gradient-to-r from-blue-500 via-gray-300 to-red-500 relative">
                                   <span className="absolute left-[30%] -translate-x-1/2 -top-4 text-[9px] font-bold text-blue-600">30</span>
@@ -1301,39 +1298,39 @@ const StrategyPage = () => {
                                 </div>
                               </div>
                               <div className="grid grid-cols-3 gap-2 text-center">
-                                <div className={`rounded-lg p-2 ${pageDark ? 'bg-blue-500/10' : 'bg-blue-50'}`}>
-                                  <p className={`text-[10px] font-bold ${pageDark ? 'text-blue-400' : 'text-blue-600'}`}>0~30</p>
-                                  <p className={`text-[10px] ${pageDark ? 'text-blue-400/80' : 'text-blue-500'}`}><Term k="과매도">과매도</Term> 구간</p>
-                                  <p className={`text-[9px] mt-0.5 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>반등 가능성 ↑</p>
+                                <div className={`rounded-lg p-2 ${!isVirt ? 'bg-blue-500/10' : 'bg-blue-50'}`}>
+                                  <p className={`text-[10px] font-bold ${!isVirt ? 'text-blue-400' : 'text-blue-600'}`}>0~30</p>
+                                  <p className={`text-[10px] ${!isVirt ? 'text-blue-400/80' : 'text-blue-500'}`}><Term k="과매도">과매도</Term> 구간</p>
+                                  <p className={`text-[9px] mt-0.5 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>반등 가능성 ↑</p>
                                 </div>
-                                <div className={`rounded-lg p-2 ${pageDark ? 'bg-white/[0.03]' : 'bg-gray-50'}`}>
-                                  <p className={`text-[10px] font-bold ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>30~70</p>
-                                  <p className={`text-[10px] ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>중립 구간</p>
-                                  <p className={`text-[9px] mt-0.5 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>관망</p>
+                                <div className={`rounded-lg p-2 ${!isVirt ? 'bg-white/[0.03]' : 'bg-gray-50'}`}>
+                                  <p className={`text-[10px] font-bold ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>30~70</p>
+                                  <p className={`text-[10px] ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>중립 구간</p>
+                                  <p className={`text-[9px] mt-0.5 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>관망</p>
                                 </div>
-                                <div className={`rounded-lg p-2 ${pageDark ? 'bg-red-500/10' : 'bg-red-50'}`}>
-                                  <p className={`text-[10px] font-bold ${pageDark ? 'text-red-400' : 'text-red-600'}`}>70~100</p>
-                                  <p className={`text-[10px] ${pageDark ? 'text-red-400/80' : 'text-red-500'}`}><Term k="과매수">과매수</Term> 구간</p>
-                                  <p className={`text-[9px] mt-0.5 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>조정 가능성 ↑</p>
+                                <div className={`rounded-lg p-2 ${!isVirt ? 'bg-red-500/10' : 'bg-red-50'}`}>
+                                  <p className={`text-[10px] font-bold ${!isVirt ? 'text-red-400' : 'text-red-600'}`}>70~100</p>
+                                  <p className={`text-[10px] ${!isVirt ? 'text-red-400/80' : 'text-red-500'}`}><Term k="과매수">과매수</Term> 구간</p>
+                                  <p className={`text-[9px] mt-0.5 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>조정 가능성 ↑</p>
                                 </div>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-4 ${pageDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                              <p className={`text-xs font-bold mb-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>이 전략의 매매 원리</p>
+                            <div className={`rounded-lg p-4 ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                              <p className={`text-xs font-bold mb-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>이 전략의 매매 원리</p>
                               <div className="space-y-2">
                                 <div className="flex items-start gap-2">
                                   <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-bold shrink-0 mt-0.5">매수</span>
-                                  <p className={`text-xs ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>RSI가 30 이하로 떨어지면 → "<Term k="과매도">과매도</Term>" 상태이므로, 곧 반등할 수 있다고 판단하여 매수합니다</p>
+                                  <p className={`text-xs ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>RSI가 30 이하로 떨어지면 → "<Term k="과매도">과매도</Term>" 상태이므로, 곧 반등할 수 있다고 판단하여 매수합니다</p>
                                 </div>
                                 <div className="flex items-start gap-2">
                                   <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">매도</span>
-                                  <p className={`text-xs ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>RSI가 70 이상으로 올라가면 → "<Term k="과매수">과매수</Term>" 상태이므로, 곧 하락할 수 있다고 판단하여 매도합니다</p>
+                                  <p className={`text-xs ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>RSI가 70 이상으로 올라가면 → "<Term k="과매수">과매수</Term>" 상태이므로, 곧 하락할 수 있다고 판단하여 매도합니다</p>
                                 </div>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-3 ${pageDark ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
-                              <p className={`text-xs font-semibold mb-1 ${pageDark ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
-                              <p className={`text-xs ${pageDark ? 'text-amber-400/80' : 'text-amber-600'}`}>이것은 <Term k="역추세">역추세(평균회귀)</Term> 전략입니다. "너무 떨어졌으니 오를 것이다"라는 논리인데, 강한 하락 추세에서는 RSI가 30 이하에서도 계속 떨어질 수 있습니다. <Term k="손절">손절</Term> 설정을 반드시 함께 사용하세요.</p>
+                            <div className={`rounded-lg p-3 ${!isVirt ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
+                              <p className={`text-xs font-semibold mb-1 ${!isVirt ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
+                              <p className={`text-xs ${!isVirt ? 'text-amber-400/80' : 'text-amber-600'}`}>이것은 <Term k="역추세">역추세(평균회귀)</Term> 전략입니다. "너무 떨어졌으니 오를 것이다"라는 논리인데, 강한 하락 추세에서는 RSI가 30 이하에서도 계속 떨어질 수 있습니다. <Term k="손절">손절</Term> 설정을 반드시 함께 사용하세요.</p>
                             </div>
                           </div>
                         );
@@ -1341,50 +1338,50 @@ const StrategyPage = () => {
                         return (
                           <div className="space-y-4">
                             <div className="flex items-start gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${pageDark ? 'bg-indigo-500/10' : 'bg-indigo-100'}`}>
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${!isVirt ? 'bg-indigo-500/10' : 'bg-indigo-100'}`}>
                                 <span className="text-base">📊</span>
                               </div>
                               <div>
-                                <p className={`text-sm font-semibold mb-1 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: <Term k="볼린저밴드">볼린저 밴드</Term></p>
-                                <p className={`text-sm leading-relaxed ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                                <p className={`text-sm font-semibold mb-1 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: <Term k="볼린저밴드">볼린저 밴드</Term></p>
+                                <p className={`text-sm leading-relaxed ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>
                                   <Term k="볼린저밴드">볼린저 밴드</Term>는 가격의 "정상 범위"를 상단·중심·하단 3개의 띠로 보여줍니다.
                                   마치 고무줄처럼, 가격이 밴드 밖으로 벗어나면 다시 안으로 돌아오려는 성질이 있습니다.
                                 </p>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-4 ${pageDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                              <p className={`text-xs font-bold mb-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>볼린저 밴드 구조</p>
+                            <div className={`rounded-lg p-4 ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                              <p className={`text-xs font-bold mb-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>볼린저 밴드 구조</p>
                               <div className="space-y-1.5">
                                 <div className="flex items-center gap-2">
                                   <div className="w-16 h-1 rounded bg-red-300" />
-                                  <span className={`text-[10px] ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}><strong>상단 밴드</strong> — 가격이 여기를 넘으면 <Term k="과매수">과매수</Term> (<Term k="%B">%B</Term> {'>'} 1)</span>
+                                  <span className={`text-[10px] ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}><strong>상단 밴드</strong> — 가격이 여기를 넘으면 <Term k="과매수">과매수</Term> (<Term k="%B">%B</Term> {'>'} 1)</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <div className="w-16 h-1 rounded bg-gray-400" />
-                                  <span className={`text-[10px] ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}><strong>중심선</strong> — 20일 <Term k="이동평균선">이동평균선</Term> (<Term k="%B">%B</Term> = 0.5)</span>
+                                  <span className={`text-[10px] ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}><strong>중심선</strong> — 20일 <Term k="이동평균선">이동평균선</Term> (<Term k="%B">%B</Term> = 0.5)</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <div className="w-16 h-1 rounded bg-blue-300" />
-                                  <span className={`text-[10px] ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}><strong>하단 밴드</strong> — 가격이 여기 아래면 <Term k="과매도">과매도</Term> (<Term k="%B">%B</Term> {'<'} 0)</span>
+                                  <span className={`text-[10px] ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}><strong>하단 밴드</strong> — 가격이 여기 아래면 <Term k="과매도">과매도</Term> (<Term k="%B">%B</Term> {'<'} 0)</span>
                                 </div>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-4 ${pageDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                              <p className={`text-xs font-bold mb-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>이 전략의 매매 원리</p>
+                            <div className={`rounded-lg p-4 ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                              <p className={`text-xs font-bold mb-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>이 전략의 매매 원리</p>
                               <div className="space-y-2">
                                 <div className="flex items-start gap-2">
                                   <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-bold shrink-0 mt-0.5">매수</span>
-                                  <p className={`text-xs ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>가격이 상단 밴드를 돌파하면 → 강한 상승 에너지로 판단, <Term k="변동성">변동성</Term> 확대 구간에서 수익을 노립니다</p>
+                                  <p className={`text-xs ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>가격이 상단 밴드를 돌파하면 → 강한 상승 에너지로 판단, <Term k="변동성">변동성</Term> 확대 구간에서 수익을 노립니다</p>
                                 </div>
                                 <div className="flex items-start gap-2">
                                   <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">매도</span>
-                                  <p className={`text-xs ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>가격이 하단 밴드 아래로 이탈하면 → 상승 에너지 소진으로 판단하고 매도합니다</p>
+                                  <p className={`text-xs ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>가격이 하단 밴드 아래로 이탈하면 → 상승 에너지 소진으로 판단하고 매도합니다</p>
                                 </div>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-3 ${pageDark ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
-                              <p className={`text-xs font-semibold mb-1 ${pageDark ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
-                              <p className={`text-xs ${pageDark ? 'text-amber-400/80' : 'text-amber-600'}`}>밴드가 매우 좁아지는 "스퀴즈" 구간을 주목하세요! 이때 폭발적인 가격 변동이 시작되는 경우가 많습니다. <Term k="백테스트">백테스트</Term>로 과거 스퀴즈 구간의 성과를 확인해보세요.</p>
+                            <div className={`rounded-lg p-3 ${!isVirt ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
+                              <p className={`text-xs font-semibold mb-1 ${!isVirt ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
+                              <p className={`text-xs ${!isVirt ? 'text-amber-400/80' : 'text-amber-600'}`}>밴드가 매우 좁아지는 "스퀴즈" 구간을 주목하세요! 이때 폭발적인 가격 변동이 시작되는 경우가 많습니다. <Term k="백테스트">백테스트</Term>로 과거 스퀴즈 구간의 성과를 확인해보세요.</p>
                             </div>
                           </div>
                         );
@@ -1392,19 +1389,19 @@ const StrategyPage = () => {
                         return (
                           <div className="space-y-4">
                             <div className="flex items-start gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${pageDark ? 'bg-blue-500/10' : 'bg-blue-100'}`}>
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${!isVirt ? 'bg-blue-500/10' : 'bg-blue-100'}`}>
                                 <span className="text-base">🔀</span>
                               </div>
                               <div>
-                                <p className={`text-sm font-semibold mb-1 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: <Term k="MACD">MACD</Term></p>
-                                <p className={`text-sm leading-relaxed ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                                <p className={`text-sm font-semibold mb-1 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: <Term k="MACD">MACD</Term></p>
+                                <p className={`text-sm leading-relaxed ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>
                                   <Term k="MACD">MACD</Term>는 두 <Term k="이동평균선">이동평균선</Term>의 차이를 분석하여 추세의 방향과 전환 시점을 알려줍니다.
                                   "추세가 바뀌려는 순간"을 잡아내는 데 특화된 지표입니다.
                                 </p>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-4 ${pageDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                              <p className={`text-xs font-bold mb-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>MACD 3가지 구성 요소</p>
+                            <div className={`rounded-lg p-4 ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                              <p className={`text-xs font-bold mb-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>MACD 3가지 구성 요소</p>
                               <div className="space-y-2">
                                 <div className="flex items-center gap-2">
                                   <div className="w-3 h-3 rounded-full bg-blue-500" />
@@ -1420,22 +1417,22 @@ const StrategyPage = () => {
                                 </div>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-4 ${pageDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                              <p className={`text-xs font-bold mb-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>이 전략의 매매 원리</p>
+                            <div className={`rounded-lg p-4 ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                              <p className={`text-xs font-bold mb-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>이 전략의 매매 원리</p>
                               <div className="space-y-2">
                                 <div className="flex items-start gap-2">
                                   <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-bold shrink-0 mt-0.5">매수</span>
-                                  <p className={`text-xs ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>MACD선이 시그널선을 <Term k="골든크로스">위로 돌파</Term>하면 → 상승 추세 전환 신호로 매수</p>
+                                  <p className={`text-xs ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>MACD선이 시그널선을 <Term k="골든크로스">위로 돌파</Term>하면 → 상승 추세 전환 신호로 매수</p>
                                 </div>
                                 <div className="flex items-start gap-2">
                                   <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">매도</span>
-                                  <p className={`text-xs ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>MACD선이 시그널선을 <Term k="데드크로스">아래로 돌파</Term>하면 → 하락 추세 전환 신호로 매도</p>
+                                  <p className={`text-xs ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>MACD선이 시그널선을 <Term k="데드크로스">아래로 돌파</Term>하면 → 하락 추세 전환 신호로 매도</p>
                                 </div>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-3 ${pageDark ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
-                              <p className={`text-xs font-semibold mb-1 ${pageDark ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
-                              <p className={`text-xs ${pageDark ? 'text-amber-400/80' : 'text-amber-600'}`}><Term k="MACD">MACD</Term>는 <Term k="RSI">RSI</Term>와 함께 사용하면 더 정확합니다. MACD가 <Term k="골든크로스">골든크로스</Term>이면서 RSI가 <Term k="과매도">과매도</Term> 구간이면 더 강한 매수 신호로 볼 수 있습니다.</p>
+                            <div className={`rounded-lg p-3 ${!isVirt ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
+                              <p className={`text-xs font-semibold mb-1 ${!isVirt ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
+                              <p className={`text-xs ${!isVirt ? 'text-amber-400/80' : 'text-amber-600'}`}><Term k="MACD">MACD</Term>는 <Term k="RSI">RSI</Term>와 함께 사용하면 더 정확합니다. MACD가 <Term k="골든크로스">골든크로스</Term>이면서 RSI가 <Term k="과매도">과매도</Term> 구간이면 더 강한 매수 신호로 볼 수 있습니다.</p>
                             </div>
                           </div>
                         );
@@ -1443,33 +1440,33 @@ const StrategyPage = () => {
                         return (
                           <div className="space-y-4">
                             <div className="flex items-start gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${pageDark ? 'bg-sky-500/10' : 'bg-sky-100'}`}>
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${!isVirt ? 'bg-sky-500/10' : 'bg-sky-100'}`}>
                                 <span className="text-base">⚡</span>
                               </div>
                               <div>
-                                <p className={`text-sm font-semibold mb-1 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: <Term k="스토캐스틱">스토캐스틱</Term></p>
-                                <p className={`text-sm leading-relaxed ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                                <p className={`text-sm font-semibold mb-1 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: <Term k="스토캐스틱">스토캐스틱</Term></p>
+                                <p className={`text-sm leading-relaxed ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>
                                   <Term k="스토캐스틱">스토캐스틱</Term>은 일정 기간의 최고가~최저가 범위에서 현재 가격의 위치를 0~100으로 보여줍니다.
                                   <Term k="RSI">RSI</Term>와 비슷하지만 가격 변화에 더 민감하게 반응합니다.
                                 </p>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-4 ${pageDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                              <p className={`text-xs font-bold mb-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>이 전략의 매매 원리</p>
+                            <div className={`rounded-lg p-4 ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                              <p className={`text-xs font-bold mb-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>이 전략의 매매 원리</p>
                               <div className="space-y-2">
                                 <div className="flex items-start gap-2">
                                   <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-bold shrink-0 mt-0.5">매수</span>
-                                  <p className={`text-xs ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>%K선이 %D선을 위로 돌파하면 → 상승 모멘텀 발생으로 매수</p>
+                                  <p className={`text-xs ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>%K선이 %D선을 위로 돌파하면 → 상승 모멘텀 발생으로 매수</p>
                                 </div>
                                 <div className="flex items-start gap-2">
                                   <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-bold shrink-0 mt-0.5">매도</span>
-                                  <p className={`text-xs ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>%K선이 %D선을 아래로 돌파하면 → 하락 모멘텀 발생으로 매도</p>
+                                  <p className={`text-xs ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>%K선이 %D선을 아래로 돌파하면 → 하락 모멘텀 발생으로 매도</p>
                                 </div>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-3 ${pageDark ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
-                              <p className={`text-xs font-semibold mb-1 ${pageDark ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
-                              <p className={`text-xs ${pageDark ? 'text-amber-400/80' : 'text-amber-600'}`}><Term k="과매도">과매도</Term>(20 이하) 구간에서의 <Term k="골든크로스">골든크로스</Term>가 가장 신뢰도 높은 매수 신호입니다. 반대로 <Term k="과매수">과매수</Term>(80 이상) 구간에서의 <Term k="데드크로스">데드크로스</Term>가 강한 매도 신호입니다.</p>
+                            <div className={`rounded-lg p-3 ${!isVirt ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
+                              <p className={`text-xs font-semibold mb-1 ${!isVirt ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
+                              <p className={`text-xs ${!isVirt ? 'text-amber-400/80' : 'text-amber-600'}`}><Term k="과매도">과매도</Term>(20 이하) 구간에서의 <Term k="골든크로스">골든크로스</Term>가 가장 신뢰도 높은 매수 신호입니다. 반대로 <Term k="과매수">과매수</Term>(80 이상) 구간에서의 <Term k="데드크로스">데드크로스</Term>가 강한 매도 신호입니다.</p>
                             </div>
                           </div>
                         );
@@ -1477,49 +1474,49 @@ const StrategyPage = () => {
                         return (
                           <div className="space-y-4">
                             <div className="flex items-start gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${pageDark ? 'bg-emerald-500/10' : 'bg-emerald-100'}`}>
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${!isVirt ? 'bg-emerald-500/10' : 'bg-emerald-100'}`}>
                                 <span className="text-base">⚖️</span>
                               </div>
                               <div>
-                                <p className={`text-sm font-semibold mb-1 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: 리밸런싱 (자산 재배분)</p>
-                                <p className={`text-sm leading-relaxed ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                                <p className={`text-sm font-semibold mb-1 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: 리밸런싱 (자산 재배분)</p>
+                                <p className={`text-sm leading-relaxed ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>
                                   여러 자산에 정해진 비율로 나누어 투자하고, 시간이 지나 비율이 틀어지면 원래 비율로 되돌리는 전략입니다.
                                   "달걀을 한 바구니에 담지 마라"는 분산투자의 원칙을 따릅니다.
                                 </p>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-4 ${pageDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                              <p className={`text-xs font-bold mb-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>목표 자산 배분</p>
+                            <div className={`rounded-lg p-4 ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                              <p className={`text-xs font-bold mb-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>목표 자산 배분</p>
                               <div className="flex gap-2">
-                                <div className={`flex-[6] rounded-lg p-2 text-center ${pageDark ? 'bg-orange-500/10' : 'bg-orange-50'}`}>
-                                  <p className={`text-xs font-bold ${pageDark ? 'text-orange-400' : 'text-orange-600'}`}>BTC 60%</p>
-                                  <p className={`text-[9px] ${pageDark ? 'text-orange-400/60' : 'text-orange-400'}`}>핵심 자산</p>
+                                <div className={`flex-[6] rounded-lg p-2 text-center ${!isVirt ? 'bg-orange-500/10' : 'bg-orange-50'}`}>
+                                  <p className={`text-xs font-bold ${!isVirt ? 'text-orange-400' : 'text-orange-600'}`}>BTC 60%</p>
+                                  <p className={`text-[9px] ${!isVirt ? 'text-orange-400/60' : 'text-orange-400'}`}>핵심 자산</p>
                                 </div>
-                                <div className={`flex-[3] rounded-lg p-2 text-center ${pageDark ? 'bg-blue-500/10' : 'bg-blue-50'}`}>
-                                  <p className={`text-xs font-bold ${pageDark ? 'text-blue-400' : 'text-blue-600'}`}>ETH 30%</p>
-                                  <p className={`text-[9px] ${pageDark ? 'text-blue-400/60' : 'text-blue-400'}`}>성장 자산</p>
+                                <div className={`flex-[3] rounded-lg p-2 text-center ${!isVirt ? 'bg-blue-500/10' : 'bg-blue-50'}`}>
+                                  <p className={`text-xs font-bold ${!isVirt ? 'text-blue-400' : 'text-blue-600'}`}>ETH 30%</p>
+                                  <p className={`text-[9px] ${!isVirt ? 'text-blue-400/60' : 'text-blue-400'}`}>성장 자산</p>
                                 </div>
-                                <div className={`flex-[1] rounded-lg p-2 text-center ${pageDark ? 'bg-green-500/10' : 'bg-green-50'}`}>
-                                  <p className={`text-xs font-bold ${pageDark ? 'text-green-400' : 'text-green-600'}`}>USDT 10%</p>
-                                  <p className={`text-[9px] ${pageDark ? 'text-green-400/60' : 'text-green-400'}`}>안전 자산</p>
+                                <div className={`flex-[1] rounded-lg p-2 text-center ${!isVirt ? 'bg-green-500/10' : 'bg-green-50'}`}>
+                                  <p className={`text-xs font-bold ${!isVirt ? 'text-green-400' : 'text-green-600'}`}>USDT 10%</p>
+                                  <p className={`text-[9px] ${!isVirt ? 'text-green-400/60' : 'text-green-400'}`}>안전 자산</p>
                                 </div>
                               </div>
                             </div>
-                            <div className={`rounded-lg p-3 ${pageDark ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
-                              <p className={`text-xs font-semibold mb-1 ${pageDark ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
-                              <p className={`text-xs ${pageDark ? 'text-amber-400/80' : 'text-amber-600'}`}>리밸런싱은 가장 안전한 투자 방식 중 하나입니다. 자동으로 "비싸진 건 팔고, 싸진 건 사는" 효과가 있어 장기적으로 안정적인 수익을 기대할 수 있습니다. 투자가 처음이라면 이 전략부터 시작해보세요.</p>
+                            <div className={`rounded-lg p-3 ${!isVirt ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
+                              <p className={`text-xs font-semibold mb-1 ${!isVirt ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
+                              <p className={`text-xs ${!isVirt ? 'text-amber-400/80' : 'text-amber-600'}`}>리밸런싱은 가장 안전한 투자 방식 중 하나입니다. 자동으로 "비싸진 건 팔고, 싸진 건 사는" 효과가 있어 장기적으로 안정적인 수익을 기대할 수 있습니다. 투자가 처음이라면 이 전략부터 시작해보세요.</p>
                             </div>
                           </div>
                         );
                       } else {
                         return (
                           <div className="space-y-3">
-                            <p className={`text-sm leading-relaxed ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                            <p className={`text-sm leading-relaxed ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>
                               {selectedStrategy.description || '이 전략을 백테스트하여 과거 성과를 확인할 수 있습니다.'}
                             </p>
-                            <div className={`rounded-lg p-3 ${pageDark ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
-                              <p className={`text-xs font-semibold mb-1 ${pageDark ? 'text-amber-400' : 'text-amber-700'}`}>시작하기</p>
-                              <p className={`text-xs ${pageDark ? 'text-amber-400/80' : 'text-amber-600'}`}>오른쪽 패널에서 종목과 기간을 선택한 후 <Term k="백테스트">백테스트</Term>를 실행해보세요. 과거 데이터로 이 전략이 얼마나 효과적이었는지 확인할 수 있습니다.</p>
+                            <div className={`rounded-lg p-3 ${!isVirt ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
+                              <p className={`text-xs font-semibold mb-1 ${!isVirt ? 'text-amber-400' : 'text-amber-700'}`}>시작하기</p>
+                              <p className={`text-xs ${!isVirt ? 'text-amber-400/80' : 'text-amber-600'}`}>오른쪽 패널에서 종목과 기간을 선택한 후 <Term k="백테스트">백테스트</Term>를 실행해보세요. 과거 데이터로 이 전략이 얼마나 효과적이었는지 확인할 수 있습니다.</p>
                             </div>
                           </div>
                         );
@@ -1529,8 +1526,8 @@ const StrategyPage = () => {
 
                   {/* 사용된 기술 지표 */}
                   {selectedStrategy.indicators && selectedStrategy.indicators.length > 0 && (
-                    <div className={`rounded-xl p-5 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                      <h3 className={`text-base font-bold mb-3 pb-2 border-l-4 pl-3 ${pageDark ? 'text-white border-b border-white/[0.06] border-l-cyan-400' : 'text-whale-dark border-b border-gray-200 border-l-whale-light'}`}>사용된 기술 지표</h3>
+                    <div className={`rounded-xl p-5 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                      <h3 className={`text-base font-bold mb-3 pb-2 border-l-4 pl-3 ${!isVirt ? 'text-white border-b border-white/[0.06] border-l-cyan-400' : 'text-whale-dark border-b border-gray-200 border-l-whale-light'}`}>사용된 기술 지표</h3>
                       <div className="flex flex-wrap gap-2">
                         {selectedStrategy.indicators.map((ind, i) => {
                           const indGlossary: Record<string, string> = {
@@ -1547,9 +1544,9 @@ const StrategyPage = () => {
                           const gKey = indGlossary[ind.type];
                           const pLabels = paramLabelsKo[ind.type] || {};
                           return (
-                            <span key={i} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-default ${pageDark ? 'bg-white/[0.04] text-white border border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.06]' : 'bg-gray-100 text-whale-dark border border-gray-200 hover:border-whale-light/50 hover:bg-whale-light/5'}`}>
+                            <span key={i} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-default ${!isVirt ? 'bg-white/[0.04] text-white border border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.06]' : 'bg-gray-100 text-whale-dark border border-gray-200 hover:border-whale-light/50 hover:bg-whale-light/5'}`}>
                               {gKey ? <Term k={gKey}><span className="font-bold">{ind.type}</span></Term> : <span className="font-bold">{ind.type}</span>}
-                              <span className={`text-xs ml-1.5 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                              <span className={`text-xs ml-1.5 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>
                                 ({Object.entries(ind.parameters).map(([k, v]) => `${pLabels[k] || k}=${v}`).join(', ')})
                               </span>
                             </span>
@@ -1561,12 +1558,12 @@ const StrategyPage = () => {
 
                   {/* 투자 대상 자산 */}
                   {selectedStrategy.targetAssets && selectedStrategy.targetAssets.length > 0 && (
-                    <div className={`rounded-xl p-5 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                      <h3 className={`text-base font-bold mb-3 pb-2 border-l-4 pl-3 ${pageDark ? 'text-white border-b border-white/[0.06] border-l-cyan-400' : 'text-whale-dark border-b border-gray-200 border-l-whale-light'}`}>항해 대상 ({selectedStrategy.targetAssets.length}개 자산)</h3>
+                    <div className={`rounded-xl p-5 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                      <h3 className={`text-base font-bold mb-3 pb-2 border-l-4 pl-3 ${!isVirt ? 'text-white border-b border-white/[0.06] border-l-cyan-400' : 'text-whale-dark border-b border-gray-200 border-l-whale-light'}`}>항해 대상 ({selectedStrategy.targetAssets.length}개 자산)</h3>
                       <div className="flex flex-wrap gap-2">
                         {selectedStrategy.targetAssets.map(code => (
-                          <span key={code} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-default ${pageDark ? 'bg-white/[0.04] text-white border border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.06]' : 'bg-gray-100 text-whale-dark border border-gray-200 hover:border-whale-light/50 hover:bg-whale-light/5'}`}>
-                            {selectedStrategy.targetAssetNames?.[code] || getAssetName(code)} <span className={pageDark ? 'text-slate-500' : 'text-gray-400'}>({code})</span>
+                          <span key={code} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-default ${!isVirt ? 'bg-white/[0.04] text-white border border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.06]' : 'bg-gray-100 text-whale-dark border border-gray-200 hover:border-whale-light/50 hover:bg-whale-light/5'}`}>
+                            {selectedStrategy.targetAssetNames?.[code] || getAssetName(code)} <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>({code})</span>
                           </span>
                         ))}
                       </div>
@@ -1576,32 +1573,32 @@ const StrategyPage = () => {
               ) : (
                 /* 항로 미선택 — 개요 대시보드 */
                 <div className="space-y-5">
-                  <div className={`rounded-xl p-8 text-center ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gradient-to-br from-whale-light/5 to-blue-50 border border-whale-light/20'}`}>
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 ${pageDark ? 'bg-cyan-500/10' : 'bg-whale-light/10'}`}>
+                  <div className={`rounded-xl p-8 text-center ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gradient-to-br from-whale-light/5 to-blue-50 border border-whale-light/20'}`}>
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 ${!isVirt ? 'bg-cyan-500/10' : 'bg-whale-light/10'}`}>
                       <svg className="w-16 h-16 text-whale-light float-animation" viewBox="0 0 64 64" fill="currentColor">
                         <path d="M32 8c-4 0-8 2-10 6-3 5-2 12 2 16l8 10 8-10c4-4 5-11 2-16-2-4-6-6-10-6zm0 4c2.5 0 5 1.2 6.5 3.8 2 3.5 1.2 8-1.5 11L32 33l-5-6.2c-2.7-3-3.5-7.5-1.5-11C27 13.2 29.5 12 32 12z"/>
                         <path d="M20 40c-2 2-4 6-4 10h32c0-4-2-8-4-10l-6-2h-12l-6 2z" opacity="0.3"/>
                       </svg>
                     </div>
-                    <h2 className={`text-xl font-bold mb-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>항로를 설정하여 항해를 시작하세요</h2>
-                    <p className={`text-sm ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>왼쪽에서 전략을 선택하면 항로 분석, 학습 영상, 백테스트가 여기에 표시됩니다</p>
+                    <h2 className={`text-xl font-bold mb-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>항로를 설정하여 항해를 시작하세요</h2>
+                    <p className={`text-sm ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>왼쪽에서 전략을 선택하면 항로 분석, 학습 영상, 백테스트가 여기에 표시됩니다</p>
                   </div>
                   <div className="grid grid-cols-3 gap-4">
-                    <div className={`rounded-xl p-4 text-center shadow-sm ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                      <div className={`text-2xl font-bold ${pageDark ? 'text-cyan-400' : 'text-whale-light'}`}>{allStrategies.length}</div>
-                      <div className={`text-xs mt-1 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>전체 전략</div>
+                    <div className={`rounded-xl p-4 text-center shadow-sm ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                      <div className={`text-2xl font-bold ${!isVirt ? 'text-cyan-400' : 'text-whale-light'}`}>{allStrategies.length}</div>
+                      <div className={`text-xs mt-1 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>전체 전략</div>
                     </div>
-                    <div className={`rounded-xl p-4 text-center shadow-sm ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                    <div className={`rounded-xl p-4 text-center shadow-sm ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
                       <div className="text-2xl font-bold text-emerald-500">{PRESET_STRATEGIES.length}</div>
-                      <div className={`text-xs mt-1 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>기본 제공</div>
+                      <div className={`text-xs mt-1 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>기본 제공</div>
                     </div>
-                    <div className={`rounded-xl p-4 text-center shadow-sm ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                    <div className={`rounded-xl p-4 text-center shadow-sm ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
                       <div className="text-2xl font-bold text-indigo-500">{strategies.length}</div>
-                      <div className={`text-xs mt-1 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>내 전략</div>
+                      <div className={`text-xs mt-1 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>내 전략</div>
                     </div>
                   </div>
-                  <div className={`rounded-xl p-5 shadow-sm ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                    <h3 className={`text-sm font-bold mb-4 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>빠른 시작 가이드</h3>
+                  <div className={`rounded-xl p-5 shadow-sm ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                    <h3 className={`text-sm font-bold mb-4 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>빠른 시작 가이드</h3>
                     <div className="space-y-3">
                       {[
                         { step: '1', title: '전략 선택', desc: '왼쪽 목록에서 기본 전략(골든크로스, RSI 등)을 선택하세요. 각 전략에 마우스를 올리면 상세 설명을 볼 수 있습니다.' },
@@ -1610,17 +1607,17 @@ const StrategyPage = () => {
                       ].map((item, idx) => (
                         <div key={item.step} className="flex items-start gap-3 relative">
                           {idx < 2 && <div className="absolute left-[14px] top-7 bottom-0 border-l-2 border-dashed border-whale-light/30" />}
-                          <div className={`w-7 h-7 rounded-lg font-bold text-sm flex items-center justify-center shrink-0 relative z-10 ${pageDark ? 'bg-cyan-500/10 text-cyan-400' : 'bg-whale-light/10 text-whale-light'}`}>{item.step}</div>
+                          <div className={`w-7 h-7 rounded-lg font-bold text-sm flex items-center justify-center shrink-0 relative z-10 ${!isVirt ? 'bg-cyan-500/10 text-cyan-400' : 'bg-whale-light/10 text-whale-light'}`}>{item.step}</div>
                           <div>
-                            <div className={`text-sm font-semibold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{item.title}</div>
-                            <div className={`text-xs ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>{item.desc}</div>
+                            <div className={`text-sm font-semibold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{item.title}</div>
+                            <div className={`text-xs ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>{item.desc}</div>
                           </div>
                         </div>
                       ))}
                     </div>
 
                     {/* 가이드 체험 버튼 */}
-                    <div className={`mt-5 pt-4 ${pageDark ? 'border-t border-white/[0.06]' : 'border-t border-gray-100'}`}>
+                    <div className={`mt-5 pt-4 ${!isVirt ? 'border-t border-white/[0.06]' : 'border-t border-gray-100'}`}>
                       <button
                         onClick={() => {
                           // 1. 골든크로스 전략 선택
@@ -1649,12 +1646,12 @@ const StrategyPage = () => {
                         </svg>
                         가이드 체험 — 골든크로스 × BTC 백테스트
                       </button>
-                      <p className={`text-[10px] text-center mt-2 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                      <p className={`text-[10px] text-center mt-2 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>
                         골든크로스 전략으로 비트코인 1년 백테스트를 자동으로 세팅합니다.
                         <br />오른쪽 패널에서 '백테스트 실행' 버튼만 누르면 됩니다.
                       </p>
                       {(() => {
-                        const tourBtnCls = pageDark
+                        const tourBtnCls = !isVirt
                           ? 'group w-full mt-3 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 relative overflow-hidden transition-all duration-200 text-white bg-amber-600/20 border-2 border-amber-500/30 hover:border-amber-400 hover:bg-amber-600/30 hover:shadow-lg'
                           : 'group w-full mt-3 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 relative overflow-hidden transition-all duration-200 text-whale-dark bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 hover:border-amber-300 hover:from-amber-100 hover:to-orange-100 hover:shadow-lg';
                         return (
@@ -1674,61 +1671,61 @@ const StrategyPage = () => {
               /* 백테스트 결과 차트 */
               <div className="space-y-4">
                 {/* 테스트 요약 카드 */}
-                <div className={`rounded-xl p-4 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gradient-to-r from-slate-50 to-blue-50/50 border border-gray-200'}`}>
+                <div className={`rounded-xl p-4 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gradient-to-r from-slate-50 to-blue-50/50 border border-gray-200'}`}>
                   <div className="flex items-center gap-2 mb-3">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${pageDark ? 'bg-cyan-500/10' : 'bg-whale-light/10'}`}>
-                      <svg className={`w-4 h-4 ${pageDark ? 'text-cyan-400' : 'text-whale-light'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${!isVirt ? 'bg-cyan-500/10' : 'bg-whale-light/10'}`}>
+                      <svg className={`w-4 h-4 ${!isVirt ? 'text-cyan-400' : 'text-whale-light'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
                     </div>
-                    <h3 className={`text-sm font-bold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>테스트 요약</h3>
+                    <h3 className={`text-sm font-bold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>테스트 요약</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className={pageDark ? 'text-slate-500' : 'text-gray-400'}>전략</span>
-                      <span className={`font-semibold truncate ml-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{selectedStrategy?.name || '직접 설정'}</span>
+                      <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>전략</span>
+                      <span className={`font-semibold truncate ml-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{selectedStrategy?.name || '직접 설정'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className={pageDark ? 'text-slate-500' : 'text-gray-400'}>종목</span>
-                      <span className={`font-semibold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{backtestStockName || backtestStockCode || '-'}</span>
+                      <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>종목</span>
+                      <span className={`font-semibold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{backtestStockName || backtestStockCode || '-'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className={pageDark ? 'text-slate-500' : 'text-gray-400'}>기간</span>
-                      <span className={`font-semibold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{backtestStartDate?.slice(2).replace(/-/g, '.')} ~ {backtestEndDate?.slice(2).replace(/-/g, '.')}</span>
+                      <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>기간</span>
+                      <span className={`font-semibold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{backtestStartDate?.slice(2).replace(/-/g, '.')} ~ {backtestEndDate?.slice(2).replace(/-/g, '.')}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className={pageDark ? 'text-slate-500' : 'text-gray-400'}>투자금</span>
-                      <span className={`font-semibold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{Number(backtestInitialCapital).toLocaleString()}원</span>
+                      <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>투자금</span>
+                      <span className={`font-semibold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{Number(backtestInitialCapital).toLocaleString()}원</span>
                     </div>
                     {(stopLossPercent || takeProfitPercent) && (
                       <div className="flex justify-between">
-                        <span className={pageDark ? 'text-slate-500' : 'text-gray-400'}><Term k="손절">손절</Term>/<Term k="익절">익절</Term></span>
-                        <span className={`font-semibold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>
+                        <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}><Term k="손절">손절</Term>/<Term k="익절">익절</Term></span>
+                        <span className={`font-semibold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
                           {stopLossPercent ? `${stopLossPercent}%` : '-'} / {takeProfitPercent ? `${takeProfitPercent}%` : '-'}
                         </span>
                       </div>
                     )}
                     <div className="flex justify-between">
-                      <span className={pageDark ? 'text-slate-500' : 'text-gray-400'}>매매방향</span>
-                      <span className={`font-semibold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>
+                      <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>매매방향</span>
+                      <span className={`font-semibold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
                         {tradeDirection === 'LONG_ONLY' ? <Term k="롱">롱</Term> : tradeDirection === 'SHORT_ONLY' ? <Term k="숏">숏</Term> : <><Term k="롱">롱</Term>+<Term k="숏">숏</Term></>}
                       </span>
                     </div>
                     {commissionRate && Number(commissionRate) > 0 && (
                       <div className="flex justify-between">
-                        <span className={pageDark ? 'text-slate-500' : 'text-gray-400'}>수수료</span>
-                        <span className={`font-semibold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{commissionRate}%</span>
+                        <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>수수료</span>
+                        <span className={`font-semibold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{commissionRate}%</span>
                       </div>
                     )}
                     {trailingStopPercent && (
                       <div className="flex justify-between">
-                        <span className={pageDark ? 'text-slate-500' : 'text-gray-400'}><Term k="트레일링스탑">트레일링</Term></span>
-                        <span className={`font-semibold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{trailingStopPercent}%</span>
+                        <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}><Term k="트레일링스탑">트레일링</Term></span>
+                        <span className={`font-semibold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{trailingStopPercent}%</span>
                       </div>
                     )}
                   </div>
                   {selectedStrategy?.strategyLogic && (
-                    <div className={`mt-3 px-3 py-2 rounded-lg font-mono text-xs shadow-sm ${pageDark ? 'bg-white/[0.04] border border-white/[0.06] text-white' : 'bg-white border border-gray-200 text-whale-dark'}`}>
+                    <div className={`mt-3 px-3 py-2 rounded-lg font-mono text-xs shadow-sm ${!isVirt ? 'bg-white/[0.04] border border-white/[0.06] text-white' : 'bg-white border border-gray-200 text-whale-dark'}`}>
                       {selectedStrategy.strategyLogic}
                     </div>
                   )}
@@ -1747,7 +1744,7 @@ const StrategyPage = () => {
                         {kpi.glossary ? <Term k={kpi.glossary}>{kpi.label}</Term> : kpi.label}
                       </div>
                       <div className="text-lg font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
-                      <div className={`text-[10px] mt-0.5 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                      <div className={`text-[10px] mt-0.5 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>
                         {kpi.subGlossary ? <Term k={kpi.subGlossary}>{kpi.sub}</Term> : kpi.sub}
                       </div>
                     </div>
@@ -1756,9 +1753,9 @@ const StrategyPage = () => {
 
                 {/* 가격 차트 + 매매 마커 */}
                 {backtestResult.priceData && backtestResult.priceData.length > 0 && (
-                  <div className={`rounded-xl p-4 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                    <h3 className={`text-sm font-bold mb-1 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>가격 차트 & 매매 포인트</h3>
-                    <p className={`text-xs mb-3 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>빨강 = 매수 / 파랑 = 매도 / 보라 = 숏진입 / 남색 = 숏청산</p>
+                  <div className={`rounded-xl p-4 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                    <h3 className={`text-sm font-bold mb-1 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>가격 차트 & 매매 포인트</h3>
+                    <p className={`text-xs mb-3 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>빨강 = 매수 / 파랑 = 매도 / 보라 = 숏진입 / 남색 = 숏청산</p>
                     <ResponsiveContainer width="100%" height={260}>
                       <ComposedChart data={(() => {
                         const tradeMap = new Map<string, { type: string; price: number }>();
@@ -1775,11 +1772,11 @@ const StrategyPage = () => {
                           };
                         });
                       })()}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={pageDark ? 'rgba(255,255,255,0.06)' : '#e5e7eb'} />
-                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: pageDark ? '#64748b' : '#6b7280' }} tickFormatter={(v) => v.substring(5)} />
-                        <YAxis tick={{ fontSize: 10, fill: pageDark ? '#64748b' : '#6b7280' }} domain={['auto', 'auto']}
+                        <CartesianGrid strokeDasharray="3 3" stroke={!isVirt ? 'rgba(255,255,255,0.06)' : '#e5e7eb'} />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: !isVirt ? '#64748b' : '#6b7280' }} tickFormatter={(v) => v.substring(5)} />
+                        <YAxis tick={{ fontSize: 10, fill: !isVirt ? '#64748b' : '#6b7280' }} domain={['auto', 'auto']}
                           tickFormatter={(v: number) => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : `${v}`} />
-                        <Tooltip contentStyle={pageDark ? { backgroundColor: '#0a1628', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, color: '#ffffff', fontSize: 12 } : { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#1a2b4d', fontSize: 12 }}
+                        <Tooltip contentStyle={!isVirt ? { backgroundColor: '#0a1628', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, color: '#ffffff', fontSize: 12 } : { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#1a2b4d', fontSize: 12 }}
                           formatter={(value: number, name: string) => [formatCurrency(value), name === 'buySignal' ? '매수' : name === 'sellSignal' ? '매도' : name === 'shortSignal' ? '숏진입' : name === 'coverSignal' ? '숏청산' : '종가']} />
                         <Line type="monotone" dataKey="close" stroke="#4a90e2" strokeWidth={1.5} dot={false} name="종가" />
                         <Line type="monotone" dataKey="buySignal" stroke="none" dot={{ r: 5, fill: '#ef4444', stroke: '#ef4444' }} name="매수" legendType="triangle" />
@@ -1793,10 +1790,10 @@ const StrategyPage = () => {
 
                 {/* 자산 변동 추이 */}
                 {backtestResult.equityCurve && backtestResult.equityCurve.length > 0 && (
-                  <div className={`rounded-xl p-4 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                    <h3 className={`text-sm font-bold mb-3 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>
+                  <div className={`rounded-xl p-4 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                    <h3 className={`text-sm font-bold mb-3 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
                       자산 변동 추이
-                      {backtestResult.buyHoldCurve && <span className={`text-xs font-normal ml-2 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>전략 vs Buy & Hold</span>}
+                      {backtestResult.buyHoldCurve && <span className={`text-xs font-normal ml-2 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>전략 vs Buy & Hold</span>}
                     </h3>
                     <ResponsiveContainer width="100%" height={200}>
                       <AreaChart data={(() => {
@@ -1813,10 +1810,10 @@ const StrategyPage = () => {
                             <stop offset="95%" stopColor="#4a90e2" stopOpacity={0} />
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke={pageDark ? 'rgba(255,255,255,0.06)' : '#e5e7eb'} />
-                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: pageDark ? '#64748b' : '#6b7280' }} tickFormatter={(v) => v.substring(5)} />
-                        <YAxis tick={{ fontSize: 10, fill: pageDark ? '#64748b' : '#6b7280' }} tickFormatter={(v: number) => v >= 1e8 ? `${(v / 1e8).toFixed(1)}억` : v >= 1e4 ? `${(v / 1e4).toFixed(0)}만` : `${v}`} />
-                        <Tooltip contentStyle={pageDark ? { backgroundColor: '#0a1628', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, color: '#ffffff', fontSize: 12 } : { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#1a2b4d', fontSize: 12 }}
+                        <CartesianGrid strokeDasharray="3 3" stroke={!isVirt ? 'rgba(255,255,255,0.06)' : '#e5e7eb'} />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: !isVirt ? '#64748b' : '#6b7280' }} tickFormatter={(v) => v.substring(5)} />
+                        <YAxis tick={{ fontSize: 10, fill: !isVirt ? '#64748b' : '#6b7280' }} tickFormatter={(v: number) => v >= 1e8 ? `${(v / 1e8).toFixed(1)}억` : v >= 1e4 ? `${(v / 1e4).toFixed(0)}만` : `${v}`} />
+                        <Tooltip contentStyle={!isVirt ? { backgroundColor: '#0a1628', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, color: '#ffffff', fontSize: 12 } : { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#1a2b4d', fontSize: 12 }}
                           formatter={(value: number, name: string) => [formatCurrency(value), name === 'buyHold' ? 'Buy & Hold' : '전략']} />
                         <ReferenceLine y={backtestResult.initialCapital} stroke="#9ca3af" strokeDasharray="5 5" />
                         <Area type="monotone" dataKey="value" stroke="#4a90e2" fillOpacity={1} fill="url(#colorEquityLight)" strokeWidth={2} name="전략" />
@@ -1829,8 +1826,8 @@ const StrategyPage = () => {
                 )}
 
                 {/* 상세 지표 그리드 */}
-                <div className={`rounded-xl p-4 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                  <h3 className={`text-sm font-bold mb-3 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>상세 성과 지표</h3>
+                <div className={`rounded-xl p-4 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                  <h3 className={`text-sm font-bold mb-3 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>상세 성과 지표</h3>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {[
                       { label: '총 수익률', value: formatPercent(backtestResult.totalReturnRate), glossary: '' },
@@ -1842,9 +1839,9 @@ const StrategyPage = () => {
                       { label: '수익 거래', value: `${backtestResult.profitableTrades}회`, glossary: '' },
                       { label: '손실 거래', value: `${backtestResult.losingTrades}회`, glossary: '' },
                     ].map((item, i) => (
-                      <div key={i} className={`p-2.5 rounded-lg text-center shadow-sm ${pageDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                        <div className={`text-xs mb-0.5 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>{item.glossary ? <Term k={item.glossary}>{item.label}</Term> : item.label}</div>
-                        <div className={`text-sm font-bold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{item.value}</div>
+                      <div key={i} className={`p-2.5 rounded-lg text-center shadow-sm ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
+                        <div className={`text-xs mb-0.5 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>{item.glossary ? <Term k={item.glossary}>{item.label}</Term> : item.label}</div>
+                        <div className={`text-sm font-bold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{item.value}</div>
                       </div>
                     ))}
                   </div>
@@ -1852,14 +1849,14 @@ const StrategyPage = () => {
 
                 {/* 거래 내역 테이블 (간소화) */}
                 {backtestResult.trades && backtestResult.trades.length > 0 && (
-                  <div className={`rounded-xl p-4 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                    <h3 className={`text-sm font-bold mb-3 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>거래 내역 ({backtestResult.trades.length}건)</h3>
+                  <div className={`rounded-xl p-4 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                    <h3 className={`text-sm font-bold mb-3 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>거래 내역 ({backtestResult.trades.length}건)</h3>
                     <div className="overflow-x-auto max-h-48">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className={pageDark ? 'border-b border-white/[0.06]' : 'border-b border-gray-200'}>
+                          <tr className={!isVirt ? 'border-b border-white/[0.06]' : 'border-b border-gray-200'}>
                             {['날짜','구분','가격','손익','수익률','사유'].map(h => (
-                              <th key={h} className={`py-2 px-2 text-left font-semibold ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>{h}</th>
+                              <th key={h} className={`py-2 px-2 text-left font-semibold ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1868,8 +1865,8 @@ const StrategyPage = () => {
                             const isEntry = trade.type === 'BUY' || trade.type === 'SHORT';
                             const isExit = trade.type === 'SELL' || trade.type === 'COVER';
                             return (
-                              <tr key={idx} className={pageDark ? 'border-b border-white/[0.04]' : 'border-b border-gray-100'}>
-                                <td className={`py-1.5 px-2 font-mono ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{trade.date}</td>
+                              <tr key={idx} className={!isVirt ? 'border-b border-white/[0.04]' : 'border-b border-gray-100'}>
+                                <td className={`py-1.5 px-2 font-mono ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{trade.date}</td>
                                 <td className="py-1.5 px-2">
                                   <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${
                                     trade.type === 'BUY' ? 'bg-red-100 text-red-600' :
@@ -1880,14 +1877,14 @@ const StrategyPage = () => {
                                     {trade.type === 'BUY' ? '매수' : trade.type === 'SHORT' ? '숏진입' : trade.type === 'COVER' ? '숏청산' : '매도'}
                                   </span>
                                 </td>
-                                <td className={`py-1.5 px-2 font-mono ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{formatCurrency(trade.price)}</td>
+                                <td className={`py-1.5 px-2 font-mono ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{formatCurrency(trade.price)}</td>
                                 <td className={`py-1.5 px-2 font-bold font-mono ${isEntry ? 'text-slate-600' : trade.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                   {isExit ? formatCurrency(Math.round(trade.pnl)) : '-'}
                                 </td>
                                 <td className={`py-1.5 px-2 font-bold ${isEntry ? 'text-slate-600' : (trade.pnlPercent ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                   {isExit ? `${(trade.pnlPercent ?? 0) >= 0 ? '+' : ''}${(trade.pnlPercent ?? 0).toFixed(2)}%` : '-'}
                                 </td>
-                                <td className={`py-1.5 px-2 max-w-[120px] truncate ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>{trade.reason}</td>
+                                <td className={`py-1.5 px-2 max-w-[120px] truncate ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>{trade.reason}</td>
                               </tr>
                             );
                           })}
@@ -1897,8 +1894,8 @@ const StrategyPage = () => {
                   </div>
                 )}
 
-                <div className={`mt-4 p-3 rounded-lg ${pageDark ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
-                  <p className={`text-[11px] leading-relaxed text-center ${pageDark ? 'text-amber-400/80' : 'text-amber-700'}`}>
+                <div className={`mt-4 p-3 rounded-lg ${!isVirt ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
+                  <p className={`text-[11px] leading-relaxed text-center ${!isVirt ? 'text-amber-400/80' : 'text-amber-700'}`}>
                     본 백테스트 결과는 과거 데이터를 기반으로 한 시뮬레이션이며, 미래 수익을 보장하지 않습니다.
                     실제 투자 시 슬리피지, 수수료, 시장 충격 등으로 결과가 달라질 수 있습니다. 투자 판단의 최종 책임은 본인에게 있습니다.
                   </p>
@@ -1907,7 +1904,7 @@ const StrategyPage = () => {
                 <div className="flex justify-center gap-3 pt-2">
                   <button
                     onClick={() => exportBacktestCsv(backtestResult)}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm ${pageDark ? 'text-emerald-400 bg-emerald-500/[0.06] border border-emerald-500/20 hover:bg-emerald-500/[0.12]' : 'text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'}`}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm ${!isVirt ? 'text-emerald-400 bg-emerald-500/[0.06] border border-emerald-500/20 hover:bg-emerald-500/[0.12]' : 'text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'}`}
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1916,7 +1913,7 @@ const StrategyPage = () => {
                   </button>
                   <button
                     onClick={() => setBacktestResult(null)}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm ${pageDark ? 'text-white bg-white/[0.04] border border-white/[0.06] hover:border-cyan-400/[0.3] hover:bg-white/[0.06]' : 'text-whale-dark bg-white border border-gray-200 hover:border-whale-light hover:bg-whale-light/[0.05]'}`}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm ${!isVirt ? 'text-white bg-white/[0.04] border border-white/[0.06] hover:border-cyan-400/[0.3] hover:bg-white/[0.06]' : 'text-whale-dark bg-white border border-gray-200 hover:border-whale-light hover:bg-whale-light/[0.05]'}`}
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -1931,28 +1928,28 @@ const StrategyPage = () => {
           {/* 하단 태그/설명 바 */}
           {selectedStrategy && (
             <div className="px-6 pb-5">
-              <div className={`rounded-xl p-4 flex flex-wrap items-center gap-3 ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+              <div className={`rounded-xl p-4 flex flex-wrap items-center gap-3 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-                  <span className={`font-bold truncate ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{selectedStrategy.name}</span>
-                  {selectedStrategy.applied && <span className={`px-2 py-0.5 rounded-full text-xs ${pageDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>적용됨</span>}
+                  <span className={`font-bold truncate ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{selectedStrategy.name}</span>
+                  {selectedStrategy.applied && <span className={`px-2 py-0.5 rounded-full text-xs ${!isVirt ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>적용됨</span>}
                 </div>
                 {selectedStrategy.assetType && (
                   <span className={`px-2 py-1 rounded-lg text-xs font-medium shrink-0 ${
-                    selectedStrategy.assetType === 'CRYPTO' ? (pageDark ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-100 text-orange-700') :
-                    selectedStrategy.assetType === 'STOCK' ? (pageDark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-100 text-indigo-700') :
-                    (pageDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-100 text-purple-700')
+                    selectedStrategy.assetType === 'CRYPTO' ? (!isVirt ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-100 text-orange-700') :
+                    selectedStrategy.assetType === 'STOCK' ? (!isVirt ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-100 text-indigo-700') :
+                    (!isVirt ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-100 text-purple-700')
                   }`}>
                     {assetTypeLabel(selectedStrategy.assetType)}
                   </span>
                 )}
                 {selectedStrategy.targetAssets && selectedStrategy.targetAssets.slice(0, 4).map(code => (
-                  <span key={code} className={`px-2 py-1 rounded-lg text-xs shrink-0 ${pageDark ? 'bg-white/[0.04] text-white' : 'bg-gray-100 text-whale-dark'}`}>
+                  <span key={code} className={`px-2 py-1 rounded-lg text-xs shrink-0 ${!isVirt ? 'bg-white/[0.04] text-white' : 'bg-gray-100 text-whale-dark'}`}>
                     {selectedStrategy.targetAssetNames?.[code] || getAssetName(code)}
                   </span>
                 ))}
                 {selectedStrategy.targetAssets && selectedStrategy.targetAssets.length > 4 && (
-                  <span className={`text-xs shrink-0 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>+{selectedStrategy.targetAssets.length - 4}</span>
+                  <span className={`text-xs shrink-0 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>+{selectedStrategy.targetAssets.length - 4}</span>
                 )}
               </div>
             </div>
@@ -1960,8 +1957,8 @@ const StrategyPage = () => {
         </div>
 
         {/* ===== RIGHT PANEL: 백테스트 실행 ===== */}
-        <div className={`lg:flex-[2.5] flex flex-col min-w-0 shadow-sm ${pageDark ? 'bg-white/[0.01] border-l border-white/[0.06]' : 'bg-white border-l border-gray-200'}`}>
-          <div className={`relative px-5 py-4 border-b shrink-0 h-[72px] flex items-center ${pageDark ? 'border-white/[0.06] bg-gradient-to-r from-whale-dark to-whale-light' : 'border-gray-200 bg-gradient-to-r from-whale-dark to-whale-light'}`}>
+        <div className={`lg:flex-[2.5] flex flex-col min-w-0 shadow-sm ${!isVirt ? 'bg-white/[0.01] border-l border-white/[0.06]' : 'bg-white border-l border-gray-200'}`}>
+          <div className={`relative px-5 py-4 border-b shrink-0 h-[72px] flex items-center ${!isVirt ? 'border-white/[0.06] bg-gradient-to-r from-whale-dark to-whale-light' : 'border-gray-200 bg-gradient-to-r from-whale-dark to-whale-light'}`}>
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
                 <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1978,7 +1975,7 @@ const StrategyPage = () => {
             </div>
             <div className="absolute bottom-0 left-0 right-0 overflow-hidden" style={{ height: '6px' }}>
               <svg viewBox="0 0 1200 20" preserveAspectRatio="none" className="w-full h-full">
-                <path d="M0,10 C150,20 350,0 500,10 C650,20 850,0 1000,10 C1100,15 1150,5 1200,10 L1200,20 L0,20 Z" fill={pageDark ? '#060d18' : 'white'} />
+                <path d="M0,10 C150,20 350,0 500,10 C650,20 850,0 1000,10 C1100,15 1150,5 1200,10 L1200,20 L0,20 Z" fill={!isVirt ? '#060d18' : 'white'} />
               </svg>
             </div>
           </div>
@@ -1986,21 +1983,21 @@ const StrategyPage = () => {
 
             {/* 선택된 전략 표시 */}
             {selectedStrategy ? (
-              <div className={`px-3 py-2.5 rounded-xl border-l-4 ${pageDark ? 'bg-white/[0.03] border border-white/[0.06] border-l-cyan-400' : 'bg-whale-light/5 border border-whale-light/20 border-l-whale-light'}`}>
-                <p className={`text-sm font-semibold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{selectedStrategy.name}</p>
-                <p className={`text-xs mt-1 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>
+              <div className={`px-3 py-2.5 rounded-xl border-l-4 ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06] border-l-cyan-400' : 'bg-whale-light/5 border border-whale-light/20 border-l-whale-light'}`}>
+                <p className={`text-sm font-semibold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{selectedStrategy.name}</p>
+                <p className={`text-xs mt-1 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>
                   진입 {selectedStrategy.entryConditions?.length || 0}개 · 청산 {selectedStrategy.exitConditions?.length || 0}개 조건
                 </p>
               </div>
             ) : (
-              <div className={`px-3 py-2.5 rounded-xl ${pageDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                <p className={`text-sm ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>왼쪽 라이브러리에서 전략을 선택하세요</p>
+              <div className={`px-3 py-2.5 rounded-xl ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                <p className={`text-sm ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>왼쪽 라이브러리에서 전략을 선택하세요</p>
               </div>
             )}
 
             {/* 종목 검색 */}
             <div data-tour="stock-search" className="relative">
-              <label className={`block text-xs font-semibold mb-1.5 ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>종목 검색</label>
+              <label className={`block text-xs font-semibold mb-1.5 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>종목 검색</label>
 
               {/* 항로 자산 바로가기 */}
               {selectedStrategy?.targetAssets && selectedStrategy.targetAssets.length > 0 && (
@@ -2012,7 +2009,7 @@ const StrategyPage = () => {
                     return (
                       <button key={assetCode} type="button"
                         onClick={() => handleBacktestStockSelect(assetCode, assetName, isStock ? 'STOCK' : 'CRYPTO')}
-                        className={`px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1 border ${isSel ? 'bg-gradient-to-r from-whale-light to-blue-500 text-white border-whale-light shadow-md' : pageDark ? 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.05]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-whale-light hover:shadow-sm hover:shadow-whale-light/20'}`}>
+                        className={`px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1 border ${isSel ? 'bg-gradient-to-r from-whale-light to-blue-500 text-white border-whale-light shadow-md' : !isVirt ? 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.05]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-whale-light hover:shadow-sm hover:shadow-whale-light/20'}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${isStock ? 'bg-indigo-400' : 'bg-emerald-400'}`} />
                         {assetName}
                       </button>
@@ -2024,7 +2021,7 @@ const StrategyPage = () => {
               <div className="relative">
                 <input type="text" value={backtestSearchQuery} onChange={(e) => handleBacktestSearch(e.target.value)}
                   onFocus={() => { if (backtestSearchResults.length > 0) setShowBacktestDropdown(true); }}
-                  className={`w-full px-3 py-2.5 rounded-xl text-sm pr-8 focus:ring-2 focus:ring-whale-light focus:border-whale-light ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white placeholder-slate-600' : 'bg-gray-50 border border-gray-200 text-gray-800'}`}
+                  className={`w-full px-3 py-2.5 rounded-xl text-sm pr-8 focus:ring-2 focus:ring-whale-light focus:border-whale-light ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white placeholder-slate-600' : 'bg-gray-50 border border-gray-200 text-gray-800'}`}
                   placeholder="BTC, 삼성전자, AAPL..." />
                 {isBacktestSearching && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -2040,19 +2037,19 @@ const StrategyPage = () => {
                 )}
               </div>
               {backtestStockCode && (
-                <div className={`mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${pageDark ? 'bg-white/[0.04] border border-white/[0.06]' : 'bg-gray-100 border border-gray-200'}`}>
+                <div className={`mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/[0.06]' : 'bg-gray-100 border border-gray-200'}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${backtestAssetType === 'STOCK' ? 'bg-indigo-400' : 'bg-emerald-400'}`} />
-                  <span className={`font-medium ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{backtestStockName}</span>
-                  <span className={pageDark ? 'text-slate-500' : 'text-gray-400'}>({backtestStockCode})</span>
+                  <span className={`font-medium ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{backtestStockName}</span>
+                  <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>({backtestStockCode})</span>
                 </div>
               )}
               {showBacktestDropdown && backtestSearchResults.length > 0 && (
-                <div className={`absolute z-20 w-full mt-1 rounded-xl shadow-xl max-h-48 overflow-y-auto ${pageDark ? 'bg-[#0a1628] border border-white/[0.06]' : 'bg-white border border-gray-200'}`}>
+                <div className={`absolute z-20 w-full mt-1 rounded-xl shadow-xl max-h-48 overflow-y-auto ${!isVirt ? 'bg-[#0a1628] border border-white/[0.06]' : 'bg-white border border-gray-200'}`}>
                   {backtestSearchResults.map((r) => (
                     <button key={`${r.market}-${r.code}`} type="button"
                       onClick={() => handleBacktestStockSelect(r.code, r.name, r.market)}
-                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between last:border-0 ${pageDark ? 'hover:bg-white/[0.03] border-b border-white/[0.04] text-white' : 'hover:bg-gray-50 border-b border-gray-100 text-gray-800'}`}>
-                      <span>{r.name} <span className={pageDark ? 'text-slate-500' : 'text-gray-400'}>({r.code})</span></span>
+                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between last:border-0 ${!isVirt ? 'hover:bg-white/[0.03] border-b border-white/[0.04] text-white' : 'hover:bg-gray-50 border-b border-gray-100 text-gray-800'}`}>
+                      <span>{r.name} <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>({r.code})</span></span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
                         {r.market === 'STOCK' ? '주식' : '코인'}
                       </span>
@@ -2064,7 +2061,7 @@ const StrategyPage = () => {
 
             {/* 기간 빠른 선택 */}
             <div data-tour="period-select">
-              <label className={`block text-[10px] font-semibold mb-1.5 ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>분석 기간</label>
+              <label className={`block text-[10px] font-semibold mb-1.5 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>분석 기간</label>
               <div className="flex gap-1.5 mb-2">
                 {[
                   { label: '6개월', months: 6 },
@@ -2078,7 +2075,7 @@ const StrategyPage = () => {
                   const isActive = backtestStartDate === start;
                   return (
                     <button key={label} onClick={() => { setBacktestStartDate(start); setBacktestEndDate(new Date().toISOString().slice(0, 10)); }}
-                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all border ${isActive ? 'bg-whale-light text-white border-whale-light' : pageDark ? 'bg-white/[0.03] text-slate-500 border-white/[0.06] hover:border-cyan-400/30 hover:text-cyan-400' : 'bg-white text-gray-500 border-gray-200 hover:border-whale-light hover:text-whale-light'}`}>
+                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all border ${isActive ? 'bg-whale-light text-white border-whale-light' : !isVirt ? 'bg-white/[0.03] text-slate-500 border-white/[0.06] hover:border-cyan-400/30 hover:text-cyan-400' : 'bg-white text-gray-500 border-gray-200 hover:border-whale-light hover:text-whale-light'}`}>
                       {label}
                     </button>
                   );
@@ -2086,29 +2083,29 @@ const StrategyPage = () => {
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex-1">
-                  <label className={`block text-[10px] font-semibold mb-1 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>시작일</label>
+                  <label className={`block text-[10px] font-semibold mb-1 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>시작일</label>
                   <DatePicker
                     selected={backtestStartDate ? new Date(backtestStartDate + 'T00:00:00') : null}
                     onChange={(date: Date | null) => date && setBacktestStartDate(date.toISOString().slice(0, 10))}
                     maxDate={backtestEndDate ? new Date(backtestEndDate + 'T00:00:00') : undefined}
                     dateFormat="yyyy.MM.dd"
-                    className={`w-full px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-whale-light focus:border-whale-light transition-all cursor-pointer ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}
+                    className={`w-full px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-whale-light focus:border-whale-light transition-all cursor-pointer ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}
                     calendarClassName="whale-datepicker"
                     showMonthDropdown
                     showYearDropdown
                     dropdownMode="select"
                   />
                 </div>
-                <span className={`text-xs mt-4 ${pageDark ? 'text-slate-600' : 'text-gray-300'}`}>~</span>
+                <span className={`text-xs mt-4 ${!isVirt ? 'text-slate-600' : 'text-gray-300'}`}>~</span>
                 <div className="flex-1">
-                  <label className={`block text-[10px] font-semibold mb-1 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>종료일</label>
+                  <label className={`block text-[10px] font-semibold mb-1 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>종료일</label>
                   <DatePicker
                     selected={backtestEndDate ? new Date(backtestEndDate + 'T00:00:00') : null}
                     onChange={(date: Date | null) => date && setBacktestEndDate(date.toISOString().slice(0, 10))}
                     minDate={backtestStartDate ? new Date(backtestStartDate + 'T00:00:00') : undefined}
                     maxDate={new Date()}
                     dateFormat="yyyy.MM.dd"
-                    className={`w-full px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-whale-light focus:border-whale-light transition-all cursor-pointer ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}
+                    className={`w-full px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-whale-light focus:border-whale-light transition-all cursor-pointer ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}
                     calendarClassName="whale-datepicker"
                     showMonthDropdown
                     showYearDropdown
@@ -2120,14 +2117,14 @@ const StrategyPage = () => {
 
             {/* 초기 투자금 */}
             <div data-tour="initial-capital">
-              <label className={`block text-[10px] font-semibold mb-1.5 ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>초기 투자금</label>
+              <label className={`block text-[10px] font-semibold mb-1.5 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>초기 투자금</label>
               <input type="number" value={backtestInitialCapital}
                 onChange={(e) => {
                   const v = e.target.value;
                   if (v === '' || parseInt(v) >= 0) setBacktestInitialCapital(v);
                 }}
                 min="1"
-                className={`w-full px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-whale-light focus:border-whale-light transition-all ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white placeholder-slate-600' : 'bg-white border border-gray-200 text-gray-800'}`}
+                className={`w-full px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-whale-light focus:border-whale-light transition-all ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white placeholder-slate-600' : 'bg-white border border-gray-200 text-gray-800'}`}
                 placeholder="10,000,000" />
             </div>
 
@@ -2135,16 +2132,16 @@ const StrategyPage = () => {
             <div className="flex flex-wrap gap-1.5">
               {[1000000, 5000000, 10000000, 50000000].map(v => (
                 <button key={v} onClick={() => setBacktestInitialCapital(String(v))}
-                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200 border ${backtestInitialCapital === String(v) ? 'bg-gradient-to-r from-whale-light to-blue-500 text-white border-whale-light shadow-sm' : pageDark ? 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.05]' : 'bg-white text-gray-600 border-gray-200 hover:border-whale-light hover:bg-whale-light/5'}`}>
+                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200 border ${backtestInitialCapital === String(v) ? 'bg-gradient-to-r from-whale-light to-blue-500 text-white border-whale-light shadow-sm' : !isVirt ? 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.05]' : 'bg-white text-gray-600 border-gray-200 hover:border-whale-light hover:bg-whale-light/5'}`}>
                   {v >= 1e8 ? `${v/1e8}억` : `${v/1e4}만`}
                 </button>
               ))}
             </div>
 
             {/* 고급 설정 (접이식) */}
-            <div data-tour="advanced-settings" className={`rounded-xl overflow-hidden ${pageDark ? 'border border-white/[0.06]' : 'border border-gray-200'}`}>
+            <div data-tour="advanced-settings" className={`rounded-xl overflow-hidden ${!isVirt ? 'border border-white/[0.06]' : 'border border-gray-200'}`}>
               <button onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-                className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold transition-colors ${showAdvancedSettings ? (pageDark ? 'bg-white/[0.04] text-white' : 'bg-gray-100 text-whale-dark') : (pageDark ? 'bg-white/[0.02] text-slate-400 hover:bg-white/[0.03]' : 'bg-white text-gray-500 hover:bg-gray-50')}`}>
+                className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold transition-colors ${showAdvancedSettings ? (!isVirt ? 'bg-white/[0.04] text-white' : 'bg-gray-100 text-whale-dark') : (!isVirt ? 'bg-white/[0.02] text-slate-400 hover:bg-white/[0.03]' : 'bg-white text-gray-500 hover:bg-gray-50')}`}>
                 <span className="flex items-center gap-1.5">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -2156,12 +2153,12 @@ const StrategyPage = () => {
                 </svg>
               </button>
               {showAdvancedSettings && (
-                <div className={`px-4 pb-4 pt-3 space-y-3 ${pageDark ? 'bg-white/[0.02]' : 'bg-gray-50'}`}>
+                <div className={`px-4 pb-4 pt-3 space-y-3 ${!isVirt ? 'bg-white/[0.02]' : 'bg-gray-50'}`}>
 
                   {/* ── 매매 조건 편집 ── */}
                   {selectedStrategy && editableIndicators.length > 0 && (
                     <>
-                      <p className={`text-xs font-bold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>지표 파라미터</p>
+                      <p className={`text-xs font-bold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>지표 파라미터</p>
                       <div className="grid grid-cols-2 gap-2">
                         {editableIndicators.map((ind, idx) => {
                           const paramLabels: Record<string, Record<string, string>> = {
@@ -2181,7 +2178,7 @@ const StrategyPage = () => {
                           const labels = paramLabels[ind.type] || {};
                           return Object.entries(ind.parameters).map(([key, val]) => (
                             <div key={`${idx}-${key}`}>
-                              <label className={`block text-xs font-semibold mb-1 ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                              <label className={`block text-xs font-semibold mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>
                                 {prefix}{labels[key] || `${ind.type} ${key}`}
                               </label>
                               <input type="number" value={val}
@@ -2190,7 +2187,7 @@ const StrategyPage = () => {
                                   next[idx] = { ...next[idx], parameters: { ...next[idx].parameters, [key]: Number(e.target.value) } };
                                   setEditableIndicators(next);
                                 }}
-                                className={`w-full px-2 py-1.5 rounded-lg text-xs ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
+                                className={`w-full px-2 py-1.5 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
                             </div>
                           ));
                         })}
@@ -2201,7 +2198,7 @@ const StrategyPage = () => {
                   {/* ── 진입/청산 기준값 편집 ── */}
                   {selectedStrategy && (editableEntryConditions.some(c => c.value !== 0) || editableExitConditions.some(c => c.value !== 0)) && (
                     <>
-                      <p className={`text-xs font-bold mt-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>매매 기준값</p>
+                      <p className={`text-xs font-bold mt-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>매매 기준값</p>
                       <div className="grid grid-cols-2 gap-2">
                         {editableEntryConditions.map((c, idx) => {
                           if (c.value === 0) return null;
@@ -2212,7 +2209,7 @@ const StrategyPage = () => {
                           };
                           return (
                             <div key={`entry-${idx}`}>
-                              <label className={`block text-xs font-semibold mb-1 ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                              <label className={`block text-xs font-semibold mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>
                                 {condLabels[c.indicator || ''] || `진입 ${c.indicator}`}
                               </label>
                               <input type="number" value={c.value}
@@ -2221,7 +2218,7 @@ const StrategyPage = () => {
                                   next[idx] = { ...next[idx], value: Number(e.target.value) };
                                   setEditableEntryConditions(next);
                                 }}
-                                className={`w-full px-2 py-1.5 rounded-lg text-xs ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
+                                className={`w-full px-2 py-1.5 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
                             </div>
                           );
                         })}
@@ -2234,7 +2231,7 @@ const StrategyPage = () => {
                           };
                           return (
                             <div key={`exit-${idx}`}>
-                              <label className={`block text-xs font-semibold mb-1 ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                              <label className={`block text-xs font-semibold mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>
                                 {condLabels[c.indicator || ''] || `청산 ${c.indicator}`}
                               </label>
                               <input type="number" value={c.value}
@@ -2243,7 +2240,7 @@ const StrategyPage = () => {
                                   next[idx] = { ...next[idx], value: Number(e.target.value) };
                                   setEditableExitConditions(next);
                                 }}
-                                className={`w-full px-2 py-1.5 rounded-lg text-xs ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
+                                className={`w-full px-2 py-1.5 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
                             </div>
                           );
                         })}
@@ -2252,11 +2249,11 @@ const StrategyPage = () => {
                   )}
 
                   {selectedStrategy && editableIndicators.length > 0 && (
-                    <div className={`pt-3 ${pageDark ? 'border-t border-white/[0.06]' : 'border-t border-gray-200'}`} />
+                    <div className={`pt-3 ${!isVirt ? 'border-t border-white/[0.06]' : 'border-t border-gray-200'}`} />
                   )}
 
                   {/* ── 리스크 관리 ── */}
-                  <p className={`text-xs font-bold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>리스크 관리</p>
+                  <p className={`text-xs font-bold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>리스크 관리</p>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { label: '손절 (%)', glossary: '손절', value: stopLossPercent, setter: setStopLossPercent, placeholder: '5' },
@@ -2265,49 +2262,49 @@ const StrategyPage = () => {
                       { label: '슬리피지 (%)', glossary: '슬리피지', value: slippagePercent, setter: setSlippagePercent, placeholder: '0.1' },
                     ].map(({ label, glossary, value, setter, placeholder }) => (
                       <div key={label}>
-                        <label className={`block text-xs font-semibold mb-1 ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}><Term k={glossary}>{label}</Term></label>
+                        <label className={`block text-xs font-semibold mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}><Term k={glossary}>{label}</Term></label>
                         <input type="number" value={value} onChange={(e) => setter(e.target.value)} placeholder={placeholder}
-                          className={`w-full px-2 py-1.5 rounded-lg text-xs ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
+                          className={`w-full px-2 py-1.5 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
                       </div>
                     ))}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className={`block text-xs font-semibold mb-1 ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>매매 방향</label>
+                      <label className={`block text-xs font-semibold mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>매매 방향</label>
                       <select value={tradeDirection} onChange={(e) => setTradeDirection(e.target.value as any)}
-                        className={`w-full px-2 py-1.5 rounded-lg text-xs ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
+                        className={`w-full px-2 py-1.5 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
                         <option value="LONG_ONLY">롱 (매수만)</option>
                         <option value="SHORT_ONLY">숏 (공매도만)</option>
                         <option value="LONG_SHORT">롱+숏</option>
                       </select>
-                      <p className={`text-[9px] mt-0.5 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}><Term k="롱">롱</Term>=가격 상승에 베팅 / <Term k="숏">숏</Term>=가격 하락에 베팅</p>
+                      <p className={`text-[9px] mt-0.5 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}><Term k="롱">롱</Term>=가격 상승에 베팅 / <Term k="숏">숏</Term>=가격 하락에 베팅</p>
                     </div>
                     <div>
-                      <label className={`block text-xs font-semibold mb-1 ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}><Term k="수수료">수수료율 (%)</Term></label>
+                      <label className={`block text-xs font-semibold mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}><Term k="수수료">수수료율 (%)</Term></label>
                       <input type="number" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} placeholder="0.1"
-                        className={`w-full px-2 py-1.5 rounded-lg text-xs ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
+                        className={`w-full px-2 py-1.5 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
                     </div>
                   </div>
 
                   {/* ── 커스텀 수식 조건 (선택) ── */}
-                  <div className={`pt-3 ${pageDark ? 'border-t border-white/[0.06]' : 'border-t border-gray-200'}`}>
+                  <div className={`pt-3 ${!isVirt ? 'border-t border-white/[0.06]' : 'border-t border-gray-200'}`}>
                     <div className="flex items-center justify-between mb-2">
-                      <p className={`text-xs font-bold ${pageDark ? 'text-white' : 'text-whale-dark'}`}><Term k="수식조건">수식 조건</Term> (선택)</p>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${pageDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600'}`}>고급</span>
+                      <p className={`text-xs font-bold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}><Term k="수식조건">수식 조건</Term> (선택)</p>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${!isVirt ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600'}`}>고급</span>
                     </div>
-                    <p className={`text-[10px] mb-2 leading-relaxed ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                    <p className={`text-[10px] mb-2 leading-relaxed ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>
                       숫자 대신 수식으로 비교값을 설정합니다. 전략에 이미 조건이 있으면 무시됩니다.
                     </p>
                     <div className="space-y-2">
                       <div>
-                        <label className={`block text-[10px] font-semibold mb-1 ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>매수 조건 — 지표</label>
+                        <label className={`block text-[10px] font-semibold mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>매수 조건 — 지표</label>
                         <select
                           value={directEntryConditions[0]?.indicator || ''}
                           onChange={(e) => {
                             if (!e.target.value) { setDirectEntryConditions([]); return; }
                             setDirectEntryConditions([{ indicator: e.target.value, operator: 'GT', value: 0, logic: 'AND', valueExpression: directEntryConditions[0]?.valueExpression || '' }]);
                           }}
-                          className={`w-full px-2 py-1.5 rounded-lg text-xs ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
+                          className={`w-full px-2 py-1.5 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
                           <option value="">사용 안 함</option>
                           <option value="CLOSE">종가 (CLOSE)</option>
                           <option value="HIGH">고가 (HIGH)</option>
@@ -2327,7 +2324,7 @@ const StrategyPage = () => {
                                 next[0] = { ...next[0], operator: e.target.value as any };
                                 setDirectEntryConditions(next);
                               }}
-                              className={`w-16 px-1.5 py-1.5 rounded-lg text-xs ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
+                              className={`w-16 px-1.5 py-1.5 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
                               <option value="GT">&gt;</option>
                               <option value="GTE">&ge;</option>
                               <option value="LT">&lt;</option>
@@ -2342,19 +2339,19 @@ const StrategyPage = () => {
                                 setDirectEntryConditions(next);
                               }}
                               placeholder="OPEN + (PREV_HIGH - PREV_LOW) * 0.5"
-                              className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-mono ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
+                              className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-mono ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
                           </div>
                         </>
                       )}
                       <div>
-                        <label className={`block text-[10px] font-semibold mb-1 ${pageDark ? 'text-slate-400' : 'text-gray-500'}`}>매도 조건 — 지표</label>
+                        <label className={`block text-[10px] font-semibold mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>매도 조건 — 지표</label>
                         <select
                           value={directExitConditions[0]?.indicator || ''}
                           onChange={(e) => {
                             if (!e.target.value) { setDirectExitConditions([]); return; }
                             setDirectExitConditions([{ indicator: e.target.value, operator: 'LT', value: 0, logic: 'AND', valueExpression: directExitConditions[0]?.valueExpression || '' }]);
                           }}
-                          className={`w-full px-2 py-1.5 rounded-lg text-xs ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
+                          className={`w-full px-2 py-1.5 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
                           <option value="">사용 안 함</option>
                           <option value="CLOSE">종가 (CLOSE)</option>
                           <option value="LOW">저가 (LOW)</option>
@@ -2373,7 +2370,7 @@ const StrategyPage = () => {
                               next[0] = { ...next[0], operator: e.target.value as any };
                               setDirectExitConditions(next);
                             }}
-                            className={`w-16 px-1.5 py-1.5 rounded-lg text-xs ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
+                            className={`w-16 px-1.5 py-1.5 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
                             <option value="GT">&gt;</option>
                             <option value="GTE">&ge;</option>
                             <option value="LT">&lt;</option>
@@ -2388,13 +2385,13 @@ const StrategyPage = () => {
                               setDirectExitConditions(next);
                             }}
                             placeholder="OPEN + (PREV_HIGH - PREV_LOW) * 0.3"
-                            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-mono ${pageDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
+                            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-mono ${!isVirt ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
                         </div>
                       )}
                       {(directEntryConditions.length > 0 || directExitConditions.length > 0) && (
-                        <div className={`rounded-lg p-2.5 space-y-1.5 ${pageDark ? 'bg-blue-500/5 border border-blue-500/20' : 'bg-blue-50 border border-blue-200'}`}>
-                          <p className={`text-[10px] font-semibold ${pageDark ? 'text-blue-400' : 'text-blue-700'}`}>사용 가능 변수</p>
-                          <div className={`grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] ${pageDark ? 'text-blue-400/80' : 'text-blue-600'}`}>
+                        <div className={`rounded-lg p-2.5 space-y-1.5 ${!isVirt ? 'bg-blue-500/5 border border-blue-500/20' : 'bg-blue-50 border border-blue-200'}`}>
+                          <p className={`text-[10px] font-semibold ${!isVirt ? 'text-blue-400' : 'text-blue-700'}`}>사용 가능 변수</p>
+                          <div className={`grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] ${!isVirt ? 'text-blue-400/80' : 'text-blue-600'}`}>
                             <span><Term k="시가">OPEN</Term> — 당일 시가</span>
                             <span><Term k="고가">HIGH</Term> — 당일 고가</span>
                             <span><Term k="저가">LOW</Term> — 당일 저가</span>
@@ -2438,7 +2435,7 @@ const StrategyPage = () => {
             </button>
 
             {!backtestStockCode && (
-              <p className={`text-center text-xs ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>종목을 먼저 선택해주세요</p>
+              <p className={`text-center text-xs ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>종목을 먼저 선택해주세요</p>
             )}
 
             {/* 이전 결과 히스토리 */}
@@ -2446,7 +2443,7 @@ const StrategyPage = () => {
               <div ref={historyDropdownRef} className="relative mt-2">
                 <button
                   onClick={() => setShowHistoryDropdown(!showHistoryDropdown)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${pageDark ? 'text-slate-400 bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04]' : 'text-gray-500 bg-gray-50 border border-gray-200 hover:bg-gray-100'}`}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${!isVirt ? 'text-slate-400 bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04]' : 'text-gray-500 bg-gray-50 border border-gray-200 hover:bg-gray-100'}`}
                 >
                   <span className="flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -2459,7 +2456,7 @@ const StrategyPage = () => {
                   </svg>
                 </button>
                 {showHistoryDropdown && (
-                  <div className={`absolute z-30 w-full mt-1 rounded-xl shadow-xl max-h-60 overflow-y-auto ${pageDark ? 'bg-[#0f1d32] border border-white/[0.08]' : 'bg-white border border-gray-200'}`}>
+                  <div className={`absolute z-30 w-full mt-1 rounded-xl shadow-xl max-h-60 overflow-y-auto ${!isVirt ? 'bg-[#0f1d32] border border-white/[0.08]' : 'bg-white border border-gray-200'}`}>
                     {backtestHistory.map((entry) => (
                       <button
                         key={entry.id}
@@ -2467,17 +2464,17 @@ const StrategyPage = () => {
                           setBacktestResult(entry.result);
                           setShowHistoryDropdown(false);
                         }}
-                        className={`w-full text-left px-3 py-2.5 text-xs transition-colors first:rounded-t-xl last:rounded-b-xl ${pageDark ? 'hover:bg-white/[0.04] border-b border-white/[0.04] last:border-b-0' : 'hover:bg-blue-50 border-b border-gray-100 last:border-b-0'}`}
+                        className={`w-full text-left px-3 py-2.5 text-xs transition-colors first:rounded-t-xl last:rounded-b-xl ${!isVirt ? 'hover:bg-white/[0.04] border-b border-white/[0.04] last:border-b-0' : 'hover:bg-blue-50 border-b border-gray-100 last:border-b-0'}`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className={`font-semibold truncate ${pageDark ? 'text-white' : 'text-whale-dark'}`}>
+                          <span className={`font-semibold truncate ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
                             {entry.strategyName}
                           </span>
                           <span className={`ml-2 shrink-0 font-bold ${entry.totalReturnRate >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                             {entry.totalReturnRate >= 0 ? '+' : ''}{entry.totalReturnRate.toFixed(1)}%
                           </span>
                         </div>
-                        <div className={`mt-0.5 flex items-center gap-2 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                        <div className={`mt-0.5 flex items-center gap-2 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>
                           <span>{entry.stockCode}</span>
                           <span>{new Date(entry.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
@@ -2500,10 +2497,10 @@ const StrategyPage = () => {
       {/* ===== 전략 생성/수정 모달 ===== */}
       {strategyModalMode && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className={`rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto ${pageDark ? 'bg-[#0a1628] border border-white/[0.06]' : 'bg-white'}`}>
-            <div className={`sticky top-0 px-6 py-4 rounded-t-2xl flex justify-between items-center ${pageDark ? 'bg-[#0a1628] border-b border-white/[0.06]' : 'bg-white border-b border-gray-100'}`}>
-              <h3 className={`text-lg font-bold ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{strategyModalMode === 'edit' ? '항로 수정' : '새 항로 만들기'}</h3>
-              <button onClick={closeStrategyModal} className={`p-1 transition-colors ${pageDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+          <div className={`rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto ${!isVirt ? 'bg-[#0a1628] border border-white/[0.06]' : 'bg-white'}`}>
+            <div className={`sticky top-0 px-6 py-4 rounded-t-2xl flex justify-between items-center ${!isVirt ? 'bg-[#0a1628] border-b border-white/[0.06]' : 'bg-white border-b border-gray-100'}`}>
+              <h3 className={`text-lg font-bold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{strategyModalMode === 'edit' ? '항로 수정' : '새 항로 만들기'}</h3>
+              <button onClick={closeStrategyModal} className={`p-1 transition-colors ${!isVirt ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -2515,21 +2512,21 @@ const StrategyPage = () => {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="w-6 h-6 rounded-full text-white text-xs font-bold flex items-center justify-center bg-whale-light">1</span>
-                  <span className={`font-semibold ${pageDark ? 'text-white' : 'text-gray-800'}`}>기본 정보</span>
+                  <span className={`font-semibold ${!isVirt ? 'text-white' : 'text-gray-800'}`}>기본 정보</span>
                 </div>
                 <div className="space-y-3 pl-8">
                   <div>
-                    <label className={`block text-sm font-medium mb-1 ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>항로 이름 *</label>
+                    <label className={`block text-sm font-medium mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>항로 이름 *</label>
                     <input type="text" value={newStrategyName} onChange={(e) => setNewStrategyName(e.target.value)}
                       className="input-field" placeholder="예: BTC+ETH 균등 투자" />
                   </div>
                   <div>
-                    <label className={`block text-sm font-medium mb-1 ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>설명</label>
+                    <label className={`block text-sm font-medium mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>설명</label>
                     <textarea value={newStrategyDescription} onChange={(e) => setNewStrategyDescription(e.target.value)}
                       className="input-field" rows={2} placeholder="항로에 대한 간단한 설명" />
                   </div>
                   <div>
-                    <label className={`block text-sm font-medium mb-1 ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>항로 로직</label>
+                    <label className={`block text-sm font-medium mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>항로 로직</label>
                     <textarea value={newStrategyLogic} onChange={(e) => setNewStrategyLogic(e.target.value)}
                       className="input-field" rows={2} placeholder="예: 균등 분배 매수 후 장기 보유, RSI 30 이하 추가매수" />
                   </div>
@@ -2540,7 +2537,7 @@ const StrategyPage = () => {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="w-6 h-6 rounded-full text-white text-xs font-bold flex items-center justify-center bg-whale-light">2</span>
-                  <span className={`font-semibold ${pageDark ? 'text-white' : 'text-gray-800'}`}>자산 유형</span>
+                  <span className={`font-semibold ${!isVirt ? 'text-white' : 'text-gray-800'}`}>자산 유형</span>
                 </div>
                 <div className="flex gap-2 pl-8">
                   {(['CRYPTO', 'STOCK', 'MIXED'] as const).map(type => (
@@ -2551,7 +2548,7 @@ const StrategyPage = () => {
                           ? type === 'CRYPTO' ? 'bg-orange-500 text-white shadow-sm' :
                             type === 'STOCK' ? 'bg-blue-500 text-white shadow-sm' :
                             'bg-purple-500 text-white shadow-sm'
-                          : pageDark ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          : !isVirt ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}>
                       {assetTypeLabel(type)}
                     </button>
@@ -2563,18 +2560,18 @@ const StrategyPage = () => {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${selectedAssets.length > 0 ? 'bg-whale-light text-white' : 'bg-gray-300 text-gray-600'}`}>3</span>
-                  <span className={`font-semibold ${pageDark ? 'text-white' : 'text-gray-800'}`}>투자 대상 자산</span>
+                  <span className={`font-semibold ${!isVirt ? 'text-white' : 'text-gray-800'}`}>투자 대상 자산</span>
                   {selectedAssets.length > 0 && (
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold bg-whale-light/10 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>{selectedAssets.length}개 선택</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold bg-whale-light/10 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{selectedAssets.length}개 선택</span>
                   )}
                 </div>
                 <div className="pl-8">
                   {selectedAssets.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-3">
                       {selectedAssets.map(code => (
-                        <span key={code} className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium bg-whale-light/10 border border-whale-light/30 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>
+                        <span key={code} className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium bg-whale-light/10 border border-whale-light/30 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
                           {getAssetName(code)}
-                          <span className={`text-xs ml-0.5 ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>{code}</span>
+                          <span className={`text-xs ml-0.5 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>{code}</span>
                           <button onClick={() => handleRemoveAsset(code)} className="ml-1 w-4 h-4 rounded-full bg-red-100 text-red-500 hover:bg-red-200 flex items-center justify-center text-xs leading-none">x</button>
                         </span>
                       ))}
@@ -2583,22 +2580,22 @@ const StrategyPage = () => {
                   <input type="text" value={assetSearchQuery} onChange={(e) => handleAssetSearchChange(e.target.value)}
                     className="input-field"
                     placeholder={newAssetType === 'CRYPTO' ? '가상화폐 검색 (BTC, ETH...)' : newAssetType === 'STOCK' ? '종목명 또는 종목코드로 검색' : '자산 검색'} />
-                  <div className={`mt-1 max-h-60 overflow-y-auto rounded-xl ${pageDark ? 'border border-white/[0.06]' : 'border border-gray-200'}`}>
+                  <div className={`mt-1 max-h-60 overflow-y-auto rounded-xl ${!isVirt ? 'border border-white/[0.06]' : 'border border-gray-200'}`}>
                     {getAvailableAssets().slice(0, 50).map(asset => {
                       const isStock = asset.code.match(/^\d{6}$/);
                       return (
                         <button key={asset.code} onClick={() => handleAddAsset(asset.code)}
-                          className={`w-full text-left px-3 py-2.5 text-sm last:border-0 transition-colors flex items-center gap-2 ${pageDark ? 'hover:bg-white/[0.03] border-b border-white/[0.04]' : 'hover:bg-blue-50 border-b border-gray-50'}`}>
+                          className={`w-full text-left px-3 py-2.5 text-sm last:border-0 transition-colors flex items-center gap-2 ${!isVirt ? 'hover:bg-white/[0.03] border-b border-white/[0.04]' : 'hover:bg-blue-50 border-b border-gray-50'}`}>
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-whale-dark flex-shrink-0 ${isStock ? 'bg-blue-400' : 'bg-orange-400'}`}>
                             {asset.name.slice(0, 1)}
                           </div>
-                          <span className={`font-medium ${pageDark ? 'text-white' : 'text-gray-800'}`}>{asset.name}</span>
-                          <span className={`text-xs ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>{asset.code}</span>
+                          <span className={`font-medium ${!isVirt ? 'text-white' : 'text-gray-800'}`}>{asset.name}</span>
+                          <span className={`text-xs ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>{asset.code}</span>
                         </button>
                       );
                     })}
                     {getAvailableAssets().length === 0 && (
-                      <div className={`px-3 py-4 text-sm text-center ${pageDark ? 'text-slate-500' : 'text-gray-500'}`}>
+                      <div className={`px-3 py-4 text-sm text-center ${!isVirt ? 'text-slate-500' : 'text-gray-500'}`}>
                         {isSearchingStocks ? '검색 중...' : assetSearchQuery ? '검색 결과가 없습니다' : selectedAssets.length > 0 ? '모든 자산이 선택되었습니다' : '불러오는 중...'}
                       </div>
                     )}
@@ -2610,14 +2607,14 @@ const StrategyPage = () => {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${newEntryConditions.length > 0 || newExitConditions.length > 0 ? 'bg-whale-light text-white' : 'bg-gray-300 text-gray-600'}`}>4</span>
-                  <span className={`font-semibold ${pageDark ? 'text-white' : 'text-gray-800'}`}>매매 조건</span>
-                  <span className={`text-xs ${pageDark ? 'text-slate-500' : 'text-gray-400'}`}>(백테스팅에 사용)</span>
+                  <span className={`font-semibold ${!isVirt ? 'text-white' : 'text-gray-800'}`}>매매 조건</span>
+                  <span className={`text-xs ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>(백테스팅에 사용)</span>
                 </div>
                 <div className="pl-8 space-y-4">
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label className="text-sm font-medium text-gray-600">사용할 지표</label>
-                      <select className={`text-xs rounded-lg px-2 py-1 ${pageDark ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`} value=""
+                      <select className={`text-xs rounded-lg px-2 py-1 ${!isVirt ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`} value=""
                         onChange={(e) => {
                           if (!e.target.value) return;
                           const type = e.target.value as any;
@@ -2665,14 +2662,14 @@ const StrategyPage = () => {
                       return (
                         <div key={idx} className="flex items-center gap-2 mb-2">
                           {idx > 0 && (
-                            <select className={`text-xs rounded px-1.5 py-1 w-14 ${pageDark ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`}
+                            <select className={`text-xs rounded px-1.5 py-1 w-14 ${!isVirt ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`}
                               value={cond.logic}
                               onChange={(e) => { const u = [...newEntryConditions]; u[idx] = { ...cond, logic: e.target.value as any }; setNewEntryConditions(u); }}>
                               <option value="AND">AND</option>
                               <option value="OR">OR</option>
                             </select>
                           )}
-                          <select className={`text-sm rounded-lg px-2 py-1.5 ${pageDark ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'} ${isCross ? 'flex-[2]' : 'flex-1'}`}
+                          <select className={`text-sm rounded-lg px-2 py-1.5 ${!isVirt ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'} ${isCross ? 'flex-[2]' : 'flex-1'}`}
                             value={cond.indicator}
                             onChange={(e) => { const u = [...newEntryConditions]; u[idx] = { ...cond, indicator: e.target.value }; setNewEntryConditions(u); }}>
                             <option value="PRICE">현재가</option>
@@ -2701,7 +2698,7 @@ const StrategyPage = () => {
                           </select>
                           {!isCross && (
                             <>
-                              <select className={`text-sm rounded-lg px-2 py-1.5 w-16 ${pageDark ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`} value={cond.operator}
+                              <select className={`text-sm rounded-lg px-2 py-1.5 w-16 ${!isVirt ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`} value={cond.operator}
                                 onChange={(e) => { const u = [...newEntryConditions]; u[idx] = { ...cond, operator: e.target.value as any }; setNewEntryConditions(u); }}>
                                 <option value="GT">&gt;</option>
                                 <option value="GTE">&ge;</option>
@@ -2709,13 +2706,13 @@ const StrategyPage = () => {
                                 <option value="LTE">&le;</option>
                                 <option value="EQ">=</option>
                               </select>
-                              <input type="number" className={`text-sm rounded-lg px-2 py-1.5 w-20 ${pageDark ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`}
+                              <input type="number" className={`text-sm rounded-lg px-2 py-1.5 w-20 ${!isVirt ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`}
                                 value={cond.value}
                                 onChange={(e) => { const u = [...newEntryConditions]; u[idx] = { ...cond, value: parseFloat(e.target.value) || 0 }; setNewEntryConditions(u); }} />
                             </>
                           )}
                           <button type="button" onClick={() => setNewEntryConditions(newEntryConditions.filter((_, i) => i !== idx))}
-                            className={`text-sm ${pageDark ? 'text-slate-600' : 'text-gray-300'} hover:text-red-500`}>x</button>
+                            className={`text-sm ${!isVirt ? 'text-slate-600' : 'text-gray-300'} hover:text-red-500`}>x</button>
                         </div>
                       );
                     })}
@@ -2734,14 +2731,14 @@ const StrategyPage = () => {
                       return (
                         <div key={idx} className="flex items-center gap-2 mb-2">
                           {idx > 0 && (
-                            <select className={`text-xs rounded px-1.5 py-1 w-14 ${pageDark ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`}
+                            <select className={`text-xs rounded px-1.5 py-1 w-14 ${!isVirt ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`}
                               value={cond.logic}
                               onChange={(e) => { const u = [...newExitConditions]; u[idx] = { ...cond, logic: e.target.value as any }; setNewExitConditions(u); }}>
                               <option value="AND">AND</option>
                               <option value="OR">OR</option>
                             </select>
                           )}
-                          <select className={`text-sm rounded-lg px-2 py-1.5 ${pageDark ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'} ${isCross ? 'flex-[2]' : 'flex-1'}`}
+                          <select className={`text-sm rounded-lg px-2 py-1.5 ${!isVirt ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'} ${isCross ? 'flex-[2]' : 'flex-1'}`}
                             value={cond.indicator}
                             onChange={(e) => { const u = [...newExitConditions]; u[idx] = { ...cond, indicator: e.target.value }; setNewExitConditions(u); }}>
                             <option value="PRICE">현재가</option>
@@ -2770,7 +2767,7 @@ const StrategyPage = () => {
                           </select>
                           {!isCross && (
                             <>
-                              <select className={`text-sm rounded-lg px-2 py-1.5 w-16 ${pageDark ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`} value={cond.operator}
+                              <select className={`text-sm rounded-lg px-2 py-1.5 w-16 ${!isVirt ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`} value={cond.operator}
                                 onChange={(e) => { const u = [...newExitConditions]; u[idx] = { ...cond, operator: e.target.value as any }; setNewExitConditions(u); }}>
                                 <option value="GT">&gt;</option>
                                 <option value="GTE">&ge;</option>
@@ -2778,13 +2775,13 @@ const StrategyPage = () => {
                                 <option value="LTE">&le;</option>
                                 <option value="EQ">=</option>
                               </select>
-                              <input type="number" className={`text-sm rounded-lg px-2 py-1.5 w-20 ${pageDark ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`}
+                              <input type="number" className={`text-sm rounded-lg px-2 py-1.5 w-20 ${!isVirt ? 'border border-white/10 bg-white/[0.04] text-white' : 'border border-gray-200 bg-white'}`}
                                 value={cond.value}
                                 onChange={(e) => { const u = [...newExitConditions]; u[idx] = { ...cond, value: parseFloat(e.target.value) || 0 }; setNewExitConditions(u); }} />
                             </>
                           )}
                           <button type="button" onClick={() => setNewExitConditions(newExitConditions.filter((_, i) => i !== idx))}
-                            className={`text-sm ${pageDark ? 'text-slate-600' : 'text-gray-300'} hover:text-red-500`}>x</button>
+                            className={`text-sm ${!isVirt ? 'text-slate-600' : 'text-gray-300'} hover:text-red-500`}>x</button>
                         </div>
                       );
                     })}
@@ -2793,7 +2790,7 @@ const StrategyPage = () => {
                   {/* 프리셋 버튼 */}
                   {newIndicators.length === 0 && newEntryConditions.length === 0 && newExitConditions.length === 0 && (
                     <div className="pt-1">
-                      <p className={`text-xs mb-2 ${pageDark ? 'text-slate-500' : 'text-gray-500'}`}>빠른 설정 (프리셋)</p>
+                      <p className={`text-xs mb-2 ${!isVirt ? 'text-slate-500' : 'text-gray-500'}`}>빠른 설정 (프리셋)</p>
                       <div className="flex flex-wrap gap-2">
                         <button type="button"
                           onClick={() => { setNewIndicators([{ type: 'RSI', parameters: { period: 14 } }]); setNewEntryConditions([{ indicator: 'RSI', operator: 'LT', value: 30, logic: 'AND' }]); setNewExitConditions([{ indicator: 'RSI', operator: 'GT', value: 70, logic: 'AND' }]); }}
@@ -2820,41 +2817,41 @@ const StrategyPage = () => {
       {/* ===== 포트폴리오 적용 모달 ===== */}
       {showApplyModal && selectedStrategy && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className={`rounded-2xl shadow-xl max-w-md w-full p-6 ${pageDark ? 'bg-[#0a1628] border border-white/[0.06]' : 'bg-white'}`}>
-            <h3 className={`text-lg font-bold mb-2 ${pageDark ? 'text-white' : 'text-whale-dark'}`}>항로 포트폴리오 적용</h3>
-            <p className={`text-sm mb-4 ${pageDark ? 'text-slate-400' : 'text-gray-600'}`}>
+          <div className={`rounded-2xl shadow-xl max-w-md w-full p-6 ${!isVirt ? 'bg-[#0a1628] border border-white/[0.06]' : 'bg-white'}`}>
+            <h3 className={`text-lg font-bold mb-2 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>항로 포트폴리오 적용</h3>
+            <p className={`text-sm mb-4 ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>
               "{selectedStrategy.name}" 항로를 포트폴리오에 적용합니다.
               투자 금액이 {selectedStrategy.targetAssets?.length || 0}개 자산에 균등 분배되어 시장가 매수됩니다.
             </p>
 
             <div className="mb-4">
-              <label className={`block text-sm font-medium mb-1 ${pageDark ? 'text-slate-300' : 'text-gray-700'}`}>투자 금액 (원)</label>
+              <label className={`block text-sm font-medium mb-1 ${!isVirt ? 'text-slate-300' : 'text-gray-700'}`}>투자 금액 (원)</label>
               <input type="number" value={applyAmount} onChange={(e) => setApplyAmount(e.target.value)}
                 className="input-field" placeholder="1000000" />
               <div className="flex gap-2 mt-2">
                 {[100000, 500000, 1000000, 5000000].map(amount => (
                   <button key={amount} onClick={() => setApplyAmount(String(amount))}
-                    className={`px-3 py-1 rounded text-xs transition-colors ${pageDark ? 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
+                    className={`px-3 py-1 rounded text-xs transition-colors ${!isVirt ? 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
                     {(amount / 10000).toFixed(0)}만
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className={`mb-4 p-3 rounded-xl text-sm space-y-2 ${pageDark ? 'bg-white/[0.02]' : 'bg-gray-50'}`}>
+            <div className={`mb-4 p-3 rounded-xl text-sm space-y-2 ${!isVirt ? 'bg-white/[0.02]' : 'bg-gray-50'}`}>
               <div className="flex justify-between">
-                <span className={pageDark ? 'text-slate-400' : 'text-gray-600'}>대상 자산</span>
+                <span className={!isVirt ? 'text-slate-400' : 'text-gray-600'}>대상 자산</span>
                 <span className="font-medium">{selectedStrategy.targetAssets?.length || 0}개</span>
               </div>
               <div className="flex justify-between">
-                <span className={pageDark ? 'text-slate-400' : 'text-gray-600'}>자산당 투자금</span>
+                <span className={!isVirt ? 'text-slate-400' : 'text-gray-600'}>자산당 투자금</span>
                 <span className="font-medium">{formatCurrency(parseInt(applyAmount || '0') / (selectedStrategy.targetAssets?.length || 1))}</span>
               </div>
               {selectedStrategy.targetAssets && selectedStrategy.targetAssets.length > 0 && (
-                <div className={`pt-2 ${pageDark ? 'border-t border-white/[0.06]' : 'border-t border-gray-200'}`}>
+                <div className={`pt-2 ${!isVirt ? 'border-t border-white/[0.06]' : 'border-t border-gray-200'}`}>
                   <div className="flex flex-wrap gap-1.5">
                     {selectedStrategy.targetAssets.map(code => (
-                      <span key={code} className={`px-2 py-1 rounded text-xs font-medium ${pageDark ? 'bg-white/[0.04] text-white border border-white/[0.06]' : 'bg-white text-gray-700 border border-gray-200'}`}>
+                      <span key={code} className={`px-2 py-1 rounded text-xs font-medium ${!isVirt ? 'bg-white/[0.04] text-white border border-white/[0.06]' : 'bg-white text-gray-700 border border-gray-200'}`}>
                         {getAssetName(code)} ({code})
                       </span>
                     ))}
@@ -2865,7 +2862,7 @@ const StrategyPage = () => {
 
             <div className="flex gap-3">
               <button onClick={() => setShowApplyModal(false)}
-                className={`flex-1 py-2.5 rounded-lg transition-colors font-medium ${pageDark ? 'border border-white/[0.06] text-slate-300 hover:bg-white/[0.03]' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+                className={`flex-1 py-2.5 rounded-lg transition-colors font-medium ${!isVirt ? 'border border-white/[0.06] text-slate-300 hover:bg-white/[0.03]' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
                 취소
               </button>
               <button onClick={handleApplyStrategy} disabled={isApplying}

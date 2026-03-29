@@ -906,7 +906,7 @@ const DashboardPage = () => {
                         </div>
                         <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full transition-all duration-500 ${achieved ? 'bg-gradient-to-r from-whale-light to-whale-accent' : 'bg-gradient-to-r from-whale-light to-blue-400'}`}
+                            className={`h-full rounded-full ${achieved ? 'bg-gradient-to-r from-whale-light to-whale-accent' : 'bg-gradient-to-r from-whale-light to-blue-400'}`}
                             style={{ width: `${progress}%` }}
                           />
                         </div>

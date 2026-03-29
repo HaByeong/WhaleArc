@@ -205,10 +205,19 @@ const DashboardPage = () => {
         isVirt ? tradeService.getPortfolio().catch(() => null) : Promise.resolve(null),
         tradeService.getStockList().catch(() => []),
       ]);
-      if (portfolioData && isVirt) setPortfolio(portfolioData);
+      if (portfolioData && isVirt) {
+        setPortfolio(prev => {
+          if (prev && prev.totalValue === portfolioData.totalValue && prev.cashBalance === portfolioData.cashBalance && prev.holdings.length === portfolioData.holdings.length) return prev;
+          return portfolioData;
+        });
+      }
       if (stocksData.length) {
         const sorted = [...stocksData].sort((a, b) => Math.abs(b.changeRate) - Math.abs(a.changeRate));
-        setTopMovers(sorted.slice(0, 5));
+        setTopMovers(prev => {
+          const next = sorted.slice(0, 5);
+          if (prev.length === next.length && prev.every((p, i) => p.stockCode === next[i].stockCode && p.currentPrice === next[i].currentPrice)) return prev;
+          return next;
+        });
         if (favoriteAssets.length > 0) {
           const favSet = new Set(favoriteAssets);
           const SYMBOL_ALIASES: Record<string, string> = { MATIC: 'POL', POL: 'MATIC' };
@@ -216,7 +225,11 @@ const DashboardPage = () => {
             const alias = SYMBOL_ALIASES[fav];
             if (alias) favSet.add(alias);
           }
-          setWatchlist(stocksData.filter((s) => favSet.has(s.stockCode)));
+          const nextWatch = stocksData.filter((s) => favSet.has(s.stockCode));
+          setWatchlist(prev => {
+            if (prev.length === nextWatch.length && prev.every((p, i) => p.stockCode === nextWatch[i].stockCode && p.currentPrice === nextWatch[i].currentPrice)) return prev;
+            return nextWatch;
+          });
         }
       }
     } catch {

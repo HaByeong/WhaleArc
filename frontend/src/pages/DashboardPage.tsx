@@ -57,6 +57,15 @@ const DashboardPage = () => {
     setEditingTarget(false);
   };
 
+  // 가이드 표시 여부 (첫 방문만, localStorage 기억)
+  const [guideVisible, setGuideVisible] = useState(() => {
+    try { return localStorage.getItem('whalearc_guide_dismissed') !== 'true'; } catch { return true; }
+  });
+  const dismissGuide = useCallback(() => {
+    setGuideVisible(false);
+    try { localStorage.setItem('whalearc_guide_dismissed', 'true'); } catch { /* ignore */ }
+  }, []);
+
   // 일반 모드 가이드 투어
   const [showNormalTour, setShowNormalTour] = useState(false);
   const normalTourSteps: TourStep[] = [
@@ -779,32 +788,30 @@ const DashboardPage = () => {
           </div>
         )}
 
-        {/* 일반 모드 가이드 투어 버튼 */}
-        {!isVirt && (
-          <button
-            onClick={() => setShowNormalTour(true)}
-            className="mb-4 w-full flex items-center justify-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04] px-4 py-3 text-sm text-cyan-400 hover:bg-cyan-500/[0.08] transition-colors"
-          >
-            <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-bold">?</span>
-            <span className="font-medium">처음이신가요? 화면 가이드 받기</span>
-          </button>
+        {/* 가이드 투어 버튼 (첫 방문 시만) */}
+        {guideVisible && (
+          <div className={`mb-4 flex items-center justify-between rounded-xl px-4 py-3 text-sm ${
+            isVirt
+              ? 'bg-amber-50 border border-amber-200 text-amber-700'
+              : 'border border-cyan-500/20 bg-cyan-500/[0.04] text-cyan-400'
+          }`}>
+            <button
+              onClick={() => isVirt ? setShowVirtTour(true) : setShowNormalTour(true)}
+              className="flex items-center gap-2"
+            >
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                isVirt ? 'bg-amber-200 text-amber-700' : 'bg-cyan-500/20 text-cyan-400'
+              }`}>?</span>
+              <span className="font-medium">처음이신가요? 화면 가이드 받기</span>
+            </button>
+            <button onClick={dismissGuide} className="p-1 hover:opacity-60" aria-label="가이드 닫기">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
         )}
 
-        {/* 일반 모드 가이드 투어 */}
+        {/* 가이드 투어 */}
         <GuideTour steps={normalTourSteps} isActive={showNormalTour} onFinish={() => setShowNormalTour(false)} />
-
-        {/* Virt 가이드 투어 버튼 */}
-        {isVirt && (
-          <button
-            onClick={() => setShowVirtTour(true)}
-            className="mb-4 w-full flex items-center justify-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-700 hover:bg-amber-100 transition-colors"
-          >
-            <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-700 flex items-center justify-center text-xs font-bold">?</span>
-            <span className="font-medium">처음이신가요? 화면 가이드 받기</span>
-          </button>
-        )}
-
-        {/* Virt 가이드 투어 */}
         <GuideTour steps={virtTourSteps} isActive={showVirtTour} onFinish={() => setShowVirtTour(false)} />
 
         {/* 샘플 데이터 안내 - Virt 모드만 */}

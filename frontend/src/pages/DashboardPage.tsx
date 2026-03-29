@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import Header from '../components/Header';
 import VirtSplashLoading from '../components/VirtSplashLoading';
@@ -18,43 +18,6 @@ import GuideTour, { type TourStep } from '../components/GuideTour';
 
 const CHART_COLORS = ['#3b82f6', '#22d3ee', '#818cf8', '#a78bfa', '#34d399', '#f472b6', '#fb923c', '#94a3b8'];
 
-/* ── 숫자 카운트업 컴포넌트 ── */
-const CountUp = ({ target, duration = 1200, prefix = '', suffix = '', className = '' }: {
-  target: number; duration?: number; prefix?: string; suffix?: string; className?: string;
-}) => {
-  const [value, setValue] = useState(0);
-  const ref = useRef<HTMLSpanElement>(null);
-  const started = useRef(false);
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    const startTime = performance.now();
-    const animate = (now: number) => {
-      const progress = Math.min((now - startTime) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-      setValue(Math.round(target * eased));
-      if (progress < 1) requestAnimationFrame(animate);
-    };
-    requestAnimationFrame(animate);
-  }, [target, duration]);
-  return <span ref={ref} className={className}>{prefix}{new Intl.NumberFormat('ko-KR').format(value)}{suffix}</span>;
-};
-
-/* ── 파도 SVG ── */
-const WaveSVG = () => (
-  <svg viewBox="0 0 1200 40" preserveAspectRatio="none" className="w-full h-full">
-    <path d="M0,20 C200,35 400,5 600,20 C800,35 1000,5 1200,20 L1200,40 L0,40 Z" />
-  </svg>
-);
-
-/* ── 고래 실루엣 SVG ── */
-const WhaleSwimSVG = ({ className }: { className: string }) => (
-  <svg className={className} viewBox="0 0 120 40" style={{ width: '120px', height: '40px' }}>
-    <path d="M10,25 Q20,10 40,15 Q55,8 70,14 Q80,10 90,15 L95,12 Q100,8 105,14 Q110,12 115,16 L110,20 Q100,28 80,26 Q60,30 40,26 Q25,30 15,28 Z"
-      fill="rgba(255,255,255,0.15)" />
-    <ellipse cx="85" cy="17" rx="2" ry="1.5" fill="rgba(255,255,255,0.3)" />
-  </svg>
-);
 
 const DashboardPage = () => {
   const navigate = useVirtNavigate();
@@ -95,7 +58,6 @@ const DashboardPage = () => {
   };
 
   // ── 카드 순서 드래그 앤 드롭 (Virt 모드) ──
-  const CARD_ORDER_KEY = 'whalearc_dashboard_order';
   const DEFAULT_CARD_ORDER: string[] = ['portfolio', 'holdings', 'routes', 'watchlist', 'actions'];
   const [cardOrder, setCardOrder] = useState<string[]>(() => {
     try {

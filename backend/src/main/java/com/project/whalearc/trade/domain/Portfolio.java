@@ -44,10 +44,12 @@ public class Portfolio {
     }
 
     public BigDecimal getTotalValue() {
-        BigDecimal holdingsValue = holdings.stream()
+        BigDecimal cb = cashBalance != null ? cashBalance : BigDecimal.ZERO;
+        BigDecimal ta = turtleAllocated != null ? turtleAllocated : BigDecimal.ZERO;
+        BigDecimal holdingsValue = (holdings != null ? holdings : java.util.List.<Holding>of()).stream()
                 .map(Holding::getMarketValue)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return cashBalance.add(holdingsValue).add(turtleAllocated);
+        return cb.add(holdingsValue).add(ta);
     }
 
     public BigDecimal getReturnRate() {

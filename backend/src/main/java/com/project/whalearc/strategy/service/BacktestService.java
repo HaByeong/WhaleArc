@@ -1153,7 +1153,8 @@ public class BacktestService {
         if (dailyReturns.size() < 2) return 0;
         double[] returns = dailyReturns.stream().mapToDouble(d -> d.getDailyReturn() / 100.0).toArray();
         double mean = Arrays.stream(returns).average().orElse(0);
-        double variance = Arrays.stream(returns).map(r -> (r - mean) * (r - mean)).average().orElse(0);
+        double sumSquares = Arrays.stream(returns).map(r -> (r - mean) * (r - mean)).sum();
+        double variance = returns.length > 1 ? sumSquares / (returns.length - 1) : 0;
         double stdDev = Math.sqrt(variance);
         if (stdDev == 0) return 0;
         double factor = "STOCK".equalsIgnoreCase(assetType) ? Math.sqrt(252) : Math.sqrt(365);
@@ -1167,9 +1168,10 @@ public class BacktestService {
         double mean = Arrays.stream(returns).average().orElse(0);
 
         // 하방 편차: 전체 수익률에 min(r, 0)^2 적용 (표준 Sortino 공식)
-        double downVariance = Arrays.stream(returns)
+        double downSumSquares = Arrays.stream(returns)
                 .map(r -> r < 0 ? r * r : 0)
-                .average().orElse(0);
+                .sum();
+        double downVariance = returns.length > 1 ? downSumSquares / (returns.length - 1) : 0;
         double downDev = Math.sqrt(downVariance);
         if (downDev == 0) return 0;
 

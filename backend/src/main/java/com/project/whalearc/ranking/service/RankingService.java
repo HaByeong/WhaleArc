@@ -88,20 +88,25 @@ public class RankingService {
         int toIndex = Math.min(fromIndex + size, totalCount);
         List<Portfolio> pageList = sorted.subList(fromIndex, toIndex);
 
-        // 현재 유저가 페이지에 없으면 마지막에 추가 (첫 페이지에서만)
+        // 현재 유저가 페이지에 없으면 별도 myRanking으로 분리 (페이지 사이즈 유지)
         boolean currentUserInPage = pageList.stream().anyMatch(p -> p.getUserId().equals(currentUserId));
         List<Portfolio> displayList = new ArrayList<>(pageList);
-        if (page == 0 && !currentUserInPage) {
-            sorted.stream()
+        Portfolio myPortfolio = null;
+        if (!currentUserInPage) {
+            myPortfolio = sorted.stream()
                     .filter(p -> p.getUserId().equals(currentUserId))
                     .findFirst()
-                    .ifPresent(displayList::add);
+                    .orElse(null);
+            // myPortfolio의 유저 정보도 조회해야 하므로 displayList에는 넣지 않음
         }
 
-        // 유저 정보 조회
+        // 유저 정보 조회 (myPortfolio 포함)
         Set<String> displayUserIds = displayList.stream()
                 .map(Portfolio::getUserId)
                 .collect(Collectors.toSet());
+        if (myPortfolio != null) {
+            displayUserIds.add(myPortfolio.getUserId());
+        }
         Map<String, User> userMap = userRepository.findAllBySupabaseIdIn(displayUserIds).stream()
                 .collect(Collectors.toMap(User::getSupabaseId, u -> u, (a, b) -> a));
 
@@ -119,11 +124,14 @@ public class RankingService {
         }
         avgReturn = totalCount > 0 ? avgReturn / totalCount : 0;
 
-        // 대표 항로 정보 배치 조회 (N+1 방지)
+        // 대표 항로 정보 배치 조회 (N+1 방지, myPortfolio 포함)
         Set<String> purchaseIds = displayList.stream()
                 .map(Portfolio::getRepresentativePurchaseId)
                 .filter(id -> id != null)
                 .collect(Collectors.toSet());
+        if (myPortfolio != null && myPortfolio.getRepresentativePurchaseId() != null) {
+            purchaseIds.add(myPortfolio.getRepresentativePurchaseId());
+        }
         Map<String, ProductPurchase> purchaseMap = purchaseIds.isEmpty()
                 ? Map.of()
                 : purchaseRepository.findAllById(purchaseIds).stream()
@@ -138,52 +146,15 @@ public class RankingService {
 
         List<RankingEntryDto> rankings = new ArrayList<>();
         for (Portfolio p : displayList) {
-            User user = userMap.get(p.getUserId());
-            String nickname = (user != null && user.getName() != null) ? user.getName() : "익명";
-            String email = (user != null && user.getEmail() != null) ? user.getEmail() : "";
+            rankings.add(buildRankingEntry(p, currentUserId, userMap, rankMap,
+                    sortMap, totalCount, purchaseMap, productMap));
+        }
 
-            // 대표 항로 정보 (배치 조회 결과 활용)
-            String routeName = null;
-            String routeStrategyType = null;
-            Double routeReturnRate = null;
-            String routeDescription = null;
-
-            if (p.getRepresentativePurchaseId() != null) {
-                try {
-                    ProductPurchase purchase = purchaseMap.get(p.getRepresentativePurchaseId());
-                    if (purchase != null && purchase.getStatus() == ProductPurchase.Status.ACTIVE) {
-                        routeName = purchase.getProductName();
-                        QuantProduct product = productMap.get(purchase.getProductId());
-                        if (product != null) {
-                            routeStrategyType = product.getStrategyType() != null ? product.getStrategyType().name() : "SIMPLE";
-                            routeDescription = product.getStrategyLogic();
-                        }
-                        routeReturnRate = getRouteReturnRate(p.getUserId(), p.getRepresentativePurchaseId());
-                    }
-                } catch (Exception e) {
-                    log.debug("대표 항로 조회 실패: {}", p.getRepresentativePurchaseId());
-                }
-            }
-
-            // 표시 수익률: 기간별이면 해당 기간 변화, all이면 전체 수익률
-            double displayReturn = sortMap != null
-                    ? sortMap.getOrDefault(p.getUserId(), 0.0)
-                    : p.getReturnRate().doubleValue();
-
-            rankings.add(RankingEntryDto.builder()
-                    .portfolioId(p.getId())
-                    .rank(rankMap.getOrDefault(p.getUserId(), totalCount + 1))
-                    .nickname(nickname)
-                    .portfolioName(email.contains("@") ? email.split("@")[0] + "의 포트폴리오" : nickname + "의 포트폴리오")
-                    .totalReturn(Math.round(displayReturn * 100.0) / 100.0)
-                    .totalValue(p.getTotalValue().doubleValue())
-                    .rankChange(0)
-                    .isMyRanking(p.getUserId().equals(currentUserId))
-                    .routeName(routeName)
-                    .routeStrategyType(routeStrategyType)
-                    .routeReturnRate(routeReturnRate)
-                    .routeDescription(routeDescription)
-                    .build());
+        // 현재 유저가 페이지에 없으면 별도 myRanking 엔트리 생성
+        RankingEntryDto myRankingEntry = null;
+        if (myPortfolio != null) {
+            myRankingEntry = buildRankingEntry(myPortfolio, currentUserId, userMap, rankMap,
+                    sortMap, totalCount, purchaseMap, productMap);
         }
 
         return RankingResponseDto.builder()
@@ -197,6 +168,61 @@ public class RankingService {
                 .positiveCount(positiveCount)
                 .negativeCount(negativeCount)
                 .rankings(rankings)
+                .myRanking(myRankingEntry)
+                .build();
+    }
+
+    /**
+     * 포트폴리오 → RankingEntryDto 변환 (공통 헬퍼)
+     */
+    private RankingEntryDto buildRankingEntry(Portfolio p, String currentUserId,
+                                               Map<String, User> userMap, Map<String, Integer> rankMap,
+                                               Map<String, Double> sortMap, int totalCount,
+                                               Map<String, ProductPurchase> purchaseMap,
+                                               Map<String, QuantProduct> productMap) {
+        User user = userMap.get(p.getUserId());
+        String nickname = (user != null && user.getName() != null) ? user.getName() : "익명";
+        String email = (user != null && user.getEmail() != null) ? user.getEmail() : "";
+
+        String routeName = null;
+        String routeStrategyType = null;
+        Double routeReturnRate = null;
+        String routeDescription = null;
+
+        if (p.getRepresentativePurchaseId() != null) {
+            try {
+                ProductPurchase purchase = purchaseMap.get(p.getRepresentativePurchaseId());
+                if (purchase != null && purchase.getStatus() == ProductPurchase.Status.ACTIVE) {
+                    routeName = purchase.getProductName();
+                    QuantProduct product = productMap.get(purchase.getProductId());
+                    if (product != null) {
+                        routeStrategyType = product.getStrategyType() != null ? product.getStrategyType().name() : "SIMPLE";
+                        routeDescription = product.getStrategyLogic();
+                    }
+                    routeReturnRate = getRouteReturnRate(p.getUserId(), p.getRepresentativePurchaseId());
+                }
+            } catch (Exception e) {
+                log.debug("대표 항로 조회 실패: {}", p.getRepresentativePurchaseId());
+            }
+        }
+
+        double displayReturn = sortMap != null
+                ? sortMap.getOrDefault(p.getUserId(), 0.0)
+                : p.getReturnRate().doubleValue();
+
+        return RankingEntryDto.builder()
+                .portfolioId(p.getId())
+                .rank(rankMap.getOrDefault(p.getUserId(), totalCount + 1))
+                .nickname(nickname)
+                .portfolioName(email.contains("@") ? email.split("@")[0] + "의 포트폴리오" : nickname + "의 포트폴리오")
+                .totalReturn(Math.round(displayReturn * 100.0) / 100.0)
+                .totalValue(p.getTotalValue().doubleValue())
+                .rankChange(0)
+                .isMyRanking(p.getUserId().equals(currentUserId))
+                .routeName(routeName)
+                .routeStrategyType(routeStrategyType)
+                .routeReturnRate(routeReturnRate)
+                .routeDescription(routeDescription)
                 .build();
     }
 

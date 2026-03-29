@@ -20,4 +20,5 @@ public class RankingResponseDto {
     private int positiveCount;
     private int negativeCount;
     private List<RankingEntryDto> rankings;
+    private RankingEntryDto myRanking;
 }

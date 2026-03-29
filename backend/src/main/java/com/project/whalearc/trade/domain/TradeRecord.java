@@ -37,7 +37,7 @@ public class TradeRecord {
     private Instant executedAt;
     private String memo;
 
-    private static final BigDecimal COMMISSION_RATE = new BigDecimal("0.001");
+    public static final BigDecimal COMMISSION_RATE = new BigDecimal("0.001");
 
     public TradeRecord(String userId, Order order, BigDecimal executionPrice) {
         this.userId = userId;

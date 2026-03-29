@@ -209,7 +209,7 @@ public class StrategyService {
                 continue;
             }
 
-            BigDecimal priceBd = BigDecimal.valueOf(priceInfo.getPrice()).multiply(new BigDecimal("1.001"));
+            BigDecimal priceBd = BigDecimal.valueOf(priceInfo.getPrice());
             BigDecimal quantity = perAssetAmount.divide(priceBd, 10, java.math.RoundingMode.HALF_UP);
             if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
                 failedAssets.add(asset + "(수량 계산 불가)");

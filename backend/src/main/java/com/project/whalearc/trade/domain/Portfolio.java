@@ -51,7 +51,7 @@ public class Portfolio {
     }
 
     public BigDecimal getReturnRate() {
-        BigDecimal initial = (initialCash.compareTo(BigDecimal.ZERO) > 0)
+        BigDecimal initial = (initialCash != null && initialCash.compareTo(BigDecimal.ZERO) > 0)
                 ? initialCash : BigDecimal.valueOf(10_000_000);
         BigDecimal current = getTotalValue();
         if (initial.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;

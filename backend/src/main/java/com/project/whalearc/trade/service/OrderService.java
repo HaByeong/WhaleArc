@@ -123,7 +123,7 @@ public class OrderService {
     private void validateOrder(Order.OrderType orderType, String stockCode, String stockName,
                                 BigDecimal quantity, BigDecimal executionPrice, Portfolio portfolio) {
         if (orderType == Order.OrderType.BUY) {
-            BigDecimal totalCost = executionPrice.multiply(quantity).multiply(new BigDecimal("1.001")); // 수수료 0.1% 포함
+            BigDecimal totalCost = executionPrice.multiply(quantity).multiply(BigDecimal.ONE.add(TradeRecord.COMMISSION_RATE)); // 수수료 포함
             if (portfolio.getCashBalance().compareTo(totalCost) < 0) {
                 log.warn("잔고 부족: userId={}, 필요={}, 보유={}", portfolio.getUserId(),
                         String.format("%,.0f", totalCost.doubleValue()),

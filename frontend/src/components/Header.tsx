@@ -91,10 +91,10 @@ const Header = ({ showNav = false }: HeaderProps) => {
                   <Link
                     key={to}
                     to={to}
-                    className={`text-sm transition-colors font-medium rounded px-2 py-1.5 ${
+                    className={`text-sm transition-colors font-medium rounded-lg px-2.5 py-1.5 ${
                       isActive(to)
-                        ? isDarkNav ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-whale-light border-b-2 border-whale-light'
-                        : isDarkNav ? 'text-slate-400 hover:text-white' : 'text-gray-700 hover:text-whale-light'
+                        ? isDarkNav ? 'text-cyan-400 bg-cyan-500/10' : 'text-whale-light bg-whale-light/10'
+                        : isDarkNav ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-gray-600 hover:text-whale-light hover:bg-gray-50'
                     }`}
                     aria-label={label}
                   >

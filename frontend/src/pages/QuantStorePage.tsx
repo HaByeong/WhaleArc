@@ -368,7 +368,7 @@ const QuantStorePage = () => {
     <div className="flex items-start gap-3">
       <div className="flex-shrink-0 flex flex-col items-center">
         <div className={`${size === 'sm' ? 'w-10 h-10' : 'w-12 h-12'} rounded-full bg-gradient-to-br from-sky-50 to-blue-100 p-1.5 shadow-sm border border-sky-200`}>
-          <img src={whale} alt="" className="w-full h-full object-contain" />
+          <img src={whale} alt="" className="w-full h-full object-contain" loading="lazy" />
         </div>
       </div>
       <div className={`relative rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[calc(100%-4rem)] ${isVirt ? 'bg-white border border-gray-200' : 'bg-white/[0.02] border border-white/[0.06]'}`}>
@@ -429,7 +429,7 @@ const QuantStorePage = () => {
         <div className="mb-8 text-center">
           <div className="inline-flex items-center gap-3 mb-3">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-sky-100 to-blue-200 p-2 shadow-md">
-              <img src="/whales/humpback.png" alt="" className="w-full h-full object-contain" />
+              <img src="/whales/humpback.png" alt="" className="w-full h-full object-contain" loading="lazy" />
             </div>
             <h1 className={`text-2xl md:text-3xl font-bold ${isVirt ? 'text-whale-dark' : 'text-white'}`}>전략 가이드</h1>
           </div>
@@ -488,7 +488,7 @@ const QuantStorePage = () => {
         {selectedCategory !== 'ALL' && (
           <div className="mb-6 flex justify-center">
             <div className={`inline-flex items-center gap-2 rounded-full px-5 py-2 ${isVirt ? 'bg-white border border-sky-100 shadow-sm' : 'bg-white/[0.02] border border-white/[0.06]'}`}>
-              <img src={CATEGORY_WHALE[selectedCategory]?.image} alt="" className="w-6 h-6 object-contain" />
+              <img src={CATEGORY_WHALE[selectedCategory]?.image} alt="" className="w-6 h-6 object-contain" loading="lazy" />
               <span className={`text-sm ${isVirt ? 'text-gray-600' : 'text-slate-400'}`}>
                 {CATEGORY_GLOSSARY_KEY[selectedCategory]
                   ? <><Term k={CATEGORY_GLOSSARY_KEY[selectedCategory]}>{CATEGORY_TAB_LABELS[selectedCategory]}</Term> — {CATEGORY_SIMPLE[selectedCategory]}</>
@@ -956,7 +956,7 @@ const QuantStorePage = () => {
         {!loading && products.length === 0 && (
           <div className="text-center py-16">
             <div className="w-20 h-20 rounded-full bg-sky-50 mx-auto mb-4 flex items-center justify-center">
-              <img src="/whales/gray-whale.png" alt="" className="w-14 h-14 object-contain opacity-60" />
+              <img src="/whales/gray-whale.png" alt="" className="w-14 h-14 object-contain opacity-60" loading="lazy" />
             </div>
             <div className={`font-medium text-lg ${isVirt ? 'text-gray-500' : 'text-slate-400'}`}>이 카테고리에 등록된 전략이 없어요</div>
             <div className={`text-sm mt-1 ${isVirt ? 'text-gray-400' : 'text-slate-500'}`}>다른 카테고리를 탐색해보세요!</div>

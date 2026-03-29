@@ -305,9 +305,21 @@ const TradePage = () => {
   /* ─── 주문 제출 ─── */
   const handleOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedStock) {
+      showToast('종목을 먼저 선택해주세요.', 'error');
+      return;
+    }
+
     const qty = parseFloat(quantity);
-    if (!selectedStock || !quantity || isNaN(qty) || qty <= 0) {
-      showToast('종목과 수량을 확인해주세요.', 'error');
+    if (!quantity || isNaN(qty) || qty <= 0) {
+      showToast('수량은 0보다 커야 합니다.', 'error');
+      return;
+    }
+
+    // 소수점 자릿수 제한 (최대 8자리)
+    const decimalPart = quantity.split('.')[1];
+    if (decimalPart && decimalPart.length > 8) {
+      showToast('수량의 소수점은 최대 8자리까지 입력할 수 있습니다.', 'error');
       return;
     }
 
@@ -319,9 +331,12 @@ const TradePage = () => {
       return;
     }
 
-    if (orderMethod === 'LIMIT' && (!limitPrice || parseFloat(limitPrice) <= 0)) {
-      showToast('지정가를 입력해주세요.', 'error');
-      return;
+    if (orderMethod === 'LIMIT') {
+      const lp = parseFloat(limitPrice);
+      if (!limitPrice || isNaN(lp) || lp <= 0) {
+        showToast('지정가는 0보다 큰 값을 입력해주세요.', 'error');
+        return;
+      }
     }
 
     // 잔고 체크 — 실시간 가격 사용
@@ -1222,16 +1237,24 @@ const TradePage = () => {
                     {orderMethod === 'MARKET' ? (
                       <div className={`text-lg font-bold ${d ? 'text-white' : 'text-whale-dark'}`}>{fmt(liveSelectedStock.currentPrice)}</div>
                     ) : (
-                      <input
-                        type="number"
-                        value={limitPrice}
-                        onChange={e => setLimitPrice(e.target.value)}
-                        placeholder="희망 가격 입력"
-                        className={`w-full text-lg font-bold bg-transparent border-none outline-none placeholder:font-normal ${
-                          d ? 'text-white placeholder:text-slate-600' : 'text-whale-dark placeholder:text-gray-300'
-                        }`}
-                        step={isSelectedStock ? '1' : 'any'}
-                      />
+                      <>
+                        <label htmlFor="trade-limit-price" className="sr-only">지정가</label>
+                        <input
+                          type="number"
+                          id="trade-limit-price"
+                          value={limitPrice}
+                          onChange={e => {
+                            const v = e.target.value;
+                            if (v === '' || parseFloat(v) >= 0) setLimitPrice(v);
+                          }}
+                          placeholder="희망 가격 입력"
+                          className={`w-full text-lg font-bold bg-transparent border-none outline-none placeholder:font-normal ${
+                            d ? 'text-white placeholder:text-slate-600' : 'text-whale-dark placeholder:text-gray-300'
+                          }`}
+                          min="0"
+                          step={isSelectedStock ? '1' : 'any'}
+                        />
+                      </>
                     )}
                   </div>
 
@@ -1246,10 +1269,20 @@ const TradePage = () => {
                         }
                       </span>
                     </div>
+                    <label htmlFor="trade-quantity" className="sr-only">주문 수량</label>
                     <input
                       type="number"
+                      id="trade-quantity"
                       value={quantity}
-                      onChange={e => setQuantity(e.target.value)}
+                      onChange={e => {
+                        const v = e.target.value;
+                        if (v === '' || parseFloat(v) >= 0) {
+                          // 소수점 8자리 초과 방지
+                          const dec = v.split('.')[1];
+                          if (dec && dec.length > 8) return;
+                          setQuantity(v);
+                        }
+                      }}
                       placeholder={isSelectedStock ? '주 수 입력' : '수량 입력'}
                       className={`w-full text-lg font-bold bg-transparent border-none outline-none placeholder:font-normal ${
                         d ? 'text-white placeholder:text-slate-600' : 'text-whale-dark placeholder:text-gray-300'
@@ -1323,7 +1356,7 @@ const TradePage = () => {
                   {/* 주문 버튼 */}
                   <button
                     type="submit"
-                    disabled={isSubmitting || !quantity || parseFloat(quantity) <= 0}
+                    disabled={isSubmitting || !selectedStock || !quantity || parseFloat(quantity) <= 0}
                     className={`w-full py-3.5 rounded-xl font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                       orderType === 'BUY'
                         ? `bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg ${d ? 'shadow-red-500/20' : 'shadow-red-200'}`
@@ -1332,7 +1365,9 @@ const TradePage = () => {
                   >
                     {isSubmitting
                       ? '주문 처리 중...'
-                      : `${selectedDisplayName} ${orderType === 'BUY' ? '매수' : '매도'}`
+                      : !selectedStock
+                        ? '종목을 선택해주세요'
+                        : `${selectedDisplayName} ${orderType === 'BUY' ? '매수' : '매도'}`
                     }
                   </button>
                 </form>
@@ -1360,7 +1395,7 @@ const TradePage = () => {
                   <div className="flex justify-between items-center">
                     <span className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>평가 손익</span>
                     <span className={`text-sm font-bold ${portfolio.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                      {portfolio.returnRate >= 0 ? '+' : ''}{portfolio.returnRate.toFixed(2)}%
+                      {portfolio.returnRate >= 0 ? '▲ +' : '▼ '}{portfolio.returnRate.toFixed(2)}%
                       <span className={`font-normal text-xs ml-1 ${d ? 'text-slate-500' : 'text-gray-400'}`}>
                         ({portfolio.returnRate >= 0 ? '+' : ''}{fmt(Math.round(portfolio.totalValue - (portfolio.initialCash || 10_000_000)))})
                       </span>

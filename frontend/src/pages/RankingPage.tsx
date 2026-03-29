@@ -78,8 +78,9 @@ const RankingPage = () => {
   };
 
   const formatReturn = (value: number) => {
+    const arrow = value > 0 ? '▲ ' : value < 0 ? '▼ ' : '';
     const sign = value > 0 ? '+' : '';
-    return `${sign}${value.toFixed(2)}%`;
+    return `${arrow}${sign}${value.toFixed(2)}%`;
   };
 
   // 서버에서 전체 기준으로 계산된 통계 사용

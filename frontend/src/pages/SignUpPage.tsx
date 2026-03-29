@@ -23,6 +23,14 @@ const SignUpPage = () => {
       return;
     }
 
+    // 이메일 형식 검증 강화
+    const trimmedEmail = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      setError('올바른 이메일 형식을 입력해주세요.');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('비밀번호가 일치하지 않습니다.');
       return;

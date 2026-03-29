@@ -244,7 +244,7 @@ const RealPortfolioPage = () => {
                 {[
                   { label: '총 자산', value: fmt(activePortfolio.totalValue), color: 'text-white', border: 'border-cyan-500/20' },
                   { label: '총 손익', value: `${sign(activePortfolio.totalPnl)}${fmt(Math.round(activePortfolio.totalPnl))}`, color: rc(activePortfolio.totalPnl), border: activePortfolio.totalPnl >= 0 ? 'border-red-500/20' : 'border-blue-500/20' },
-                  { label: '수익률', value: `${sign(activePortfolio.returnRate)}${activePortfolio.returnRate.toFixed(2)}%`, color: rc(activePortfolio.returnRate), border: activePortfolio.returnRate >= 0 ? 'border-red-500/20' : 'border-blue-500/20' },
+                  { label: '수익률', value: `${activePortfolio.returnRate >= 0 ? '▲ ' : '▼ '}${sign(activePortfolio.returnRate)}${activePortfolio.returnRate.toFixed(2)}%`, color: rc(activePortfolio.returnRate), border: activePortfolio.returnRate >= 0 ? 'border-red-500/20' : 'border-blue-500/20' },
                   { label: serviceTab === 'kis' ? '예수금' : serviceTab === 'upbit' ? 'KRW 잔고' : 'USDT', value: fmt(activePortfolio.cashBalance), color: 'text-white', border: 'border-white/[0.06]' },
                 ].map((m) => (
                   <div key={m.label} className={`bg-white/[0.02] rounded-xl p-4 border ${m.border}`}>
@@ -305,7 +305,7 @@ const RealPortfolioPage = () => {
                             </div>
                             <div className="col-span-3 text-right self-center text-sm font-medium text-white">{fmt(h.marketValue)}</div>
                             <div className="col-span-3 text-right self-center">
-                              <div className={`text-sm font-bold ${rc(h.returnRate)}`}>{sign(h.returnRate)}{h.returnRate.toFixed(2)}%</div>
+                              <div className={`text-sm font-bold ${rc(h.returnRate)}`}>{h.returnRate >= 0 ? '▲ ' : '▼ '}{sign(h.returnRate)}{h.returnRate.toFixed(2)}%</div>
                               <div className={`text-[11px] ${rc(h.profitLoss)}`}>{sign(h.profitLoss)}{fmt(Math.round(h.profitLoss))}</div>
                             </div>
                           </div>
@@ -403,7 +403,7 @@ const RealPortfolioPage = () => {
                       <span className="text-slate-500">총 손익</span>
                       <span className={`font-bold ${rc(activePortfolio.totalPnl)}`}>
                         {sign(activePortfolio.totalPnl)}{fmt(Math.round(activePortfolio.totalPnl))}
-                        <span className="text-xs font-normal ml-1">({sign(activePortfolio.returnRate)}{activePortfolio.returnRate.toFixed(2)}%)</span>
+                        <span className="text-xs font-normal ml-1">({activePortfolio.returnRate >= 0 ? '▲ ' : '▼ '}{sign(activePortfolio.returnRate)}{activePortfolio.returnRate.toFixed(2)}%)</span>
                       </span>
                     </div>
                   </div>
@@ -741,7 +741,7 @@ const MyPortfolioPage = () => {
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
                 <div className="text-blue-200 text-xs mb-1">수익률</div>
                 <div className={`text-xl md:text-2xl font-bold ${returnRate >= 0 ? 'text-red-300' : 'text-blue-300'}`}>
-                  {signPrefix(returnRate)}{returnRate.toFixed(2)}%
+                  {returnRate >= 0 ? '▲ ' : '▼ '}{signPrefix(returnRate)}{returnRate.toFixed(2)}%
                 </div>
               </div>
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
@@ -1150,7 +1150,7 @@ const MyPortfolioPage = () => {
                                   <div className="text-right">
                                     <div className="font-semibold text-sm">{fmt(h.marketValue)}</div>
                                     <div className={`text-xs font-semibold ${returnColor(h.returnRate)}`}>
-                                      {signPrefix(h.returnRate)}{h.returnRate.toFixed(2)}%
+                                      {h.returnRate >= 0 ? '▲ ' : '▼ '}{signPrefix(h.returnRate)}{h.returnRate.toFixed(2)}%
                                       <span className="text-gray-400 font-normal ml-1">
                                         ({signPrefix(h.profitLoss)}{fmt(Math.round(h.profitLoss))})
                                       </span>
@@ -1194,7 +1194,7 @@ const MyPortfolioPage = () => {
                                   <div className="text-right">
                                     <div className="font-semibold text-sm">{fmt(h.marketValue)}</div>
                                     <div className={`text-xs font-semibold ${returnColor(h.returnRate)}`}>
-                                      {signPrefix(h.returnRate)}{h.returnRate.toFixed(2)}%
+                                      {h.returnRate >= 0 ? '▲ ' : '▼ '}{signPrefix(h.returnRate)}{h.returnRate.toFixed(2)}%
                                       <span className="text-gray-400 font-normal ml-1">
                                         ({signPrefix(h.profitLoss)}{fmt(Math.round(h.profitLoss))})
                                       </span>
@@ -1283,7 +1283,7 @@ const MyPortfolioPage = () => {
                   <span className={`font-bold ${returnColor(totalPnl)}`}>
                     {signPrefix(totalPnl)}{fmt(Math.round(totalPnl))}
                     <span className="text-xs font-normal ml-1">
-                      ({signPrefix(returnRate)}{returnRate.toFixed(2)}%)
+                      ({returnRate >= 0 ? '▲ ' : '▼ '}{signPrefix(returnRate)}{returnRate.toFixed(2)}%)
                     </span>
                   </span>
                 </div>
@@ -1347,7 +1347,7 @@ const MyPortfolioPage = () => {
                       {/* 수익률 */}
                       <div className="px-4 py-3">
                         <div className={`text-xl font-bold ${returnColor(perf.totalReturnRate)}`}>
-                          {signPrefix(perf.totalReturnRate)}{perf.totalReturnRate.toFixed(2)}%
+                          {perf.totalReturnRate >= 0 ? '▲ ' : '▼ '}{signPrefix(perf.totalReturnRate)}{perf.totalReturnRate.toFixed(2)}%
                           <span className="text-xs font-normal text-gray-500 ml-1.5">
                             ({signPrefix(perf.totalPnl)}{fmt(Math.round(perf.totalPnl))})
                           </span>

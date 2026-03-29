@@ -437,7 +437,7 @@ const DashboardPage = () => {
                   <div className="absolute inset-0 rounded-full border border-white/20 dash-ripple-1" />
                   <div className="absolute inset-0 rounded-full border border-white/10 dash-ripple-2" />
                   <div className="w-full h-full bg-white bg-opacity-20 rounded-full flex items-center justify-center backdrop-blur-sm p-1.5 relative z-10 dash-whale-float">
-                    <img src="/whales/blue-whale.png" alt="고래" className="w-full h-full object-contain" />
+                    <img src="/whales/blue-whale.png" alt="고래" className="w-full h-full object-contain" loading="lazy" />
                   </div>
                 </div>
                 <div>
@@ -465,7 +465,7 @@ const DashboardPage = () => {
                     <div className={`text-lg md:text-2xl font-bold ${
                       portfolio.returnRate >= 0 ? 'text-red-400' : 'text-blue-400'
                     }`}>
-                      {portfolio.returnRate >= 0 ? '+' : ''}
+                      {portfolio.returnRate >= 0 ? '▲ +' : '▼ '}
                       {portfolio.returnRate.toFixed(2)}%
                     </div>
                   </div>
@@ -565,7 +565,7 @@ const DashboardPage = () => {
                         <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
                           ap.returnRate >= 0 ? 'bg-red-400/20 text-red-200' : 'bg-blue-400/20 text-blue-200'
                         }`}>
-                          {sign(ap.returnRate)}{ap.returnRate.toFixed(2)}%
+                          {ap.returnRate >= 0 ? '▲ ' : '▼ '}{sign(ap.returnRate)}{ap.returnRate.toFixed(2)}%
                         </span>
                       </div>
                     </div>
@@ -621,7 +621,7 @@ const DashboardPage = () => {
                                 </div>
                                 <div className="col-span-3 text-right self-center text-sm font-medium text-white">{formatCurrency(h.marketValue)}</div>
                                 <div className="col-span-3 text-right self-center">
-                                  <div className={`text-sm font-bold ${rc(h.returnRate)}`}>{sign(h.returnRate)}{h.returnRate.toFixed(2)}%</div>
+                                  <div className={`text-sm font-bold ${rc(h.returnRate)}`}>{h.returnRate >= 0 ? '▲ ' : '▼ '}{sign(h.returnRate)}{h.returnRate.toFixed(2)}%</div>
                                   <div className={`text-[11px] ${rc(h.profitLoss)}`}>{sign(h.profitLoss)}{formatCurrency(Math.round(h.profitLoss))}</div>
                                 </div>
                               </div>
@@ -680,7 +680,7 @@ const DashboardPage = () => {
                               <span className="text-slate-500">총 손익</span>
                               <span className={`font-bold ${rc(ap.totalPnl)}`}>
                                 {sign(ap.totalPnl)}{formatCurrency(Math.round(ap.totalPnl))}
-                                <span className="text-xs font-normal ml-1">({sign(ap.returnRate)}{ap.returnRate.toFixed(2)}%)</span>
+                                <span className="text-xs font-normal ml-1">({ap.returnRate >= 0 ? '▲ ' : '▼ '}{sign(ap.returnRate)}{ap.returnRate.toFixed(2)}%)</span>
                               </span>
                             </div>
                           </div>
@@ -981,7 +981,7 @@ const DashboardPage = () => {
                       <div className={`text-2xl font-bold ${
                         portfolio.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'
                       }`}>
-                        {portfolio.returnRate >= 0 ? '+' : ''}
+                        {portfolio.returnRate >= 0 ? '▲ +' : '▼ '}
                         {portfolio.returnRate.toFixed(2)}%
                       </div>
                     </div>
@@ -1064,7 +1064,7 @@ const DashboardPage = () => {
                     return stockHoldings.length > 0 ? (
                       <div className="mb-4">
                         <div className="flex items-center gap-1.5 mb-2">
-                          <img src="/whales/spotted-dolphin.png" alt="주식" className="w-5 h-5 object-contain" />
+                          <img src="/whales/spotted-dolphin.png" alt="주식" className="w-5 h-5 object-contain" loading="lazy" />
                           <span className="text-sm font-bold text-indigo-600">주식</span>
                           <span className="text-xs text-gray-400">{stockHoldings.length}종목</span>
                         </div>
@@ -1088,7 +1088,7 @@ const DashboardPage = () => {
                               <div className="text-right">
                                 <div className="text-sm font-semibold text-gray-800">{formatCurrency(holding.marketValue)}</div>
                                 <div className={`text-xs font-semibold ${holding.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                                  {holding.returnRate >= 0 ? '+' : ''}{holding.returnRate.toFixed(2)}%
+                                  {holding.returnRate >= 0 ? '▲ +' : '▼ '}{holding.returnRate.toFixed(2)}%
                                 </div>
                               </div>
                             </div>
@@ -1103,7 +1103,7 @@ const DashboardPage = () => {
                     return cryptoHoldings.length > 0 ? (
                       <div>
                         <div className="flex items-center gap-1.5 mb-2">
-                          <img src="/whales/wild-cat-whale.png" alt="가상화폐" className="w-5 h-5 object-contain" />
+                          <img src="/whales/wild-cat-whale.png" alt="가상화폐" className="w-5 h-5 object-contain" loading="lazy" />
                           <span className="text-sm font-bold text-emerald-600">가상화폐</span>
                           <span className="text-xs text-gray-400">{cryptoHoldings.length}종목</span>
                         </div>
@@ -1127,7 +1127,7 @@ const DashboardPage = () => {
                               <div className="text-right">
                                 <div className="text-sm font-semibold text-gray-800">{formatCurrency(holding.marketValue)}</div>
                                 <div className={`text-xs font-semibold ${holding.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                                  {holding.returnRate >= 0 ? '+' : ''}{holding.returnRate.toFixed(2)}%
+                                  {holding.returnRate >= 0 ? '▲ +' : '▼ '}{holding.returnRate.toFixed(2)}%
                                 </div>
                               </div>
                             </div>
@@ -1168,7 +1168,7 @@ const DashboardPage = () => {
               <DragWrap id="routes" key="routes">
                 <div className="card py-8 mb-6">
                   <div className="text-center mb-6">
-                    <img src="/whales/beluga.png" alt="벨루가" className="w-14 h-14 object-contain mx-auto mb-3" />
+                    <img src="/whales/beluga.png" alt="벨루가" className="w-14 h-14 object-contain mx-auto mb-3" loading="lazy" />
                     <h3 className="text-lg font-bold text-whale-dark mb-1">첫 항해를 시작해볼까요?</h3>
                     <p className="text-sm text-gray-400">가상 자금 1,000만원으로 부담 없이 체험해보세요</p>
                   </div>
@@ -1178,7 +1178,7 @@ const DashboardPage = () => {
                       className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-blue-100 bg-blue-50/50 hover:bg-blue-50 transition-colors text-left group"
                     >
                       <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                        <img src="/whales/spotted-dolphin.png" alt="" className="w-6 h-6 object-contain" />
+                        <img src="/whales/spotted-dolphin.png" alt="" className="w-6 h-6 object-contain" loading="lazy" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-bold text-whale-dark">삼성전자 1주 사보기</div>
@@ -1191,7 +1191,7 @@ const DashboardPage = () => {
                       className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-amber-100 bg-amber-50/50 hover:bg-amber-50 transition-colors text-left group"
                     >
                       <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-                        <img src="/whales/wild-cat-whale.png" alt="" className="w-6 h-6 object-contain" />
+                        <img src="/whales/wild-cat-whale.png" alt="" className="w-6 h-6 object-contain" loading="lazy" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-bold text-whale-dark">비트코인 소량 사보기</div>
@@ -1204,7 +1204,7 @@ const DashboardPage = () => {
                       className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-purple-100 bg-purple-50/50 hover:bg-purple-50 transition-colors text-left group"
                     >
                       <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                        <img src="/whales/narwhal.png" alt="" className="w-6 h-6 object-contain" />
+                        <img src="/whales/narwhal.png" alt="" className="w-6 h-6 object-contain" loading="lazy" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-bold text-whale-dark">전략으로 자동 매매 시작</div>
@@ -1248,7 +1248,7 @@ const DashboardPage = () => {
                               <div className={`text-xs font-semibold ${
                                 stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'
                               }`}>
-                                {stock.changeRate >= 0 ? '+' : ''}{stock.changeRate.toFixed(2)}%
+                                {stock.changeRate >= 0 ? '▲ +' : '▼ '}{stock.changeRate.toFixed(2)}%
                               </div>
                             </div>
                           </div>
@@ -1284,7 +1284,7 @@ const DashboardPage = () => {
                               <div className={`text-xs font-semibold ${
                                 stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'
                               }`}>
-                                {stock.changeRate >= 0 ? '+' : ''}{stock.changeRate.toFixed(2)}%
+                                {stock.changeRate >= 0 ? '▲ +' : '▼ '}{stock.changeRate.toFixed(2)}%
                               </div>
                             </div>
                           </div>
@@ -1292,7 +1292,7 @@ const DashboardPage = () => {
                       </div>
                     ) : (
                       <div className="text-center py-12">
-                        <img src="/whales/beluga.png" alt="벨루가" className="w-16 h-16 object-contain mx-auto mb-3" />
+                        <img src="/whales/beluga.png" alt="벨루가" className="w-16 h-16 object-contain mx-auto mb-3" loading="lazy" />
                         <div className="font-medium text-gray-500">관심 종목이 없습니다</div>
                         <div className="text-sm mt-1 text-gray-400">
                           프로필에서 관심 종목을 추가하면 여기에 실시간 시세가 표시됩니다
@@ -1470,7 +1470,7 @@ const DashboardPage = () => {
                       <div className={`text-xs font-semibold ${
                         stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'
                       }`}>
-                        {stock.changeRate >= 0 ? '+' : ''}{stock.changeRate.toFixed(2)}%
+                        {stock.changeRate >= 0 ? '▲ +' : '▼ '}{stock.changeRate.toFixed(2)}%
                       </div>
                     </div>
                   </div>

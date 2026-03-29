@@ -1,28 +1,29 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
-import LandingPage from './pages/LandingPage';
-import LoginPage from './pages/LoginPage';
-import SignUpPage from './pages/SignUpPage';
-import AuthCallbackPage from './pages/AuthCallbackPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import DashboardPage from './pages/DashboardPage';
-import MarketPage from './pages/MarketPage';
-import TradePage from './pages/TradePage';
-import StrategyPage from './pages/StrategyPage';
-
-import QuantStorePage from './pages/QuantStorePage';
-import RankingPage from './pages/RankingPage';
-import PortfolioDetailPage from './pages/PortfolioDetailPage';
-import MyPortfolioPage from './pages/MyPortfolioPage';
-import UserPage from './pages/UserPage';
-import VirtDashboardPage from './pages/VirtDashboardPage';
-import NotFoundPage from './pages/NotFoundPage';
+import SplashLoading from './components/SplashLoading';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
-import GoldenCrossChart from './components/GoldenCrossChart';
+
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const SignUpPage = lazy(() => import('./pages/SignUpPage'));
+const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const MarketPage = lazy(() => import('./pages/MarketPage'));
+const TradePage = lazy(() => import('./pages/TradePage'));
+const StrategyPage = lazy(() => import('./pages/StrategyPage'));
+const QuantStorePage = lazy(() => import('./pages/QuantStorePage'));
+const RankingPage = lazy(() => import('./pages/RankingPage'));
+const PortfolioDetailPage = lazy(() => import('./pages/PortfolioDetailPage'));
+const MyPortfolioPage = lazy(() => import('./pages/MyPortfolioPage'));
+const UserPage = lazy(() => import('./pages/UserPage'));
+const VirtDashboardPage = lazy(() => import('./pages/VirtDashboardPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const GoldenCrossChart = lazy(() => import('./components/GoldenCrossChart'));
 
 // non-Virt 경로에서 body에 다크 모드 클래스 적용
 const DarkModeController = () => {
@@ -47,6 +48,7 @@ function App() {
         <DarkModeController />
         <ThemeProvider>
         <AuthProvider>
+        <Suspense fallback={<SplashLoading />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -148,6 +150,7 @@ function App() {
 
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </Suspense>
         </AuthProvider>
         </ThemeProvider>
       </Router>

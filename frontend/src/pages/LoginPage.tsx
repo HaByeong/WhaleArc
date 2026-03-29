@@ -76,8 +76,17 @@ const LoginPage = () => {
     setError(null);
     setInfoMessage(null);
 
+    // 이메일 형식 검증 강화
+    const trimmedEmail = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      setError('올바른 이메일 형식을 입력해주세요.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      await authService.login(email, password);
+      await authService.login(trimmedEmail, password);
       const state = location.state as { from?: string } | null;
       const redirectTo = state?.from || '/dashboard';
       navigate(redirectTo, { replace: true });

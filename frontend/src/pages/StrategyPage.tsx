@@ -507,6 +507,17 @@ const StrategyPage = () => {
       return;
     }
 
+    if (backtestStartDate > backtestEndDate) {
+      showToast('시작일은 종료일보다 이전이어야 합니다.', 'error');
+      return;
+    }
+
+    const capital = parseInt(backtestInitialCapital);
+    if (!backtestInitialCapital || isNaN(capital) || capital <= 0) {
+      showToast('초기 투자금은 0보다 커야 합니다.', 'error');
+      return;
+    }
+
     if (backtestMode === 'stock' && directEntryConditions.length === 0 && directExitConditions.length === 0) {
       showToast('진입 조건 또는 청산 조건을 최소 1개 설정해주세요.', 'error');
       return;
@@ -2107,7 +2118,12 @@ const StrategyPage = () => {
             {/* 초기 투자금 */}
             <div data-tour="initial-capital">
               <label className={`block text-[10px] font-semibold mb-1.5 ${isVirt ? 'text-gray-500' : 'text-slate-400'}`}>초기 투자금</label>
-              <input type="number" value={backtestInitialCapital} onChange={(e) => setBacktestInitialCapital(e.target.value)}
+              <input type="number" value={backtestInitialCapital}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '' || parseInt(v) >= 0) setBacktestInitialCapital(v);
+                }}
+                min="1"
                 className={`w-full px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-whale-light focus:border-whale-light transition-all ${isVirt ? 'bg-white border border-gray-200 text-gray-800' : 'bg-white/[0.04] border border-white/10 text-white placeholder-slate-600'}`}
                 placeholder="10,000,000" />
             </div>

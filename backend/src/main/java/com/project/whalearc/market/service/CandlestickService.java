@@ -209,6 +209,7 @@ public class CandlestickService {
 
                 List<CandlestickResponse> result = new ArrayList<>();
                 for (List<Object> candle : data) {
+                    if (candle == null || candle.size() < 6) continue;
                     long time = ((Number) candle.get(0)).longValue() / 1000;
                     double open = parseDouble(candle.get(1));
                     double close = parseDouble(candle.get(2));

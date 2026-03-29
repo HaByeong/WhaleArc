@@ -209,8 +209,10 @@ public class BacktestDataProvider {
             if (timestamps == null || timestamps.isEmpty()) return List.of();
 
             Map<String, Object> indicators = (Map<String, Object>) result.get("indicators");
+            if (indicators == null) return List.of();
             List<Map<String, Object>> quotes =
                     (List<Map<String, Object>>) indicators.get("quote");
+            if (quotes == null || quotes.isEmpty()) return List.of();
             Map<String, Object> q = quotes.get(0);
 
             List<Number> opens   = (List<Number>) q.get("open");

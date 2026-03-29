@@ -272,7 +272,7 @@ const RealPortfolioPage = () => {
                       }`}
                     >
                       {tab === 'holdings'
-                        ? `보유 ${serviceTab === 'kis' ? '종목' : '코인'} (${activePortfolio.holdings.length})`
+                        ? `보유 ${serviceTab === 'kis' ? '종목' : '코인'} (${activePortfolio?.holdings?.length ?? 0})`
                         : `체결 내역 ${serviceTab === 'kis' ? `(${trades.length})` : ''}`}
                     </button>
                   ))}

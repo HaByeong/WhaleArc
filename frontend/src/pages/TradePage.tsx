@@ -501,16 +501,17 @@ const TradePage = () => {
   const handleMemoChange = (value: string) => {
     if (value.length > 200) return;
     setStockMemo(value);
+    const code = liveSelectedStock?.stockCode;
+    if (!code) return;
     if (memoTimerRef.current) clearTimeout(memoTimerRef.current);
     memoTimerRef.current = setTimeout(() => {
-      if (!liveSelectedStock) return;
       try {
         const stored = localStorage.getItem(MEMO_STORAGE_KEY);
         const memos: Record<string, { memo: string; updatedAt: string }> = stored ? JSON.parse(stored) : {};
         if (value.trim()) {
-          memos[liveSelectedStock.stockCode] = { memo: value, updatedAt: new Date().toISOString() };
+          memos[code] = { memo: value, updatedAt: new Date().toISOString() };
         } else {
-          delete memos[liveSelectedStock.stockCode];
+          delete memos[code];
         }
         localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memos));
       } catch { /* localStorage 쓰기 실패 무시 */ }

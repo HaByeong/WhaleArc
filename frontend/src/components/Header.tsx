@@ -78,7 +78,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
           {showNav ? (
             <>
               {/* 데스크톱 네비게이션 */}
-              <nav className="hidden lg:flex items-center space-x-4" aria-label="주요 네비게이션">
+              <nav className="hidden lg:flex items-center space-x-1" aria-label="주요 네비게이션">
                 {[
                   { to: `${prefix}/dashboard`, label: '내 투자' },
                   { to: `${prefix}/my-portfolio`, label: '포트폴리오' },
@@ -101,8 +101,9 @@ const Header = ({ showNav = false }: HeaderProps) => {
                     {label}
                   </Link>
                 ))}
-                {isAuthenticated && (
-                  <div className={`flex items-center space-x-3 ml-4 pl-4 border-l ${isDarkNav ? 'border-white/10' : 'border-gray-200'}`}>
+              </nav>
+              {isAuthenticated && (
+                <div className="hidden lg:flex items-center space-x-2">
                     {/* 테마 토글 */}
                     <button
                       onClick={toggleTheme}
@@ -201,8 +202,8 @@ const Header = ({ showNav = false }: HeaderProps) => {
                       로그아웃
                     </button>
                   </div>
-                )}
-              </nav>
+                </div>
+              )}
 
               {/* 모바일 메뉴 버튼 */}
               <button

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import Header from '../components/Header';
 import VirtSplashLoading from '../components/VirtSplashLoading';
@@ -16,6 +16,44 @@ import UnstableCurrent from '../components/UnstableCurrent';
 import GuideTour, { type TourStep } from '../components/GuideTour';
 
 const CHART_COLORS = ['#3b82f6', '#22d3ee', '#818cf8', '#a78bfa', '#34d399', '#f472b6', '#fb923c', '#94a3b8'];
+
+/* ── 숫자 카운트업 컴포넌트 ── */
+const CountUp = ({ target, duration = 1200, prefix = '', suffix = '', className = '' }: {
+  target: number; duration?: number; prefix?: string; suffix?: string; className?: string;
+}) => {
+  const [value, setValue] = useState(0);
+  const ref = useRef<HTMLSpanElement>(null);
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    const startTime = performance.now();
+    const animate = (now: number) => {
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      setValue(Math.round(target * eased));
+      if (progress < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }, [target, duration]);
+  return <span ref={ref} className={className}>{prefix}{new Intl.NumberFormat('ko-KR').format(value)}{suffix}</span>;
+};
+
+/* ── 파도 SVG ── */
+const WaveSVG = () => (
+  <svg viewBox="0 0 1200 40" preserveAspectRatio="none" className="w-full h-full">
+    <path d="M0,20 C200,35 400,5 600,20 C800,35 1000,5 1200,20 L1200,40 L0,40 Z" />
+  </svg>
+);
+
+/* ── 고래 실루엣 SVG ── */
+const WhaleSwimSVG = ({ className }: { className: string }) => (
+  <svg className={className} viewBox="0 0 120 40" style={{ width: '120px', height: '40px' }}>
+    <path d="M10,25 Q20,10 40,15 Q55,8 70,14 Q80,10 90,15 L95,12 Q100,8 105,14 Q110,12 115,16 L110,20 Q100,28 80,26 Q60,30 40,26 Q25,30 15,28 Z"
+      fill="rgba(255,255,255,0.15)" />
+    <ellipse cx="85" cy="17" rx="2" ry="1.5" fill="rgba(255,255,255,0.3)" />
+  </svg>
+);
 
 const DashboardPage = () => {
   const navigate = useVirtNavigate();
@@ -308,16 +346,14 @@ const DashboardPage = () => {
       <Header showNav={true} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 환영 메시지 */}
+        {/* 환영 메시지 — 살아있는 바다 */}
         <div className="mb-8 bg-gradient-to-r from-whale-dark to-whale-light rounded-2xl shadow-xl p-6 md:p-8 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-whale-accent opacity-10 rounded-full blur-2xl"></div>
-          {/* 거품 파티클 — 배너 전체 영역에 배치 */}
-          <div className="dash-banner-bubble dash-banner-bubble-1" />
-          <div className="dash-banner-bubble dash-banner-bubble-2" />
-          <div className="dash-banner-bubble dash-banner-bubble-3" />
-          <div className="dash-banner-bubble dash-banner-bubble-4" />
-          <div className="dash-banner-bubble dash-banner-bubble-5" />
+          {/* 버블 파티클 (12개) */}
+          {Array.from({ length: 12 }, (_, i) => (
+            <div key={i} className={`dash-bubble dash-bubble-${i + 1}`} />
+          ))}
 
           <div className="relative z-10">
             <div className="flex items-center justify-between flex-wrap gap-4">
@@ -348,11 +384,11 @@ const DashboardPage = () => {
                       {formatCurrency(portfolio.totalValue)}
                     </div>
                   </div>
-                  <div className="h-10 md:h-12 w-px bg-white bg-opacity-30"></div>
+                  <div className="h-10 md:h-12 w-px bg-white bg-opacity-20"></div>
                   <div className="text-center">
                     <div className="text-xs md:text-sm text-blue-200 mb-1">수익률</div>
                     <div className={`text-lg md:text-2xl font-bold ${
-                      portfolio.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'
+                      portfolio.returnRate >= 0 ? 'text-red-400' : 'text-blue-400'
                     }`}>
                       {portfolio.returnRate >= 0 ? '+' : ''}
                       {portfolio.returnRate.toFixed(2)}%
@@ -374,7 +410,7 @@ const DashboardPage = () => {
                         {formatCurrency(realTotal)}
                       </div>
                     </div>
-                    <div className="h-10 md:h-12 w-px bg-white bg-opacity-30"></div>
+                    <div className="h-10 md:h-12 w-px bg-white bg-opacity-20"></div>
                     <div className="text-center">
                       <div className="text-xs md:text-sm text-blue-200 mb-1">총 손익</div>
                       <div className={`text-lg md:text-2xl font-bold ${realPnl >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
@@ -390,7 +426,7 @@ const DashboardPage = () => {
 
         {/* ═══ 일반 모드: 실계좌 자산 ═══ */}
         {!isVirt && (
-          <div data-tour="normal-api-panel" className="mb-8 space-y-5">
+          <div data-tour="normal-api-panel" className="mb-8 space-y-5 dash-card-enter dash-card-enter-1">
 
             {/* 서비스 탭 */}
             <div className="flex items-center gap-2">
@@ -800,7 +836,7 @@ const DashboardPage = () => {
         {isVirt && portfolio && (
           <div
             data-tour="virt-portfolio"
-            className="mb-8 card card-hover cursor-pointer group"
+            className="mb-8 card card-hover cursor-pointer group dash-card-enter dash-card-enter-1"
             onClick={() => navigate('/my-portfolio')}
             role="button"
             tabIndex={0}
@@ -851,7 +887,7 @@ const DashboardPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* 보유 종목 or 빈 상태 - Virt 모드만 */}
           {isVirt && portfolio && portfolio.holdings.length > 0 ? (
-            <div data-tour="virt-holdings" className="card">
+            <div data-tour="virt-holdings" className="card dash-card-enter dash-card-enter-2">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-whale-dark">보유 종목</h2>
                 <button
@@ -943,7 +979,7 @@ const DashboardPage = () => {
               })()}
             </div>
           ) : isVirt && activePurchases.length > 0 ? (
-            <div data-tour="virt-routes" className="card">
+            <div data-tour="virt-routes" className="card dash-card-enter dash-card-enter-3">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-whale-dark">항해 중인 항로</h2>
                 <button onClick={() => navigate('/store')} className="text-sm text-whale-light hover:text-whale-accent font-medium">
@@ -1020,7 +1056,7 @@ const DashboardPage = () => {
 
           {/* 시세 변동 상위 - Virt 모드에서만 표시 */}
           {isVirt && liveTopMovers.length > 0 && (
-            <div data-tour="virt-watchlist" className="card">
+            <div data-tour="virt-watchlist" className="card dash-card-enter dash-card-enter-4">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-whale-dark">시세 변동 상위</h2>
                 <button
@@ -1114,7 +1150,7 @@ const DashboardPage = () => {
           {/* 우측 사이드바 */}
           <div className="space-y-6">
             {/* 빠른 액션 */}
-            <div data-tour="virt-actions" className={isVirt ? 'card !p-5' : 'rounded-xl border border-white/[0.06] bg-white/[0.02] p-5'}>
+            <div data-tour="virt-actions" className={`dash-card-enter dash-card-enter-5 ${isVirt ? 'card !p-5' : 'rounded-xl border border-white/[0.06] bg-white/[0.02] p-5'}`}>
               <h2 className={`text-lg font-bold mb-3 ${isVirt ? 'text-whale-dark' : 'text-white'}`}>어디로 항해할까요?</h2>
               <div className="space-y-2">
                 {isVirt && (

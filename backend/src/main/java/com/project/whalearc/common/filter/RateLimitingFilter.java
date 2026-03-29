@@ -26,7 +26,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
     private final Map<String, RequestCounter> requestCounters = new ConcurrentHashMap<>();
 
-    private static final int DEFAULT_LIMIT = 120;
+    private static final int DEFAULT_LIMIT = 600;   // 일반 GET 조회: 분당 600회 (대시보드 폴링 대응)
     private static final int TRADE_LIMIT = 30;
     private static final int REFRESH_LIMIT = 10;
     private static final int BACKTEST_LIMIT = 5;   // 백테스트: 분당 5회 (무거운 연산)

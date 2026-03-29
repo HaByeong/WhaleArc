@@ -815,10 +815,13 @@ const QuantStorePage = () => {
                 <button onClick={() => setInvestModal(null)} className={`flex-1 py-3 rounded-xl font-medium transition-colors ${!isVirt ? 'text-slate-400 bg-white/[0.04] hover:bg-white/[0.06]' : 'text-gray-600 bg-gray-100 hover:bg-gray-200'}`}>
                   취소
                 </button>
-                <button onClick={goToConfirmStep} disabled={!investmentAmount} className="flex-1 py-3 bg-whale-light hover:bg-whale-dark text-white rounded-xl font-semibold transition-colors disabled:opacity-50">
+                <button onClick={goToConfirmStep} disabled={!investmentAmount} className="flex-1 py-3 bg-whale-light hover:bg-whale-dark text-white rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   다음
                 </button>
               </div>
+              {!investmentAmount && (
+                <p className={`text-xs text-center mt-2 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>투자 금액을 입력해주세요</p>
+              )}
             </div>
           </div>
         )}

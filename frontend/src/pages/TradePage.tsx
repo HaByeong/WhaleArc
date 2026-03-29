@@ -373,10 +373,12 @@ const TradePage = () => {
       setQuantity('');
       setLimitPrice('');
       setOrderMemo('');
-      showToast(
-        `${displayName} ${orderType === 'BUY' ? '매수' : '매도'} 주문 완료!`,
-        'success'
-      );
+      const action = orderType === 'BUY' ? '매수' : '매도';
+      if (orderMethod === 'MARKET') {
+        showToast(`시장가 ${action}가 체결되었습니다`, 'success');
+      } else {
+        showToast(`지정가 ${action} 주문이 접수되었습니다. 목표가 도달 시 자동 체결됩니다`, 'success');
+      }
       const [portfolioData, ordersData, tradesData] = await Promise.all([
         tradeService.getPortfolio(),
         tradeService.getOrders(),

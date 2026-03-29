@@ -185,7 +185,17 @@ const RankingPage = () => {
               {rankings.length === 0 ? (
                 <div className="px-6 py-16 text-center">
                   <p className={`font-medium ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>아직 참여한 투자자가 없습니다</p>
-                  <p className={`text-sm mt-1 ${!isVirt ? 'text-slate-600' : 'text-gray-300'}`}>첫 번째 항해를 시작해보세요</p>
+                  <p className={`text-sm mt-1 mb-4 ${!isVirt ? 'text-slate-600' : 'text-gray-300'}`}>첫 번째 항해를 시작해보세요</p>
+                  <button
+                    onClick={() => navigate('/trade')}
+                    className={`inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                      !isVirt
+                        ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20'
+                        : 'btn-primary'
+                    }`}
+                  >
+                    거래하기
+                  </button>
                 </div>
               ) : (
                 rankings.map((ranking) => (

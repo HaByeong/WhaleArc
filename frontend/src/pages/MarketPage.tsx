@@ -349,6 +349,14 @@ const MarketPage = () => {
                   <div className="text-center py-12">
                     <div className={`font-medium ${!isVirt ? 'text-slate-400' : 'text-gray-400'}`}>검색 결과가 없습니다</div>
                     <div className={`text-sm mt-1 ${!isVirt ? 'text-slate-600' : 'text-gray-300'}`}>다른 키워드로 검색해보세요</div>
+                    {filterText && (
+                      <button
+                        onClick={() => { setFilterText(''); setSearchResults([]); }}
+                        className={`mt-3 text-sm font-medium transition-colors ${!isVirt ? 'text-cyan-400 hover:text-cyan-300' : 'text-whale-light hover:text-whale-dark'}`}
+                      >
+                        검색어 초기화
+                      </button>
+                    )}
                   </div>
                 ) : (
                   filteredAndSortedAssets.map((asset) => (

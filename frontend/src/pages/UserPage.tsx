@@ -160,7 +160,17 @@ const UserPage = () => {
         <Header showNav />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {!isVirt ? (
-            <UnstableCurrent message="해류가 불안정합니다" sub={error || '데이터를 다시 불러오고 있어요...'} />
+            <div>
+              <UnstableCurrent message="해류가 불안정합니다" sub={error || '데이터를 다시 불러오고 있어요...'} />
+              <div className="flex justify-center mt-4">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-cyan-500 hover:bg-cyan-400 text-white transition-colors"
+                >
+                  다시 시도
+                </button>
+              </div>
+            </div>
           ) : (
             <ErrorMessage message={error} onRetry={() => window.location.reload()} variant="offline" />
           )}

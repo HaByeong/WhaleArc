@@ -280,7 +280,12 @@ const RealPortfolioPage = () => {
                 <div className="p-5">
                   {activeTab === 'holdings' ? (
                     activePortfolio.holdings.length === 0 ? (
-                      <div className="text-center py-16 text-slate-500"><p>보유 종목이 없습니다</p>
+                      <div className="text-center py-16 text-slate-500">
+                        <p className="mb-1">보유 종목이 없습니다</p>
+                        <p className="text-sm text-slate-600 mb-4">거래 페이지에서 첫 매수를 해보세요</p>
+                        <Link to="/virt/trade" className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20 transition-colors">
+                          거래하기
+                        </Link>
                       </div>
                     ) : (
                       <>
@@ -317,7 +322,13 @@ const RealPortfolioPage = () => {
                       <p className="font-medium">코인 체결 내역은 지원 예정입니다</p>
                     </div>
                   ) : trades.length === 0 ? (
-                    <div className="text-center py-16 text-slate-500"><p>체결 내역이 없습니다</p></div>
+                    <div className="text-center py-16 text-slate-500">
+                      <p className="mb-1">아직 거래 내역이 없습니다</p>
+                      <p className="text-sm text-slate-600 mb-4">거래 페이지에서 첫 매수를 해보세요</p>
+                      <Link to="/virt/trade" className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20 transition-colors">
+                        거래하기
+                      </Link>
+                    </div>
                   ) : (
                     <div className="space-y-1">
                       {trades.map((t) => (
@@ -1213,8 +1224,11 @@ const MyPortfolioPage = () => {
                   trades.length === 0 ? (
                     <div className="text-center py-12">
                       <img src="/whales/gray-whale.png" alt="" className="w-14 h-14 object-contain mx-auto mb-3 opacity-50" />
-                      <p className="text-gray-500 font-medium mb-1">거래 내역이 없습니다</p>
-                      <p className="text-sm text-gray-400">매수 또는 매도를 하면 여기에 거래 내역이 기록됩니다.</p>
+                      <p className="text-gray-500 font-medium mb-1">아직 거래 내역이 없습니다</p>
+                      <p className="text-sm text-gray-400 mb-4">매수 또는 매도를 하면 여기에 거래 내역이 기록됩니다.</p>
+                      <button onClick={() => navigate('/trade')} className="btn-primary text-sm px-4 py-2">
+                        거래하기
+                      </button>
                     </div>
                   ) : (
                     <div className="space-y-2">

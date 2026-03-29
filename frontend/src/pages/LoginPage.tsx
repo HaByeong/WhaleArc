@@ -91,7 +91,13 @@ const LoginPage = () => {
       const redirectTo = state?.from || '/dashboard';
       navigate(redirectTo, { replace: true });
     } catch (err: any) {
-      setError(err.message || '항해를 시작할 수 없습니다. 이메일과 비밀번호를 확인해주세요.');
+      if (err?.message) {
+        setError(err.message);
+      } else if (err?.code === 'NETWORK_ERROR' || !navigator.onLine) {
+        setError('네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.');
+      } else {
+        setError('항해를 시작할 수 없습니다. 이메일과 비밀번호를 확인해주세요.');
+      }
     } finally {
       setIsLoading(false);
     }

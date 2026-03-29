@@ -339,10 +339,6 @@ const DashboardPage = () => {
         <div className="mb-8 bg-gradient-to-r from-whale-dark to-whale-light rounded-2xl shadow-xl p-6 md:p-8 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-whale-accent opacity-10 rounded-full blur-2xl"></div>
-          {/* 버블 파티클 (12개) */}
-          {Array.from({ length: 12 }, (_, i) => (
-            <div key={i} className={`dash-bubble dash-bubble-${i + 1}`} />
-          ))}
 
           <div className="relative z-10">
             <div className="flex items-center justify-between flex-wrap gap-4">
@@ -1333,7 +1329,7 @@ const DashboardPage = () => {
           {/* 우측 사이드바 */}
           <div className="space-y-6">
             {/* 빠른 액션 */}
-            <div data-tour="virt-actions" className="dash-card-enter dash-card-enter-5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+            <div data-tour="virt-actions" className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
               <h2 className="text-lg font-bold mb-3 text-white">어디로 항해할까요?</h2>
               <div className="space-y-2">
                 {[

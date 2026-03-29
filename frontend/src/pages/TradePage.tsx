@@ -18,6 +18,7 @@ import {
 } from '../services/tradeService';
 import { CRYPTO_NAMES, formatQuantity } from '../services/quantStoreService';
 import TradingChart from '../components/TradingChart';
+import { useTheme } from '../contexts/ThemeContext';
 
 /* ─── 인기 가상화폐 (종목 목록 상단 고정) ─── */
 const POPULAR_COINS = ['BTC', 'ETH', 'XRP', 'SOL', 'DOGE', 'ADA', 'AVAX', 'LINK', 'DOT', 'MATIC'];
@@ -36,7 +37,9 @@ const assetName = (code: string, assetType?: string) => {
 
 const TradePage = () => {
   const { isVirt } = useRoutePrefix();
-  const d = !isVirt; // dark mode flag
+  const { resolvePageDark } = useTheme();
+  const pageDark = resolvePageDark(isVirt);
+  const d = pageDark; // dark mode flag
   const _virtNavigate = useVirtNavigate(); void _virtNavigate;
   const [searchParams] = useSearchParams();
   const urlCode = searchParams.get('code');
@@ -577,7 +580,7 @@ const TradePage = () => {
   }
   if (error && stockList.length === 0) {
     return (
-      <div className={`min-h-screen ${isVirt ? 'bg-gray-50' : 'bg-[#060d18] text-white'}`}>
+      <div className={`min-h-screen ${pageDark ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
         <Header showNav />
         <div className="max-w-7xl mx-auto px-4 py-8">
           {!isVirt ? (
@@ -591,7 +594,7 @@ const TradePage = () => {
   }
 
   return (
-    <div className={`min-h-screen ${isVirt ? 'bg-gray-50' : 'bg-[#060d18] text-white'}`}>
+    <div className={`min-h-screen ${pageDark ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
       <Header showNav />
 
       {/* 토스트 */}

@@ -11,6 +11,7 @@ import { usePolling } from '../hooks/usePolling';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
 import { useVirtNavigate, useRoutePrefix } from '../hooks/useRoutePrefix';
 import { virtService, type VirtCredentialInfo, type VirtPortfolio } from '../services/virtService';
+import { useTheme } from '../contexts/ThemeContext';
 import SplashLoading from '../components/SplashLoading';
 import UnstableCurrent from '../components/UnstableCurrent';
 import GuideTour, { type TourStep } from '../components/GuideTour';
@@ -59,6 +60,7 @@ const DashboardPage = () => {
   const navigate = useVirtNavigate();
   const { isVirt } = useRoutePrefix();
   const { user, profileName } = useAuth();
+  const { resolvePageDark } = useTheme();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [watchlist, setWatchlist] = useState<StockPrice[]>([]);
   const [topMovers, setTopMovers] = useState<StockPrice[]>([]);
@@ -394,7 +396,8 @@ const DashboardPage = () => {
     }).format(value);
   };
 
-  const pageBg = isVirt ? 'bg-gray-50' : 'bg-[#060d18] text-white';
+  const pageDark = resolvePageDark(isVirt);
+  const pageBg = pageDark ? 'bg-[#060d18] text-white' : 'bg-gray-50';
 
   if (loading) {
     if (!isVirt) return <SplashLoading message="실계좌 자산을 불러오는 중..." />;

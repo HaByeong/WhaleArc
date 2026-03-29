@@ -131,7 +131,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
                       </button>
                       {showThemeTooltip && (
                         <div className="absolute right-0 top-full mt-1 px-3 py-1.5 text-xs font-medium text-white bg-gray-800 rounded-lg shadow-lg whitespace-nowrap z-50">
-                          테마 설정은 준비 중입니다
+                          {theme === 'light' ? '라이트 모드' : theme === 'dark' ? '다크 모드' : '시스템 설정'}
                           <div className="absolute -top-1 right-3 w-2 h-2 bg-gray-800 rotate-45" />
                         </div>
                       )}
@@ -327,7 +327,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
                     <span className="text-sm">
                       테마 ({theme === 'light' ? '라이트' : theme === 'dark' ? '다크' : '시스템'})
                     </span>
-                    <span className="ml-auto text-[10px] text-gray-400">준비 중</span>
+                    <span className="ml-auto text-[10px] text-gray-400">클릭하여 변경</span>
                   </button>
                   {/* 모바일 알림 */}
                   <button

@@ -6,6 +6,8 @@ interface ThemeContextType {
   theme: ThemeOption;
   isDark: boolean;
   toggleTheme: () => void;
+  /** 페이지에서 사용: isVirt 기본값에 사용자 테마 설정을 오버라이드 */
+  resolvePageDark: (isVirt: boolean) => boolean;
 }
 
 const STORAGE_KEY = 'whalearc_theme';
@@ -65,8 +67,14 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     setTheme(prev => CYCLE[prev]);
   }, []);
 
+  /** system이면 isVirt 기반 (기존 동작), light/dark면 사용자 선택 우선 */
+  const resolvePageDark = useCallback((isVirt: boolean) => {
+    if (theme === 'system') return !isVirt; // 기존 동작: virt=라이트, no-virt=다크
+    return theme === 'dark';
+  }, [theme]);
+
   return (
-    <ThemeContext.Provider value={{ theme, isDark, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, isDark, toggleTheme, resolvePageDark }}>
       {children}
     </ThemeContext.Provider>
   );

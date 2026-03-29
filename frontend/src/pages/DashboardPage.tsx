@@ -466,7 +466,7 @@ const DashboardPage = () => {
 
         {/* ═══ 일반 모드: 실계좌 자산 ═══ */}
         {!isVirt && (
-          <div data-tour="normal-api-panel" className="mb-8 space-y-5 dash-card-enter dash-card-enter-1">
+          <div data-tour="normal-api-panel" className="mb-8 space-y-5">
 
             {/* 서비스 탭 */}
             <div className="flex items-center gap-2">
@@ -906,7 +906,7 @@ const DashboardPage = () => {
               <DragWrap id="portfolio" key="portfolio">
                 <div
                   data-tour="virt-portfolio"
-                  className="mb-6 card card-hover cursor-pointer group dash-card-enter dash-card-enter-1"
+                  className="mb-6 card card-hover cursor-pointer group"
                   onClick={() => navigate('/my-portfolio')}
                   role="button"
                   tabIndex={0}
@@ -1013,7 +1013,7 @@ const DashboardPage = () => {
 
             holdings: portfolio && portfolio.holdings.length > 0 ? (
               <DragWrap id="holdings" key="holdings">
-                <div data-tour="virt-holdings" className="card dash-card-enter dash-card-enter-2 mb-6">
+                <div data-tour="virt-holdings" className="card mb-6">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-bold text-whale-dark">보유 종목</h2>
                     <button
@@ -1107,7 +1107,7 @@ const DashboardPage = () => {
 
             routes: activePurchases.length > 0 ? (
               <DragWrap id="routes" key="routes">
-                <div data-tour="virt-routes" className="card dash-card-enter dash-card-enter-3 mb-6">
+                <div data-tour="virt-routes" className="card mb-6">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-bold text-whale-dark">항해 중인 항로</h2>
                     <button onClick={() => navigate('/store')} className="text-sm text-whale-light hover:text-whale-accent font-medium">
@@ -1187,7 +1187,7 @@ const DashboardPage = () => {
                 <div className="mb-6">
                   {/* 시세 변동 상위 */}
                   {liveTopMovers.length > 0 && (
-                    <div data-tour="virt-watchlist" className="card mb-4 dash-card-enter dash-card-enter-4">
+                    <div data-tour="virt-watchlist" className="card mb-4">
                       <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-bold text-whale-dark">시세 변동 상위</h2>
                         <button
@@ -1278,7 +1278,7 @@ const DashboardPage = () => {
             actions: (
               <DragWrap id="actions" key="actions">
                 <div className="mb-6 space-y-6">
-                  <div data-tour="virt-actions" className="card !p-5 dash-card-enter dash-card-enter-5">
+                  <div data-tour="virt-actions" className="card !p-5">
                     <h2 className="text-lg font-bold mb-3 text-whale-dark">어디로 항해할까요?</h2>
                     <div className="space-y-2">
                       <button

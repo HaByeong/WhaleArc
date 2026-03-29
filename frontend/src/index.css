@@ -590,10 +590,10 @@ body.whalearc-dark .whalearc-text-nav {
 }
 
 /* 카드 등장 모션 */
+/* 카드 등장 모션 — 1회만 재생 (animation-iteration-count: 1 + forwards) */
 .dash-card-enter {
-  opacity: 0;
-  transform: translateY(24px);
-  animation: dash-card-rise 0.6s ease-out forwards;
+  animation: dash-card-rise 0.6s ease-out both;
+  animation-iteration-count: 1;
 }
 .dash-card-enter-1 { animation-delay: 0.1s; }
 .dash-card-enter-2 { animation-delay: 0.2s; }
@@ -602,6 +602,7 @@ body.whalearc-dark .whalearc-text-nav {
 .dash-card-enter-5 { animation-delay: 0.5s; }
 .dash-card-enter-6 { animation-delay: 0.6s; }
 @keyframes dash-card-rise {
+  from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: translateY(0); }
 }
 

@@ -61,10 +61,10 @@ const Header = ({ showNav = false }: HeaderProps) => {
         <div className="flex justify-between items-center h-16">
           <Link
             to="/"
-            className="flex items-center focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-lg"
+            className="flex items-center shrink-0 h-full focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 rounded-lg"
             aria-label="홈으로 이동"
           >
-            <div className="flex items-center gap-1.5" style={{ height: 40 }}>
+            <div className="flex items-center gap-1.5">
               <WhaleTailLogo size={40} showNav={showNav} darkNav={isDarkNav} />
               <span className={`text-xl ${isDarkNav ? 'whalearc-text' : showNav ? 'whalearc-text-nav' : 'whalearc-text'}`}>
                 WHALEARC{isVirt && <span className="text-cyan-400">-VIRT</span>}

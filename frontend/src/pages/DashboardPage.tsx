@@ -68,6 +68,7 @@ const DashboardPage = () => {
   const [showVirtTour, setShowVirtTour] = useState(false);
   const virtTourSteps: TourStep[] = [
     { target: 'virt-portfolio', title: '포트폴리오 요약', description: '가상 자금 1,000만원으로 시작합니다.\n\n총 자산, 현금 잔고, 수익률을 한눈에 확인할 수 있어요. 카드를 클릭하면 상세 포트폴리오 페이지로 이동합니다.', position: 'bottom' },
+    { target: 'virt-target-return', title: '목표 수익률', description: '나만의 목표 수익률을 설정할 수 있어요.\n\n연필 아이콘을 클릭하면 목표를 수정할 수 있고,\n프로그레스 바로 달성률을 한눈에 확인합니다.\n\n목표 달성 시 축하 표시가 나타나요!', position: 'bottom' },
     { target: 'virt-holdings', title: '보유 종목', description: '매수한 주식과 암호화폐가 여기에 표시됩니다.\n\n종목별 수익률, 평가금액을 실시간으로 확인할 수 있어요. 아직 매수한 종목이 없다면 거래 페이지에서 첫 매수를 해보세요!', position: 'bottom' },
     { target: 'virt-routes', title: '항해 중인 항로', description: '퀀트 전략(항로)을 구매하면 자동으로 매매가 실행됩니다.\n\n전략 학습 페이지에서 다양한 전략을 백테스트하고, 마음에 드는 전략을 적용해보세요.', position: 'bottom' },
     { target: 'virt-watchlist', title: '관심 종목', description: '프로필에서 관심 종목을 등록하면 실시간 시세가 여기에 표시됩니다.\n\n급등·급락 종목도 자동으로 추천해드려요.', position: 'top' },
@@ -879,7 +880,7 @@ const DashboardPage = () => {
                     const progress = targetReturn > 0 ? Math.min(Math.max(portfolio.returnRate / targetReturn * 100, 0), 100) : 0;
                     const achieved = portfolio.returnRate >= targetReturn;
                     return (
-                      <div className="mt-4 pt-4 border-t border-gray-100" onClick={e => e.stopPropagation()}>
+                      <div data-tour="virt-target-return" className="mt-4 pt-4 border-t border-gray-100" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-semibold text-gray-500">목표 수익률</span>
                           <div className="flex items-center gap-1">

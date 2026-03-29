@@ -12,5 +12,4 @@ import java.util.Optional;
 public interface PortfolioRepository extends MongoRepository<Portfolio, String> {
     Optional<Portfolio> findByUserId(String userId);
     List<Portfolio> findByUserIdIn(Collection<String> userIds);
-    long countByReturnRateGreaterThan(java.math.BigDecimal returnRate);
 }

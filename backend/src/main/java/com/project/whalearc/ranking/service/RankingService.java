@@ -338,7 +338,10 @@ public class RankingService {
     }
 
     private int calculateRank(Portfolio target) {
-        long higherCount = portfolioRepository.countByReturnRateGreaterThan(target.getReturnRate());
+        BigDecimal targetRate = target.getReturnRate();
+        long higherCount = portfolioRepository.findAll().stream()
+                .filter(p -> p.getReturnRate().compareTo(targetRate) > 0)
+                .count();
         return (int) higherCount + 1;
     }
 }

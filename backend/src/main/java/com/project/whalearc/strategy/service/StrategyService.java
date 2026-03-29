@@ -167,8 +167,7 @@ public class StrategyService {
 
         Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
         if (portfolio.getCashBalance().compareTo(investmentAmount) < 0) {
-            throw new IllegalArgumentException("잔고가 부족합니다. 보유: " +
-                    String.format("%,.0f", portfolio.getCashBalance().doubleValue()) + "원");
+            throw new IllegalArgumentException("잔고가 부족합니다.");
         }
 
         // 자산 유형 판단

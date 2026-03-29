@@ -49,10 +49,8 @@ public class RankingService {
         size = Math.min(Math.max(size, 1), 100);
         page = Math.max(page, 0);
 
-        // 유효한 유저 ID 먼저 조회 → 해당 유저의 포트폴리오만 DB에서 가져옴
-        Set<String> validUserIds = userRepository.findAll().stream()
-                .map(User::getSupabaseId).collect(Collectors.toSet());
-        List<Portfolio> allPortfolios = portfolioRepository.findByUserIdIn(validUserIds);
+        // 전체 포트폴리오 조회 (유저 존재 여부는 표시 시점에 필터)
+        List<Portfolio> allPortfolios = portfolioRepository.findAll();
 
         // 기간별 스냅샷 기준 수익률 변화 계산
         Map<String, Double> periodReturnMap = null;
@@ -121,13 +119,30 @@ public class RankingService {
         }
         avgReturn = totalCount > 0 ? avgReturn / totalCount : 0;
 
+        // 대표 항로 정보 배치 조회 (N+1 방지)
+        Set<String> purchaseIds = displayList.stream()
+                .map(Portfolio::getRepresentativePurchaseId)
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+        Map<String, ProductPurchase> purchaseMap = purchaseIds.isEmpty()
+                ? Map.of()
+                : purchaseRepository.findAllById(purchaseIds).stream()
+                        .collect(Collectors.toMap(ProductPurchase::getId, pp -> pp, (a, b) -> a));
+        Set<String> productIds = purchaseMap.values().stream()
+                .map(ProductPurchase::getProductId)
+                .collect(Collectors.toSet());
+        Map<String, QuantProduct> productMap = productIds.isEmpty()
+                ? Map.of()
+                : productRepository.findAllById(productIds).stream()
+                        .collect(Collectors.toMap(QuantProduct::getId, qp -> qp, (a, b) -> a));
+
         List<RankingEntryDto> rankings = new ArrayList<>();
         for (Portfolio p : displayList) {
             User user = userMap.get(p.getUserId());
             String nickname = (user != null && user.getName() != null) ? user.getName() : "익명";
             String email = (user != null && user.getEmail() != null) ? user.getEmail() : "";
 
-            // 대표 항로 정보
+            // 대표 항로 정보 (배치 조회 결과 활용)
             String routeName = null;
             String routeStrategyType = null;
             Double routeReturnRate = null;
@@ -135,10 +150,10 @@ public class RankingService {
 
             if (p.getRepresentativePurchaseId() != null) {
                 try {
-                    ProductPurchase purchase = purchaseRepository.findById(p.getRepresentativePurchaseId()).orElse(null);
+                    ProductPurchase purchase = purchaseMap.get(p.getRepresentativePurchaseId());
                     if (purchase != null && purchase.getStatus() == ProductPurchase.Status.ACTIVE) {
                         routeName = purchase.getProductName();
-                        QuantProduct product = productRepository.findById(purchase.getProductId()).orElse(null);
+                        QuantProduct product = productMap.get(purchase.getProductId());
                         if (product != null) {
                             routeStrategyType = product.getStrategyType() != null ? product.getStrategyType().name() : "SIMPLE";
                             routeDescription = product.getStrategyLogic();
@@ -323,10 +338,7 @@ public class RankingService {
     }
 
     private int calculateRank(Portfolio target) {
-        BigDecimal targetRate = target.getReturnRate();
-        long higherCount = portfolioRepository.findAll().stream()
-                .filter(p -> p.getReturnRate().compareTo(targetRate) > 0)
-                .count();
+        long higherCount = portfolioRepository.countByReturnRateGreaterThan(target.getReturnRate());
         return (int) higherCount + 1;
     }
 }

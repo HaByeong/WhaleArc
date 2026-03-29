@@ -1,5 +1,6 @@
 package com.project.whalearc.strategy.controller;
 
+import com.project.whalearc.common.dto.ApiResponse;
 import com.project.whalearc.strategy.domain.Strategy;
 import com.project.whalearc.strategy.dto.BacktestRequest;
 import com.project.whalearc.strategy.dto.BacktestResponse;
@@ -27,31 +28,31 @@ public class StrategyController {
     private final BacktestService backtestService;
 
     @GetMapping
-    public ResponseEntity<Map<String, Object>> getStrategies(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<ApiResponse<List<StrategyResponse>>> getStrategies(@AuthenticationPrincipal Jwt jwt) {
         String userId = jwt.getSubject();
         List<StrategyResponse> strategies = strategyService.getUserStrategies(userId).stream()
                 .map(StrategyResponse::from)
                 .toList();
-        return ResponseEntity.ok(Map.of("data", strategies));
+        return ResponseEntity.ok(ApiResponse.ok(strategies));
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> createStrategy(
+    public ResponseEntity<ApiResponse<StrategyResponse>> createStrategy(
             @AuthenticationPrincipal Jwt jwt,
             @RequestBody StrategyRequest request) {
         String userId = jwt.getSubject();
         Strategy created = strategyService.createStrategy(userId, request);
-        return ResponseEntity.ok(Map.of("data", StrategyResponse.from(created)));
+        return ResponseEntity.ok(ApiResponse.ok(StrategyResponse.from(created)));
     }
 
     @PutMapping("/{strategyId}")
-    public ResponseEntity<Map<String, Object>> updateStrategy(
+    public ResponseEntity<ApiResponse<StrategyResponse>> updateStrategy(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable String strategyId,
             @RequestBody StrategyRequest request) {
         String userId = jwt.getSubject();
         Strategy updated = strategyService.updateStrategy(userId, strategyId, request);
-        return ResponseEntity.ok(Map.of("data", StrategyResponse.from(updated)));
+        return ResponseEntity.ok(ApiResponse.ok(StrategyResponse.from(updated)));
     }
 
     @DeleteMapping("/{strategyId}")
@@ -64,23 +65,23 @@ public class StrategyController {
     }
 
     @PostMapping("/backtest")
-    public ResponseEntity<?> runBacktest(
+    public ResponseEntity<ApiResponse<?>> runBacktest(
             @AuthenticationPrincipal Jwt jwt,
             @RequestBody BacktestRequest request) {
         try {
             String userId = jwt.getSubject();
             BacktestResponse result = backtestService.runBacktest(request, userId);
-            return ResponseEntity.ok(Map.of("data", result));
+            return ResponseEntity.ok(ApiResponse.ok(result));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("백테스팅 실행 실패: {}", e.getMessage());
-            return ResponseEntity.internalServerError().body(Map.of("error", "백테스팅 실행 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."));
+            return ResponseEntity.internalServerError().body(ApiResponse.error("백테스팅 실행 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."));
         }
     }
 
     @PostMapping("/{strategyId}/apply")
-    public ResponseEntity<Map<String, Object>> applyStrategy(
+    public ResponseEntity<ApiResponse<?>> applyStrategy(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable String strategyId,
             @RequestBody Map<String, Object> body) {
@@ -91,22 +92,22 @@ public class StrategyController {
                 : java.math.BigDecimal.ZERO;
         try {
             Strategy applied = strategyService.applyStrategy(userId, strategyId, investmentAmount);
-            return ResponseEntity.ok(Map.of("data", StrategyResponse.from(applied)));
+            return ResponseEntity.ok(ApiResponse.ok(StrategyResponse.from(applied)));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
 
     @PostMapping("/{strategyId}/unapply")
-    public ResponseEntity<Map<String, Object>> unapplyStrategy(
+    public ResponseEntity<ApiResponse<?>> unapplyStrategy(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable String strategyId) {
         String userId = jwt.getSubject();
         try {
             Strategy unapplied = strategyService.unapplyStrategy(userId, strategyId);
-            return ResponseEntity.ok(Map.of("data", StrategyResponse.from(unapplied)));
+            return ResponseEntity.ok(ApiResponse.ok(StrategyResponse.from(unapplied)));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
 }

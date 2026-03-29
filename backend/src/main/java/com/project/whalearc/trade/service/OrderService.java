@@ -109,9 +109,10 @@ public class OrderService {
         if (orderType == Order.OrderType.BUY) {
             BigDecimal totalCost = executionPrice.multiply(quantity).multiply(new BigDecimal("1.001")); // 수수료 0.1% 포함
             if (portfolio.getCashBalance().compareTo(totalCost) < 0) {
-                throw new IllegalArgumentException("잔고가 부족합니다. 필요: " +
-                        String.format("%,.0f", totalCost.doubleValue()) + "원, 보유: " +
-                        String.format("%,.0f", portfolio.getCashBalance().doubleValue()) + "원");
+                log.warn("잔고 부족: userId={}, 필요={}, 보유={}", portfolio.getUserId(),
+                        String.format("%,.0f", totalCost.doubleValue()),
+                        String.format("%,.0f", portfolio.getCashBalance().doubleValue()));
+                throw new IllegalArgumentException("잔고가 부족합니다.");
             }
         } else {
             Holding holding = portfolio.getHoldings().stream()
@@ -119,8 +120,9 @@ public class OrderService {
                     .findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("보유하지 않은 종목입니다: " + stockName));
             if (holding.getQuantity().compareTo(quantity) < 0) {
-                throw new IllegalArgumentException("보유 수량이 부족합니다. 보유: " +
-                        holding.getQuantity().toPlainString() + "개, 요청: " + quantity.toPlainString() + "개");
+                log.warn("보유 수량 부족: userId={}, stock={}, 보유={}, 요청={}",
+                        portfolio.getUserId(), stockCode, holding.getQuantity(), quantity);
+                throw new IllegalArgumentException("보유 수량이 부족합니다.");
             }
         }
     }

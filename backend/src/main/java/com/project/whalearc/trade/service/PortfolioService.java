@@ -147,12 +147,15 @@ public class PortfolioService {
 
     /**
      * 모의투자 완전 초기화: 포트폴리오, 주문, 거래, 구매, 터틀 포지션, 스냅샷, 전략 적용상태 전부 리셋
+     * MongoDB Standalone에서는 multi-doc 트랜잭션 불가 → 각 단계별 에러 격리
      */
     public Portfolio resetPortfolio(String userId) {
         ReentrantLock lock = getUserLock(userId);
         lock.lock();
         try {
-            // 1. 포트폴리오 먼저 초기화 (실패 시 다른 데이터 보존)
+            List<String> errors = new java.util.ArrayList<>();
+
+            // 1. 포트폴리오 초기화 (핵심 — 실패 시 전체 중단)
             Portfolio portfolio = portfolioRepository.findByUserId(userId)
                     .orElse(new Portfolio(userId, INITIAL_CASH));
             portfolio.setCashBalance(INITIAL_CASH);
@@ -162,27 +165,36 @@ public class PortfolioService {
             portfolio.setRepresentativePurchaseId(null);
             portfolio = portfolioRepository.save(portfolio);
 
-            // 2. 주문·거래 기록 삭제
-            orderRepository.deleteByUserId(userId);
-            tradeRecordRepository.deleteByUserId(userId);
+            // 2~5. 부속 데이터 삭제 (각각 실패해도 다음 단계 진행)
+            try { orderRepository.deleteByUserId(userId); }
+            catch (Exception e) { errors.add("주문 기록: " + e.getMessage()); }
 
-            // 3. 항로 구매·터틀 포지션 삭제
-            purchaseRepository.deleteByUserId(userId);
-            turtlePositionRepository.deleteByUserId(userId);
+            try { tradeRecordRepository.deleteByUserId(userId); }
+            catch (Exception e) { errors.add("거래 기록: " + e.getMessage()); }
 
-            // 4. 전략 적용 상태 초기화
-            strategyRepository.findByUserIdOrderByCreatedAtDesc(userId).forEach(strategy -> {
-                if (strategy.isApplied()) {
-                    strategy.setApplied(false);
-                    strategy.setAppliedSuccessCount(0);
-                    strategy.setAppliedTotalCount(0);
-                    strategyRepository.save(strategy);
-                }
-            });
+            try { purchaseRepository.deleteByUserId(userId); }
+            catch (Exception e) { errors.add("항로 구매: " + e.getMessage()); }
 
-            // 5. 스냅샷 삭제 (마지막에 — 포트폴리오 리셋 성공 후)
-            snapshotRepository.deleteByUserId(userId);
+            try { turtlePositionRepository.deleteByUserId(userId); }
+            catch (Exception e) { errors.add("터틀 포지션: " + e.getMessage()); }
 
+            try {
+                strategyRepository.findByUserIdOrderByCreatedAtDesc(userId).forEach(strategy -> {
+                    if (strategy.isApplied()) {
+                        strategy.setApplied(false);
+                        strategy.setAppliedSuccessCount(0);
+                        strategy.setAppliedTotalCount(0);
+                        strategyRepository.save(strategy);
+                    }
+                });
+            } catch (Exception e) { errors.add("전략 초기화: " + e.getMessage()); }
+
+            try { snapshotRepository.deleteByUserId(userId); }
+            catch (Exception e) { errors.add("스냅샷: " + e.getMessage()); }
+
+            if (!errors.isEmpty()) {
+                log.warn("모의투자 초기화 부분 실패: userId={}, errors={}", userId, errors);
+            }
             log.info("모의투자 초기화 완료: userId={}", userId);
             return portfolio;
         } catch (Exception e) {

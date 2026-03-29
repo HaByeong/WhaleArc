@@ -360,8 +360,7 @@ public class QuantStoreService {
         Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
         BigDecimal investBd = investmentAmount;
         if (portfolio.getCashBalance().compareTo(investBd) < 0) {
-            throw new IllegalArgumentException("잔고가 부족합니다. 보유: " +
-                    String.format("%,.0f", portfolio.getCashBalance().doubleValue()) + "원");
+            throw new IllegalArgumentException("잔고가 부족합니다.");
         }
 
         List<String> targetAssets = product.getTargetAssets();

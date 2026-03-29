@@ -159,13 +159,13 @@ const DashboardPage = () => {
 
   const _apiConnected = apiTab === 'kis' ? kisCredInfo?.connected : apiTab === 'upbit' ? upbitCredInfo?.connected : bitgetCredInfo?.connected; void _apiConnected;
 
-  // 실시간 WebSocket 시세
-  const { prices: realtimePrices } = useRealtimePrice({ enabled: true });
-
+  // 실시간 WebSocket 시세 (가이드 중에는 비활성화)
+  const isTourActive = showVirtTour || showNormalTour;
+  const { prices: realtimePrices } = useRealtimePrice({ enabled: !isTourActive });
 
   // 관심 종목에 실시간 시세 병합
   const liveWatchlist = useMemo(() => {
-    if (realtimePrices.size === 0) return watchlist;
+    if (isTourActive || realtimePrices.size === 0) return watchlist;
     return watchlist.map((stock) => {
       const rt = realtimePrices.get(stock.stockCode);
       if (rt) {
@@ -173,7 +173,7 @@ const DashboardPage = () => {
       }
       return stock;
     });
-  }, [watchlist, realtimePrices]);
+  }, [watchlist, realtimePrices, isTourActive]);
 
 
   const displayName = profileName || user?.user_metadata?.name || user?.email?.split('@')[0] || '사용자';

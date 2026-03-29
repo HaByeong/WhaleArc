@@ -43,7 +43,7 @@ const RealtimeChart = ({ symbol, price, className = '', isDark = false }: Realti
         horzLines: { color: isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9', style: 0 },
       },
       width: containerRef.current.clientWidth,
-      height: 340,
+      height: window.innerWidth < 640 ? 240 : 340,
       timeScale: {
         timeVisible: true,
         secondsVisible: true,

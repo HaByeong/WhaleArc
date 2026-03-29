@@ -33,9 +33,25 @@ import java.util.stream.Collectors;
 public class PortfolioService {
 
     private static final BigDecimal INITIAL_CASH = BigDecimal.valueOf(10_000_000); // 1000만원
+    private static final int MAX_LOCKS = 10_000;
     private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> lockLastUsed = new ConcurrentHashMap<>();
 
     private ReentrantLock getUserLock(String userId) {
+        lockLastUsed.put(userId, System.currentTimeMillis());
+        if (userLocks.size() > MAX_LOCKS) {
+            long expiry = System.currentTimeMillis() - 600_000;
+            lockLastUsed.entrySet().removeIf(e -> {
+                if (e.getValue() < expiry) {
+                    ReentrantLock lock = userLocks.get(e.getKey());
+                    if (lock != null && !lock.isLocked()) {
+                        userLocks.remove(e.getKey());
+                        return true;
+                    }
+                }
+                return false;
+            });
+        }
         return userLocks.computeIfAbsent(userId, k -> new ReentrantLock());
     }
 

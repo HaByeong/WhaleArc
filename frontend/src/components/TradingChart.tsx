@@ -141,7 +141,7 @@ const TradingChart = ({
         horzLines: { color: isDark ? 'rgba(255,255,255,0.04)' : '#f3f4f6', style: 0 },
       },
       width: containerRef.current.clientWidth,
-      height: 340,
+      height: window.innerWidth < 640 ? 240 : 340,
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
@@ -228,7 +228,7 @@ const TradingChart = ({
         layout: { background: { color: isDark ? '#0a1628' : '#ffffff' }, textColor: isDark ? '#475569' : '#6b7280', fontFamily: "'Pretendard', sans-serif", fontSize: 10, attributionLogo: false },
         grid: { vertLines: { color: isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb' }, horzLines: { color: isDark ? 'rgba(255,255,255,0.04)' : '#f3f4f6' } },
         width: container.clientWidth,
-        height: 100,
+        height: window.innerWidth < 640 ? 60 : 100,
         timeScale: { visible: false },
         rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.1, bottom: 0.1 } },
         crosshair: { mode: 0 },

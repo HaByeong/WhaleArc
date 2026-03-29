@@ -34,10 +34,26 @@ public class OrderService {
     private final KisApiClient kisApiClient;
     private final NotificationService notificationService;
 
-    // 유저별 동시 주문 방지 락
+    // 유저별 동시 주문 방지 락 (최대 10,000개, 10분 미사용 시 자동 제거)
+    private static final int MAX_LOCKS = 10_000;
     private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> lockLastUsed = new ConcurrentHashMap<>();
 
     private ReentrantLock getUserLock(String userId) {
+        lockLastUsed.put(userId, System.currentTimeMillis());
+        if (userLocks.size() > MAX_LOCKS) {
+            long expiry = System.currentTimeMillis() - 600_000; // 10분
+            lockLastUsed.entrySet().removeIf(e -> {
+                if (e.getValue() < expiry) {
+                    ReentrantLock lock = userLocks.get(e.getKey());
+                    if (lock != null && !lock.isLocked()) {
+                        userLocks.remove(e.getKey());
+                        return true;
+                    }
+                }
+                return false;
+            });
+        }
         return userLocks.computeIfAbsent(userId, k -> new ReentrantLock());
     }
 

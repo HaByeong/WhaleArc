@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-route
 import { lazy, Suspense, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import SplashLoading from './components/SplashLoading';
+import VirtSplashLoading from './components/VirtSplashLoading';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -17,6 +18,7 @@ const TradePage = lazy(() => import('./pages/TradePage'));
 const StrategyPage = lazy(() => import('./pages/StrategyPage'));
 const QuantStorePage = lazy(() => import('./pages/QuantStorePage'));
 const RankingPage = lazy(() => import('./pages/RankingPage'));
+const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 const PortfolioDetailPage = lazy(() => import('./pages/PortfolioDetailPage'));
 const MyPortfolioPage = lazy(() => import('./pages/MyPortfolioPage'));
 const UserPage = lazy(() => import('./pages/UserPage'));
@@ -40,6 +42,12 @@ const DarkModeController = () => {
   return null;
 };
 
+/** Suspense fallback — 현재 URL에 따라 virt/real 로딩 화면 분기 */
+const RouteSplashLoading = () => {
+  const isVirt = window.location.pathname.startsWith('/virt');
+  return isVirt ? <VirtSplashLoading /> : <SplashLoading />;
+};
+
 function App() {
   return (
     <ErrorBoundary>
@@ -47,7 +55,7 @@ function App() {
         <DarkModeController />
 
         <AuthProvider>
-        <Suspense fallback={<SplashLoading />}>
+        <Suspense fallback={<RouteSplashLoading />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -104,6 +112,14 @@ function App() {
             }
           />
           <Route
+            path="/feedback"
+            element={
+              <ProtectedRoute>
+                <FeedbackPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/my-portfolio"
             element={
               <ProtectedRoute>
@@ -143,6 +159,7 @@ function App() {
           <Route path="/virt/strategy" element={<ProtectedRoute><StrategyPage /></ProtectedRoute>} />
           <Route path="/virt/store" element={<ProtectedRoute><QuantStorePage /></ProtectedRoute>} />
           <Route path="/virt/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
+          <Route path="/virt/feedback" element={<ProtectedRoute><FeedbackPage /></ProtectedRoute>} />
           <Route path="/virt/user" element={<ProtectedRoute><UserPage /></ProtectedRoute>} />
           <Route path="/virt/portfolio/:portfolioId" element={<ProtectedRoute><PortfolioDetailPage /></ProtectedRoute>} />
           <Route path="/golden-cross" element={<GoldenCrossChart />} />

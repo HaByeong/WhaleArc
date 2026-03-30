@@ -27,7 +27,9 @@ const EXPERIENCE_LEVELS: { value: ExperienceLevel; label: string; whale: string;
   { value: 'EXPERT', label: '고래 대장', whale: 'Alpha', desc: '깊은 바다도 자유롭게 유영합니다', img: '/whales/sperm-whale.png' },
 ];
 
-const POPULAR_ASSETS = ['BTC', 'ETH', 'XRP', 'SOL', 'DOGE', 'ADA', 'DOT', 'AVAX', 'MATIC', 'LINK'];
+const POPULAR_CRYPTO = ['BTC', 'ETH', 'XRP', 'SOL', 'DOGE', 'ADA', 'DOT', 'AVAX', 'MATIC', 'LINK'];
+const POPULAR_KR_STOCKS = ['삼성전자', 'SK하이닉스', 'LG에너지솔루션', 'NAVER', '카카오', '삼성바이오로직스', '현대차', 'POSCO홀딩스', '셀트리온', 'KB금융'];
+const POPULAR_US_STOCKS = ['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'AVGO', 'TSM', 'AMD'];
 
 const UserPage = () => {
   const { isVirt } = useRoutePrefix();
@@ -298,27 +300,36 @@ const UserPage = () => {
               {/* 관심 종목 */}
               <div className={`card ${!!isVirt ? '' : 'border border-white/[0.06] bg-white/[0.02] !shadow-none'}`}>
                 <h2 className={`text-lg font-bold mb-3 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>관심 종목</h2>
-                <p className={`text-sm mb-4 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>관심 있는 가상화폐를 선택하거나 직접 입력하세요 (최대 20개)</p>
+                <p className={`text-sm mb-4 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>관심 있는 종목을 선택하거나 직접 입력하세요 (최대 20개)</p>
 
-                {/* 인기 종목 빠른 선택 */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {POPULAR_ASSETS.map((asset) => (
-                    <button
-                      key={asset}
-                      type="button"
-                      onClick={() =>
-                        favoriteAssets.includes(asset) ? removeAsset(asset) : addAsset(asset)
-                      }
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                        favoriteAssets.includes(asset)
-                          ? 'bg-whale-light text-white shadow-sm'
-                          : !isVirt ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.06] border border-white/[0.06]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {asset}
-                    </button>
-                  ))}
-                </div>
+                {/* 인기 종목 빠른 선택 — 카테고리별 */}
+                {[
+                  { label: '암호화폐', items: POPULAR_CRYPTO },
+                  { label: '국내 주식', items: POPULAR_KR_STOCKS },
+                  { label: '미국 주식', items: POPULAR_US_STOCKS },
+                ].map((group) => (
+                  <div key={group.label} className="mb-4">
+                    <p className={`text-xs font-semibold mb-2 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>{group.label}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {group.items.map((asset) => (
+                        <button
+                          key={asset}
+                          type="button"
+                          onClick={() =>
+                            favoriteAssets.includes(asset) ? removeAsset(asset) : addAsset(asset)
+                          }
+                          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                            favoriteAssets.includes(asset)
+                              ? 'bg-whale-light text-white shadow-sm'
+                              : !isVirt ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.06] border border-white/[0.06]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {asset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
 
                 {/* 직접 입력 */}
                 <div className="flex gap-2">
@@ -333,7 +344,7 @@ const UserPage = () => {
                       }
                     }}
                     className={`input-field flex-1 ${!!isVirt ? '' : 'bg-white/[0.04] border-white/10 text-white placeholder-slate-600'}`}
-                    placeholder="종목 코드 입력 (예: SHIB)"
+                    placeholder="종목 코드 입력 (예: SHIB, 삼성SDI, PLTR)"
                     maxLength={20}
                   />
                   <button
@@ -352,13 +363,13 @@ const UserPage = () => {
                     {favoriteAssets.map((asset) => (
                       <span
                         key={asset}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-whale-light/10 text-whale-dark rounded-full text-sm font-medium"
+                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium ${!isVirt ? 'bg-cyan-500/20 text-cyan-300' : 'bg-whale-light text-white'}`}
                       >
                         {asset}
                         <button
                           type="button"
                           onClick={() => removeAsset(asset)}
-                          className="ml-0.5 text-gray-400 hover:text-red-500 transition-colors !min-h-0 !min-w-0"
+                          className={`ml-0.5 transition-colors !min-h-0 !min-w-0 ${!isVirt ? 'text-cyan-400/60 hover:text-red-400' : 'text-white/60 hover:text-red-300'}`}
                           aria-label={`${asset} 제거`}
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

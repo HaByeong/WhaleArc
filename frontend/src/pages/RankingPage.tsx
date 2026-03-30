@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useVirtNavigate, useRoutePrefix } from '../hooks/useRoutePrefix';
 import Header from '../components/Header';
-import LoadingSpinner from '../components/LoadingSpinner';
 import VirtSplashLoading from '../components/VirtSplashLoading';
 import SplashLoading from '../components/SplashLoading';
 import ErrorMessage from '../components/ErrorMessage';
@@ -92,7 +91,10 @@ const RankingPage = () => {
     return '일반';
   };
 
-  if (loading && !isVirt) return <SplashLoading message="투자 현황을 불러오는 중..." />;
+  if (loading && rankings.length === 0) {
+    if (!isVirt) return <SplashLoading message="투자 현황을 불러오는 중..." />;
+    return <VirtSplashLoading message="투자 현황을 불러오는 중..." />;
+  }
 
   return (
     <div className={`min-h-screen ${!isVirt ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
@@ -157,7 +159,11 @@ const RankingPage = () => {
           ))}
         </div>
 
-        {loading && (isVirt ? <VirtSplashLoading message="투자 현황을 불러오는 중..." /> : <LoadingSpinner fullScreen={false} message="투자 현황을 불러오는 중..." />)}
+        {loading && rankings.length > 0 && (
+          <div className="flex justify-center py-8">
+            <div className={`w-8 h-8 border-2 rounded-full animate-spin ${!isVirt ? 'border-cyan-500/30 border-t-cyan-400' : 'border-whale-light/30 border-t-whale-light'}`} />
+          </div>
+        )}
 
         {error && !loading && (
           !isVirt ? (

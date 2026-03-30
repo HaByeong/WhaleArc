@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import Header from '../components/Header';
-import LoadingSpinner from '../components/LoadingSpinner';
+import SplashLoading from '../components/SplashLoading';
+import VirtSplashLoading from '../components/VirtSplashLoading';
 import ErrorMessage from '../components/ErrorMessage';
+import UnstableCurrent from '../components/UnstableCurrent';
 import apiClient from '../utils/api';
 
 interface PortfolioSummary {
@@ -25,7 +27,7 @@ interface PortfolioSummary {
 
 const PortfolioDetailPage = () => {
   const { portfolioId } = useParams<{ portfolioId: string }>();
-  const { prefix } = useRoutePrefix();
+  const { prefix, isVirt } = useRoutePrefix();
   const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,26 +62,24 @@ const PortfolioDetailPage = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header showNav />
-        <div className="max-w-3xl mx-auto px-4 py-8">
-          <LoadingSpinner fullScreen={false} message="포트폴리오 정보를 불러오는 중..." />
-        </div>
-      </div>
-    );
+    if (!isVirt) return <SplashLoading message="포트폴리오 정보를 불러오는 중..." />;
+    return <VirtSplashLoading message="포트폴리오 정보를 불러오는 중..." />;
   }
 
   if (error || !portfolio) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className={`min-h-screen ${!isVirt ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
         <Header showNav />
         <div className="max-w-3xl mx-auto px-4 py-8">
-          <ErrorMessage message={error || '포트폴리오를 찾을 수 없습니다.'} onRetry={loadDetail} variant="notfound" />
+          {!isVirt ? (
+            <UnstableCurrent message="해류가 불안정합니다" sub={error || '포트폴리오를 찾을 수 없습니다.'} />
+          ) : (
+            <ErrorMessage message={error || '포트폴리오를 찾을 수 없습니다.'} onRetry={loadDetail} variant="notfound" />
+          )}
           <div className="text-center mt-6">
             <Link
               to={`${prefix}/ranking`}
-              className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold text-whale-light hover:text-whale-dark transition-colors"
+              className={`inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${!isVirt ? 'text-cyan-400 hover:text-cyan-300' : 'text-whale-light hover:text-whale-dark'}`}
             >
               <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

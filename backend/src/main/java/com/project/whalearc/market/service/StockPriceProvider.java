@@ -8,8 +8,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
+
+import jakarta.annotation.PostConstruct;
+import org.springframework.scheduling.annotation.Scheduled;
 
 /**
  * 국내 주식 시세 제공 — 한국투자증권 KIS API 연동.
@@ -65,45 +68,49 @@ public class StockPriceProvider {
         POPULAR_STOCKS.put("352820", "하이브");
     }
 
-    /** 캐시된 시세만 즉시 반환 (블로킹 없음) — 캐시 없으면 빈 리스트 */
-    public List<MarketPriceResponse> getCachedStockPrices() {
-        return cachedPrices.isEmpty() ? getMockKrxTickers() : cachedPrices;
+    /** 서버 시작 시 비동기로 초기 데이터 로드 */
+    @PostConstruct
+    public void init() {
+        CompletableFuture.runAsync(() -> {
+            if (!kisApiClient.isConfigured()) return;
+            try {
+                List<MarketPriceResponse> freshData = fetchAllStockPrices();
+                if (!freshData.isEmpty()) {
+                    cachedPrices = freshData;
+                    lastFetchTime.set(System.currentTimeMillis());
+                    log.info("주식 시세 초기 로드 완료: {}개 종목", freshData.size());
+                }
+            } catch (Exception e) {
+                log.warn("주식 시세 초기 로드 실패: {}", e.getMessage());
+            }
+        });
     }
 
-    /** 캐시 우선 시세 조회 (캐시 만료 시 KIS API 호출 — 느릴 수 있음) */
-    public List<MarketPriceResponse> getAllStockPrices() {
-        if (!kisApiClient.isConfigured()) {
-            log.warn("KIS API 키 미설정 — mock 데이터 반환");
-            return getMockKrxTickers();
-        }
-
-        long now = System.currentTimeMillis();
-        if (!cachedPrices.isEmpty() && (now - lastFetchTime.get()) < cacheTtlMs) {
-            return cachedPrices;
-        }
-
-        // 캐시 만료 → 동기 갱신 (최대 5초 대기, 초과 시 stale 반환)
-        return refreshCacheSync();
-    }
-
-    private synchronized List<MarketPriceResponse> refreshCacheSync() {
-        // 더블 체크: 다른 스레드가 이미 갱신했을 수 있음
-        if (!cachedPrices.isEmpty() && (System.currentTimeMillis() - lastFetchTime.get()) < cacheTtlMs) {
-            return cachedPrices;
-        }
-
+    /** 15초마다 백그라운드 갱신 — 요청 스레드를 차단하지 않음 */
+    @Scheduled(fixedDelay = 15000, initialDelay = 20000)
+    public void scheduledRefresh() {
+        if (!kisApiClient.isConfigured()) return;
         try {
             List<MarketPriceResponse> freshData = fetchAllStockPrices();
             if (!freshData.isEmpty()) {
                 cachedPrices = freshData;
                 lastFetchTime.set(System.currentTimeMillis());
-                return cachedPrices;
             }
         } catch (Exception e) {
-            log.warn("주식 시세 갱신 실패: {}", e.getMessage());
+            log.warn("주식 시세 백그라운드 갱신 실패: {}", e.getMessage());
         }
+    }
 
-        // 갱신 실패 시 이전 캐시 또는 mock 반환
+    /** 캐시된 시세만 즉시 반환 (블로킹 없음) — 캐시 없으면 빈 리스트 */
+    public List<MarketPriceResponse> getCachedStockPrices() {
+        return cachedPrices.isEmpty() ? getMockKrxTickers() : cachedPrices;
+    }
+
+    /** 시세 조회 — 항상 캐시에서 즉시 반환 (백그라운드에서 자동 갱신) */
+    public List<MarketPriceResponse> getAllStockPrices() {
+        if (!kisApiClient.isConfigured()) {
+            return getMockKrxTickers();
+        }
         return cachedPrices.isEmpty() ? getMockKrxTickers() : cachedPrices;
     }
 

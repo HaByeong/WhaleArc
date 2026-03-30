@@ -14,6 +14,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @RestController
@@ -136,41 +138,48 @@ public class MarketController {
             return ResponseEntity.ok(List.of());
         }
 
-        List<IndexPriceResponse> indices = new ArrayList<>();
-
-        Map<String, String> kospi = kisApiClient.getIndexPrice("0001");
-        if (kospi != null) {
-            indices.add(new IndexPriceResponse(
-                    "KOSPI", "코스피",
+        // 3개 지수를 병렬 조회 (순차 → 최대 응답 시간만큼만 대기)
+        CompletableFuture<IndexPriceResponse> kospiFuture = CompletableFuture.supplyAsync(() -> {
+            Map<String, String> kospi = kisApiClient.getIndexPrice("0001");
+            if (kospi == null) return null;
+            return new IndexPriceResponse("KOSPI", "코스피",
                     parseDouble(kospi.get("bstp_nmix_prpr")),
                     parseDouble(kospi.get("bstp_nmix_prdy_vrss")),
-                    parseDouble(kospi.get("bstp_nmix_prdy_ctrt"))
-            ));
-        }
+                    parseDouble(kospi.get("bstp_nmix_prdy_ctrt")));
+        });
 
-        Map<String, String> kosdaq = kisApiClient.getIndexPrice("1001");
-        if (kosdaq != null) {
-            indices.add(new IndexPriceResponse(
-                    "KOSDAQ", "코스닥",
+        CompletableFuture<IndexPriceResponse> kosdaqFuture = CompletableFuture.supplyAsync(() -> {
+            Map<String, String> kosdaq = kisApiClient.getIndexPrice("1001");
+            if (kosdaq == null) return null;
+            return new IndexPriceResponse("KOSDAQ", "코스닥",
                     parseDouble(kosdaq.get("bstp_nmix_prpr")),
                     parseDouble(kosdaq.get("bstp_nmix_prdy_vrss")),
-                    parseDouble(kosdaq.get("bstp_nmix_prdy_ctrt"))
-            ));
-        }
+                    parseDouble(kosdaq.get("bstp_nmix_prdy_ctrt")));
+        });
 
-        // USDT/KRW 환율 (업비트 공개 API)
-        try {
-            List<Map<String, Object>> ticker = upbitClient.getTicker("KRW-USDT");
-            if (!ticker.isEmpty()) {
-                Map<String, Object> t = ticker.get(0);
-                double price = Double.parseDouble(String.valueOf(t.get("trade_price")));
-                double change = Double.parseDouble(String.valueOf(t.get("signed_change_price")));
-                double changeRate = Double.parseDouble(String.valueOf(t.get("signed_change_rate"))) * 100;
-                indices.add(new IndexPriceResponse("USDT/KRW", "테더 환율", price, change, changeRate));
+        CompletableFuture<IndexPriceResponse> usdtFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                List<Map<String, Object>> ticker = upbitClient.getTicker("KRW-USDT");
+                if (!ticker.isEmpty()) {
+                    Map<String, Object> t = ticker.get(0);
+                    double price = Double.parseDouble(String.valueOf(t.get("trade_price")));
+                    double change = Double.parseDouble(String.valueOf(t.get("signed_change_price")));
+                    double changeRate = Double.parseDouble(String.valueOf(t.get("signed_change_rate"))) * 100;
+                    return new IndexPriceResponse("USDT/KRW", "테더 환율", price, change, changeRate);
+                }
+            } catch (Exception e) {
+                log.debug("[Market] USDT/KRW 환율 조회 실패: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            log.debug("[Market] USDT/KRW 환율 조회 실패: {}", e.getMessage());
-        }
+            return null;
+        });
+
+        List<IndexPriceResponse> indices = new ArrayList<>();
+        try { IndexPriceResponse r = kospiFuture.get(5, TimeUnit.SECONDS); if (r != null) indices.add(r); }
+        catch (Exception e) { log.debug("KOSPI 지수 조회 실패: {}", e.getMessage()); }
+        try { IndexPriceResponse r = kosdaqFuture.get(5, TimeUnit.SECONDS); if (r != null) indices.add(r); }
+        catch (Exception e) { log.debug("KOSDAQ 지수 조회 실패: {}", e.getMessage()); }
+        try { IndexPriceResponse r = usdtFuture.get(5, TimeUnit.SECONDS); if (r != null) indices.add(r); }
+        catch (Exception e) { log.debug("USDT/KRW 환율 조회 실패: {}", e.getMessage()); }
 
         if (!indices.isEmpty()) {
             cachedIndices = indices;

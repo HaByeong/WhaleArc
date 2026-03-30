@@ -14,9 +14,12 @@ import org.springframework.web.client.RestTemplate;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
+
+import jakarta.annotation.PreDestroy;
 
 @Slf4j
 @Service
@@ -43,12 +46,20 @@ public class CandlestickService {
     private static final int MAX_CACHE_SIZE = 100;
     private final ConcurrentHashMap<String, CandleCache> candleCache = new ConcurrentHashMap<>();
 
+    private ExecutorService chunkExecutor;
+
     @PostConstruct
     public void init() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(timeoutMs);
         factory.setReadTimeout(timeoutMs);
         this.restTemplate = new RestTemplate(factory);
+        this.chunkExecutor = Executors.newFixedThreadPool(4);
+    }
+
+    @PreDestroy
+    public void destroy() {
+        if (chunkExecutor != null) chunkExecutor.shutdownNow();
     }
 
     /**
@@ -94,7 +105,7 @@ public class CandlestickService {
         return getCandlesticks(symbol, interval, null);
     }
 
-    /** 국내주식 일봉 (KIS API) — 최대 2년치 데이터를 3개월 단위로 반복 조회 */
+    /** 국내주식 일봉 (KIS API) — 최대 2년치 데이터를 3개월 단위로 병렬 조회 */
     private List<CandlestickResponse> getStockCandlesticks(String stockCode) {
         if (!kisApiClient.isConfigured()) {
             log.warn("KIS API 미설정 — 주식 캔들스틱 조회 불가: {}", stockCode);
@@ -104,58 +115,30 @@ public class CandlestickService {
         try {
             DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
             LocalDate now = LocalDate.now();
-            List<CandlestickResponse> allResults = new ArrayList<>();
-            int consecutiveEmpty = 0;
 
-            // 3개월 단위로 최대 2년(8구간) 반복 조회
+            // 8청크를 병렬 요청 (300ms 간격 stagger로 rate limit 준수)
+            List<CompletableFuture<List<CandlestickResponse>>> futures = new ArrayList<>();
             for (int i = 0; i < 8; i++) {
-                LocalDate chunkEnd = now.minusMonths(3L * i);
-                LocalDate chunkStart = now.minusMonths(3L * (i + 1)).plusDays(1);
-
-                // 개별 청크에 대해 최대 2회 재시도
-                List<Map<String, String>> candles = null;
-                for (int retry = 0; retry < 2; retry++) {
-                    candles = kisApiClient.getStockDailyCandles(
-                            stockCode, chunkStart.format(fmt), chunkEnd.format(fmt));
-                    if (candles != null && !candles.isEmpty()) break;
-                    // 재시도 전 대기
-                    try { Thread.sleep(1000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
-                }
-
-                if (candles == null || candles.isEmpty()) {
-                    consecutiveEmpty++;
-                    // 연속 2번 빈 응답이면 더 이상 과거 데이터 없다고 판단
-                    if (consecutiveEmpty >= 2) {
-                        log.debug("주식 일봉 [{}]: 연속 빈 응답 {}회, 과거 데이터 조회 중단", stockCode, consecutiveEmpty);
-                        break;
+                final int idx = i;
+                futures.add(CompletableFuture.supplyAsync(() -> {
+                    if (idx > 0) {
+                        try { Thread.sleep(300L * idx); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
                     }
-                    continue; // 한 번 빈 응답은 건너뛰고 다음 구간 시도
-                }
-                consecutiveEmpty = 0;
+                    return fetchStockChunk(stockCode, idx, fmt, now);
+                }, chunkExecutor));
+            }
 
-                for (Map<String, String> c : candles) {
-                    String dateStr = c.get("stck_bsop_date");
-                    if (dateStr == null || dateStr.isEmpty()) continue;
-
-                    LocalDate date = LocalDate.parse(dateStr, fmt);
-                    long time = date.atStartOfDay().toEpochSecond(java.time.ZoneOffset.of("+09:00"));
-                    double open = parseDouble(c.get("stck_oprc"));
-                    double high = parseDouble(c.get("stck_hgpr"));
-                    double low = parseDouble(c.get("stck_lwpr"));
-                    double close = parseDouble(c.get("stck_clpr"));
-                    double volume = parseDouble(c.get("acml_vol"));
-
-                    allResults.add(new CandlestickResponse(time, open, high, low, close, volume));
-                }
-
-                // KIS API 속도 제한 준수 (초당 1회 이하)
-                if (i < 7) {
-                    try { Thread.sleep(1000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            List<CandlestickResponse> allResults = new ArrayList<>();
+            for (CompletableFuture<List<CandlestickResponse>> future : futures) {
+                try {
+                    allResults.addAll(future.get(15, TimeUnit.SECONDS));
+                } catch (Exception e) {
+                    log.debug("주식 캔들 청크 조회 타임아웃 [{}]: {}", stockCode, e.getMessage());
                 }
             }
 
             // 시간순 정렬 + 중복 제거
-            allResults.sort(java.util.Comparator.comparingLong(CandlestickResponse::getTime));
+            allResults.sort(Comparator.comparingLong(CandlestickResponse::getTime));
             List<CandlestickResponse> deduped = new ArrayList<>();
             long prevTime = -1;
             for (CandlestickResponse cr : allResults) {
@@ -165,12 +148,41 @@ public class CandlestickService {
                 }
             }
 
-            log.info("주식 일봉 {}개 조회 (최대 2년): {}", deduped.size(), stockCode);
+            log.info("주식 일봉 {}개 조회 (병렬, 최대 2년): {}", deduped.size(), stockCode);
             return deduped;
         } catch (Exception e) {
             log.error("주식 캔들스틱 조회 실패 [{}]: {}", stockCode, e.getMessage());
             return List.of();
         }
+    }
+
+    /** 단일 3개월 청크 조회 (최대 2회 재시도) */
+    private List<CandlestickResponse> fetchStockChunk(String stockCode, int chunkIndex, DateTimeFormatter fmt, LocalDate now) {
+        LocalDate chunkEnd = now.minusMonths(3L * chunkIndex);
+        LocalDate chunkStart = now.minusMonths(3L * (chunkIndex + 1)).plusDays(1);
+
+        for (int retry = 0; retry < 2; retry++) {
+            List<Map<String, String>> candles = kisApiClient.getStockDailyCandles(
+                    stockCode, chunkStart.format(fmt), chunkEnd.format(fmt));
+            if (candles != null && !candles.isEmpty()) {
+                List<CandlestickResponse> result = new ArrayList<>();
+                for (Map<String, String> c : candles) {
+                    String dateStr = c.get("stck_bsop_date");
+                    if (dateStr == null || dateStr.isEmpty()) continue;
+                    LocalDate date = LocalDate.parse(dateStr, fmt);
+                    long time = date.atStartOfDay().toEpochSecond(java.time.ZoneOffset.of("+09:00"));
+                    result.add(new CandlestickResponse(time,
+                            parseDouble(c.get("stck_oprc")), parseDouble(c.get("stck_hgpr")),
+                            parseDouble(c.get("stck_lwpr")), parseDouble(c.get("stck_clpr")),
+                            parseDouble(c.get("acml_vol"))));
+                }
+                return result;
+            }
+            if (retry < 1) {
+                try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            }
+        }
+        return List.of();
     }
 
     /** 앱 interval 형식을 빗썸 API 형식으로 변환 */

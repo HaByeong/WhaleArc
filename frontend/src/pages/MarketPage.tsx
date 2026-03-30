@@ -19,8 +19,8 @@ const ChartLoadingWrapper = ({ symbol, children, isDark }: { symbol: string; chi
   useEffect(() => {
     setReady(false);
     setFailed(false);
-    // 차트가 내부적으로 데이터를 로드할 시간을 확보한 뒤 표시
-    timerRef.current = setTimeout(() => setReady(true), 600);
+    // 차트 컴포넌트가 마운트될 최소 시간만 확보
+    timerRef.current = setTimeout(() => setReady(true), 100);
     // 12초 내에 차트가 렌더되지 않으면 지연 안내 (주식은 API 응답이 느릴 수 있음)
     const failTimer = setTimeout(() => setFailed(true), 12000);
     return () => {
@@ -61,6 +61,10 @@ const MarketPage = () => {
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'change' | 'volume'>('volume');
   const [filterText, setFilterText] = useState('');
   const [chartType, setChartType] = useState<'area' | 'candle'>('area');
+
+  // 탭별 데이터 캐시 (stale-while-revalidate)
+  const assetCacheRef = useRef<Record<AssetType, MarketPrice[]>>({ STOCK: [], CRYPTO: [] });
+  const selectionCacheRef = useRef<Record<AssetType, MarketPrice | null>>({ STOCK: null, CRYPTO: null });
 
   // 주식 종목 검색
   const [searchResults, setSearchResults] = useState<{ code: string; name: string; market: string }[]>([]);
@@ -126,6 +130,7 @@ const MarketPage = () => {
       const interval = setInterval(async () => {
         try {
           const prices = await marketService.getPrices('STOCK');
+          assetCacheRef.current['STOCK'] = prices;
           setAssetList(prices);
           setSelectedAsset(prev => {
             if (!prev) return prev;
@@ -171,15 +176,30 @@ const MarketPage = () => {
 
   const loadData = async () => {
     try {
-      setLoading(true);
       setError(null);
+      // 캐시된 데이터가 있으면 즉시 표시 (stale-while-revalidate)
+      const cached = assetCacheRef.current[assetType];
+      if (cached.length > 0) {
+        setAssetList(cached);
+        if (!selectedAsset) {
+          const cachedSelection = selectionCacheRef.current[assetType];
+          setSelectedAsset(cachedSelection || cached[0]);
+        }
+      } else {
+        setLoading(true);
+      }
+
+      // 백그라운드에서 최신 데이터 fetch
       const prices = await marketService.getPrices(assetType);
+      assetCacheRef.current[assetType] = prices;
       setAssetList(prices);
       if (prices.length > 0 && !selectedAsset) {
         setSelectedAsset(prices[0]);
       }
     } catch {
-      setError('시세 데이터를 불러오지 못했습니다.');
+      if (assetCacheRef.current[assetType].length === 0) {
+        setError('시세 데이터를 불러오지 못했습니다.');
+      }
     } finally {
       setLoading(false);
     }
@@ -197,6 +217,7 @@ const MarketPage = () => {
 
   const handleAssetSelect = (asset: MarketPrice) => {
     setSelectedAsset(asset);
+    selectionCacheRef.current[assetType] = asset;
     // 최근 본 종목 저장
     try {
       const entry = { stockCode: asset.symbol, stockName: asset.name, assetType: asset.assetType };
@@ -272,7 +293,7 @@ const MarketPage = () => {
                   ? !isVirt ? 'bg-cyan-500 text-white shadow-md' : 'bg-whale-light text-white shadow-md'
                   : !isVirt ? 'bg-white/[0.04] text-slate-400 border border-white/[0.06] hover:bg-white/[0.06]' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
               }`}
-              onClick={() => { setAssetType('STOCK'); setSelectedAsset(null); setChartType('area'); }}
+              onClick={() => { selectionCacheRef.current[assetType] = selectedAsset; setAssetType('STOCK'); setSelectedAsset(selectionCacheRef.current['STOCK']); setChartType('area'); }}
             >
               주식
             </button>
@@ -283,7 +304,7 @@ const MarketPage = () => {
                   ? !isVirt ? 'bg-cyan-500 text-white shadow-md' : 'bg-whale-light text-white shadow-md'
                   : !isVirt ? 'bg-white/[0.04] text-slate-400 border border-white/[0.06] hover:bg-white/[0.06]' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
               }`}
-              onClick={() => { setAssetType('CRYPTO'); setSelectedAsset(null); setChartType('area'); }}
+              onClick={() => { selectionCacheRef.current[assetType] = selectedAsset; setAssetType('CRYPTO'); setSelectedAsset(selectionCacheRef.current['CRYPTO']); setChartType('area'); }}
             >
               가상화폐 (빗썸)
             </button>

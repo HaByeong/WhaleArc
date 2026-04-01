@@ -48,6 +48,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/market/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/store/products/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/store/products").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/feedback/images/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

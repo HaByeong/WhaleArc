@@ -85,6 +85,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
                   { to: `${prefix}/strategy`, label: '전략' },
                   { to: `${prefix}/store`, label: '전략 학습' },
                   { to: `${prefix}/ranking`, label: '투자 현황' },
+                  { to: `${prefix}/feedback`, label: '피드백' },
                 ].map(({ to, label }) => (
                   <Link
                     key={to}
@@ -232,6 +233,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
               { to: `${prefix}/strategy`, label: '전략', ariaLabel: '전략' },
               { to: `${prefix}/store`, label: '항로', ariaLabel: '항로' },
               { to: `${prefix}/ranking`, label: '투자 현황', ariaLabel: '투자 현황' },
+              { to: `${prefix}/feedback`, label: '피드백', ariaLabel: '피드백' },
             ].map(({ to, label, ariaLabel }) => (
               <Link
                 key={to}

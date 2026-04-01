@@ -2,6 +2,10 @@ server:
   port: 8080
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
   data:
     mongodb:
       uri: mongodb://localhost:27017/whaleArc
@@ -28,6 +32,10 @@ kis:
     cache-ttl-ms: 15000
     max-retries: 3
     retry-delay-ms: 500
+
+# 피드백 관리자 (쉼표 구분 userId)
+feedback:
+  admin-user-ids: ${FEEDBACK_ADMIN_IDS:9704ef8d-d8c0-487d-b690-848a4ba758e9,230dcba7-74d3-420a-a276-11404ae3573b}
 
 logging:
   level:

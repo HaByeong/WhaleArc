@@ -68,16 +68,21 @@ const AuthCallbackPage = () => {
           const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'SIGNED_IN' && session) {
               subscription.unsubscribe();
-              await redirectWithOnboardingCheck();
+              try {
+                await redirectWithOnboardingCheck();
+              } catch {
+                setError('로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
+                setTimeout(() => window.location.replace('/login'), 3000);
+              }
             }
           });
 
-          // 10초 타임아웃
+          // 30초 타임아웃 (모바일 네트워크 고려)
           setTimeout(() => {
             subscription.unsubscribe();
             setError('로그인 응답이 지연되고 있습니다. 다시 시도해주세요.');
             setTimeout(() => window.location.replace('/login'), 2000);
-          }, 10000);
+          }, 30000);
         }
       } catch {
         setError('로그인 처리 중 예기치 않은 오류가 발생했습니다.');

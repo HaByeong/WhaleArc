@@ -109,7 +109,9 @@ const LoginPage = () => {
     try {
       // OAuth 후 돌아올 목적지 저장 (콜백에서 state가 날아가므로)
       const state = location.state as { from?: string } | null;
-      if (state?.from) localStorage.setItem('whalearc_redirect', state.from);
+      if (state?.from) {
+        try { localStorage.setItem('whalearc_redirect', state.from); } catch { /* iOS Safari 개인정보 보호 모드 등 */ }
+      }
       await authService.loginWithOAuth(provider);
     } catch (err: any) {
       setError(err.message || `${provider} 로그인에 실패했습니다.`);

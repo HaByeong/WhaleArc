@@ -14,30 +14,43 @@ const apiClient = axios.create({
 // 세션 토큰 캐시 (매 요청마다 getSession() 호출 방지)
 let _cachedToken: string | null = null;
 let _tokenExpiresAt = 0;
+let _tokenFetchPromise: Promise<string | null> | null = null;
 
 async function getCachedToken(): Promise<string | null> {
   if (_cachedToken && Date.now() < _tokenExpiresAt) {
     return _cachedToken;
   }
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.access_token) {
-    _cachedToken = session.access_token;
-    // 세션 만료 1분 전 또는 4분 후 중 빠른 시점에 갱신
-    const sessionExpiry = session.expires_at ? session.expires_at * 1000 - 60_000 : 0;
-    _tokenExpiresAt = sessionExpiry > Date.now()
-      ? Math.min(sessionExpiry, Date.now() + 4 * 60_000)
-      : Date.now() + 4 * 60_000;
-    return _cachedToken;
-  }
-  _cachedToken = null;
-  _tokenExpiresAt = 0;
-  return null;
+  // 동시 요청 시 getSession() 중복 호출 방지
+  if (_tokenFetchPromise) return _tokenFetchPromise;
+  _tokenFetchPromise = (async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        _cachedToken = session.access_token;
+        const sessionExpiry = session.expires_at ? session.expires_at * 1000 - 60_000 : 0;
+        _tokenExpiresAt = sessionExpiry > Date.now()
+          ? Math.min(sessionExpiry, Date.now() + 4 * 60_000)
+          : Date.now() + 4 * 60_000;
+        return _cachedToken;
+      }
+      _cachedToken = null;
+      _tokenExpiresAt = 0;
+      return null;
+    } finally {
+      _tokenFetchPromise = null;
+    }
+  })();
+  return _tokenFetchPromise;
 }
+
+// 동시 다발 401 시 refreshSession() 중복 호출 방지
+let _refreshPromise: ReturnType<typeof supabase.auth.refreshSession> | null = null;
 
 /** 외부에서 토큰 캐시 무효화 (로그아웃, 401 등) */
 export function invalidateTokenCache() {
   _cachedToken = null;
   _tokenExpiresAt = 0;
+  _tokenFetchPromise = null;
 }
 
 // Request interceptor - 캐싱된 Supabase 세션 토큰 추가
@@ -62,8 +75,14 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       invalidateTokenCache();
-      const { data, error: refreshError } = await supabase.auth.refreshSession();
-      if (data.session && !refreshError) {
+      // 동시 다발 401에 대해 refresh를 한 번만 수행
+      if (!_refreshPromise) {
+        _refreshPromise = supabase.auth.refreshSession().finally(() => {
+          _refreshPromise = null;
+        });
+      }
+      const { data, error: refreshError } = await _refreshPromise;
+      if (data?.session && !refreshError) {
         originalRequest.headers.Authorization = `Bearer ${data.session.access_token}`;
         return apiClient.request(originalRequest);
       }

@@ -52,7 +52,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   useEffect(() => {
+    let initialSessionHandled = false;
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      initialSessionHandled = true;
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -60,14 +63,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      // getSession()이 이미 같은 세션을 처리한 경우 중복 fetchProfile 방지
+      if (!initialSessionHandled) {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+        if (session) {
+          fetchProfile();
+        } else {
+          setProfileName(null);
+          setOnboardingDone(null);
+        }
+        return;
+      }
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
-      if (session) {
-        fetchProfile();
-      } else {
+      if (!session) {
         setProfileName(null);
         setOnboardingDone(null);
+      } else if (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED') {
+        fetchProfile();
       }
     });
 

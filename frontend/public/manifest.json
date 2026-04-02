@@ -3,7 +3,7 @@
   "short_name": "WhaleArc",
   "description": "고래처럼, 시장을 유영하듯",
   "start_url": "/",
-  "display": "standalone",
+  "display": "minimal-ui",
   "background_color": "#0a1628",
   "theme_color": "#0a1628",
   "icons": [

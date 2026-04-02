@@ -22,6 +22,28 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // 인증 관련 경로 및 API 요청은 항상 네트워크 우선 (캐싱 제외)
+  const isAuthRoute = ['/auth/', '/login', '/signup', '/forgot-password', '/reset-password'].some(
+    (path) => url.pathname.startsWith(path)
+  );
+  const isApiRequest = url.pathname.startsWith('/api/');
+
+  if (isAuthRoute || isApiRequest) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // 네비게이션 요청(HTML 페이지)은 network-first + 캐시 폴백 (SPA 지원)
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/'))
+    );
+    return;
+  }
+
+  // 정적 자산은 cache-first
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );

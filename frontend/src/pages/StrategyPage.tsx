@@ -75,6 +75,7 @@ const StrategyPage = () => {
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [applyAmount, setApplyAmount] = useState('1000000');
   const [isApplying, setIsApplying] = useState(false);
+  const [cashBalance, setCashBalance] = useState<number | null>(null);
 
   // 백테스팅 가이드
   const [_showBacktestGuide, _setShowBacktestGuide] = useState(false);
@@ -420,6 +421,10 @@ const StrategyPage = () => {
     const amount = parseInt(applyAmount);
     if (!amount || amount <= 0) {
       showToast('투자 금액을 입력해주세요.', 'error');
+      return;
+    }
+    if (cashBalance !== null && amount > cashBalance) {
+      showToast(`잔고가 부족합니다. 보유 잔고: ${formatCurrency(cashBalance)}`, 'error');
       return;
     }
 
@@ -1047,7 +1052,7 @@ const StrategyPage = () => {
                         </div>
                         {isVirt && !strategy.applied && strategy.targetAssets && strategy.targetAssets.length > 0 && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedStrategy(strategy); setShowApplyModal(true); }}
+                            onClick={(e) => { e.stopPropagation(); setSelectedStrategy(strategy); setShowApplyModal(true); tradeService.getPortfolio().then(p => setCashBalance(p.cashBalance)).catch(() => {}); }}
                             className="px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-whale-light to-blue-500 hover:from-whale-dark hover:to-whale-light shadow-sm hover:shadow-md transition-all duration-200">
                             포트폴리오 적용
                           </button>
@@ -1138,7 +1143,7 @@ const StrategyPage = () => {
                           </svg>
                         </button>
                         {isVirt && !selectedStrategy.applied && selectedStrategy.targetAssets && selectedStrategy.targetAssets.length > 0 && (
-                          <button onClick={() => setShowApplyModal(true)}
+                          <button onClick={() => { setShowApplyModal(true); tradeService.getPortfolio().then(p => setCashBalance(p.cashBalance)).catch(() => {}); }}
                             className="px-3 py-2 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-whale-light to-blue-500 hover:from-whale-dark hover:to-whale-light hover:shadow-md transition-all duration-200">
                             포트폴리오 적용
                           </button>
@@ -2824,6 +2829,14 @@ const StrategyPage = () => {
               투자 금액이 {selectedStrategy.targetAssets?.length || 0}개 자산에 균등 분배되어 시장가 매수됩니다.
             </p>
 
+            {/* 보유 잔고 표시 */}
+            {cashBalance !== null && (
+              <div className={`mb-4 px-3 py-2.5 rounded-xl text-sm flex items-center justify-between ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                <span className={!isVirt ? 'text-slate-400' : 'text-gray-500'}>보유 잔고</span>
+                <span className={`font-bold ${!isVirt ? 'text-white' : 'text-gray-900'}`}>{formatCurrency(cashBalance)}</span>
+              </div>
+            )}
+
             <div className="mb-4">
               <label className={`block text-sm font-medium mb-1 ${!isVirt ? 'text-slate-300' : 'text-gray-700'}`}>투자 금액 (원)</label>
               <input type="number" value={applyAmount} onChange={(e) => setApplyAmount(e.target.value)}
@@ -2836,6 +2849,13 @@ const StrategyPage = () => {
                   </button>
                 ))}
               </div>
+              {/* 잔고 부족 경고 */}
+              {cashBalance !== null && parseInt(applyAmount || '0') > cashBalance && (
+                <p className="mt-2 text-xs text-red-400 flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  잔고가 부족합니다. 보유 잔고: {formatCurrency(cashBalance)}
+                </p>
+              )}
             </div>
 
             <div className={`mb-4 p-3 rounded-xl text-sm space-y-2 ${!isVirt ? 'bg-white/[0.02]' : 'bg-gray-50'}`}>

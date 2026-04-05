@@ -4,6 +4,7 @@ import Header from '../components/Header';
 import SplashLoading from '../components/SplashLoading';
 import VirtSplashLoading from '../components/VirtSplashLoading';
 import { Term } from '../components/TermTooltip';
+import { tradeService } from '../services/tradeService';
 import {
   quantStoreService,
   type QuantProduct,
@@ -275,6 +276,7 @@ const QuantStorePage = () => {
   const [investModal, setInvestModal] = useState<QuantProduct | null>(null);
   const [investmentAmount, setInvestmentAmount] = useState('');
   const [confirmStep, setConfirmStep] = useState(false);
+  const [cashBalance, setCashBalance] = useState<number | null>(null);
 
   // 취소 확인 모달
   const [cancelTarget, setCancelTarget] = useState<ProductPurchase | null>(null);
@@ -313,11 +315,16 @@ const QuantStorePage = () => {
     setInvestModal(product);
     setInvestmentAmount('');
     setConfirmStep(false);
+    tradeService.getPortfolio().then(p => setCashBalance(p.cashBalance)).catch(() => {});
   };
 
   const goToConfirmStep = () => {
     const amount = Number(investmentAmount.replace(/,/g, ''));
     if (!amount || amount <= 0) { showToast('투자 금액을 입력해주세요.'); return; }
+    if (cashBalance !== null && amount > cashBalance) {
+      showToast(`잔고가 부족합니다. 보유 잔고: ${formatCurrency(cashBalance)}`);
+      return;
+    }
     setConfirmStep(true);
   };
 
@@ -785,6 +792,14 @@ const QuantStorePage = () => {
                 </span>
               </p>
 
+              {/* 보유 잔고 표시 */}
+              {cashBalance !== null && (
+                <div className={`mb-4 px-3 py-2.5 rounded-xl text-sm flex items-center justify-between ${!isVirt ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                  <span className={!isVirt ? 'text-slate-400' : 'text-gray-500'}>보유 잔고</span>
+                  <span className={`font-bold ${!isVirt ? 'text-white' : 'text-gray-900'}`}>{formatCurrency(cashBalance)}</span>
+                </div>
+              )}
+
               <div className="relative mb-4">
                 <input
                   type="text"
@@ -796,6 +811,14 @@ const QuantStorePage = () => {
                 />
                 <span className={`absolute right-4 top-1/2 -translate-y-1/2 font-medium ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>원</span>
               </div>
+
+              {/* 잔고 부족 경고 */}
+              {cashBalance !== null && Number(investmentAmount.replace(/,/g, '') || '0') > cashBalance && (
+                <p className="mb-4 text-xs text-red-400 flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  잔고가 부족합니다. 보유 잔고: {formatCurrency(cashBalance)}
+                </p>
+              )}
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
                 {QUICK_AMOUNTS.map((amount) => (

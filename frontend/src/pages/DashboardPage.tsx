@@ -684,6 +684,13 @@ const DashboardPage = () => {
                     >{t.label}</button>
                   ))}
                 </div>
+                {/* API란? 안내 */}
+                <div className="mb-4 rounded-lg bg-slate-500/[0.08] border border-white/[0.06] px-4 py-3">
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    <span className="font-semibold text-slate-200">API 키란?</span>{' '}
+                    거래소가 발급해주는 <span className="text-cyan-400">일종의 조회 전용 비밀번호</span>입니다. 이 키를 등록하면 WhaleArc가 여러분의 거래소 자산을 자동으로 불러와 보여줍니다. 직접 거래소에 로그인할 필요 없이, 한눈에 자산을 확인할 수 있습니다.
+                  </p>
+                </div>
                 {/* API 키 발급 가이드 */}
                 <details className="mb-4 rounded-lg bg-cyan-500/[0.06] border border-cyan-500/15 overflow-hidden">
                   <summary className="px-4 py-2.5 text-xs font-semibold text-cyan-400 cursor-pointer hover:bg-cyan-500/[0.04] transition-colors flex items-center gap-2">

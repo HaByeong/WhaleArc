@@ -113,7 +113,23 @@ const RealInvestmentStatusPage = () => {
               </svg>
             </div>
             <h3 className="text-lg font-semibold text-white mb-2">연동된 계좌가 없습니다</h3>
-            <p className="text-slate-400 text-sm mb-6">KIS, 업비트, 비트겟 API를 연동하면<br />실제 자산 현황을 확인할 수 있습니다.</p>
+            <p className="text-slate-400 text-sm mb-4">거래소 API 키를 연동하면 실제 자산 현황을 확인할 수 있습니다.</p>
+            <div className="max-w-md mx-auto mb-6 rounded-xl bg-white/[0.03] border border-white/[0.06] p-4 text-left space-y-3">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                <span className="font-semibold text-slate-200">API 키란?</span>{' '}
+                거래소가 발급해주는 <span className="text-cyan-400">일종의 조회 전용 비밀번호</span>입니다. 이 키를 등록하면 WhaleArc가 여러분의 거래소 자산을 자동으로 불러와 보여줍니다.
+              </p>
+              <div className="text-[11px] text-slate-500 leading-relaxed space-y-1">
+                <p className="text-slate-400 font-medium mb-1">지원 거래소</p>
+                <p><span className="text-cyan-400">KIS (한국투자증권)</span> — 국내 주식 자산 조회</p>
+                <p><span className="text-cyan-400">업비트</span> — 암호화폐 자산 조회</p>
+                <p><span className="text-cyan-400">비트겟</span> — 암호화폐 자산 조회</p>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                <span className="text-amber-400/80 font-medium">안전한가요?</span>{' '}
+                읽기 전용 키만 사용하므로 주문·출금이 실행되지 않습니다. 키는 AES 암호화되어 저장됩니다.
+              </p>
+            </div>
             <button
               onClick={() => navigate('/api-setting')}
               className="px-6 py-3 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-xl font-semibold text-sm hover:bg-cyan-500/20 transition-colors"

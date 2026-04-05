@@ -488,6 +488,50 @@ const RealPortfolioPage = () => {
                   >{t.label}</button>
                 ))}
               </div>
+              {/* API란? 안내 */}
+              <div className="mb-4 rounded-lg bg-slate-500/[0.08] border border-white/[0.06] px-4 py-3">
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  <span className="font-semibold text-slate-200">API 키란?</span>{' '}
+                  거래소가 발급해주는 <span className="text-cyan-400">일종의 조회 전용 비밀번호</span>입니다. 이 키를 등록하면 WhaleArc가 여러분의 거래소 자산을 자동으로 불러와 보여줍니다. 직접 거래소에 로그인할 필요 없이, 한눈에 자산을 확인할 수 있습니다.
+                </p>
+              </div>
+              {/* API 키 발급 가이드 */}
+              <details className="mb-4 rounded-lg bg-cyan-500/[0.06] border border-cyan-500/15 overflow-hidden">
+                <summary className="px-4 py-2.5 text-xs font-semibold text-cyan-400 cursor-pointer hover:bg-cyan-500/[0.04] transition-colors flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  {showSetup === 'kis' ? 'KIS API 키 발급 방법' : showSetup === 'upbit' ? '업비트 API 키 발급 방법' : '비트겟 API 키 발급 방법'}
+                </summary>
+                <div className="px-4 pb-3 text-[11px] text-slate-400 leading-relaxed space-y-1.5">
+                  {showSetup === 'kis' && (
+                    <>
+                      <p><span className="text-slate-300 font-medium">1.</span> 한국투자증권 홈페이지 접속 후 로그인</p>
+                      <p><span className="text-slate-300 font-medium">2.</span> KIS Developers → API 신청/관리 메뉴 이동</p>
+                      <p><span className="text-slate-300 font-medium">3.</span> 앱 등록 → <span className="text-cyan-400">App Key / App Secret</span> 발급</p>
+                      <p><span className="text-slate-300 font-medium">4.</span> 권한 설정 시 <span className="text-amber-400 font-medium">"조회" 권한만</span> 선택</p>
+                      <p><span className="text-slate-300 font-medium">5.</span> 계좌번호는 앞 8자리만 입력 (뒤 2자리 제외)</p>
+                    </>
+                  )}
+                  {showSetup === 'upbit' && (
+                    <>
+                      <p><span className="text-slate-300 font-medium">1.</span> 업비트 로그인 → 마이페이지 → Open API 관리</p>
+                      <p><span className="text-slate-300 font-medium">2.</span> Open API Key 발급하기 클릭</p>
+                      <p><span className="text-slate-300 font-medium">3.</span> <span className="text-amber-400 font-medium">"자산조회"만 체크</span>, "주문하기"는 반드시 해제</p>
+                      <p><span className="text-slate-300 font-medium">4.</span> IP 주소 등록 (서버 IP 입력 필요)</p>
+                      <p><span className="text-slate-300 font-medium">5.</span> 발급된 <span className="text-cyan-400">Access Key / Secret Key</span> 입력</p>
+                    </>
+                  )}
+                  {showSetup === 'bitget' && (
+                    <>
+                      <p><span className="text-slate-300 font-medium">1.</span> 비트겟 로그인 → 프로필 → API Management</p>
+                      <p><span className="text-slate-300 font-medium">2.</span> Create API Key 클릭</p>
+                      <p><span className="text-slate-300 font-medium">3.</span> 권한을 <span className="text-amber-400 font-medium">"Read Only"</span>로 설정</p>
+                      <p><span className="text-slate-300 font-medium">4.</span> IP 허용 목록 설정 (선택)</p>
+                      <p><span className="text-slate-300 font-medium">5.</span> 발급된 <span className="text-cyan-400">API Key / Secret Key / Passphrase</span> 입력</p>
+                    </>
+                  )}
+                </div>
+              </details>
+
               <div className="space-y-3">
                 {showSetup === 'kis' && (
                   <>
@@ -510,6 +554,32 @@ const RealPortfolioPage = () => {
                   </>
                 )}
                 {setupError && <p className="text-xs text-red-400">{setupError}</p>}
+                {/* 보안 안내 */}
+                <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-3.5 py-3 space-y-2.5">
+                  <div className="flex items-start gap-2">
+                    <svg className="w-4 h-4 text-cyan-500/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <div className="text-[11px] text-slate-500 leading-relaxed">
+                      <p className="text-slate-400 font-semibold mb-1">보안 안내</p>
+                      <p>WhaleArc는 <span className="text-slate-400">자산 조회만</span> 수행하며, 어떠한 주문·출금도 실행하지 않습니다. API 키는 AES 암호화되어 저장됩니다.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <svg className="w-4 h-4 text-amber-500/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="text-[11px] text-slate-500 leading-relaxed">
+                      <p className="text-amber-400/80 font-semibold mb-1">반드시 읽기 전용 키를 발급해주세요</p>
+                      <p>
+                        {showSetup === 'kis' && 'KIS 개발자센터에서 API 키 발급 시 "조회" 권한만 선택해주세요.'}
+                        {showSetup === 'upbit' && '업비트 Open API에서 "자산조회"만 체크하고, "주문하기"는 반드시 체크 해제해주세요.'}
+                        {showSetup === 'bitget' && '비트겟 API 관리에서 "Read Only" 권한으로 발급해주세요.'}
+                        {' '}읽기 전용 키는 유출되더라도 자산에 영향을 줄 수 없습니다.
+                      </p>
+                    </div>
+                  </div>
+                </div>
                 <button onClick={handleSetupSave} disabled={setupLoading}
                   className="w-full py-3 bg-cyan-500 text-white text-sm font-semibold rounded-lg hover:bg-cyan-600 disabled:opacity-50 transition-colors">
                   {setupLoading ? '연결 중...' : 'API 연결'}

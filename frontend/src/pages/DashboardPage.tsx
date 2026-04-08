@@ -188,10 +188,12 @@ const DashboardPage = () => {
   const pollData = useCallback(async () => {
     if (showVirtTour || showNormalTour) return; // 가이드 중 폴링 중지
     try {
-      const [portfolioData, stocksData] = await Promise.all([
+      const [portfolioData, cryptoPoll, krxPoll] = await Promise.all([
         isVirt ? tradeService.getPortfolio().catch(() => null) : Promise.resolve(null),
         tradeService.getStockList().catch(() => []),
+        tradeService.getKrxStockList().catch(() => []),
       ]);
+      const stocksData = [...cryptoPoll, ...krxPoll];
       if (portfolioData && isVirt) {
         setPortfolio(prev => {
           if (prev && prev.totalValue === portfolioData.totalValue && prev.cashBalance === portfolioData.cashBalance && prev.holdings.length === portfolioData.holdings.length) return prev;
@@ -206,7 +208,7 @@ const DashboardPage = () => {
             const alias = SYMBOL_ALIASES[fav];
             if (alias) favSet.add(alias);
           }
-          const nextWatch = stocksData.filter((s) => favSet.has(s.stockCode));
+          const nextWatch = stocksData.filter((s) => favSet.has(s.stockCode) || favSet.has(s.stockName));
           setWatchlist(prev => {
             if (prev.length === nextWatch.length && prev.every((p, i) => p.stockCode === nextWatch[i].stockCode && p.currentPrice === nextWatch[i].currentPrice)) return prev;
             return nextWatch;
@@ -257,12 +259,14 @@ const DashboardPage = () => {
       setError(null);
 
       let portfolioFallback = false;
-      const [portfolioData, stocksData, profile, purchaseData] = await Promise.all([
+      const [portfolioData, cryptoData, krxData, profile, purchaseData] = await Promise.all([
         isVirt ? tradeService.getPortfolio().catch(() => { portfolioFallback = true; return getDemoPortfolio(); }) : Promise.resolve(null),
         tradeService.getStockList().catch(() => []),
+        tradeService.getKrxStockList().catch(() => []),
         userService.getProfile().catch(() => null),
         isVirt ? quantStoreService.getMyPurchases().catch(() => ({ purchases: [], purchasedProductIds: [] })) : Promise.resolve({ purchases: [], purchasedProductIds: [] }),
       ]);
+      const stocksData = [...cryptoData, ...krxData];
 
       const actives = purchaseData.purchases.filter((p) => p.status === 'ACTIVE');
       setActivePurchases(actives);
@@ -285,7 +289,7 @@ const DashboardPage = () => {
             const alias = SYMBOL_ALIASES[fav];
             if (alias) favSet.add(alias);
           }
-          setWatchlist(stocksData.filter((s) => favSet.has(s.stockCode)));
+          setWatchlist(stocksData.filter((s) => favSet.has(s.stockCode) || favSet.has(s.stockName)));
         }
       }
     } catch (err: any) {
@@ -881,7 +885,7 @@ const DashboardPage = () => {
                     const progress = targetReturn > 0 ? Math.min(Math.max(portfolio.returnRate / targetReturn * 100, 0), 100) : 0;
                     const achieved = portfolio.returnRate >= targetReturn;
                     return (
-                      <div data-tour="virt-target-return" className="mt-4 pt-4 border-t border-gray-100" onClick={e => e.stopPropagation()}>
+                      <div data-tour="virt-target-return" className="mt-4 pt-4 border-t border-gray-100" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-semibold text-gray-500">목표 수익률</span>
                           <div className="flex items-center gap-1">
@@ -1083,7 +1087,7 @@ const DashboardPage = () => {
                   <div className="flex items-center justify-between mb-5">
                     <h2 className="text-lg font-bold text-whale-dark">관심 종목</h2>
                     <button
-                      onClick={() => navigate('/user')}
+                      onClick={() => navigate('/user?section=favorites')}
                       className="text-sm font-medium text-whale-light hover:text-whale-accent"
                     >
                       종목 편집
@@ -1120,7 +1124,7 @@ const DashboardPage = () => {
                         프로필에서 관심 종목을 추가하면 여기에 실시간 시세가 표시됩니다
                       </div>
                       <button
-                        onClick={() => navigate('/user')}
+                        onClick={() => navigate('/user?section=favorites')}
                         className="mt-4 text-sm btn-secondary"
                       >
                         관심 종목 추가하기
@@ -1286,7 +1290,7 @@ const DashboardPage = () => {
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-white">관심 종목</h2>
               <button
-                onClick={() => navigate('/user')}
+                onClick={() => navigate('/user?section=favorites')}
                 className="text-sm font-medium text-cyan-400 hover:text-cyan-300"
               >
                 종목 편집
@@ -1322,7 +1326,7 @@ const DashboardPage = () => {
                   프로필에서 관심 종목을 추가하면 여기에 실시간 시세가 표시됩니다
                 </div>
                 <button
-                  onClick={() => navigate('/user')}
+                  onClick={() => navigate('/user?section=favorites')}
                   className="mt-4 text-sm px-4 py-2 border border-cyan-500/30 text-cyan-400 rounded-lg hover:bg-cyan-500/10 transition-colors"
                 >
                   관심 종목 추가하기

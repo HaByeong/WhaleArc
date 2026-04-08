@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import VirtSplashLoading from '../components/VirtSplashLoading';
@@ -51,6 +51,7 @@ const UserPage = () => {
 
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const favoritesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +84,15 @@ const UserPage = () => {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // 대시보드에서 "관심 종목 추가하기"로 왔을 때 해당 섹션으로 스크롤
+  useEffect(() => {
+    if (!loading && searchParams.get('section') === 'favorites' && favoritesRef.current) {
+      setTimeout(() => {
+        favoritesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [loading, searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -298,7 +308,7 @@ const UserPage = () => {
               </div>
 
               {/* 관심 종목 */}
-              <div className={`card ${!!isVirt ? '' : 'border border-white/[0.06] bg-white/[0.02] !shadow-none'}`}>
+              <div ref={favoritesRef} className={`card ${!!isVirt ? '' : 'border border-white/[0.06] bg-white/[0.02] !shadow-none'}`}>
                 <h2 className={`text-lg font-bold mb-3 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>관심 종목</h2>
                 <p className={`text-sm mb-4 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>관심 있는 종목을 선택하거나 직접 입력하세요 (최대 20개)</p>
 

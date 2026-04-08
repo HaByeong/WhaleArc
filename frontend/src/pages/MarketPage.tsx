@@ -70,6 +70,8 @@ const MarketPage = () => {
   const [searchResults, setSearchResults] = useState<{ code: string; name: string; market: string }[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  // 검색으로 추가된 종목을 추적 (시세 갱신 시에도 유지)
+  const searchAddedRef = useRef<MarketPrice[]>([]);
 
   const handleStockSearch = useCallback((keyword: string) => {
     setFilterText(keyword);
@@ -99,8 +101,10 @@ const MarketPage = () => {
   const handleSearchResultClick = async (result: { code: string; name: string; market: string }) => {
     try {
       const price = await marketService.getStockPrice(result.code);
-      setAssetList(prev => [price, ...prev]);
+      searchAddedRef.current = [price, ...searchAddedRef.current.filter(a => a.symbol !== price.symbol)];
+      setAssetList(prev => [price, ...prev.filter(a => a.symbol !== price.symbol)]);
       setSelectedAsset(price);
+      setFilterText('');
       setSearchResults([]);
       // 최근 본 종목 저장
       try {
@@ -131,7 +135,10 @@ const MarketPage = () => {
         try {
           const prices = await marketService.getPrices('STOCK');
           assetCacheRef.current['STOCK'] = prices;
-          setAssetList(prices);
+          // 검색으로 추가된 종목을 유지하면서 병합
+          const serverSymbols = new Set(prices.map(p => p.symbol));
+          const extraAssets = searchAddedRef.current.filter(a => !serverSymbols.has(a.symbol));
+          setAssetList([...extraAssets, ...prices]);
           setSelectedAsset(prev => {
             if (!prev) return prev;
             const updated = prices.find(p => p.symbol === prev.symbol);
@@ -192,7 +199,10 @@ const MarketPage = () => {
       // 백그라운드에서 최신 데이터 fetch
       const prices = await marketService.getPrices(assetType);
       assetCacheRef.current[assetType] = prices;
-      setAssetList(prices);
+      // 검색으로 추가된 종목을 유지하면서 병합
+      const serverSymbols = new Set(prices.map(p => p.symbol));
+      const extraAssets = searchAddedRef.current.filter(a => !serverSymbols.has(a.symbol));
+      setAssetList([...extraAssets, ...prices]);
       if (prices.length > 0 && !selectedAsset) {
         setSelectedAsset(prices[0]);
       }
@@ -293,7 +303,7 @@ const MarketPage = () => {
                   ? !isVirt ? 'bg-cyan-500 text-white shadow-md' : 'bg-whale-light text-white shadow-md'
                   : !isVirt ? 'bg-white/[0.04] text-slate-400 border border-white/[0.06] hover:bg-white/[0.06]' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
               }`}
-              onClick={() => { selectionCacheRef.current[assetType] = selectedAsset; setAssetType('STOCK'); setSelectedAsset(selectionCacheRef.current['STOCK']); setChartType('area'); }}
+              onClick={() => { selectionCacheRef.current[assetType] = selectedAsset; searchAddedRef.current = []; setAssetType('STOCK'); setSelectedAsset(selectionCacheRef.current['STOCK']); setChartType('area'); }}
             >
               주식
             </button>
@@ -304,7 +314,7 @@ const MarketPage = () => {
                   ? !isVirt ? 'bg-cyan-500 text-white shadow-md' : 'bg-whale-light text-white shadow-md'
                   : !isVirt ? 'bg-white/[0.04] text-slate-400 border border-white/[0.06] hover:bg-white/[0.06]' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
               }`}
-              onClick={() => { selectionCacheRef.current[assetType] = selectedAsset; setAssetType('CRYPTO'); setSelectedAsset(selectionCacheRef.current['CRYPTO']); setChartType('area'); }}
+              onClick={() => { selectionCacheRef.current[assetType] = selectedAsset; searchAddedRef.current = []; setAssetType('CRYPTO'); setSelectedAsset(selectionCacheRef.current['CRYPTO']); setChartType('area'); }}
             >
               가상화폐 (빗썸)
             </button>

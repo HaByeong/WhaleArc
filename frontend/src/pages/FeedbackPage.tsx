@@ -77,6 +77,7 @@ const FeedbackPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
@@ -257,9 +258,12 @@ const FeedbackPage = () => {
     loadFeedbacks();
   }
 
-  const filteredFeedbacks = filterCategory === 'all'
+  const statusOrder: Record<string, number> = { reviewed: 0, pending: 1, resolved: 2 };
+
+  const filteredFeedbacks = (filterCategory === 'all'
     ? feedbacks
-    : feedbacks.filter(f => f.category === filterCategory);
+    : feedbacks.filter(f => f.category === filterCategory)
+  ).slice().sort((a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1));
 
   // 이미지 첨부 UI 컴포넌트
   const ImageUploadSection = ({ images, pending, onRemovePending, mode, inputRef, maxTotal = 5 }: {
@@ -556,10 +560,10 @@ const FeedbackPage = () => {
             <svg className={`w-12 h-12 mx-auto mb-3 ${isDark ? 'text-slate-700' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            <p className={`text-sm font-medium ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+            <p className={`text-base font-medium ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
               아직 피드백이 없습니다
             </p>
-            <p className={`text-xs mt-1 ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+            <p className={`text-sm mt-1 ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
               첫 번째 피드백을 남겨주세요!
             </p>
           </div>
@@ -569,7 +573,11 @@ const FeedbackPage = () => {
               <div
                 key={feedback.id}
                 className={`p-5 rounded-2xl border transition-colors ${
-                  isDark ? 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]' : 'bg-white border-gray-100 hover:border-gray-200 shadow-sm'
+                  feedback.status === 'resolved'
+                    ? isDark ? 'bg-green-500/[0.04] border-green-500/20' : 'bg-green-50/60 border-green-200'
+                    : feedback.status === 'reviewed'
+                    ? isDark ? 'bg-cyan-500/[0.04] border-cyan-500/20 hover:bg-cyan-500/[0.06]' : 'bg-blue-50/50 border-blue-200 hover:border-blue-300 shadow-sm'
+                    : isDark ? 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]' : 'bg-white border-gray-100 hover:border-gray-200 shadow-sm'
                 }`}
               >
                 {editingFeedback?.id === feedback.id ? (
@@ -684,27 +692,34 @@ const FeedbackPage = () => {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
                           isDark ? categoryColors[feedback.category].dark : categoryColors[feedback.category].light
                         }`}>
                           {categoryLabels[feedback.category]}
                         </span>
                         {feedback.isAdmin ? (
-                          <select
-                            value={feedback.status}
-                            onChange={e => handleStatusChange(feedback.id, e.target.value)}
-                            className={`text-[11px] font-medium rounded-md px-1.5 py-0.5 border cursor-pointer focus:outline-none focus:ring-1 focus:ring-whale-light ${
-                              isDark
-                                ? 'bg-white/[0.04] border-white/[0.08] ' + statusColors[feedback.status].dark
-                                : 'bg-white border-gray-200 ' + statusColors[feedback.status].light
-                            }`}
-                          >
-                            <option value="pending">검토 대기</option>
-                            <option value="reviewed">검토 중</option>
-                            <option value="resolved">반영 완료</option>
-                          </select>
+                          <>
+                            <select
+                              value={feedback.status}
+                              onChange={e => handleStatusChange(feedback.id, e.target.value)}
+                              className={`text-xs font-medium rounded-md px-1.5 py-0.5 border cursor-pointer focus:outline-none focus:ring-1 focus:ring-whale-light ${
+                                isDark
+                                  ? 'bg-white/[0.04] border-white/[0.08] ' + statusColors[feedback.status].dark
+                                  : 'bg-white border-gray-200 ' + statusColors[feedback.status].light
+                              }`}
+                            >
+                              <option value="pending">검토 대기</option>
+                              <option value="reviewed">검토 중</option>
+                              <option value="resolved">반영 완료</option>
+                            </select>
+                            {feedback.status !== 'pending' && feedback.reviewerName && (
+                              <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                                by {feedback.reviewerName}
+                              </span>
+                            )}
+                          </>
                         ) : (
-                          <span className={`text-[11px] font-medium ${
+                          <span className={`text-xs font-medium ${
                             isDark ? statusColors[feedback.status].dark : statusColors[feedback.status].light
                           }`}>
                             {feedback.status !== 'pending' && feedback.reviewerName
@@ -713,12 +728,28 @@ const FeedbackPage = () => {
                           </span>
                         )}
                       </div>
-                      <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>
+                      <h3
+                        className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-800'} ${feedback.isAdmin ? 'cursor-pointer' : ''}`}
+                        onClick={() => feedback.isAdmin && setExpandedId(expandedId === feedback.id ? null : feedback.id)}
+                      >
                         {feedback.title}
                       </h3>
-                      <p className={`text-xs mt-1 line-clamp-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                      <p
+                        className={`text-sm mt-1.5 ${isDark ? 'text-slate-400' : 'text-gray-500'} ${
+                          feedback.isAdmin && expandedId === feedback.id ? 'whitespace-pre-wrap' : 'line-clamp-3'
+                        } ${feedback.isAdmin ? 'cursor-pointer' : ''}`}
+                        onClick={() => feedback.isAdmin && setExpandedId(expandedId === feedback.id ? null : feedback.id)}
+                      >
                         {feedback.content}
                       </p>
+                      {feedback.isAdmin && feedback.content.length > 150 && (
+                        <button
+                          onClick={() => setExpandedId(expandedId === feedback.id ? null : feedback.id)}
+                          className={`text-xs mt-1 font-medium ${isDark ? 'text-cyan-500 hover:text-cyan-400' : 'text-whale-light hover:text-whale-accent'}`}
+                        >
+                          {expandedId === feedback.id ? '접기' : '전문 보기'}
+                        </button>
+                      )}
                       {/* 첨부 이미지 썸네일 */}
                       {feedback.imageUrls && feedback.imageUrls.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-3">
@@ -735,7 +766,7 @@ const FeedbackPage = () => {
                           ))}
                         </div>
                       )}
-                      <div className={`flex items-center gap-3 mt-3 text-[11px] ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+                      <div className={`flex items-center gap-3 mt-3 text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
                         <span>{feedback.authorName}</span>
                         <span>·</span>
                         <span>{new Date(feedback.createdAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}</span>
@@ -765,7 +796,7 @@ const FeedbackPage = () => {
                       <svg className="w-4 h-4" fill={feedback.hasUpvoted ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                       </svg>
-                      <span className="text-[11px] font-semibold">{feedback.upvotes}</span>
+                      <span className="text-xs font-semibold">{feedback.upvotes}</span>
                     </button>
                   </div>
                 )}

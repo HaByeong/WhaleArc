@@ -430,7 +430,8 @@ public class BacktestService {
             } else if ("SHORT".equals(currentDir)) {
                 double shortEntryValue = posEntries.stream()
                         .mapToDouble(e -> e.quantity * e.execPrice).sum();
-                equity = cash - totalQty * price + shortEntryValue;
+                double margin = posEntries.stream().mapToDouble(PosEntry::cost).sum();
+                equity = cash + margin + (shortEntryValue - totalQty * price);
             } else {
                 equity = cash;
             }
@@ -440,35 +441,51 @@ public class BacktestService {
                     ? posEntries.stream().mapToDouble(e -> e.execPrice * e.quantity).sum() / totalQty
                     : 0;
 
+            // ── 장중 고가/저가 (손절·익절·트레일링 스탑에 사용) ──
+            double candleHigh = candle.getHigh();
+            double candleLow = candle.getLow();
+
             // ── 트레일링 스탑 ──
             boolean trailingStopHit = false;
             if (hasPosition && "LONG".equals(currentDir)) {
-                if (price > highSinceEntry) highSinceEntry = price;
+                if (candleHigh > highSinceEntry) highSinceEntry = candleHigh;
                 if (trailingStop > 0 && highSinceEntry > 0) {
-                    double drop = (highSinceEntry - price) / highSinceEntry * 100;
+                    double drop = (highSinceEntry - candleLow) / highSinceEntry * 100;
                     if (drop >= trailingStop) trailingStopHit = true;
                 }
             } else if (hasPosition && "SHORT".equals(currentDir)) {
-                if (price < lowSinceEntry) lowSinceEntry = price;
+                if (candleLow < lowSinceEntry) lowSinceEntry = candleLow;
                 if (trailingStop > 0 && lowSinceEntry > 0 && lowSinceEntry < Double.MAX_VALUE) {
-                    double rise = (price - lowSinceEntry) / lowSinceEntry * 100;
+                    double rise = (candleHigh - lowSinceEntry) / lowSinceEntry * 100;
                     if (rise >= trailingStop) trailingStopHit = true;
                 }
             }
 
-            // ── 손절/익절 ──
+            // ── 손절/익절 (장중 고가/저가 기반) ──
             boolean stopLossHit = false;
             boolean takeProfitHit = false;
             if (hasPosition && avgPrice > 0) {
-                double unrealizedPct = "LONG".equals(currentDir)
-                        ? (price - avgPrice) / avgPrice * 100
-                        : (avgPrice - price) / avgPrice * 100; // SHORT: 가격 하락 = 이익
-                if (stopLoss > 0 && unrealizedPct <= -stopLoss) stopLossHit = true;
-                if (takeProfit > 0 && unrealizedPct >= takeProfit) takeProfitHit = true;
+                if ("LONG".equals(currentDir)) {
+                    double worstPct = (candleLow - avgPrice) / avgPrice * 100;
+                    double bestPct = (candleHigh - avgPrice) / avgPrice * 100;
+                    if (stopLoss > 0 && worstPct <= -stopLoss) stopLossHit = true;
+                    if (takeProfit > 0 && bestPct >= takeProfit) takeProfitHit = true;
+                } else {
+                    // SHORT: 가격 상승 = 손실, 가격 하락 = 이익
+                    double worstPct = (avgPrice - candleHigh) / avgPrice * 100;
+                    double bestPct = (avgPrice - candleLow) / avgPrice * 100;
+                    if (stopLoss > 0 && worstPct <= -stopLoss) stopLossHit = true;
+                    if (takeProfit > 0 && bestPct >= takeProfit) takeProfitHit = true;
+                }
+                // 같은 캔들에서 손절·익절 동시 충족 시 손절 우선 (보수적 접근)
+                if (stopLossHit && takeProfitHit) takeProfitHit = false;
             }
 
+            // ── 마진콜: 자산가치가 0 이하로 떨어지면 강제 청산 ──
+            boolean marginCallHit = hasPosition && equity <= 0;
+
             // ── 조건 평가 ──
-            boolean riskExit = hasPosition && (stopLossHit || takeProfitHit || trailingStopHit);
+            boolean riskExit = hasPosition && (stopLossHit || takeProfitHit || trailingStopHit || marginCallHit);
             boolean canAddPosition = !hasPosition || posEntries.size() < maxPos;
             boolean entrySignal = !riskExit && canAddPosition
                     && evaluateConditions(entryConditions, indicatorValues, gi, price, candles, globalOffset, i);
@@ -479,17 +496,43 @@ public class BacktestService {
 
             // 1) 리스크 청산
             if (riskExit) {
-                String reason = stopLossHit
+                String reason = marginCallHit
+                        ? "마진콜 (자산가치 소진)"
+                        : stopLossHit
                         ? String.format("손절 (%.1f%%)", -stopLoss)
                         : trailingStopHit
                         ? String.format("트레일링 스탑 (-%.1f%%)", trailingStop)
                         : String.format("익절 (+%.1f%%)", takeProfit);
+
+                // 리스크 청산 시 실제 체결 가격 결정 (종가 대신 손절가/익절가/트레일링 가격)
+                double riskExitPrice = price; // 기본: 종가
+                if (!marginCallHit && avgPrice > 0) {
+                    if (stopLossHit) {
+                        // 손절가에서 체결
+                        riskExitPrice = "LONG".equals(currentDir)
+                                ? avgPrice * (1 - stopLoss / 100.0)
+                                : avgPrice * (1 + stopLoss / 100.0);
+                    } else if (takeProfitHit) {
+                        // 익절가에서 체결
+                        riskExitPrice = "LONG".equals(currentDir)
+                                ? avgPrice * (1 + takeProfit / 100.0)
+                                : avgPrice * (1 - takeProfit / 100.0);
+                    } else if (trailingStopHit) {
+                        // 트레일링 스탑 가격에서 체결
+                        riskExitPrice = "LONG".equals(currentDir)
+                                ? highSinceEntry * (1 - trailingStop / 100.0)
+                                : lowSinceEntry * (1 + trailingStop / 100.0);
+                    }
+                }
+
                 int[] streaks = {currentStreak, maxWinStreak, maxLossStreak};
                 int[] tradeCounts = {profitableTrades, losingTrades};
-                cash = executeCloseAll(trades, posEntries, currentDir, price, slippage, commissionRate,
+                cash = executeCloseAll(trades, posEntries, currentDir, riskExitPrice, slippage, commissionRate,
                         date, i, reason, cash,
                         winAmounts, lossAmounts, winRates, lossRates, holdingDaysList,
                         streaks, tradeCounts);
+                // 마진콜 시 손실을 초기 자본금으로 제한 (cash가 음수가 되지 않도록)
+                if (marginCallHit && cash < 0) cash = 0;
                 currentStreak = streaks[0]; maxWinStreak = streaks[1]; maxLossStreak = streaks[2];
                 profitableTrades = tradeCounts[0]; losingTrades = tradeCounts[1];
                 posEntries.clear();
@@ -520,6 +563,7 @@ public class BacktestService {
                                 date, i, "방향 전환 (숏→롱)", cash,
                                 winAmounts, lossAmounts, winRates, lossRates, holdingDaysList,
                                 streaks, tradeCounts);
+                        if (cash < 0) cash = 0; // 숏 대손실 시 음수 방지
                         currentStreak = streaks[0]; maxWinStreak = streaks[1]; maxLossStreak = streaks[2];
                         profitableTrades = tradeCounts[0]; losingTrades = tradeCounts[1];
                         posEntries.clear();

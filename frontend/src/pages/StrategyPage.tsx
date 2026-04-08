@@ -25,6 +25,9 @@ import GoldenCrossCanvasChart from '../components/GoldenCrossCanvasChart';
 import RSIChart from '../components/RSIChart';
 import BollingerChart from '../components/BollingerChart';
 import MACDChart from '../components/MACDChart';
+import StochasticChart from '../components/StochasticChart';
+import ConnorsRSI2Chart from '../components/ConnorsRSI2Chart';
+import VolatilityBreakoutChart from '../components/VolatilityBreakoutChart';
 import {
   Line,
   AreaChart,
@@ -720,6 +723,9 @@ const StrategyPage = () => {
       case 'preset-rsi-reversal': return <RSIChart />;
       case 'preset-bollinger-squeeze': return <BollingerChart />;
       case 'preset-macd-divergence': return <MACDChart />;
+      case 'preset-stochastic': return <StochasticChart />;
+      case 'preset-connors-rsi2': return <ConnorsRSI2Chart />;
+      case 'preset-volatility-breakout': return <VolatilityBreakoutChart />;
       default:
         return (
           <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -1167,16 +1173,6 @@ const StrategyPage = () => {
                       </div>
                     )}
                   </div>
-
-                  {/* 항로 로직 */}
-                  {selectedStrategy.strategyLogic && (
-                    <div className={`rounded-xl p-5 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gradient-to-r from-whale-dark/5 to-blue-50/50 border border-whale-light/20'}`}>
-                      <h3 className={`text-xs font-bold mb-3 tracking-wide uppercase ${!isVirt ? 'text-cyan-400' : 'text-whale-light'}`}>Trading Logic</h3>
-                      <div className={`px-4 py-3 rounded-xl text-sm font-mono shadow-sm ${!isVirt ? 'text-white bg-white/[0.04] border border-white/[0.06]' : 'text-whale-dark bg-white border border-gray-200'}`}>
-                        {selectedStrategy.strategyLogic}
-                      </div>
-                    </div>
-                  )}
 
                   {/* 매매 조건 시각화 */}
                   {((selectedStrategy.entryConditions?.length || 0) > 0 || (selectedStrategy.exitConditions?.length || 0) > 0) && (

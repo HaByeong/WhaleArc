@@ -90,31 +90,121 @@
 }
 
 /* ═══════════════════════════════════════
-   WhaleArc 다크 모드 (non-Virt 전용)
-   body.whalearc-dark 에서 자동 적용
-   — 컴포넌트 클래스만 오버라이드
-   — 각 페이지는 자체적으로 isVirt 분기
+   WhaleArc 4-Theme CSS Variables
+   virt/novirt × light/dark
+   ═══════════════════════════════════════ */
+
+/* Virt Light — 수면 위, 밝고 친근한 */
+body.whalearc-virt:not(.whalearc-dark) {
+  --wa-page-bg: #f8fafc;
+  --wa-header-bg: #ffffff;
+  --wa-header-border: #e2e8f0;
+  --wa-card-bg: #ffffff;
+  --wa-card-border: #e2e8f0;
+  --wa-card-hover-border: rgba(14,165,233,0.4);
+  --wa-text-primary: #0f172a;
+  --wa-text-secondary: #64748b;
+  --wa-text-muted: #94a3b8;
+  --wa-accent: #0ea5e9;
+  --wa-accent-soft: rgba(14,165,233,0.1);
+  --wa-input-bg: #ffffff;
+  --wa-input-border: #d1d5db;
+  --wa-banner-from: #0c4a6e;
+  --wa-banner-to: #0284c7;
+  --wa-select-bg: #ffffff;
+  --wa-up-color: #16a34a;
+  --wa-down-color: #dc2626;
+}
+
+/* Virt Dark — 얕은 바다, 부드러운 다크 */
+body.whalearc-dark.whalearc-virt {
+  --wa-page-bg: #0f1b2d;
+  --wa-header-bg: #0f1b2d;
+  --wa-header-border: rgba(255,255,255,0.08);
+  --wa-card-bg: rgba(255,255,255,0.04);
+  --wa-card-border: rgba(255,255,255,0.08);
+  --wa-card-hover-border: rgba(103,232,249,0.35);
+  --wa-text-primary: #e2e8f0;
+  --wa-text-secondary: #7c9ab8;
+  --wa-text-muted: #5b7a95;
+  --wa-accent: #67e8f9;
+  --wa-accent-soft: rgba(103,232,249,0.1);
+  --wa-input-bg: rgba(255,255,255,0.04);
+  --wa-input-border: rgba(255,255,255,0.1);
+  --wa-banner-from: #164e6e;
+  --wa-banner-to: #0e7490;
+  --wa-select-bg: #162236;
+  --wa-up-color: #4ade80;
+  --wa-down-color: #f87171;
+}
+
+/* No Virt Light — 맑은 바다, 프로페셔널 */
+body.whalearc-novirt:not(.whalearc-dark) {
+  --wa-page-bg: #f1f5f9;
+  --wa-header-bg: #ffffff;
+  --wa-header-border: #cbd5e1;
+  --wa-card-bg: #ffffff;
+  --wa-card-border: #cbd5e1;
+  --wa-card-hover-border: rgba(30,58,95,0.4);
+  --wa-text-primary: #0f172a;
+  --wa-text-secondary: #475569;
+  --wa-text-muted: #64748b;
+  --wa-accent: #1e3a5f;
+  --wa-accent-soft: rgba(30,58,95,0.1);
+  --wa-input-bg: #ffffff;
+  --wa-input-border: #cbd5e1;
+  --wa-banner-from: #0f172a;
+  --wa-banner-to: #1e3a5f;
+  --wa-select-bg: #ffffff;
+  --wa-up-color: #16a34a;
+  --wa-down-color: #dc2626;
+}
+
+/* No Virt Dark — 심해, 깊고 날카로운 */
+body.whalearc-dark.whalearc-novirt {
+  --wa-page-bg: #060d18;
+  --wa-header-bg: #060d18;
+  --wa-header-border: rgba(255,255,255,0.06);
+  --wa-card-bg: rgba(255,255,255,0.025);
+  --wa-card-border: rgba(255,255,255,0.06);
+  --wa-card-hover-border: rgba(56,189,248,0.3);
+  --wa-text-primary: #e2e8f0;
+  --wa-text-secondary: #64748b;
+  --wa-text-muted: #475569;
+  --wa-accent: #38bdf8;
+  --wa-accent-soft: rgba(56,189,248,0.1);
+  --wa-input-bg: rgba(255,255,255,0.04);
+  --wa-input-border: rgba(255,255,255,0.1);
+  --wa-banner-from: #020617;
+  --wa-banner-to: #0c2d4a;
+  --wa-select-bg: #0c1a2e;
+  --wa-up-color: #34d399;
+  --wa-down-color: #f87171;
+}
+
+/* ═══════════════════════════════════════
+   WhaleArc 다크 모드 공통 오버라이드
    ═══════════════════════════════════════ */
 body.whalearc-dark {
-  background-color: #060d18;
-  color: #e2e8f0;
+  background-color: var(--wa-page-bg, #060d18);
+  color: var(--wa-text-primary, #e2e8f0);
 }
 
 body.whalearc-dark .card {
-  background: rgba(255, 255, 255, 0.025);
-  border-color: rgba(255, 255, 255, 0.06);
+  background: var(--wa-card-bg);
+  border-color: var(--wa-card-border);
   box-shadow: none;
-  color: #e2e8f0;
+  color: var(--wa-text-primary);
 }
 body.whalearc-dark .card:hover {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 body.whalearc-dark .card-hover:hover {
-  border-color: rgba(56, 189, 248, 0.3);
+  border-color: var(--wa-card-hover-border);
 }
 body.whalearc-dark .btn-secondary {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--wa-input-bg);
+  border-color: var(--wa-card-border);
   color: #cbd5e1;
 }
 body.whalearc-dark .btn-secondary:hover {
@@ -122,43 +212,55 @@ body.whalearc-dark .btn-secondary:hover {
   color: #fff;
 }
 body.whalearc-dark .input-field {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
+  background: var(--wa-input-bg);
+  border-color: var(--wa-input-border);
+  color: var(--wa-text-primary);
 }
-body.whalearc-dark .input-field:hover { border-color: rgba(56, 189, 248, 0.3); }
-body.whalearc-dark .input-field:focus { border-color: rgba(56, 189, 248, 0.5); }
+body.whalearc-dark .input-field:hover { border-color: var(--wa-card-hover-border); }
+body.whalearc-dark .input-field:focus { border-color: var(--wa-accent); }
 body.whalearc-dark .input-field select,
-body.whalearc-dark .input-field option { background: #0c1a2e; color: #e2e8f0; }
+body.whalearc-dark .input-field option { background: var(--wa-select-bg); color: var(--wa-text-primary); }
 body.whalearc-dark .stock-item-default {
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--wa-card-bg);
   border-color: transparent;
 }
 body.whalearc-dark .stock-item-default:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: var(--wa-card-border);
 }
 body.whalearc-dark .stock-item-selected {
-  background: rgba(56, 189, 248, 0.08);
-  border-color: rgba(56, 189, 248, 0.4);
+  background: var(--wa-accent-soft);
+  border-color: var(--wa-accent);
 }
 
 /* 폼 요소 */
 body.whalearc-dark select,
 body.whalearc-dark input:not([type="checkbox"]):not([type="radio"]),
 body.whalearc-dark textarea {
-  background-color: rgba(255, 255, 255, 0.04);
-  color: #e2e8f0;
-  border-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--wa-input-bg);
+  color: var(--wa-text-primary);
+  border-color: var(--wa-input-border);
   color-scheme: dark;
 }
-body.whalearc-dark select option { background: #0c1a2e; color: #e2e8f0; }
+body.whalearc-dark select option { background: var(--wa-select-bg); color: var(--wa-text-primary); }
 body.whalearc-dark input::placeholder,
-body.whalearc-dark textarea::placeholder { color: #475569; }
+body.whalearc-dark textarea::placeholder { color: var(--wa-text-muted); }
 
 /* 스크롤바 */
-body.whalearc-dark ::-webkit-scrollbar-track { background: #060d18; }
+body.whalearc-dark ::-webkit-scrollbar-track { background: var(--wa-page-bg); }
 body.whalearc-dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+
+/* No Virt Light 모드 — 컴포넌트 오버라이드 */
+body.whalearc-novirt:not(.whalearc-dark) {
+  background-color: var(--wa-page-bg);
+  color: var(--wa-text-primary);
+}
+body.whalearc-novirt:not(.whalearc-dark) .card {
+  border-color: var(--wa-card-border);
+}
+body.whalearc-novirt:not(.whalearc-dark) .input-field {
+  border-color: var(--wa-input-border);
+}
 
 /* 그래디언트 텍스트 보호 */
 body.whalearc-dark .whalearc-text,
@@ -576,14 +678,22 @@ body.whalearc-dark .whalearc-text-nav {
   fill: currentColor;
   animation: dash-wave-flow linear infinite;
 }
-/* virt (배너 다크 → 페이지 gray-50) */
+/* virt light (배너 다크 → 페이지 #f8fafc) */
 .dash-wave-1 { color: rgba(15,30,60,0.7); animation-duration: 6s; }
 .dash-wave-2 { color: rgba(100,140,180,0.3); animation-duration: 8s; animation-direction: reverse; bottom: -4px; }
-.dash-wave-3 { color: rgb(249,250,251); animation-duration: 10s; bottom: -8px; }
-/* no-virt (배너 다크 → 페이지 #060d18) */
+.dash-wave-3 { color: rgb(248,250,252); animation-duration: 10s; bottom: -8px; }
+/* no-virt dark (배너 다크 → 페이지 #060d18) */
 .dash-wave-dark-1 { color: rgba(8,18,35,0.7); animation-duration: 6s; }
 .dash-wave-dark-2 { color: rgba(10,25,50,0.5); animation-duration: 8s; animation-direction: reverse; bottom: -4px; }
 .dash-wave-dark-3 { color: rgb(6,13,24); animation-duration: 10s; bottom: -8px; }
+/* virt dark (배너 다크 → 페이지 #0f1b2d) */
+.dash-wave-vdark-1 { color: rgba(12,22,40,0.7); animation-duration: 6s; }
+.dash-wave-vdark-2 { color: rgba(15,27,45,0.5); animation-duration: 8s; animation-direction: reverse; bottom: -4px; }
+.dash-wave-vdark-3 { color: rgb(15,27,45); animation-duration: 10s; bottom: -8px; }
+/* no-virt light (배너 다크 → 페이지 #f1f5f9) */
+.dash-wave-nlight-1 { color: rgba(15,23,42,0.7); animation-duration: 6s; }
+.dash-wave-nlight-2 { color: rgba(30,58,95,0.3); animation-duration: 8s; animation-direction: reverse; bottom: -4px; }
+.dash-wave-nlight-3 { color: rgb(241,245,249); animation-duration: 10s; bottom: -8px; }
 @keyframes dash-wave-flow {
   0%   { transform: translateX(0); }
   100% { transform: translateX(50%); }

@@ -1,10 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
 import WhaleTailLogo from '../components/WhaleTailLogo';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 const LandingPage = () => {
   const navigate = useNavigate();
   const { session } = useAuth();
+  const { isDark } = useTheme();
 
   const handleFeatureClick = (path: string) => {
     if (!session) {
@@ -20,7 +22,7 @@ const LandingPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${isDark ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
       {/* Header */}
       <header className="bg-whale-dark">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -184,13 +186,13 @@ const LandingPage = () => {
       </div>
 
       {/* Feature Cards Section */}
-      <div className="bg-gradient-to-b from-white to-gray-50 py-20">
+      <div className={`bg-gradient-to-b ${isDark ? 'from-[#0a1628] to-[#060d18]' : 'from-white to-gray-50'} py-20`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-whale-dark mb-4">
+            <h2 className={`text-3xl md:text-4xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'} mb-4`}>
               이런 것들을 할 수 있어요
             </h2>
-            <p className="text-gray-600 text-lg">
+            <p className={`${isDark ? 'text-gray-400' : 'text-gray-600'} text-lg`}>
               WhaleArc와 함께 항해를 시작해보세요
             </p>
           </div>
@@ -263,15 +265,15 @@ const LandingPage = () => {
               <div
                 key={feature.title}
                 onClick={() => handleFeatureClick(feature.route)}
-                className="group card text-center hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 border border-gray-100 hover:border-whale-light cursor-pointer"
+                className={`group card text-center hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 border ${isDark ? 'border-white/10 hover:border-whale-light bg-white/[0.04]' : 'border-gray-100 hover:border-whale-light'} cursor-pointer`}
               >
                 <div className="w-16 h-16 bg-gradient-to-br from-whale-light to-whale-accent rounded-xl mx-auto mb-4 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg">
                   {feature.icon}
                 </div>
-                <h3 className="text-lg font-bold text-whale-dark mb-1.5 group-hover:text-whale-light transition-colors">
+                <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-whale-dark'} mb-1.5 group-hover:text-whale-light transition-colors`}>
                   {feature.title}
                 </h3>
-                <p className="text-gray-500 text-sm leading-relaxed">
+                <p className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-sm leading-relaxed`}>
                   {feature.desc}
                 </p>
               </div>

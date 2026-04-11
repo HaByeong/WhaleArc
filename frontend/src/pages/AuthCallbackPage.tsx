@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { userService } from '../services/userService';
+import { useTheme } from '../contexts/ThemeContext';
 
 const AuthCallbackPage = () => {
+  const { isDark } = useTheme();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -94,7 +96,7 @@ const AuthCallbackPage = () => {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
       <div className="text-center">
         {error ? (
           <>
@@ -104,12 +106,12 @@ const AuthCallbackPage = () => {
               </svg>
             </div>
             <p className="text-red-600 font-medium mb-1">{error}</p>
-            <p className="text-gray-400 text-sm">잠시 후 로그인 페이지로 이동합니다...</p>
+            <p className={`${isDark ? 'text-gray-500' : 'text-gray-400'} text-sm`}>잠시 후 로그인 페이지로 이동합니다...</p>
           </>
         ) : (
           <>
             <div className="w-12 h-12 border-4 border-whale-light border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-600">바다로 입수 중...</p>
+            <p className={`${isDark ? 'text-gray-400' : 'text-gray-600'}`}>바다로 입수 중...</p>
           </>
         )}
       </div>

@@ -3,8 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { authService } from '../services/authService';
 import { validateNickname } from '../utils/nicknameFilter';
+import { useTheme } from '../contexts/ThemeContext';
 
 const SignUpPage = () => {
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -71,13 +73,13 @@ const SignUpPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${isDark ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
       <Header showNav={false} />
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="card">
           <div className="mb-8 text-center">
-            <h2 className="text-2xl font-bold text-whale-dark">새로운 항해를 시작하세요</h2>
+            <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>새로운 항해를 시작하세요</h2>
             <p className="text-gray-400 text-sm mt-1">WhaleArc과 함께 투자의 바다로</p>
           </div>
 
@@ -86,7 +88,7 @@ const SignUpPage = () => {
             <button
               type="button"
               onClick={() => handleOAuthLogin('google')}
-              className="w-full flex items-center justify-center space-x-3 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className={`w-full flex items-center justify-center space-x-3 px-4 py-3 border rounded-lg transition-colors ${isDark ? 'border-white/20 hover:bg-white/10' : 'border-gray-300 hover:bg-gray-50'}`}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
@@ -94,7 +96,7 @@ const SignUpPage = () => {
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
               </svg>
-              <span className="font-medium text-gray-700">Google로 시작하기</span>
+              <span className={`font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>Google로 시작하기</span>
             </button>
 
           </div>
@@ -102,10 +104,10 @@ const SignUpPage = () => {
           {/* 구분선 */}
           <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
+              <div className={`w-full border-t ${isDark ? 'border-white/20' : 'border-gray-300'}`} />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="bg-white px-4 text-gray-500">또는 이메일로 가입</span>
+              <span className={`px-4 text-gray-500 ${isDark ? 'bg-[#0f1a2e]' : 'bg-white'}`}>또는 이메일로 가입</span>
             </div>
           </div>
 
@@ -118,7 +120,7 @@ const SignUpPage = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-4">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="email" className={`block text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                   이메일 *
                 </label>
                 <input
@@ -133,7 +135,7 @@ const SignUpPage = () => {
               </div>
 
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="name" className={`block text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                   닉네임 *
                 </label>
                 <input
@@ -148,7 +150,7 @@ const SignUpPage = () => {
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="password" className={`block text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                   비밀번호 *
                 </label>
                 <input
@@ -163,7 +165,7 @@ const SignUpPage = () => {
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="confirmPassword" className={`block text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                   비밀번호 확인 *
                 </label>
                 <input
@@ -187,7 +189,7 @@ const SignUpPage = () => {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-gray-600">
+          <p className={`mt-6 text-center ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
             이미 계정이 있으신가요?{' '}
             <Link to="/login" className="text-whale-light hover:underline font-semibold">
               로그인

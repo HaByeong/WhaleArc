@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
+import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import apiClient from '../utils/api';
@@ -52,8 +53,8 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 const FeedbackPage = () => {
   const { isVirt } = useRoutePrefix();
+  const { isDark } = useTheme();
   const { profileName, user } = useAuth();
-  const isDark = !isVirt;
 
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -346,7 +347,7 @@ const FeedbackPage = () => {
   };
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-[#060d18]' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen ${isDark ? 'bg-[var(--wa-page-bg)]' : 'bg-gray-50'}`}>
       <Header showNav={true} />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

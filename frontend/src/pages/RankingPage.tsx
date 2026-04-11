@@ -8,11 +8,13 @@ import UnstableCurrent from '../components/UnstableCurrent';
 import { type RankingType, type RankingEntry } from '../services/rankingService';
 import { virtService, type VirtCredentialInfo, type VirtPortfolio, type VirtHolding } from '../services/virtService';
 import apiClient from '../utils/api';
+import { useTheme } from '../contexts/ThemeContext';
 
 /* ═══════════════════════════════════════════════════
    실계좌 투자 현황 (일반 모드)
    ═══════════════════════════════════════════════════ */
 const RealInvestmentStatusPage = () => {
+  const { isDark } = useTheme();
   const navigate = useVirtNavigate();
   const [serviceTab, setServiceTab] = useState<'kis' | 'upbit' | 'bitget' | 'all'>('all');
   const [kisCredInfo, setKisCredInfo] = useState<VirtCredentialInfo | null>(null);
@@ -92,7 +94,7 @@ const RealInvestmentStatusPage = () => {
   if (loading) return <SplashLoading message="실계좌 투자 현황을 불러오는 중..." />;
 
   return (
-    <div className="min-h-screen bg-[#060d18] text-white">
+    <div className="min-h-screen bg-[var(--wa-page-bg)] text-white">
       <Header showNav={true} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -403,7 +405,7 @@ const VirtRankingPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--wa-page-bg)]">
       <Header showNav={true} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

@@ -7,6 +7,7 @@ import VirtSplashLoading from '../components/VirtSplashLoading';
 import ErrorMessage from '../components/ErrorMessage';
 import UnstableCurrent from '../components/UnstableCurrent';
 import apiClient from '../utils/api';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface PortfolioSummary {
   portfolioId: string;
@@ -28,6 +29,7 @@ interface PortfolioSummary {
 const PortfolioDetailPage = () => {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const { prefix, isVirt } = useRoutePrefix();
+  const { isDark } = useTheme();
   const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,10 +70,10 @@ const PortfolioDetailPage = () => {
 
   if (error || !portfolio) {
     return (
-      <div className={`min-h-screen ${!isVirt ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
+      <div className={`min-h-screen ${isDark ? 'bg-[var(--wa-page-bg)] text-white' : 'bg-[var(--wa-page-bg)]'}`}>
         <Header showNav />
         <div className="max-w-3xl mx-auto px-4 py-8">
-          {!isVirt ? (
+          {isDark ? (
             <UnstableCurrent message="해류가 불안정합니다" sub={error || '포트폴리오를 찾을 수 없습니다.'} />
           ) : (
             <ErrorMessage message={error || '포트폴리오를 찾을 수 없습니다.'} onRetry={loadDetail} variant="notfound" />
@@ -79,7 +81,7 @@ const PortfolioDetailPage = () => {
           <div className="text-center mt-6">
             <Link
               to={`${prefix}/ranking`}
-              className={`inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${!isVirt ? 'text-cyan-400 hover:text-cyan-300' : 'text-whale-light hover:text-whale-dark'}`}
+              className={`inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${isDark ? 'text-cyan-400 hover:text-cyan-300' : 'text-whale-light hover:text-whale-dark'}`}
             >
               <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -99,7 +101,7 @@ const PortfolioDetailPage = () => {
   const totalHoldings = portfolio.stockCount + portfolio.cryptoCount;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--wa-page-bg)]">
       <Header showNav />
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">

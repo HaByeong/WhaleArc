@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useVirtNavigate, useRoutePrefix } from '../hooks/useRoutePrefix';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Area, ComposedChart, Line } from 'recharts';
 import apiClient from '../utils/api';
+import { useTheme } from '../contexts/ThemeContext';
 import Header from '../components/Header';
 import VirtSplashLoading from '../components/VirtSplashLoading';
 import SplashLoading from '../components/SplashLoading';
@@ -26,6 +27,7 @@ const CHART_COLORS = ['#4a90e2', '#50c878', '#f5a623', '#e74c3c', '#9b59b6', '#1
    실계좌 포트폴리오 (일반 모드 전용)
    ═══════════════════════════════════════════════════ */
 const RealPortfolioPage = () => {
+  const { isDark } = useTheme();
   const [serviceTab, setServiceTab] = useState<'kis' | 'upbit' | 'bitget'>('kis');
   const [activeTab, setActiveTab] = useState<'holdings' | 'trades'>('holdings');
   const [kisCredInfo, setKisCredInfo] = useState<VirtCredentialInfo | null>(null);
@@ -138,7 +140,7 @@ const RealPortfolioPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#060d18] text-white">
+    <div className="min-h-screen bg-[var(--wa-page-bg)] text-white">
       <Header showNav />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
@@ -378,7 +380,7 @@ const RealPortfolioPage = () => {
                         </Pie>
                         <Tooltip
                           formatter={(v: number) => fmt(v)}
-                          contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', fontSize: '12px', color: '#e2e8f0' }}
+                          contentStyle={{ backgroundColor: isDark ? '#0f172a' : '#ffffff', border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.1)', borderRadius: '8px', fontSize: '12px', color: isDark ? '#e2e8f0' : '#1e293b' }}
                         />
                       </PieChart>
                     </ResponsiveContainer>
@@ -596,6 +598,7 @@ const RealPortfolioPage = () => {
 const MyPortfolioPage = () => {
   const navigate = useVirtNavigate();
   const { prefix, isVirt } = useRoutePrefix();
+  const { isDark } = useTheme();
   const { user, profileName } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [purchasePerformance, setPurchasePerformance] = useState<PurchasePerformance[]>([]);
@@ -711,7 +714,7 @@ const MyPortfolioPage = () => {
   }
   if (error && !portfolio) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[var(--wa-page-bg)]">
         <Header showNav />
         <div className="max-w-7xl mx-auto px-4 py-8">
           <ErrorMessage message={error} onRetry={() => loadPortfolio()} variant="error" />
@@ -721,7 +724,7 @@ const MyPortfolioPage = () => {
   }
   if (!portfolio) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[var(--wa-page-bg)]">
         <Header showNav />
         <div className="max-w-7xl mx-auto px-4 py-8">
           <ErrorMessage message="포트폴리오를 찾을 수 없습니다." variant="empty" />
@@ -768,7 +771,7 @@ const MyPortfolioPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--wa-page-bg)]">
       {toast && (
         <div className="fixed top-4 right-4 z-50 max-w-sm">
           <div className={`px-4 py-3 rounded-xl shadow-lg border-l-4 ${

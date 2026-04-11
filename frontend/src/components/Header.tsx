@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import Toast from './Toast';
@@ -16,6 +17,7 @@ const Header = ({ showNav = false }: HeaderProps) => {
   const location = useLocation();
   const { prefix, isVirt } = useRoutePrefix();
   const { session, user, profileName } = useAuth();
+  const { isDark, theme, toggleTheme } = useTheme();
   const isAuthenticated = !!session;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
@@ -48,13 +50,13 @@ const Header = ({ showNav = false }: HeaderProps) => {
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
-  // non-Virt + 네비 = 다크 헤더
-  const isDarkNav = showNav && !isVirt;
+  // 다크 모드 + 네비 = 다크 헤더
+  const isDarkNav = showNav && isDark;
 
   return (
     <>
     <Toast toasts={toasts} onDismiss={dismissToast} />
-    <header className={isDarkNav ? "bg-[#060d18] border-b border-white/[0.06]" : showNav ? "bg-white shadow-sm" : "bg-whale-dark"}>
+    <header className={isDarkNav ? "bg-[var(--wa-header-bg)] border-b border-[var(--wa-header-border)]" : showNav ? "bg-[var(--wa-header-bg,#fff)] shadow-sm border-b border-[var(--wa-header-border,#e2e8f0)]" : "bg-whale-dark"}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <Link
@@ -104,6 +106,21 @@ const Header = ({ showNav = false }: HeaderProps) => {
               {/* 오른쪽 아이콘 영역 */}
               {isAuthenticated && (
                 <div className="hidden lg:flex items-center space-x-2 shrink-0 h-full">
+                    {/* 테마 토글 */}
+                    <button
+                      onClick={toggleTheme}
+                      className={`p-2 transition-colors rounded-lg focus:outline-none focus:ring-2 focus:ring-whale-light focus:ring-offset-2 ${isDarkNav ? 'text-slate-400 hover:text-white' : 'text-gray-500 hover:text-whale-light'}`}
+                      aria-label={`테마 변경 (현재: ${theme === 'light' ? '라이트' : theme === 'dark' ? '다크' : '시스템'})`}
+                      title={theme === 'light' ? '라이트 모드' : theme === 'dark' ? '다크 모드' : '시스템 모드'}
+                    >
+                      {theme === 'light' ? (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                      ) : theme === 'dark' ? (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                      )}
+                    </button>
                     {/* 알림 벨 */}
                     <div className="relative" ref={notifRef}>
                       <button
@@ -252,6 +269,20 @@ const Header = ({ showNav = false }: HeaderProps) => {
             {isAuthenticated && (
               <>
                 <div className={`px-4 py-3 mt-2 border-t ${isDarkNav ? 'border-white/[0.06]' : 'border-gray-200'}`}>
+                  {/* 모바일 테마 토글 */}
+                  <button
+                    onClick={toggleTheme}
+                    className={`flex items-center w-full px-2 py-2 mb-2 rounded-lg transition-colors ${isDarkNav ? 'text-slate-300 hover:bg-white/5' : 'text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    {theme === 'light' ? (
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    ) : theme === 'dark' ? (
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                    ) : (
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                    )}
+                    <span className="text-sm">{theme === 'light' ? '라이트 모드' : theme === 'dark' ? '다크 모드' : '시스템 모드'}</span>
+                  </button>
                   {/* 모바일 알림 */}
                   <button
                     onClick={() => { setShowNotifPanel(!showNotifPanel); if (!showNotifPanel) refreshNotifications(); }}

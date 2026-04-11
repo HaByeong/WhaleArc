@@ -8,6 +8,7 @@ import UnstableCurrent from '../components/UnstableCurrent';
 import { usePolling } from '../hooks/usePolling';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
 import { useRoutePrefix, useVirtNavigate } from '../hooks/useRoutePrefix';
+import { useTheme } from '../contexts/ThemeContext';
 import {
   tradeService,
   type StockPrice,
@@ -36,7 +37,7 @@ const assetName = (code: string, assetType?: string) => {
 
 const TradePage = () => {
   const { isVirt } = useRoutePrefix();
-  const d = !isVirt; // dark mode flag
+  const { isDark: d } = useTheme();
   const _virtNavigate = useVirtNavigate(); void _virtNavigate;
   const [searchParams] = useSearchParams();
   const urlCode = searchParams.get('code');
@@ -579,7 +580,7 @@ const TradePage = () => {
   }
   if (error && stockList.length === 0) {
     return (
-      <div className={`min-h-screen ${!isVirt ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
+      <div className={`min-h-screen ${d ? 'bg-[var(--wa-page-bg)] text-white' : 'bg-gray-50'}`}>
         <Header showNav />
         <div className="max-w-7xl mx-auto px-4 py-8">
           {!isVirt ? (
@@ -593,7 +594,7 @@ const TradePage = () => {
   }
 
   return (
-    <div className={`min-h-screen ${!isVirt ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen ${d ? 'bg-[var(--wa-page-bg)] text-white' : 'bg-gray-50'}`}>
       <Header showNav />
 
       {/* 토스트 */}
@@ -684,7 +685,7 @@ const TradePage = () => {
               {/* 주식 검색 드롭다운 */}
               {marketTab === 'STOCK' && stockSearchResults.length > 0 && (
                 <div className={`absolute top-full left-0 right-0 mt-1 rounded-xl shadow-xl border z-20 max-h-60 overflow-y-auto ${
-                  d ? 'bg-[#0c1829] border-white/[0.06]' : 'bg-white border-gray-200'
+                  d ? 'bg-[var(--wa-card-bg)] border-white/[0.06]' : 'bg-white border-gray-200'
                 }`}>
                   {stockSearchResults.map(r => (
                     <div
@@ -996,7 +997,7 @@ const TradePage = () => {
                           price={liveSelectedStock.currentPrice}
                           changeRate={liveSelectedStock.changeRate}
                           assetType={isSelectedStock ? 'STOCK' : undefined}
-                          isDark={!isVirt}
+                          isDark={d}
                         />
                       </>
                     )}

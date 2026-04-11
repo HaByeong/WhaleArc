@@ -9,11 +9,13 @@ import {
   type VirtCredentialInfo,
 } from '../services/virtService';
 import VirtSplashLoading from '../components/VirtSplashLoading';
+import { useTheme } from '../contexts/ThemeContext';
 
 const CHART_COLORS = ['#38bdf8', '#22d3ee', '#818cf8', '#a78bfa', '#34d399', '#f472b6', '#fb923c', '#94a3b8'];
 
 const VirtDashboardPage = () => {
   const navigate = useNavigate();
+  const { isDark } = useTheme();
   // 서비스 탭
   const [serviceTab, setServiceTab] = useState<'stock' | 'upbit' | 'bitget'>('stock');
 
@@ -140,7 +142,7 @@ const VirtDashboardPage = () => {
 
   // API 설정 전용 헤더 (공통)
   const ApiSettingHeader = () => (
-    <header className="relative z-50 border-b border-white/[0.06]" style={{ backgroundColor: '#060d18' }}>
+    <header className="relative z-50 border-b border-[var(--wa-header-border)]" style={{ backgroundColor: 'var(--wa-header-bg)' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
         <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-slate-500 hover:text-white transition-colors">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -163,7 +165,7 @@ const VirtDashboardPage = () => {
 
   if (error && !credInfo && !upbitCredInfo && !bitgetCredInfo) {
     return (
-      <div className="min-h-screen bg-[#060d18]">
+      <div className="min-h-screen bg-[var(--wa-page-bg)]">
         <ApiSettingHeader />
         <div className="flex items-center justify-center h-[85vh]">
           <div className="text-center max-w-md px-4">
@@ -182,7 +184,7 @@ const VirtDashboardPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#060d18] text-white">
+    <div className="min-h-screen bg-[var(--wa-page-bg)] text-white">
       <ApiSettingHeader />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
@@ -391,7 +393,7 @@ const VirtDashboardPage = () => {
                             ...activePortfolio.holdings.map((_, i) => ({ color: CHART_COLORS[i % CHART_COLORS.length] })),
                           ].map((e, i) => <Cell key={i} fill={e.color} />)}
                         </Pie>
-                        <Tooltip formatter={(v: number) => fmt(v)} contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', fontSize: '12px', color: '#e2e8f0' }} />
+                        <Tooltip formatter={(v: number) => fmt(v)} contentStyle={{ backgroundColor: isDark ? '#0f172a' : '#ffffff', border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.1)', borderRadius: '8px', fontSize: '12px', color: isDark ? '#e2e8f0' : '#1e293b' }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>

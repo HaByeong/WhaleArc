@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { authService } from '../services/authService';
+import { useTheme } from '../contexts/ThemeContext';
 
 const ResetPasswordPage = () => {
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -39,7 +41,7 @@ const ResetPasswordPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${isDark ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
       <Header showNav={false} />
 
       <div className="max-w-md mx-auto px-4 sm:px-6 py-12">
@@ -51,13 +53,13 @@ const ResetPasswordPage = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h2 className="text-xl font-bold text-whale-dark mb-2">비밀번호가 변경되었습니다</h2>
+              <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'} mb-2`}>비밀번호가 변경되었습니다</h2>
               <p className="text-gray-500 text-sm">잠시 후 로그인 페이지로 이동합니다...</p>
             </div>
           ) : (
             <>
               <div className="mb-6">
-                <h2 className="text-2xl font-bold text-whale-dark">새 비밀번호 설정</h2>
+                <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>새 비밀번호 설정</h2>
                 <p className="text-gray-400 text-sm mt-1">새로운 비밀번호를 입력해주세요</p>
               </div>
 
@@ -69,7 +71,7 @@ const ResetPasswordPage = () => {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="password" className={`block text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                     새 비밀번호
                   </label>
                   <input
@@ -83,7 +85,7 @@ const ResetPasswordPage = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="confirmPassword" className={`block text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                     새 비밀번호 확인
                   </label>
                   <input

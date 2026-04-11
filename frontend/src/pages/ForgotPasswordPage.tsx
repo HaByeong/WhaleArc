@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { authService } from '../services/authService';
+import { useTheme } from '../contexts/ThemeContext';
 
 const ForgotPasswordPage = () => {
+  const { isDark } = useTheme();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -25,7 +27,7 @@ const ForgotPasswordPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${isDark ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
       <Header showNav={false} />
 
       <div className="max-w-md mx-auto px-4 sm:px-6 py-12">
@@ -37,9 +39,9 @@ const ForgotPasswordPage = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
-              <h2 className="text-xl font-bold text-whale-dark mb-2">이메일을 확인해주세요</h2>
+              <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'} mb-2`}>이메일을 확인해주세요</h2>
               <p className="text-gray-500 text-sm mb-6">
-                <span className="font-semibold text-whale-dark">{email}</span>로
+                <span className={`font-semibold ${isDark ? 'text-white' : 'text-whale-dark'}`}>{email}</span>로
                 비밀번호 재설정 링크를 보냈습니다.
                 <br />메일함을 확인해주세요.
               </p>
@@ -50,13 +52,13 @@ const ForgotPasswordPage = () => {
           ) : (
             <>
               <div className="mb-6">
-                <h2 className="text-2xl font-bold text-whale-dark">비밀번호 찾기</h2>
+                <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>비밀번호 찾기</h2>
                 <p className="text-gray-400 text-sm mt-1">
                   가입한 이메일을 입력하면 비밀번호 재설정 링크를 보내드립니다
                 </p>
               </div>
 
-              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+              <div className={`mb-6 ${isDark ? 'bg-blue-900/30 border-blue-700 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-800'} border rounded-lg p-3 text-sm`}>
                 WhaleArc은 이메일이 곧 아이디입니다.
                 가입한 이메일이 기억나지 않으시면 Google 소셜 로그인을 시도해보세요.
               </div>
@@ -69,7 +71,7 @@ const ForgotPasswordPage = () => {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="email" className={`block text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                     이메일
                   </label>
                   <input
@@ -91,7 +93,7 @@ const ForgotPasswordPage = () => {
                 </button>
               </form>
 
-              <p className="mt-4 text-center text-gray-600 text-sm">
+              <p className={`mt-4 text-center ${isDark ? 'text-gray-400' : 'text-gray-600'} text-sm`}>
                 <Link to="/login" className="text-whale-light hover:underline font-semibold">
                   로그인으로 돌아가기
                 </Link>

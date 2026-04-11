@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import SplashLoading from './components/SplashLoading';
 import VirtSplashLoading from './components/VirtSplashLoading';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -26,19 +27,28 @@ const VirtDashboardPage = lazy(() => import('./pages/VirtDashboardPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const GoldenCrossChart = lazy(() => import('./components/GoldenCrossChart'));
 
-// non-Virt 경로에서 body에 다크 모드 클래스 적용
+// body에 테마 + virt/novirt 클래스 적용
+const THEME_CLASSES = ['whalearc-dark', 'whalearc-virt', 'whalearc-novirt'] as const;
 const DarkModeController = () => {
   const location = useLocation();
+  const { isDark } = useTheme();
   useEffect(() => {
     const isVirtRoute = location.pathname.startsWith('/virt');
     const isAuthRoute = ['/', '/login', '/signup', '/auth/callback', '/forgot-password', '/reset-password'].includes(location.pathname);
-    if (!isVirtRoute && !isAuthRoute) {
-      document.body.classList.add('whalearc-dark');
-    } else {
-      document.body.classList.remove('whalearc-dark');
+
+    // 기존 테마 클래스 제거
+    document.body.classList.remove(...THEME_CLASSES);
+
+    // 다크 모드는 모든 페이지에 적용
+    if (isDark) document.body.classList.add('whalearc-dark');
+
+    if (!isAuthRoute) {
+      if (isVirtRoute) document.body.classList.add('whalearc-virt');
+      else document.body.classList.add('whalearc-novirt');
     }
-    return () => { document.body.classList.remove('whalearc-dark'); };
-  }, [location.pathname]);
+
+    return () => { document.body.classList.remove(...THEME_CLASSES); };
+  }, [location.pathname, isDark]);
   return null;
 };
 
@@ -51,6 +61,7 @@ const RouteSplashLoading = () => {
 function App() {
   return (
     <ErrorBoundary>
+      <ThemeProvider>
       <Router>
         <DarkModeController />
 
@@ -170,6 +181,7 @@ function App() {
         </AuthProvider>
 
       </Router>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

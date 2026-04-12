@@ -112,7 +112,7 @@ const mapMarketToStockPrice = (item: {
   change: number;
   changeRate: number;
   volume: number;
-}, assetType: 'STOCK' | 'CRYPTO' = 'CRYPTO'): StockPrice => ({
+}, assetType: 'STOCK' | 'CRYPTO' | 'US_STOCK' = 'CRYPTO'): StockPrice => ({
   stockCode: item.symbol,
   stockName: item.name,
   currentPrice: item.price,

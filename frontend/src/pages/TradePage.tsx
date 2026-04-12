@@ -1123,7 +1123,7 @@ const TradePage = () => {
                           price={liveSelectedStock.currentPrice}
                           changeRate={liveSelectedStock.changeRate}
                           assetType={liveSelectedStock.assetType === 'US_STOCK' ? 'US_STOCK' : liveSelectedStock.assetType === 'STOCK' ? 'STOCK' : undefined}
-                          isDark={!isVirt}
+                          isDark={d}
                         />
                       </>
                     )}

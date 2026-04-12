@@ -8,13 +8,11 @@ import UnstableCurrent from '../components/UnstableCurrent';
 import { type RankingType, type RankingEntry } from '../services/rankingService';
 import { virtService, type VirtCredentialInfo, type VirtPortfolio, type VirtHolding } from '../services/virtService';
 import apiClient from '../utils/api';
-import { useTheme } from '../contexts/ThemeContext';
 
 /* ═══════════════════════════════════════════════════
    실계좌 투자 현황 (일반 모드)
    ═══════════════════════════════════════════════════ */
 const RealInvestmentStatusPage = () => {
-  const { isDark } = useTheme();
   const navigate = useVirtNavigate();
   const [serviceTab, setServiceTab] = useState<'kis' | 'upbit' | 'bitget' | 'all'>('all');
   const [kisCredInfo, setKisCredInfo] = useState<VirtCredentialInfo | null>(null);

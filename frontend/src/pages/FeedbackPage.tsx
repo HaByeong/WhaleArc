@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react';
-import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
@@ -52,7 +51,6 @@ const statusColors: Record<string, { dark: string; light: string }> = {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 const FeedbackPage = () => {
-  const { isVirt } = useRoutePrefix();
   const { isDark } = useTheme();
   const { profileName, user } = useAuth();
 
@@ -272,7 +270,7 @@ const FeedbackPage = () => {
     pending: File[];
     onRemovePending: (i: number) => void;
     mode: 'create' | 'edit';
-    inputRef: React.RefObject<HTMLInputElement | null>;
+    inputRef: React.RefObject<HTMLInputElement>;
     maxTotal?: number;
   }) => {
     const totalCount = images.length + pending.length;

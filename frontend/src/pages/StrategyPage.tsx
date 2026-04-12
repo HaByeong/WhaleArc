@@ -886,7 +886,7 @@ const StrategyPage = () => {
   // 프리셋 + 사용자 항로 합치기
   const allStrategies = [...PRESET_STRATEGIES, ...strategies];
 
-  if (pageLoading && !isVirt) return <SplashLoading message="전략 데이터를 불러오는 중..." />;
+  if (pageLoading && isDark) return <SplashLoading message="전략 데이터를 불러오는 중..." />;
   if (pageLoading && isVirt) return <VirtSplashLoading message="전략 데이터를 불러오는 중..." />;
 
   return (
@@ -1093,8 +1093,8 @@ const StrategyPage = () => {
                             return (
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
                                 isMulti
-                                  ? (!isVirt ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600')
-                                  : (!isVirt ? 'bg-cyan-500/10 text-cyan-400' : 'bg-cyan-50 text-cyan-600')
+                                  ? (isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600')
+                                  : (isDark ? 'bg-cyan-500/10 text-cyan-400' : 'bg-cyan-50 text-cyan-600')
                               }`}>{isMulti ? '다수 종목' : '단일 종목'}</span>
                             );
                           })()}
@@ -1817,12 +1817,12 @@ const StrategyPage = () => {
                     return [formatCurrency(value), label];
                   };
                   return (
-                  <div className={`rounded-xl p-4 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                    <h3 className={`text-sm font-bold mb-1 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
+                  <div className={`rounded-xl p-4 ${isDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                    <h3 className={`text-sm font-bold mb-1 ${isDark ? 'text-white' : 'text-whale-dark'}`}>
                       가격 차트 & 매매 포인트
-                      {isUsd && <span className={`text-xs font-normal ml-2 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>USD 기준 (1$ ≈ ₩{xRate.toFixed(0)})</span>}
+                      {isUsd && <span className={`text-xs font-normal ml-2 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>USD 기준 (1$ ≈ ₩{xRate.toFixed(0)})</span>}
                     </h3>
-                    <p className={`text-xs mb-3 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>빨강 = 매수 / 파랑 = 매도 / 보라 = 숏진입 / 남색 = 숏청산</p>
+                    <p className={`text-xs mb-3 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>빨강 = 매수 / 파랑 = 매도 / 보라 = 숏진입 / 남색 = 숏청산</p>
                     <ResponsiveContainer width="100%" height={260}>
                       <ComposedChart data={(() => {
                         const tradeMap = new Map<string, { type: string; price: number }>();
@@ -1839,11 +1839,11 @@ const StrategyPage = () => {
                           };
                         });
                       })()}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={!isVirt ? 'rgba(255,255,255,0.06)' : '#e5e7eb'} />
-                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: !isVirt ? '#64748b' : '#6b7280' }} tickFormatter={(v) => v.substring(5)} />
-                        <YAxis tick={{ fontSize: 10, fill: !isVirt ? '#64748b' : '#6b7280' }} domain={['auto', 'auto']}
+                        <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.06)' : '#e5e7eb'} />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: isDark ? '#64748b' : '#6b7280' }} tickFormatter={(v) => v.substring(5)} />
+                        <YAxis tick={{ fontSize: 10, fill: isDark ? '#64748b' : '#6b7280' }} domain={['auto', 'auto']}
                           tickFormatter={fmtPriceAxis} />
-                        <Tooltip contentStyle={!isVirt ? { backgroundColor: '#0a1628', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, color: '#ffffff', fontSize: 12 } : { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#1a2b4d', fontSize: 12 }}
+                        <Tooltip contentStyle={isDark ? { backgroundColor: '#0a1628', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, color: '#ffffff', fontSize: 12 } : { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#1a2b4d', fontSize: 12 }}
                           formatter={fmtTooltip} />
                         <Line type="monotone" dataKey="close" stroke="#4a90e2" strokeWidth={1.5} dot={false} name="종가" />
                         <Line type="monotone" dataKey="buySignal" stroke="none" dot={{ r: 5, fill: '#ef4444', stroke: '#ef4444' }} name="매수" legendType="triangle" />
@@ -1862,8 +1862,8 @@ const StrategyPage = () => {
                   const eqRate = backtestResult.exchangeRate || 1400;
                   const toKrw = (v: number) => isUsdEquity ? Math.round(v * eqRate) : v;
                   return (
-                  <div className={`rounded-xl p-4 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                    <h3 className={`text-sm font-bold mb-3 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
+                  <div className={`rounded-xl p-4 ${isDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                    <h3 className={`text-sm font-bold mb-3 ${isDark ? 'text-white' : 'text-whale-dark'}`}>
                       자산 변동 추이
                       {backtestResult.buyHoldCurve && <span className={`text-xs font-normal ml-2 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>전략 vs Buy & Hold</span>}
                     </h3>
@@ -1929,10 +1929,10 @@ const StrategyPage = () => {
                     ? `$${v >= 0 ? '+' : ''}${v.toFixed(2)} (₩${formatCurrency(Math.round(v * tradeRate))})`
                     : formatCurrency(Math.round(v));
                   return (
-                  <div className={`rounded-xl p-4 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                    <h3 className={`text-sm font-bold mb-3 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
+                  <div className={`rounded-xl p-4 ${isDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                    <h3 className={`text-sm font-bold mb-3 ${isDark ? 'text-white' : 'text-whale-dark'}`}>
                       거래 내역 ({backtestResult.trades.length}건)
-                      {isUsdTrade && <span className={`text-xs font-normal ml-2 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>USD</span>}
+                      {isUsdTrade && <span className={`text-xs font-normal ml-2 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>USD</span>}
                     </h3>
                     <div className="overflow-x-auto max-h-48">
                       <table className="w-full text-xs">
@@ -1960,7 +1960,7 @@ const StrategyPage = () => {
                                     {trade.type === 'BUY' ? '매수' : trade.type === 'SHORT' ? '숏진입' : trade.type === 'COVER' ? '숏청산' : '매도'}
                                   </span>
                                 </td>
-                                <td className={`py-1.5 px-2 font-mono ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{fmtTradePrice(trade.price)}</td>
+                                <td className={`py-1.5 px-2 font-mono ${isDark ? 'text-white' : 'text-whale-dark'}`}>{fmtTradePrice(trade.price)}</td>
                                 <td className={`py-1.5 px-2 font-bold font-mono ${isEntry ? 'text-slate-600' : trade.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                   {isExit ? fmtTradePnl(trade.pnl) : '-'}
                                 </td>
@@ -2095,7 +2095,7 @@ const StrategyPage = () => {
                     return (
                       <button key={assetCode} type="button"
                         onClick={() => handleBacktestStockSelect(assetCode, assetName, market)}
-                        className={`px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1 border ${isSel ? 'bg-gradient-to-r from-whale-light to-blue-500 text-white border-whale-light shadow-md' : !isVirt ? 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.05]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-whale-light hover:shadow-sm hover:shadow-whale-light/20'}`}>
+                        className={`px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1 border ${isSel ? 'bg-gradient-to-r from-whale-light to-blue-500 text-white border-whale-light shadow-md' : isDark ? 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.05]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-whale-light hover:shadow-sm hover:shadow-whale-light/20'}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${isStock ? 'bg-indigo-400' : isUsStock ? 'bg-blue-400' : 'bg-emerald-400'}`} />
                         {assetName}
                       </button>
@@ -2123,10 +2123,10 @@ const StrategyPage = () => {
                 )}
               </div>
               {backtestStockCode && (
-                <div className={`mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/[0.06]' : 'bg-gray-100 border border-gray-200'}`}>
+                <div className={`mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${isDark ? 'bg-white/[0.04] border border-white/[0.06]' : 'bg-gray-100 border border-gray-200'}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${backtestAssetType === 'STOCK' ? 'bg-indigo-400' : backtestAssetType === 'US_STOCK' ? 'bg-blue-400' : 'bg-emerald-400'}`} />
-                  <span className={`font-medium ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{backtestStockName}</span>
-                  <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>({backtestStockCode})</span>
+                  <span className={`font-medium ${isDark ? 'text-white' : 'text-whale-dark'}`}>{backtestStockName}</span>
+                  <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({backtestStockCode})</span>
                 </div>
               )}
               {showBacktestDropdown && backtestSearchResults.length > 0 && (
@@ -2134,8 +2134,8 @@ const StrategyPage = () => {
                   {backtestSearchResults.map((r) => (
                     <button key={`${r.market}-${r.code}`} type="button"
                       onClick={() => handleBacktestStockSelect(r.code, r.name, r.market)}
-                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between last:border-0 ${!isVirt ? 'hover:bg-white/[0.03] border-b border-white/[0.04] text-white' : 'hover:bg-gray-50 border-b border-gray-100 text-gray-800'}`}>
-                      <span>{r.name} <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>({r.code})</span></span>
+                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between last:border-0 ${isDark ? 'hover:bg-white/[0.03] border-b border-white/[0.04] text-white' : 'hover:bg-gray-50 border-b border-gray-100 text-gray-800'}`}>
+                      <span>{r.name} <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({r.code})</span></span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : r.market === 'US_STOCK' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
                         {r.market === 'STOCK' ? '주식' : r.market === 'US_STOCK' ? '미국주식' : '코인'}
                       </span>
@@ -2685,13 +2685,13 @@ const StrategyPage = () => {
                   <input type="text" value={assetSearchQuery} onChange={(e) => handleAssetSearchChange(e.target.value)}
                     className="input-field"
                     placeholder={newAssetType === 'CRYPTO' ? '가상화폐 검색 (BTC, ETH...)' : newAssetType === 'US_STOCK' ? '미국주식 검색 (AAPL, TSLA...)' : newAssetType === 'STOCK' ? '종목명 또는 종목코드로 검색' : '자산 검색'} />
-                  <div className={`mt-1 max-h-60 overflow-y-auto rounded-xl ${!isVirt ? 'border border-white/[0.06]' : 'border border-gray-200'}`}>
+                  <div className={`mt-1 max-h-60 overflow-y-auto rounded-xl ${isDark ? 'border border-white/[0.06]' : 'border border-gray-200'}`}>
                     {getAvailableAssets().slice(0, 50).map(asset => {
                       const isStock = asset.code.match(/^\d{6}$/);
                       const isUsStock = !isStock && US_STOCK_NAMES[asset.code] !== undefined;
                       return (
                         <button key={asset.code} onClick={() => handleAddAsset(asset.code)}
-                          className={`w-full text-left px-3 py-2.5 text-sm last:border-0 transition-colors flex items-center gap-2 ${!isVirt ? 'hover:bg-white/[0.03] border-b border-white/[0.04]' : 'hover:bg-blue-50 border-b border-gray-50'}`}>
+                          className={`w-full text-left px-3 py-2.5 text-sm last:border-0 transition-colors flex items-center gap-2 ${isDark ? 'hover:bg-white/[0.03] border-b border-white/[0.04]' : 'hover:bg-blue-50 border-b border-gray-50'}`}>
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-whale-dark flex-shrink-0 ${isStock ? 'bg-indigo-400' : isUsStock ? 'bg-blue-400' : 'bg-orange-400'}`}>
                             {asset.name.slice(0, 1)}
                           </div>

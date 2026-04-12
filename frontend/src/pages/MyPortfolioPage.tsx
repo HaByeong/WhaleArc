@@ -598,7 +598,6 @@ const RealPortfolioPage = () => {
 const MyPortfolioPage = () => {
   const navigate = useVirtNavigate();
   const { prefix, isVirt } = useRoutePrefix();
-  const { isDark } = useTheme();
   const { user, profileName } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [purchasePerformance, setPurchasePerformance] = useState<PurchasePerformance[]>([]);

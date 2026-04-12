@@ -24,7 +24,7 @@ interface TradingChartProps {
   price: number;
   changeRate: number;
   className?: string;
-  assetType?: 'STOCK' | 'CRYPTO';
+  assetType?: 'STOCK' | 'CRYPTO' | 'US_STOCK';
   activeIndicators?: string[];
   isDark?: boolean;
 }

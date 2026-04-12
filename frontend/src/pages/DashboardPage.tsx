@@ -3,14 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import RealAccountSection from '../components/RealAccountSection';
 import { tradeService, type Portfolio } from '../services/tradeService';
 import { authService } from '../services/authService';
-import { useTheme } from '../contexts/ThemeContext';
 
 const DashboardPage = () => {
   const navigate = useNavigate();
-  const { isDark } = useTheme();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +31,8 @@ const DashboardPage = () => {
       id: 'demo-1',
       userId: 'demo-user',
       cashBalance: 5000000,
+      initialCash: 10000000,
+      turtleAllocated: 0,
       totalValue: 12500000,
       returnRate: 25.0,
       holdings: [
@@ -266,8 +265,12 @@ const DashboardPage = () => {
             </div>
           </div>
 
-          {/* 실계좌 연동 */}
-          <RealAccountSection />
+          {/* 실계좌 연동 (준비 중) */}
+          <div className="card border-2 border-dashed border-gray-300 bg-gray-50/30 flex flex-col items-center justify-center py-12">
+            <span className="text-4xl mb-3">🔗</span>
+            <h2 className="text-xl font-bold text-whale-dark mb-2">실계좌 연동</h2>
+            <p className="text-gray-500 text-sm">곧 지원될 예정입니다</p>
+          </div>
         </div>
 
         {/* 네비게이션 카드 */}

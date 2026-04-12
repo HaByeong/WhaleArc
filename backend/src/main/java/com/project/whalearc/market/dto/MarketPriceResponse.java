@@ -19,6 +19,7 @@ public class MarketPriceResponse {
     private double change;       // 전일 대비 절대값
     private double changeRate;   // 전일 대비 %
     private long volume;         // 거래량 (24h 등)
-    private String market;       // KRX, BITHUMB_KRW 등
+    private String market;       // KRX, BITHUMB_KRW, NYSE, NASDAQ 등
+    private String currency;     // KRW, USD
 }
 

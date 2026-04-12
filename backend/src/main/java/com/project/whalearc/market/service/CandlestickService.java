@@ -27,6 +27,7 @@ import jakarta.annotation.PreDestroy;
 public class CandlestickService {
 
     private final KisApiClient kisApiClient;
+    private final UsStockPriceProvider usStockPriceProvider;
 
     @Value("${bithumb.api.base-url:https://api.bithumb.com}")
     private String baseUrl;
@@ -70,7 +71,8 @@ public class CandlestickService {
      */
     public List<CandlestickResponse> getCandlesticks(String symbol, String interval, String assetType) {
         boolean isStock = "STOCK".equalsIgnoreCase(assetType);
-        String cacheKey = symbol + ":" + interval + ":" + (isStock ? "STOCK" : "CRYPTO");
+        boolean isUsStock = "US_STOCK".equalsIgnoreCase(assetType);
+        String cacheKey = symbol + ":" + interval + ":" + (isStock ? "STOCK" : isUsStock ? "US_STOCK" : "CRYPTO");
 
         // 캐시 확인
         CandleCache cached = candleCache.get(cacheKey);
@@ -80,13 +82,18 @@ public class CandlestickService {
         }
 
         // API 조회
-        List<CandlestickResponse> result = isStock
-                ? getStockCandlesticks(symbol)
-                : getCryptoCandlesticks(symbol, interval);
+        List<CandlestickResponse> result;
+        if (isStock) {
+            result = getStockCandlesticks(symbol);
+        } else if (isUsStock) {
+            result = getUsStockCandlesticks(symbol);
+        } else {
+            result = getCryptoCandlesticks(symbol, interval);
+        }
 
         // 빈 응답은 캐시하지 않음
         if (!result.isEmpty()) {
-            long ttl = isStock ? STOCK_CACHE_TTL : CRYPTO_CACHE_TTL;
+            long ttl = (isStock || isUsStock) ? STOCK_CACHE_TTL : CRYPTO_CACHE_TTL;
             candleCache.put(cacheKey, new CandleCache(result, System.currentTimeMillis() + ttl));
 
             // 캐시 크기 제한
@@ -192,6 +199,64 @@ public class CandlestickService {
             case "1w" -> "24h";
             default -> interval; // 1m, 3m, 5m, 10m, 30m, 1h, 6h, 12h 그대로 사용
         };
+    }
+
+    /** 미국주식 일봉 (KIS 해외주식 API) — BYMD 페이지네이션으로 최대 2년치 조회 */
+    private List<CandlestickResponse> getUsStockCandlesticks(String symbol) {
+        if (!kisApiClient.isConfigured()) {
+            return List.of();
+        }
+        try {
+            String exchange = usStockPriceProvider.getExchange(symbol);
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+            Map<Long, CandlestickResponse> deduped = new java.util.TreeMap<>();
+            String bymd = ""; // 빈값 = 오늘부터
+
+            // 최대 8 페이지 (100건 × 8 ≈ 800 거래일 ≈ 3년)
+            for (int page = 0; page < 8; page++) {
+                if (page > 0) {
+                    try { Thread.sleep(300); } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt(); break;
+                    }
+                }
+
+                List<Map<String, String>> raw = kisApiClient.getUsStockDailyCandles(exchange, symbol, bymd);
+                if (raw == null || raw.isEmpty()) break;
+
+                String oldestDate = null;
+                for (Map<String, String> row : raw) {
+                    String dateStr = row.get("xymd");
+                    if (dateStr == null || dateStr.isBlank()) continue;
+                    try {
+                        LocalDate date = LocalDate.parse(dateStr, fmt);
+                        long epochSec = date.atStartOfDay(java.time.ZoneOffset.UTC).toEpochSecond();
+                        double open = Double.parseDouble(row.getOrDefault("open", "0"));
+                        double high = Double.parseDouble(row.getOrDefault("high", "0"));
+                        double low = Double.parseDouble(row.getOrDefault("low", "0"));
+                        double close = Double.parseDouble(row.getOrDefault("clos", "0"));
+                        double volume = Double.parseDouble(row.getOrDefault("tvol", "0"));
+                        if (close > 0) {
+                            deduped.putIfAbsent(epochSec, new CandlestickResponse(epochSec, open, high, low, close, volume));
+                        }
+                        if (oldestDate == null || dateStr.compareTo(oldestDate) < 0) {
+                            oldestDate = dateStr;
+                        }
+                    } catch (Exception e) {
+                        log.debug("미국주식 일봉 파싱 오류 [{}]: {}", symbol, e.getMessage());
+                    }
+                }
+
+                if (oldestDate == null || oldestDate.equals(bymd)) break; // 더 이상 새 데이터 없음
+                bymd = oldestDate;
+            }
+
+            log.info("미국주식 일봉 {}개 조회 (페이지네이션): {}", deduped.size(), symbol);
+            return new ArrayList<>(deduped.values());
+        } catch (Exception e) {
+            log.error("미국주식 캔들스틱 조회 실패 [{}]: {}", symbol, e.getMessage());
+            return List.of();
+        }
     }
 
     /** 빗썸 캔들스틱 API 호출 (최대 3회 재시도) */

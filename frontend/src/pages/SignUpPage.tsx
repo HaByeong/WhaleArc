@@ -14,6 +14,7 @@ const SignUpPage = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,10 +181,25 @@ const SignUpPage = () => {
               </div>
             </div>
 
+            <label className="flex items-start space-x-2 mt-6 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreedToTerms}
+                onChange={(e) => setAgreedToTerms(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-whale-dark focus:ring-whale-light"
+              />
+              <span className="text-sm text-gray-600">
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-whale-light hover:underline font-medium">이용약관</a>
+                {' '}및{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-whale-light hover:underline font-medium">개인정보처리방침</a>
+                에 동의합니다.
+              </span>
+            </label>
+
             <button
               type="submit"
-              className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed mt-6"
-              disabled={isLoading}
+              className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+              disabled={isLoading || !agreedToTerms}
             >
               {isLoading ? '회원가입 중...' : '회원가입'}
             </button>

@@ -1,9 +1,7 @@
 package com.project.whalearc.trade.service;
 
 import com.project.whalearc.market.dto.MarketPriceResponse;
-import com.project.whalearc.market.service.CryptoPriceProvider;
-import com.project.whalearc.market.service.KisApiClient;
-import com.project.whalearc.market.service.StockPriceProvider;
+import com.project.whalearc.market.service.*;
 import com.project.whalearc.store.repository.ProductPurchaseRepository;
 import com.project.whalearc.strategy.repository.StrategyRepository;
 import com.project.whalearc.strategy.repository.TurtlePositionRepository;
@@ -58,6 +56,7 @@ public class PortfolioService {
     private final PortfolioRepository portfolioRepository;
     private final CryptoPriceProvider cryptoPriceProvider;
     private final StockPriceProvider stockPriceProvider;
+    private final UsStockPriceProvider usStockPriceProvider;
     private final KisApiClient kisApiClient;
     private final PortfolioSnapshotRepository snapshotRepository;
     private final OrderRepository orderRepository;
@@ -114,6 +113,17 @@ public class PortfolioService {
                 }
             }
 
+            // 미국주식 시세 맵 (캐시된 인기종목)
+            Map<String, BigDecimal> usStockPriceMap = Map.of();
+            boolean hasUsStock = portfolio.getHoldings().stream().anyMatch(Holding::isUsStock);
+            if (hasUsStock) {
+                List<MarketPriceResponse> usPrices = usStockPriceProvider.getAllUsStockPrices();
+                if (!usPrices.isEmpty()) {
+                    usStockPriceMap = usPrices.stream()
+                            .collect(Collectors.toMap(MarketPriceResponse::getSymbol, p -> BigDecimal.valueOf(p.getPrice()), (a, b) -> a));
+                }
+            }
+
             for (Holding holding : portfolio.getHoldings()) {
                 if (holding.isStock()) {
                     BigDecimal price = stockPriceMap.get(holding.getStockCode());
@@ -130,6 +140,11 @@ public class PortfolioService {
                         } catch (Exception e) {
                             log.debug("주식 시세 개별 조회 실패 [{}]: {}", holding.getStockCode(), e.getMessage());
                         }
+                    }
+                } else if (holding.isUsStock()) {
+                    BigDecimal price = usStockPriceMap.get(holding.getStockCode());
+                    if (price != null) {
+                        holding.setCurrentPrice(price); // USD 단위
                     }
                 } else {
                     BigDecimal price = cryptoPriceMap.get(holding.getStockCode());

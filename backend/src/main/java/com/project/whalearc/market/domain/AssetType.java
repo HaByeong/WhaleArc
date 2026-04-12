@@ -2,6 +2,7 @@ package com.project.whalearc.market.domain;
 
 public enum AssetType {
     STOCK,
-    CRYPTO
+    CRYPTO,
+    US_STOCK
 }
 

@@ -7,6 +7,7 @@ import UnstableCurrent from '../components/UnstableCurrent';
 import RealtimeChart from '../components/RealtimeChart';
 import TradingChart from '../components/TradingChart';
 import { marketService, type MarketPrice, type AssetType } from '../services/marketService';
+import { userService } from '../services/userService';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import { useTheme } from '../contexts/ThemeContext';
@@ -63,10 +64,17 @@ const MarketPage = () => {
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'change' | 'volume'>('volume');
   const [filterText, setFilterText] = useState('');
   const [chartType, setChartType] = useState<'area' | 'candle'>('area');
+  const [activeIndicators, setActiveIndicators] = useState<string[]>([]);
+  const [showIndicatorPanel, setShowIndicatorPanel] = useState(false);
+  const [listFilter, setListFilter] = useState<'all' | 'favorites'>('all');
+  const [favoriteAssets, setFavoriteAssets] = useState<string[]>([]);
 
   // 탭별 데이터 캐시 (stale-while-revalidate)
-  const assetCacheRef = useRef<Record<AssetType, MarketPrice[]>>({ STOCK: [], CRYPTO: [] });
-  const selectionCacheRef = useRef<Record<AssetType, MarketPrice | null>>({ STOCK: null, CRYPTO: null });
+  const assetCacheRef = useRef<Record<AssetType, MarketPrice[]>>({ STOCK: [], CRYPTO: [], US_STOCK: [] });
+  const selectionCacheRef = useRef<Record<AssetType, MarketPrice | null>>({ STOCK: null, CRYPTO: null, US_STOCK: null });
+
+  // 환율 상태 (미국주식 탭용)
+  const [usdKrwRate, setUsdKrwRate] = useState<number>(1400);
 
   // 주식 종목 검색
   const [searchResults, setSearchResults] = useState<{ code: string; name: string; market: string }[]>([]);
@@ -79,16 +87,18 @@ const MarketPage = () => {
     setFilterText(keyword);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
-    if (assetType !== 'STOCK' || keyword.trim().length < 2) {
+    if ((assetType !== 'STOCK' && assetType !== 'US_STOCK') || keyword.trim().length < 2) {
       setSearchResults([]);
       return;
     }
 
-    // 항상 서버 검색 수행 (전체 KRX 종목 대상)
+    // 항상 서버 검색 수행 (전체 KRX / US 종목 대상)
     searchTimerRef.current = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const results = await marketService.searchStocks(keyword);
+        const results = assetType === 'US_STOCK'
+          ? await marketService.searchUsStocks(keyword)
+          : await marketService.searchStocks(keyword);
         // 이미 리스트에 있는 종목 제외
         const existing = new Set(assetList.map(a => a.symbol));
         setSearchResults(results.filter(r => !existing.has(r.code)));
@@ -122,6 +132,57 @@ const MarketPage = () => {
     }
   };
 
+  // 관심 종목 로드 + 목록에 없는 종목은 검색해서 추가
+  useEffect(() => {
+    userService.getProfile().then(async (profile) => {
+      const favs = profile?.favoriteAssets ?? [];
+      if (favs.length === 0) return;
+      setFavoriteAssets(favs);
+
+      // 현재 목록에 없는 관심 종목을 개별 조회해서 추가
+      const currentSymbols = new Set(assetList.map(a => a.symbol));
+      const currentNames = new Set(assetList.map(a => a.name));
+      const missing = favs.filter(f => !currentSymbols.has(f) && !currentNames.has(f) && !currentSymbols.has(f.toUpperCase()));
+
+      const extra: MarketPrice[] = [];
+      for (const fav of missing) {
+        try {
+          // 먼저 종목 검색으로 코드 찾기
+          const results = await marketService.searchStocks(fav);
+          if (results.length > 0) {
+            const price = await marketService.getStockPrice(results[0].code);
+            if (!currentSymbols.has(price.symbol)) extra.push(price);
+          }
+        } catch { /* 조회 실패 무시 */ }
+      }
+      if (extra.length > 0) {
+        searchAddedRef.current = [...searchAddedRef.current, ...extra];
+        setAssetList(prev => {
+          const existing = new Set(prev.map(a => a.symbol));
+          return [...prev, ...extra.filter(e => !existing.has(e.symbol))];
+        });
+      }
+    }).catch(() => {});
+  }, []);
+
+  const SYMBOL_ALIASES: Record<string, string> = { MATIC: 'POL', POL: 'MATIC' };
+  const favoriteSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const fav of favoriteAssets) {
+      set.add(fav);
+      set.add(fav.toUpperCase());
+      set.add(fav.toLowerCase());
+      const alias = SYMBOL_ALIASES[fav];
+      if (alias) { set.add(alias); set.add(alias.toLowerCase()); }
+    }
+    return set;
+  }, [favoriteAssets]);
+
+  const isFavorite = useCallback((asset: MarketPrice) => {
+    return favoriteSet.has(asset.symbol) || favoriteSet.has(asset.name)
+      || favoriteSet.has(asset.symbol?.toUpperCase()) || favoriteSet.has(asset.name?.toUpperCase());
+  }, [favoriteSet]);
+
   // 실시간 WebSocket 구독 (가상화폐 탭일 때만)
   const { prices: realtimePrices, connected, tickCount } = useRealtimePrice({
     enabled: assetType === 'CRYPTO',
@@ -130,13 +191,13 @@ const MarketPage = () => {
   useEffect(() => {
     loadData();
 
-    // 주식 탭: 10초마다 시세 갱신 (가상화폐는 WebSocket 사용)
-    if (assetType === 'STOCK') {
+    // 주식/미국주식 탭: 10초마다 시세 갱신 (가상화폐는 WebSocket 사용)
+    if (assetType === 'STOCK' || assetType === 'US_STOCK') {
       let consecutiveFails = 0;
       const interval = setInterval(async () => {
         try {
-          const prices = await marketService.getPrices('STOCK');
-          assetCacheRef.current['STOCK'] = prices;
+          const prices = await marketService.getPrices(assetType);
+          assetCacheRef.current[assetType] = prices;
           // 검색으로 추가된 종목을 유지하면서 병합
           const serverSymbols = new Set(prices.map(p => p.symbol));
           const extraAssets = searchAddedRef.current.filter(a => !serverSymbols.has(a.symbol));
@@ -158,6 +219,19 @@ const MarketPage = () => {
       return () => clearInterval(interval);
     }
   }, [assetType]);
+
+  // 환율 정보 주기적 갱신 (미국주식 가격 표시용)
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const { usdKrw } = await marketService.getExchangeRate();
+        setUsdKrwRate(usdKrw);
+      } catch { /* fallback */ }
+    };
+    fetchRate();
+    const interval = setInterval(fetchRate, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // 실시간 데이터로 목록 병합
   const mergedAssetList = useMemo(() => {
@@ -217,6 +291,38 @@ const MarketPage = () => {
     }
   };
 
+  const toggleIndicator = (key: string) => {
+    setActiveIndicators(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  const INDICATOR_GROUPS = [
+    { label: '이동평균', items: [
+      { key: 'MA5', label: 'MA5' },
+      { key: 'MA20', label: 'MA20' },
+      { key: 'MA60', label: 'MA60' },
+      { key: 'EMA', label: 'EMA20' },
+    ]},
+    { label: '밴드/추세', items: [
+      { key: 'BOLLINGER', label: '볼린저' },
+      { key: 'VWAP', label: 'VWAP' },
+      { key: 'PARABOLIC_SAR', label: 'SAR' },
+      { key: 'ICHIMOKU', label: '일목균형' },
+    ]},
+    { label: '오실레이터', items: [
+      { key: 'RSI', label: 'RSI' },
+      { key: 'MACD', label: 'MACD' },
+      { key: 'STOCHASTIC', label: '스토캐스틱' },
+      { key: 'CCI', label: 'CCI' },
+      { key: 'WILLIAMS_R', label: 'W%R' },
+    ]},
+    { label: '기타', items: [
+      { key: 'ATR', label: 'ATR' },
+      { key: 'OBV', label: 'OBV' },
+    ]},
+  ];
+
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
 
@@ -244,6 +350,7 @@ const MarketPage = () => {
   const filteredAndSortedAssets = mergedAssetList
     .filter((asset) => {
       if (!asset) return false;
+      if (listFilter === 'favorites' && !isFavorite(asset)) return false;
       const name = (asset.name ?? '').toLowerCase();
       const symbol = (asset.symbol ?? '').toLowerCase();
       const keyword = filterText.toLowerCase();
@@ -296,7 +403,7 @@ const MarketPage = () => {
               </div>
             )}
           </div>
-          <p className={`mb-3 ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>주식/가상화폐 시세를 한 곳에서 확인하세요</p>
+          <p className={`mb-3 ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>주식/미국주식/가상화폐 시세를 한 곳에서 확인하세요</p>
           <div className="flex space-x-3">
             <button
               type="button"
@@ -308,6 +415,17 @@ const MarketPage = () => {
               onClick={() => { selectionCacheRef.current[assetType] = selectedAsset; searchAddedRef.current = []; setAssetType('STOCK'); setSelectedAsset(selectionCacheRef.current['STOCK']); setChartType('area'); }}
             >
               주식
+            </button>
+            <button
+              type="button"
+              className={`px-4 py-2 rounded-lg text-sm font-semibold min-h-[44px] ${
+                assetType === 'US_STOCK'
+                  ? !isVirt ? 'bg-cyan-500 text-white shadow-md' : 'bg-whale-light text-white shadow-md'
+                  : !isVirt ? 'bg-white/[0.04] text-slate-400 border border-white/[0.06] hover:bg-white/[0.06]' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }`}
+              onClick={() => { selectionCacheRef.current[assetType] = selectedAsset; searchAddedRef.current = []; setAssetType('US_STOCK'); setSelectedAsset(selectionCacheRef.current['US_STOCK']); setChartType('area'); }}
+            >
+              미국주식
             </button>
             <button
               type="button"
@@ -329,13 +447,40 @@ const MarketPage = () => {
             <div className="card">
               <h2 className={`text-xl font-bold mb-4 ${isDark ? 'text-white' : 'text-whale-dark'}`}>종목 목록</h2>
 
+              {/* 전체 / 관심 탭 */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => setListFilter('all')}
+                  className={`px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-all ${
+                    listFilter === 'all'
+                      ? !isVirt ? 'bg-cyan-500 text-white' : 'bg-whale-light text-white'
+                      : !isVirt ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.06]' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  전체
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setListFilter('favorites')}
+                  className={`px-3.5 py-1.5 text-sm font-semibold rounded-lg transition-all flex items-center gap-1 ${
+                    listFilter === 'favorites'
+                      ? !isVirt ? 'bg-cyan-500 text-white' : 'bg-whale-light text-white'
+                      : !isVirt ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.06]' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+                  관심
+                </button>
+              </div>
+
               <div className="mb-4 space-y-3">
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder={assetType === 'STOCK' ? '전체 KOSPI/KOSDAQ 종목 검색...' : '가상화폐 검색 (이름/코드)...'}
+                    placeholder={assetType === 'STOCK' ? '전체 KOSPI/KOSDAQ 종목 검색...' : assetType === 'US_STOCK' ? '미국주식 검색 (애플, AAPL...)' : '가상화폐 검색 (이름/코드)...'}
                     value={filterText}
-                    onChange={(e) => assetType === 'STOCK' ? handleStockSearch(e.target.value) : setFilterText(e.target.value)}
+                    onChange={(e) => (assetType === 'STOCK' || assetType === 'US_STOCK') ? handleStockSearch(e.target.value) : setFilterText(e.target.value)}
                     className="input-field"
                   />
                   {searchLoading && (
@@ -380,8 +525,18 @@ const MarketPage = () => {
               <div className="space-y-2 max-h-[600px] overflow-y-auto">
                 {filteredAndSortedAssets.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className={`font-medium ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>검색 결과가 없습니다</div>
-                    <div className={`text-sm mt-1 ${isDark ? 'text-slate-600' : 'text-gray-300'}`}>다른 키워드로 검색해보세요</div>
+                    {listFilter === 'favorites' ? (
+                      <>
+                        <svg className={`w-10 h-10 mx-auto mb-3 ${!isVirt ? 'text-slate-600' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>
+                        <div className={`font-medium ${!isVirt ? 'text-slate-400' : 'text-gray-400'}`}>관심 종목이 없습니다</div>
+                        <div className={`text-sm mt-1 ${!isVirt ? 'text-slate-600' : 'text-gray-300'}`}>프로필에서 관심 종목을 등록해보세요</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className={`font-medium ${!isVirt ? 'text-slate-400' : 'text-gray-400'}`}>검색 결과가 없습니다</div>
+                        <div className={`text-sm mt-1 ${!isVirt ? 'text-slate-600' : 'text-gray-300'}`}>다른 키워드로 검색해보세요</div>
+                      </>
+                    )}
                     {filterText && (
                       <button
                         onClick={() => { setFilterText(''); setSearchResults([]); }}
@@ -404,15 +559,25 @@ const MarketPage = () => {
                     >
                       <div className="flex justify-between items-start">
                         <div>
-                          <div className={`font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>{asset.name}</div>
-                          <div className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
-                            {asset.symbol} {asset.assetType === 'CRYPTO' ? '/ KRW' : ''}
+                          <div className={`font-bold flex items-center gap-1 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
+                            {asset.name}
+                            {isFavorite(asset) && <svg className={`w-3 h-3 flex-shrink-0 ${!isVirt ? 'text-cyan-400' : 'text-whale-light'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>}
+                          </div>
+                          <div className={`text-sm ${!isVirt ? 'text-slate-500' : 'text-gray-500'}`}>
+                            {asset.symbol} {asset.assetType === 'CRYPTO' ? '/ KRW' : asset.assetType === 'US_STOCK' ? '/ USD' : ''}
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className={`font-semibold ${isDark ? 'text-slate-100' : 'text-whale-dark'}`}>
-                            {formatCurrency(asset.price)}
+                          <div className={`font-semibold ${!isVirt ? 'text-slate-100' : 'text-whale-dark'}`}>
+                            {asset.assetType === 'US_STOCK'
+                              ? `$${asset.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                              : formatCurrency(asset.price)}
                           </div>
+                          {asset.assetType === 'US_STOCK' && (
+                            <div className={`text-xs ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>
+                              {formatCurrency(Math.round(asset.price * usdKrwRate))}
+                            </div>
+                          )}
                           <div className={`text-sm font-semibold ${asset.changeRate >= 0 ? 'price-up' : 'price-down'}`}>
                             {asset.changeRate >= 0 ? '+' : ''}{asset.changeRate.toFixed(2)}%
                           </div>
@@ -430,6 +595,11 @@ const MarketPage = () => {
                   * 주식 시세는 KIS 모의투자 API 기준 약 15~20초 지연
                 </p>
               )}
+              {assetType === 'US_STOCK' && (
+                <p className={`text-[10px] text-right mt-2 ${!isVirt ? 'text-slate-600' : 'text-gray-400'}`}>
+                  * 미국주식 시세는 약 15~20초 지연 · 환율 1$ ≈ ₩{usdKrwRate.toLocaleString()}
+                </p>
+              )}
             </div>
           </div>
 
@@ -444,13 +614,20 @@ const MarketPage = () => {
                       <h2 className={`text-xl md:text-2xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>{liveSelectedAsset.name}</h2>
                       <p className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
                         {liveSelectedAsset.symbol}
-                        {liveSelectedAsset.assetType === 'CRYPTO' ? ' / KRW' : ''}
+                        {liveSelectedAsset.assetType === 'CRYPTO' ? ' / KRW' : liveSelectedAsset.assetType === 'US_STOCK' ? ' / USD' : ''}
                       </p>
                     </div>
                     <div className="text-left sm:text-right">
-                      <div className={`text-2xl md:text-3xl font-bold mb-1 ${isDark ? 'text-white' : 'text-whale-dark'}`}>
-                        {formatCurrency(liveSelectedAsset.price)}
+                      <div className={`text-2xl md:text-3xl font-bold mb-1 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
+                        {liveSelectedAsset.assetType === 'US_STOCK'
+                          ? `$${liveSelectedAsset.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : formatCurrency(liveSelectedAsset.price)}
                       </div>
+                      {liveSelectedAsset.assetType === 'US_STOCK' && (
+                        <div className={`text-sm mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-500'}`}>
+                          {formatCurrency(Math.round(liveSelectedAsset.price * usdKrwRate))}
+                        </div>
+                      )}
                       <div className={`text-sm md:text-lg font-semibold ${liveSelectedAsset.changeRate >= 0 ? 'price-up' : 'price-down'}`}>
                         {liveSelectedAsset.change >= 0 ? '+' : ''}
                         {formatCurrency(liveSelectedAsset.change)} ({liveSelectedAsset.changeRate >= 0 ? '+' : ''}
@@ -462,35 +639,87 @@ const MarketPage = () => {
                   {/* 차트 */}
                   {assetType === 'CRYPTO' ? (
                     <div className="mt-4">
-                      {/* 차트 타입 토글 */}
-                      <div className="flex items-center gap-1 mb-3">
-                        <button
-                          onClick={() => setChartType('area')}
-                          className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
-                            chartType === 'area'
-                              ? isDark ? 'bg-cyan-500 text-white shadow-sm' : 'bg-whale-light text-white shadow-sm'
-                              : isDark ? 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.03]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                          }`}
-                        >
-                          <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4" />
-                          </svg>
-                          라인
-                        </button>
-                        <button
-                          onClick={() => setChartType('candle')}
-                          className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
-                            chartType === 'candle'
-                              ? isDark ? 'bg-cyan-500 text-white shadow-sm' : 'bg-whale-light text-white shadow-sm'
-                              : isDark ? 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.03]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                          }`}
-                        >
-                          <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l6 13V6" />
-                          </svg>
-                          캔들
-                        </button>
+                      {/* 차트 타입 토글 + 지표 버튼 */}
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setChartType('area')}
+                            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                              chartType === 'area'
+                                ? !isVirt ? 'bg-cyan-500 text-white shadow-sm' : 'bg-whale-light text-white shadow-sm'
+                                : !isVirt ? 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.03]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                            }`}
+                          >
+                            <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4" />
+                            </svg>
+                            라인
+                          </button>
+                          <button
+                            onClick={() => setChartType('candle')}
+                            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                              chartType === 'candle'
+                                ? !isVirt ? 'bg-cyan-500 text-white shadow-sm' : 'bg-whale-light text-white shadow-sm'
+                                : !isVirt ? 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.03]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                            }`}
+                          >
+                            <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l6 13V6" />
+                            </svg>
+                            캔들
+                          </button>
+                        </div>
+                        {chartType === 'candle' && (
+                          <button
+                            onClick={() => setShowIndicatorPanel(!showIndicatorPanel)}
+                            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all flex items-center gap-1 ${
+                              showIndicatorPanel || activeIndicators.length > 0
+                                ? !isVirt ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-whale-light/10 text-whale-light border border-whale-light/30'
+                                : !isVirt ? 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.03] border border-white/[0.06]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 border border-gray-200'
+                            }`}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            지표{activeIndicators.length > 0 && ` (${activeIndicators.length})`}
+                          </button>
+                        )}
                       </div>
+
+                      {/* 지표 선택 패널 (캔들 모드에서만) */}
+                      {chartType === 'candle' && showIndicatorPanel && (
+                        <div className={`mb-3 p-3 rounded-xl border ${!isVirt ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-gray-50 border-gray-100'}`}>
+                          {INDICATOR_GROUPS.map(group => (
+                            <div key={group.label} className="mb-2 last:mb-0">
+                              <span className={`text-[10px] font-semibold ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>{group.label}</span>
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {group.items.map(item => (
+                                  <button
+                                    key={item.key}
+                                    type="button"
+                                    onClick={() => toggleIndicator(item.key)}
+                                    className={`px-2.5 py-1 text-[11px] rounded-md font-medium transition-all ${
+                                      activeIndicators.includes(item.key)
+                                        ? !isVirt ? 'bg-cyan-500 text-white shadow-sm' : 'bg-whale-light text-white shadow-sm'
+                                        : !isVirt ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] border border-white/[0.06]' : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'
+                                    }`}
+                                  >
+                                    {item.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          {activeIndicators.length > 0 && (
+                            <button
+                              onClick={() => setActiveIndicators([])}
+                              className={`mt-2 text-[10px] font-medium ${!isVirt ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                              전체 해제
+                            </button>
+                          )}
+                        </div>
+                      )}
 
                       {chartType === 'area' ? (
                         connected ? (
@@ -510,19 +739,70 @@ const MarketPage = () => {
                             symbol={liveSelectedAsset.symbol}
                             price={liveSelectedAsset.price}
                             changeRate={liveSelectedAsset.changeRate}
-                            isDark={isDark}
+                            activeIndicators={activeIndicators}
+                            isDark={!isVirt}
                           />
                         </ChartLoadingWrapper>
                       )}
                     </div>
                   ) : (
                     <div className="mt-4">
+                      {/* 주식 차트 지표 버튼 */}
+                      <div className="flex items-center justify-end mb-3">
+                        <button
+                          onClick={() => setShowIndicatorPanel(!showIndicatorPanel)}
+                          className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all flex items-center gap-1 ${
+                            showIndicatorPanel || activeIndicators.length > 0
+                              ? !isVirt ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-whale-light/10 text-whale-light border border-whale-light/30'
+                              : !isVirt ? 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.03] border border-white/[0.06]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 border border-gray-200'
+                          }`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                          지표{activeIndicators.length > 0 && ` (${activeIndicators.length})`}
+                        </button>
+                      </div>
+                      {showIndicatorPanel && (
+                        <div className={`mb-3 p-3 rounded-xl border ${!isVirt ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-gray-50 border-gray-100'}`}>
+                          {INDICATOR_GROUPS.map(group => (
+                            <div key={group.label} className="mb-2 last:mb-0">
+                              <span className={`text-[10px] font-semibold ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>{group.label}</span>
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {group.items.map(item => (
+                                  <button
+                                    key={item.key}
+                                    type="button"
+                                    onClick={() => toggleIndicator(item.key)}
+                                    className={`px-2.5 py-1 text-[11px] rounded-md font-medium transition-all ${
+                                      activeIndicators.includes(item.key)
+                                        ? !isVirt ? 'bg-cyan-500 text-white shadow-sm' : 'bg-whale-light text-white shadow-sm'
+                                        : !isVirt ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] border border-white/[0.06]' : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'
+                                    }`}
+                                  >
+                                    {item.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          {activeIndicators.length > 0 && (
+                            <button
+                              onClick={() => setActiveIndicators([])}
+                              className={`mt-2 text-[10px] font-medium ${!isVirt ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                              전체 해제
+                            </button>
+                          )}
+                        </div>
+                      )}
                       <TradingChart
                         symbol={liveSelectedAsset.symbol}
                         price={liveSelectedAsset.price}
                         changeRate={liveSelectedAsset.changeRate}
-                        assetType="STOCK"
-                        isDark={isDark}
+                        assetType={assetType === 'US_STOCK' ? 'US_STOCK' : 'STOCK'}
+                        activeIndicators={activeIndicators}
+                        isDark={!isVirt}
                       />
                     </div>
                   )}
@@ -531,9 +811,11 @@ const MarketPage = () => {
                 {/* 시장 통계 */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="card text-center">
-                    <div className={`text-sm mb-1 ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>전일 종가</div>
-                    <div className={`text-lg md:text-xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>
-                      {formatCurrency(liveSelectedAsset.price - liveSelectedAsset.change)}
+                    <div className={`text-sm mb-1 ${!isVirt ? 'text-slate-400' : 'text-gray-600'}`}>전일 종가</div>
+                    <div className={`text-lg md:text-xl font-bold ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
+                      {liveSelectedAsset.assetType === 'US_STOCK'
+                        ? `$${(liveSelectedAsset.price - liveSelectedAsset.change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : formatCurrency(liveSelectedAsset.price - liveSelectedAsset.change)}
                     </div>
                   </div>
                   <div className="card text-center">
@@ -545,7 +827,10 @@ const MarketPage = () => {
                   <div className="card text-center">
                     <div className={`text-sm mb-1 ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>등락액</div>
                     <div className={`text-xl font-bold ${liveSelectedAsset.change >= 0 ? 'price-up' : 'price-down'}`}>
-                      {liveSelectedAsset.change >= 0 ? '+' : ''}{formatCurrency(liveSelectedAsset.change)}
+                      {liveSelectedAsset.change >= 0 ? '+' : ''}
+                      {liveSelectedAsset.assetType === 'US_STOCK'
+                        ? `$${Math.abs(liveSelectedAsset.change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : formatCurrency(liveSelectedAsset.change)}
                     </div>
                   </div>
                   <div className="card text-center">

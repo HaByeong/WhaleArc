@@ -221,6 +221,54 @@ public class KisApiClient {
         return List.of();
     }
 
+    /* ───── 업종(지수) 일봉 조회 ───── */
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, String>> getIndexDailyCandles(String indexCode, String startDate, String endDate) {
+        String cacheKey = "indexCandle:" + indexCode + ":" + startDate + ":" + endDate;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String url = baseUrl + "/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice"
+                        + "?FID_COND_MRKT_DIV_CODE=U"
+                        + "&FID_INPUT_ISCD=" + indexCode
+                        + "&FID_INPUT_DATE_1=" + startDate
+                        + "&FID_INPUT_DATE_2=" + endDate
+                        + "&FID_PERIOD_DIV_CODE=D";
+
+                HttpHeaders headers = buildHeaders("FHKUP03500100");
+                HttpEntity<Void> request = new HttpEntity<>(headers);
+
+                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
+                Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<Map<String, Object>>() {});
+
+                if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
+                    log.warn("KIS 지수 일봉 조회 실패 [{}]: {}", indexCode, result.get("msg1"));
+                    List<Map<String, String>> cached = getCachedOrNull(cacheKey);
+                    return cached != null ? cached : List.of();
+                }
+
+                List<Map<String, String>> output = objectMapper.convertValue(result.get("output2"),
+                        new TypeReference<List<Map<String, String>>>() {});
+                putCache(cacheKey, output);
+                return output;
+            } catch (Exception e) {
+                log.warn("KIS 지수 일봉 조회 오류 [{}] (시도 {}/{}): {}", indexCode, attempt, maxRetries, e.getMessage());
+                if (attempt < maxRetries) {
+                    sleep(retryDelayMs * attempt);
+                }
+            }
+        }
+
+        List<Map<String, String>> cached = getCachedOrNull(cacheKey);
+        if (cached != null) {
+            log.warn("KIS 지수 일봉 [{}]: API 실패, 캐시 폴백 사용", indexCode);
+            return cached;
+        }
+        return List.of();
+    }
+
     /* ───── 업종(지수) 현재가 조회 ───── */
 
     @SuppressWarnings("unchecked")
@@ -266,6 +314,111 @@ public class KisApiClient {
             log.warn("KIS 지수 [{}]: API 실패, 캐시 폴백 사용", indexCode);
         }
         return cached;
+    }
+
+    /* ───── 해외주식 현재가 조회 ───── */
+
+    @SuppressWarnings("unchecked")
+    public Map<String, String> getUsStockPrice(String exchange, String symbol) {
+        String cacheKey = "us-price:" + exchange + ":" + symbol;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String url = baseUrl + "/uapi/overseas-price/v1/quotations/price"
+                        + "?AUTH="
+                        + "&EXCD=" + exchange
+                        + "&SYMB=" + symbol;
+
+                HttpHeaders headers = buildHeaders("HHDFS00000300");
+                HttpEntity<Void> request = new HttpEntity<>(headers);
+
+                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
+                Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<Map<String, Object>>() {});
+
+                if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
+                    log.warn("KIS 해외주식 현재가 조회 실패 [{}/{}]: {}", exchange, symbol, result.get("msg1"));
+                    return getCachedOrNull(cacheKey);
+                }
+
+                Map<String, String> output = objectMapper.convertValue(result.get("output"),
+                        new TypeReference<Map<String, String>>() {});
+                putCache(cacheKey, output);
+
+                if (attempt > 1) {
+                    log.info("KIS 해외주식 현재가 조회 성공 [{}/{}] ({}번째 시도)", exchange, symbol, attempt);
+                }
+                return output;
+            } catch (Exception e) {
+                log.warn("KIS 해외주식 현재가 조회 오류 [{}/{}] (시도 {}/{}): {}", exchange, symbol, attempt, maxRetries, e.getMessage());
+                if (attempt < maxRetries) {
+                    sleep(retryDelayMs * attempt);
+                }
+            }
+        }
+
+        Map<String, String> cached = getCachedOrNull(cacheKey);
+        if (cached != null) {
+            log.warn("KIS 해외주식 [{}/{}]: API 실패, 캐시 폴백 사용", exchange, symbol);
+        }
+        return cached;
+    }
+
+    /* ───── 해외주식 일봉 조회 ───── */
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, String>> getUsStockDailyCandles(String exchange, String symbol) {
+        return getUsStockDailyCandles(exchange, symbol, "");
+    }
+
+    public List<Map<String, String>> getUsStockDailyCandles(String exchange, String symbol, String bymd) {
+        String cacheKey = "us-candle:" + exchange + ":" + symbol + ":" + bymd;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String url = baseUrl + "/uapi/overseas-price/v1/quotations/dailyprice"
+                        + "?AUTH="
+                        + "&EXCD=" + exchange
+                        + "&SYMB=" + symbol
+                        + "&GUBN=0"
+                        + "&MODP=1"
+                        + "&BYMD=" + bymd;
+
+                HttpHeaders headers = buildHeaders("HHDFS76240000");
+                HttpEntity<Void> request = new HttpEntity<>(headers);
+
+                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
+                Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<Map<String, Object>>() {});
+
+                if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
+                    log.warn("KIS 해외주식 일봉 조회 실패 [{}/{}]: {}", exchange, symbol, result.get("msg1"));
+                    List<Map<String, String>> cached = getCachedOrNull(cacheKey);
+                    return cached != null ? cached : List.of();
+                }
+
+                List<Map<String, String>> output = objectMapper.convertValue(result.get("output2"),
+                        new TypeReference<List<Map<String, String>>>() {});
+                putCache(cacheKey, output);
+
+                if (attempt > 1) {
+                    log.info("KIS 해외주식 일봉 조회 성공 [{}/{}] ({}번째 시도)", exchange, symbol, attempt);
+                }
+                return output;
+            } catch (Exception e) {
+                log.warn("KIS 해외주식 일봉 조회 오류 [{}/{}] (시도 {}/{}): {}", exchange, symbol, attempt, maxRetries, e.getMessage());
+                if (attempt < maxRetries) {
+                    sleep(retryDelayMs * attempt);
+                }
+            }
+        }
+
+        List<Map<String, String>> cached = getCachedOrNull(cacheKey);
+        if (cached != null) {
+            log.warn("KIS 해외주식 일봉 [{}/{}]: API 실패, 캐시 폴백 사용", exchange, symbol);
+            return cached;
+        }
+        return List.of();
     }
 
     /* ───── 캐시 유틸 ───── */

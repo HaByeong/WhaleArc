@@ -72,4 +72,8 @@ public class Order {
     public boolean isStock() {
         return "STOCK".equals(assetType);
     }
+
+    public boolean isUsStock() {
+        return "US_STOCK".equals(assetType);
+    }
 }

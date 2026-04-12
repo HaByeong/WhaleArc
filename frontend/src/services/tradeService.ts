@@ -13,7 +13,7 @@ export interface StockPrice {
   open: number;
   previousClose: number;
   timestamp: string;
-  assetType?: 'STOCK' | 'CRYPTO';
+  assetType?: 'STOCK' | 'CRYPTO' | 'US_STOCK';
 }
 
 export interface OrderRequest {
@@ -23,7 +23,7 @@ export interface OrderRequest {
   orderMethod: 'MARKET' | 'LIMIT';
   quantity: number;
   price?: number; // 지정가 주문일 때만 필요
-  assetType?: 'STOCK' | 'CRYPTO';
+  assetType?: 'STOCK' | 'CRYPTO' | 'US_STOCK';
   memo?: string;
 }
 
@@ -156,6 +156,15 @@ export const tradeService = {
     });
     const list: any[] = response.data;
     return list.map((item) => mapMarketToStockPrice(item, 'STOCK'));
+  },
+
+  // 미국주식 종목 목록 조회 (인기 30종목)
+  getUsStockList: async (): Promise<StockPrice[]> => {
+    const response = await apiClient.get('/api/market/prices', {
+      params: { type: 'US_STOCK' },
+    });
+    const list: any[] = response.data;
+    return list.map((item) => mapMarketToStockPrice(item, 'US_STOCK'));
   },
 
   // 주식 종목 검색 (전체 KRX)

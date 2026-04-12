@@ -142,6 +142,18 @@ export const STOCK_NAMES: Record<string, string> = {
   '329180': '현대중공업', '352820': '하이브',
 };
 
+// 주요 미국주식 심볼 → 한글 이름 매핑
+export const US_STOCK_NAMES: Record<string, string> = {
+  'AAPL': '애플', 'MSFT': '마이크로소프트', 'GOOGL': '알파벳(구글)', 'AMZN': '아마존',
+  'NVDA': '엔비디아', 'TSLA': '테슬라', 'META': '메타', 'AVGO': '브로드컴',
+  'JPM': 'JP모건', 'V': '비자', 'JNJ': '존슨앤존슨', 'WMT': '월마트',
+  'MA': '마스터카드', 'PG': 'P&G', 'HD': '홈디포', 'DIS': '디즈니',
+  'NFLX': '넷플릭스', 'AMD': 'AMD', 'INTC': '인텔', 'CRM': '세일즈포스',
+  'ADBE': '어도비', 'PYPL': '페이팔', 'COST': '코스트코', 'NKE': '나이키',
+  'KO': '코카콜라', 'PEP': '펩시코', 'BAC': '뱅크오브아메리카', 'XOM': '엑슨모빌',
+  'COIN': '코인베이스', 'PLTR': '팔란티어',
+};
+
 /** 심볼 코드를 "한글명(코드)" 형태로 변환 (주식 종목코드도 지원) */
 export const cryptoDisplayName = (code: string): string => {
   const cryptoName = CRYPTO_NAMES[code];
@@ -155,6 +167,9 @@ export const cryptoDisplayName = (code: string): string => {
 export const assetDisplayName = (code: string, assetType?: string): string => {
   if (assetType === 'STOCK') {
     return STOCK_NAMES[code] || code;
+  }
+  if (assetType === 'US_STOCK') {
+    return US_STOCK_NAMES[code] || code;
   }
   return CRYPTO_NAMES[code] ? `${CRYPTO_NAMES[code]}(${code})` : code;
 };

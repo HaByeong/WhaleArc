@@ -1,6 +1,6 @@
 import apiClient from '../utils/api';
 
-export type AssetType = 'STOCK' | 'CRYPTO';
+export type AssetType = 'STOCK' | 'CRYPTO' | 'US_STOCK';
 
 export interface MarketPrice {
   assetType: AssetType;
@@ -11,6 +11,7 @@ export interface MarketPrice {
   changeRate: number;
   volume: number;
   market: string;
+  currency?: string;
 }
 
 export interface Candlestick {
@@ -48,7 +49,7 @@ export const marketService = {
 
     // 빈 응답은 캐시하지 않음 (재시도 시 다시 요청하도록)
     if (res.data.length > 0) {
-      const ttl = assetType === 'STOCK' ? STOCK_CACHE_TTL : CRYPTO_CACHE_TTL;
+      const ttl = (assetType === 'STOCK' || assetType === 'US_STOCK') ? STOCK_CACHE_TTL : CRYPTO_CACHE_TTL;
       candleCache.set(cacheKey, { data: res.data, expireAt: Date.now() + ttl });
     }
 
@@ -72,6 +73,26 @@ export const marketService = {
   /** 개별 종목 현재가 조회 */
   getStockPrice: async (code: string): Promise<MarketPrice> => {
     const res = await apiClient.get<MarketPrice>(`/api/market/stock/price/${code}`);
+    return res.data;
+  },
+
+  /** 미국주식 종목 검색 */
+  searchUsStocks: async (keyword: string): Promise<{ code: string; name: string; market: string }[]> => {
+    const res = await apiClient.get<{ code: string; name: string; market: string }[]>('/api/market/us-stock/search', {
+      params: { keyword },
+    });
+    return res.data;
+  },
+
+  /** 미국주식 개별 종목 현재가 조회 */
+  getUsStockPrice: async (symbol: string): Promise<MarketPrice> => {
+    const res = await apiClient.get<MarketPrice>(`/api/market/us-stock/price/${symbol}`);
+    return res.data;
+  },
+
+  /** USD/KRW 환율 조회 */
+  getExchangeRate: async (): Promise<{ usdKrw: number; timestamp: number }> => {
+    const res = await apiClient.get<{ usdKrw: number; timestamp: number }>('/api/market/exchange-rate');
     return res.data;
   },
 };

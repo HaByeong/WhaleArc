@@ -1,9 +1,7 @@
 package com.project.whalearc.trade.service;
 
 import com.project.whalearc.market.dto.MarketPriceResponse;
-import com.project.whalearc.market.service.CryptoPriceProvider;
-import com.project.whalearc.market.service.KisApiClient;
-import com.project.whalearc.market.service.StockPriceProvider;
+import com.project.whalearc.market.service.*;
 import com.project.whalearc.trade.domain.Order;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +21,7 @@ public class LimitOrderScheduler {
     private final OrderService orderService;
     private final CryptoPriceProvider cryptoPriceProvider;
     private final StockPriceProvider stockPriceProvider;
+    private final UsStockPriceProvider usStockPriceProvider;
     private final KisApiClient kisApiClient;
 
     /**
@@ -33,9 +32,20 @@ public class LimitOrderScheduler {
         List<Order> pendingOrders = orderService.getPendingLimitOrders();
         if (pendingOrders.isEmpty()) return;
 
+        // 미국주식 시세 (캐시된 인기종목)
+        Map<String, Double> usStockPriceMap = Map.of();
+        boolean hasUsStock = pendingOrders.stream().anyMatch(Order::isUsStock);
+        if (hasUsStock) {
+            List<MarketPriceResponse> usPrices = usStockPriceProvider.getAllUsStockPrices();
+            if (!usPrices.isEmpty()) {
+                usStockPriceMap = usPrices.stream()
+                        .collect(Collectors.toMap(MarketPriceResponse::getSymbol, MarketPriceResponse::getPrice, (a, b) -> a));
+            }
+        }
+
         // 가상화폐 시세
         Map<String, Double> cryptoPriceMap = Map.of();
-        boolean hasCrypto = pendingOrders.stream().anyMatch(o -> !o.isStock());
+        boolean hasCrypto = pendingOrders.stream().anyMatch(o -> !o.isStock() && !o.isUsStock());
         if (hasCrypto) {
             List<MarketPriceResponse> prices = cryptoPriceProvider.getAllKrwTickers();
             if (!prices.isEmpty()) {
@@ -58,7 +68,9 @@ public class LimitOrderScheduler {
         int executed = 0;
         for (Order order : pendingOrders) {
             Double marketPrice;
-            if (order.isStock()) {
+            if (order.isUsStock()) {
+                marketPrice = usStockPriceMap.get(order.getStockCode());
+            } else if (order.isStock()) {
                 marketPrice = stockPriceMap.get(order.getStockCode());
                 // 캐시에 없으면 개별 조회
                 if (marketPrice == null) {

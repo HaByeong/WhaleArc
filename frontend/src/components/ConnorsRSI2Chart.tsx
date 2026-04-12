@@ -105,7 +105,7 @@ export default function ConnorsRSI2Chart() {
   const dprRef = useRef(window.devicePixelRatio || 1);
 
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(30);
+  const [finished, setFinished] = useState(false);
   const [statusText, setStatusText] = useState('');
 
   const draw = useCallback(() => {
@@ -185,12 +185,22 @@ export default function ConnorsRSI2Chart() {
     }
     ctx.stroke();
 
-    /* ── 시그널: RSI(2) < 5 매수, RSI(2) > 60 매도 ── */
+    /* ── 시그널: RSI(2) < 5 매수, RSI(2) > 60 매도 (쿨다운 적용) ── */
     const signals: { i: number; type: 'buy' | 'sell'; rsiVal: number; price: number }[] = [];
+    const MIN_GAP = 12;
+    let lastBuyIdx = -MIN_GAP, lastSellIdx = -MIN_GAP;
     for (let i = RSI_P + 1; i <= frame && i < N; i++) {
       if (rsi[i] === null || rsi[i - 1] === null) continue;
-      if (rsi[i - 1]! >= 5 && rsi[i]! < 5) signals.push({ i, type: 'buy', rsiVal: rsi[i]!, price: closes[i] });
-      if (rsi[i - 1]! <= 60 && rsi[i]! > 60) signals.push({ i, type: 'sell', rsiVal: rsi[i]!, price: closes[i] });
+      // 매수: 쿨다운 + RSI(2)가 3 이하까지 깊이 빠진 경우만 (극단적 급락)
+      if (rsi[i - 1]! >= 5 && rsi[i]! < 5 && i - lastBuyIdx >= MIN_GAP) {
+        let deep = false;
+        for (let j = Math.max(RSI_P, i - 3); j <= i; j++) { if (rsi[j] !== null && rsi[j]! < 3) deep = true; }
+        if (deep) { signals.push({ i, type: 'buy', rsiVal: rsi[i]!, price: closes[i] }); lastBuyIdx = i; }
+      }
+      // 매도: 쿨다운 + 직전에 매수 신호가 있었을 때만 (페어 매칭)
+      if (rsi[i - 1]! <= 60 && rsi[i]! > 60 && i - lastSellIdx >= MIN_GAP && lastBuyIdx > lastSellIdx) {
+        signals.push({ i, type: 'sell', rsiVal: rsi[i]!, price: closes[i] }); lastSellIdx = i;
+      }
     }
 
     signals.forEach(s => {
@@ -263,19 +273,16 @@ export default function ConnorsRSI2Chart() {
   const stopPlayback = useCallback(() => {
     playingRef.current = false; setPlaying(false);
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (frameRef.current >= N - 1) setFinished(true);
   }, []);
   const step = useCallback(() => { if (frameRef.current < N - 1) { frameRef.current++; draw(); } else stopPlayback(); }, [draw, stopPlayback]);
-  const startPlayback = useCallback((spd: number) => {
-    if (playingRef.current) return; playingRef.current = true; setPlaying(true);
+  const startPlayback = useCallback(() => {
+    if (playingRef.current) return; playingRef.current = true; setPlaying(true); setFinished(false);
     if (frameRef.current >= N - 1) { frameRef.current = 0; setStatusText(''); }
-    timerRef.current = setInterval(step, spd);
+    timerRef.current = setInterval(step, 50);
   }, [step]);
-  const handlePlayPause = useCallback(() => { if (playingRef.current) stopPlayback(); else startPlayback(speed); }, [playing, speed, startPlayback, stopPlayback]);
-  const handleReset = useCallback(() => { stopPlayback(); dataRef.current = genData(mulberry32(SEED)); frameRef.current = 0; setStatusText(''); draw(); }, [stopPlayback, draw]);
-  const handleSpeedChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value); setSpeed(val);
-    if (playingRef.current) { clearInterval(timerRef.current!); timerRef.current = setInterval(step, val); }
-  }, [step]);
+  const handlePlayPause = useCallback(() => { if (playingRef.current) stopPlayback(); else startPlayback(); }, [startPlayback, stopPlayback]);
+  const handleReset = useCallback(() => { stopPlayback(); dataRef.current = genData(mulberry32(SEED)); frameRef.current = 0; setStatusText(''); setFinished(false); draw(); }, [stopPlayback, draw]);
 
   useEffect(() => {
     if (!canvasRef.current) return; resize(); draw();
@@ -289,16 +296,6 @@ export default function ConnorsRSI2Chart() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <button onClick={handlePlayPause} className="bg-gray-800 text-white border border-gray-700 rounded px-3.5 py-1.5 text-[13px] cursor-pointer hover:bg-gray-700 active:scale-95 transition-all">
-          {playing ? '⏸ Pause' : '▶ Play'}
-        </button>
-        <button onClick={handleReset} className="bg-transparent text-gray-600 border border-gray-300 rounded px-3.5 py-1.5 text-[13px] cursor-pointer hover:bg-gray-100 active:scale-95 transition-all">
-          ↺ Reset
-        </button>
-        <input type="range" min={1} max={100} value={speed} onChange={handleSpeedChange} className="flex-1 min-w-[100px] h-1 bg-gray-300 rounded appearance-none outline-none cursor-pointer accent-gray-600" />
-        <span className="text-[13px] text-gray-500">Speed: {speed}ms</span>
-      </div>
       <div className="flex gap-4 flex-wrap mb-2.5 text-[12px] text-gray-500">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: TV.rsi }} />RSI(2)
@@ -312,8 +309,19 @@ export default function ConnorsRSI2Chart() {
           RSI(2) {'>'} 60 반등 매도
         </span>
       </div>
-      <div className="relative w-full h-[420px] rounded-xl overflow-hidden">
+      <div className="relative w-full h-[420px] rounded-xl overflow-hidden cursor-pointer" onClick={() => { if (finished) handleReset(); else handlePlayPause(); }}>
         <canvas ref={canvasRef} className="block" />
+        {!playing && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity">
+            <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
+              {finished ? (
+                <svg className="w-7 h-7 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              ) : (
+                <svg className="w-8 h-8 text-gray-700 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       <div className="mt-2.5 text-[13px] min-h-[20px]">
         {statusText && <span style={{ color: statusColor }}>{statusLabel}</span>}

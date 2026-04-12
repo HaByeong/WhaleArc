@@ -29,14 +29,32 @@ public class PortfolioSnapshot {
     private BigDecimal returnRate;
 
     public PortfolioSnapshot(String userId, LocalDate date, Portfolio portfolio) {
+        this(userId, date, portfolio, 0);
+    }
+
+    public PortfolioSnapshot(String userId, LocalDate date, Portfolio portfolio, double usdKrwRate) {
         this.userId = userId;
         this.date = date;
-        this.totalValue = portfolio.getTotalValue();
         this.cashBalance = portfolio.getCashBalance();
-        this.holdingsValue = portfolio.getHoldings().stream()
-                .map(Holding::getMarketValue)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
         this.turtleAllocated = portfolio.getTurtleAllocated();
-        this.returnRate = portfolio.getReturnRate();
+
+        if (usdKrwRate > 0) {
+            this.totalValue = portfolio.getTotalValueWithExchangeRate(usdKrwRate);
+            this.returnRate = portfolio.getReturnRateWithExchangeRate(usdKrwRate);
+            // 홀딩 가치도 환율 적용
+            BigDecimal hv = BigDecimal.ZERO;
+            for (Holding h : portfolio.getHoldings()) {
+                BigDecimal mv = h.getMarketValue();
+                if (h.isUsStock()) mv = mv.multiply(BigDecimal.valueOf(usdKrwRate));
+                hv = hv.add(mv);
+            }
+            this.holdingsValue = hv;
+        } else {
+            this.totalValue = portfolio.getTotalValue();
+            this.returnRate = portfolio.getReturnRate();
+            this.holdingsValue = portfolio.getHoldings().stream()
+                    .map(Holding::getMarketValue)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
     }
 }

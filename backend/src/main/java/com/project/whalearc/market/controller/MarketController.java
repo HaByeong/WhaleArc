@@ -13,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -24,12 +26,14 @@ import java.util.concurrent.TimeUnit;
 public class MarketController {
 
     private final StockPriceProvider stockPriceProvider;
+    private final UsStockPriceProvider usStockPriceProvider;
     private final CryptoPriceProvider cryptoPriceProvider;
     private final RealtimePriceHolder realtimePriceHolder;
     private final CandlestickService candlestickService;
     private final StockMasterService stockMasterService;
     private final KisApiClient kisApiClient;
     private final VirtUpbitClient upbitClient;
+    private final ExchangeRateService exchangeRateService;
 
     // 지수 캐시 (30초)
     private volatile List<IndexPriceResponse> cachedIndices = List.of();
@@ -41,6 +45,7 @@ public class MarketController {
         try {
             List<MarketPriceResponse> prices = switch (type) {
                 case STOCK -> stockPriceProvider.getAllStockPrices();
+                case US_STOCK -> usStockPriceProvider.getAllUsStockPrices();
                 case CRYPTO -> {
                     // REST 데이터를 기본으로, 실시간 WebSocket 데이터로 덮어쓰기
                     List<MarketPriceResponse> restData = cryptoPriceProvider.getAllKrwTickers();
@@ -126,6 +131,31 @@ public class MarketController {
         }
     }
 
+    /* ───── 미국주식 엔드포인트 ───── */
+
+    @GetMapping("/us-stock/search")
+    public ResponseEntity<List<Map<String, String>>> searchUsStocks(@RequestParam String keyword) {
+        return ResponseEntity.ok(usStockPriceProvider.search(keyword));
+    }
+
+    @GetMapping("/us-stock/price/{symbol}")
+    public ResponseEntity<MarketPriceResponse> getUsStockPrice(@PathVariable String symbol) {
+        try {
+            MarketPriceResponse dto = usStockPriceProvider.getUsStockPriceBySymbol(symbol.toUpperCase());
+            if (dto == null) return ResponseEntity.notFound().build();
+            return ResponseEntity.ok(dto);
+        } catch (Exception e) {
+            log.error("미국주식 개별 조회 실패 [{}]: {}", symbol, e.getMessage());
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/exchange-rate")
+    public ResponseEntity<Map<String, Object>> getExchangeRate() {
+        double rate = exchangeRateService.getUsdKrwRate();
+        return ResponseEntity.ok(Map.of("usdKrw", rate, "timestamp", System.currentTimeMillis()));
+    }
+
     /** KOSPI / KOSDAQ 지수 조회 (인증 불필요, 30초 캐싱) */
     @GetMapping("/indices")
     public ResponseEntity<List<IndexPriceResponse>> getIndices() {
@@ -187,6 +217,41 @@ public class MarketController {
         }
 
         return ResponseEntity.ok(indices);
+    }
+
+    /** 지수 일봉 조회 (KOSPI/KOSDAQ 기간 수익률 벤치마크용) */
+    @GetMapping("/indices/history")
+    public ResponseEntity<List<Map<String, Object>>> getIndexHistory(
+            @RequestParam(defaultValue = "0001") String code,
+            @RequestParam(defaultValue = "90") int days
+    ) {
+        if (!kisApiClient.isConfigured()) {
+            return ResponseEntity.ok(List.of());
+        }
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
+        String endDate = LocalDate.now().format(fmt);
+        String startDate = LocalDate.now().minusDays(days).format(fmt);
+
+        List<Map<String, String>> raw = kisApiClient.getIndexDailyCandles(code, startDate, endDate);
+        if (raw == null || raw.isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Map<String, String> row : raw) {
+            String date = row.get("stck_bsop_date"); // yyyyMMdd
+            String closeStr = row.get("bstp_nmix_prpr"); // 지수 종가
+            if (date == null || closeStr == null || closeStr.isBlank()) continue;
+            try {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("date", date.substring(0, 4) + "-" + date.substring(4, 6) + "-" + date.substring(6, 8));
+                entry.put("close", Double.parseDouble(closeStr));
+                result.add(entry);
+            } catch (NumberFormatException ignored) {}
+        }
+        // KIS는 최신→과거 순이므로 오래된 순으로 정렬
+        result.sort(Comparator.comparing(m -> (String) m.get("date")));
+        return ResponseEntity.ok(result);
     }
 
     /**

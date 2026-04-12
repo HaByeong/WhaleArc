@@ -7,6 +7,7 @@ import com.project.whalearc.market.service.IndicatorCalculator;
 import com.project.whalearc.strategy.domain.Condition;
 import com.project.whalearc.strategy.domain.Indicator;
 import com.project.whalearc.strategy.domain.Strategy;
+import com.project.whalearc.market.service.ExchangeRateService;
 import com.project.whalearc.strategy.dto.BacktestRequest;
 import com.project.whalearc.strategy.dto.BacktestResponse;
 import com.project.whalearc.strategy.repository.StrategyRepository;
@@ -28,6 +29,7 @@ public class BacktestService {
     private final StrategyRepository strategyRepository;
     private final CandlestickService candlestickService;
     private final BacktestDataProvider backtestDataProvider;
+    private final ExchangeRateService exchangeRateService;
 
     private static final double DEFAULT_COMMISSION_RATE = 0.001; // 0.1%
     private static final ZoneOffset KST = ZoneOffset.of("+09:00");
@@ -80,7 +82,7 @@ public class BacktestService {
 
         if (allCandles == null || allCandles.isEmpty()) {
             log.info("백테스트 데이터 폴백: 기존 CandlestickService 사용 ({})", request.getStockCode());
-            String interval = "STOCK".equals(assetType) ? "1d" : "24h";
+            String interval = ("STOCK".equals(assetType) || "US_STOCK".equals(assetType)) ? "1d" : "24h";
             allCandles = candlestickService.getCandlesticks(
                     request.getStockCode(), interval, assetType);
         }
@@ -360,7 +362,12 @@ public class BacktestService {
                                        Map<String, double[]> indicatorValues,
                                        int globalOffset, BacktestRequest request, String assetType) {
 
-        double initialCapital = request.getInitialCapital();
+        boolean isUsStock = "US_STOCK".equalsIgnoreCase(assetType);
+        double usdKrwRate = isUsStock ? exchangeRateService.getUsdKrwRate() : 0;
+        // US_STOCK: KRW 투자금을 USD로 변환하여 USD 단위 시뮬레이션
+        double initialCapital = isUsStock
+                ? request.getInitialCapital() / usdKrwRate
+                : request.getInitialCapital();
         double cash = initialCapital;
         double peakEquity = initialCapital;
 
@@ -486,7 +493,9 @@ public class BacktestService {
 
             // ── 조건 평가 ──
             boolean riskExit = hasPosition && (stopLossHit || takeProfitHit || trailingStopHit || marginCallHit);
-            boolean canAddPosition = !hasPosition || posEntries.size() < maxPos;
+            // LONG_SHORT 모드에서는 방향 전환을 위해 진입 신호 평가를 항상 허용
+            boolean canAddPosition = !hasPosition || posEntries.size() < maxPos
+                    || ("LONG_SHORT".equals(tradeDir) && hasPosition);
             boolean entrySignal = !riskExit && canAddPosition
                     && evaluateConditions(entryConditions, indicatorValues, gi, price, candles, globalOffset, i);
             boolean exitSignal = hasPosition && !riskExit
@@ -601,8 +610,23 @@ public class BacktestService {
                     lowSinceEntry = price;
                     firstEntryDayIndex = i;
                 } else if ("LONG_SHORT".equals(tradeDir) && "SHORT".equals(currentDir)) {
-                    // LONG_SHORT 모드에서 숏 보유 중 청산 신호 → 숏 유지 (다음 진입 신호에서 롱 전환)
-                    // do nothing
+                    // LONG_SHORT 모드: 숏 보유 중 청산 신호 → 숏 청산 + 롱 진입 (방향 전환)
+                    int[] streaks = {currentStreak, maxWinStreak, maxLossStreak};
+                    int[] tradeCounts = {profitableTrades, losingTrades};
+                    cash = executeCloseAll(trades, posEntries, currentDir, price, slippage, commissionRate,
+                            date, i, "방향 전환 (숏→롱)", cash,
+                            winAmounts, lossAmounts, winRates, lossRates, holdingDaysList,
+                            streaks, tradeCounts);
+                    currentStreak = streaks[0]; maxWinStreak = streaks[1]; maxLossStreak = streaks[2];
+                    profitableTrades = tradeCounts[0]; losingTrades = tradeCounts[1];
+                    posEntries.clear();
+                    currentDir = "NONE";
+                    // 롱 오픈
+                    cash = openPosition(trades, posEntries, "LONG", price, slippage, commissionRate,
+                            positionSizing, positionValue, cash, date, i);
+                    currentDir = "LONG";
+                    highSinceEntry = price;
+                    firstEntryDayIndex = i;
                 } else {
                     // 일반 청산 (LONG_ONLY / SHORT_ONLY)
                     int[] streaks = {currentStreak, maxWinStreak, maxLossStreak};
@@ -845,6 +869,9 @@ public class BacktestService {
                 .drawdownCurve(drawdownCurve)
                 .priceData(priceData)
                 .indicatorSummary(indicatorSummary)
+                // 통화 정보
+                .currency(isUsStock ? "USD" : "KRW")
+                .exchangeRate(isUsStock ? usdKrwRate : 0)
                 .build();
     }
 
@@ -1201,7 +1228,7 @@ public class BacktestService {
         double variance = returns.length > 1 ? sumSquares / (returns.length - 1) : 0;
         double stdDev = Math.sqrt(variance);
         if (stdDev == 0) return 0;
-        double factor = "STOCK".equalsIgnoreCase(assetType) ? Math.sqrt(252) : Math.sqrt(365);
+        double factor = ("STOCK".equalsIgnoreCase(assetType) || "US_STOCK".equalsIgnoreCase(assetType)) ? Math.sqrt(252) : Math.sqrt(365);
         return (mean / stdDev) * factor;
     }
 
@@ -1219,7 +1246,7 @@ public class BacktestService {
         double downDev = Math.sqrt(downVariance);
         if (downDev == 0) return 0;
 
-        double factor = "STOCK".equalsIgnoreCase(assetType) ? Math.sqrt(252) : Math.sqrt(365);
+        double factor = ("STOCK".equalsIgnoreCase(assetType) || "US_STOCK".equalsIgnoreCase(assetType)) ? Math.sqrt(252) : Math.sqrt(365);
         return (mean / downDev) * factor;
     }
 

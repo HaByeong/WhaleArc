@@ -55,6 +55,10 @@ public class BacktestResponse {
     // 가격 데이터 (매매 마커용)
     private List<PricePointDto> priceData;
 
+    // 통화 정보 (US_STOCK 백테스트: "USD", 그 외: "KRW")
+    private String currency;
+    private double exchangeRate; // 시뮬레이션 시점의 USD/KRW 환율 (currency=USD일 때만 유효)
+
     // 지표 요약 (0-trade 디버깅용: 지표명 → {min, max, avg, last})
     private Map<String, IndicatorSummaryDto> indicatorSummary;
 

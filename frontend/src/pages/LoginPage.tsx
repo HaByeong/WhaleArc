@@ -265,6 +265,14 @@ const LoginPage = () => {
 
             </div>
 
+            <p className={`text-xs text-center ${isVirtLogin ? 'text-gray-400' : 'text-slate-500'}`}>
+              로그인 시{' '}
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className={`underline hover:no-underline ${isVirtLogin ? 'text-gray-500 hover:text-whale-light' : 'text-slate-400 hover:text-cyan-400'}`}>이용약관</a>
+              {' '}및{' '}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className={`underline hover:no-underline ${isVirtLogin ? 'text-gray-500 hover:text-whale-light' : 'text-slate-400 hover:text-cyan-400'}`}>개인정보처리방침</a>
+              에 동의하는 것으로 간주합니다.
+            </p>
+
             {/* 구분선 */}
             <div className="relative mb-6">
               <div className="absolute inset-0 flex items-center">

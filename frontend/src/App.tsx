@@ -25,6 +25,9 @@ const MyPortfolioPage = lazy(() => import('./pages/MyPortfolioPage'));
 const UserPage = lazy(() => import('./pages/UserPage'));
 const VirtDashboardPage = lazy(() => import('./pages/VirtDashboardPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const TermsPage = lazy(() => import('./pages/TermsPage'));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
+const DisclaimerPage = lazy(() => import('./pages/DisclaimerPage'));
 const GoldenCrossChart = lazy(() => import('./components/GoldenCrossChart'));
 
 // body에 테마 + virt/novirt 클래스 적용
@@ -34,7 +37,7 @@ const DarkModeController = () => {
   const { isDark } = useTheme();
   useEffect(() => {
     const isVirtRoute = location.pathname.startsWith('/virt');
-    const isAuthRoute = ['/', '/login', '/signup', '/auth/callback', '/forgot-password', '/reset-password'].includes(location.pathname);
+    const isAuthRoute = ['/', '/login', '/signup', '/auth/callback', '/forgot-password', '/reset-password', '/terms', '/privacy', '/disclaimer'].includes(location.pathname);
 
     // 기존 테마 클래스 제거
     document.body.classList.remove(...THEME_CLASSES);
@@ -74,6 +77,9 @@ function App() {
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/disclaimer" element={<DisclaimerPage />} />
           <Route
             path="/dashboard"
             element={

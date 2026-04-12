@@ -52,6 +52,31 @@ public class Portfolio {
         return cb.add(holdingsValue).add(ta);
     }
 
+    /** US_STOCK 홀딩을 환율 적용하여 KRW로 합산한 총 자산가치 */
+    public BigDecimal getTotalValueWithExchangeRate(double usdKrwRate) {
+        BigDecimal cb = cashBalance != null ? cashBalance : BigDecimal.ZERO;
+        BigDecimal ta = turtleAllocated != null ? turtleAllocated : BigDecimal.ZERO;
+        BigDecimal holdingsValue = BigDecimal.ZERO;
+        for (Holding h : (holdings != null ? holdings : java.util.List.<Holding>of())) {
+            BigDecimal mv = h.getMarketValue();
+            if (h.isUsStock()) {
+                mv = mv.multiply(BigDecimal.valueOf(usdKrwRate));
+            }
+            holdingsValue = holdingsValue.add(mv);
+        }
+        return cb.add(holdingsValue).add(ta);
+    }
+
+    public BigDecimal getReturnRateWithExchangeRate(double usdKrwRate) {
+        BigDecimal initial = (initialCash != null && initialCash.compareTo(BigDecimal.ZERO) > 0)
+                ? initialCash : BigDecimal.valueOf(10_000_000);
+        BigDecimal current = getTotalValueWithExchangeRate(usdKrwRate);
+        if (initial.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;
+        return current.subtract(initial)
+                .divide(initial, 10, java.math.RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100));
+    }
+
     public BigDecimal getReturnRate() {
         BigDecimal initial = (initialCash != null && initialCash.compareTo(BigDecimal.ZERO) > 0)
                 ? initialCash : BigDecimal.valueOf(10_000_000);

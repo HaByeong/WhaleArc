@@ -374,6 +374,12 @@ const LandingPage = () => {
               &copy; 2025 WhaleArc. All rights reserved.
               <span className="mx-2 text-white/20">|</span>
               <a href="mailto:khyun1109@gmail.com,jhschris8080@naver.com" className="text-gray-300 hover:text-white transition-colors underline underline-offset-4 decoration-gray-500 hover:decoration-white">문의하기</a>
+              <span className="mx-2 text-white/20">|</span>
+              <Link to="/terms" className="text-gray-300 hover:text-white transition-colors underline underline-offset-4 decoration-gray-500 hover:decoration-white">이용약관</Link>
+              <span className="mx-2 text-white/20">|</span>
+              <Link to="/privacy" className="text-gray-300 hover:text-white transition-colors underline underline-offset-4 decoration-gray-500 hover:decoration-white">개인정보처리방침</Link>
+              <span className="mx-2 text-white/20">|</span>
+              <Link to="/disclaimer" className="text-gray-300 hover:text-white transition-colors underline underline-offset-4 decoration-gray-500 hover:decoration-white">투자 면책 고지</Link>
             </p>
             <p className="text-gray-500 italic">
               고래처럼, 시장을 유영하듯

@@ -151,16 +151,21 @@ const UserPage = () => {
     }
   };
 
+  const saveFavorites = (next: string[]) => {
+    setFavoriteAssets(next);
+    userService.saveUserInfo({ favoriteAssets: next }).catch(() => {});
+  };
+
   const addAsset = (asset: string) => {
     const normalized = asset.toUpperCase().trim();
     if (normalized && !favoriteAssets.includes(normalized) && favoriteAssets.length < 20) {
-      setFavoriteAssets([...favoriteAssets, normalized]);
+      saveFavorites([...favoriteAssets, normalized]);
     }
     setCustomAsset('');
   };
 
   const removeAsset = (asset: string) => {
-    setFavoriteAssets(favoriteAssets.filter((a) => a !== asset));
+    saveFavorites(favoriteAssets.filter((a) => a !== asset));
   };
 
   if (loading) {
@@ -391,6 +396,11 @@ const UserPage = () => {
                       </span>
                     ))}
                   </div>
+                )}
+                {favoriteAssets.length > 0 && (
+                  <p className={`mt-2 text-[11px] ${!isVirt ? 'text-slate-600' : 'text-gray-400'}`}>
+                    * 관심 종목은 선택 즉시 자동 저장됩니다
+                  </p>
                 )}
               </div>
             </div>

@@ -610,7 +610,7 @@ const MyPortfolioPage = () => {
   const [chartMode, setChartMode] = useState<'value' | 'return'>('value');
   const [settingRoute, setSettingRoute] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
-  const [kospiBenchmark, setKospiBenchmark] = useState<{ price: number; change: number } | null>(null);
+  const [kospiHistory, setKospiHistory] = useState<{ date: string; close: number }[]>([]);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const showToast = (message: string, type: 'success' | 'error' = 'error') => {
     setToast({ message, type });
@@ -649,15 +649,11 @@ const MyPortfolioPage = () => {
     loadPortfolio();
   }, [loadPortfolio]);
 
-  // KOSPI 현재가 조회 (벤치마크용)
+  // KOSPI 일봉 데이터 조회 (벤치마크용)
   useEffect(() => {
-    apiClient.get('/api/market/indices')
-      .then((res) => {
-        const kospi = (res.data as Array<{ code: string; name: string; price: number; change: number; changeRate: number }>)
-          ?.find((d) => d.code === 'KOSPI' || d.name === 'KOSPI' || d.code === '0001');
-        if (kospi) setKospiBenchmark({ price: kospi.price, change: kospi.change });
-      })
-      .catch(() => { /* graceful degradation */ });
+    apiClient.get('/api/market/indices/history', { params: { code: '0001', days: 365 } })
+      .then((res) => { if (Array.isArray(res.data)) setKospiHistory(res.data); })
+      .catch(() => {});
   }, []);
 
   const handleSetRepresentativeRoute = async (purchaseId: string) => {
@@ -874,27 +870,41 @@ const MyPortfolioPage = () => {
               </div>
               {historyData.length >= 2 ? (() => {
                 const startValue = historyData[0].totalValue;
-                const hasKospi = kospiBenchmark != null;
 
-                // KOSPI: 현재 등락률을 기간에 걸쳐 선형 보간
-                const kospiDailyRate = hasKospi ? (kospiBenchmark.change / (kospiBenchmark.price - kospiBenchmark.change)) : 0;
-                const totalDays = historyData.length - 1;
-                const kospiTotalReturn = kospiDailyRate * totalDays;
-                const kospiEndValue = Math.round(startValue * (1 + kospiTotalReturn));
+                // KOSPI 일봉을 날짜별 Map으로 변환
+                const kospiMap = new Map(kospiHistory.map(k => [k.date, k.close]));
+                // 포트폴리오 시작일에 가장 가까운 KOSPI 종가 찾기
+                const startDate = historyData[0].date;
+                let kospiStartPrice = 0;
+                for (const k of kospiHistory) {
+                  if (k.date <= startDate) kospiStartPrice = k.close;
+                  else break;
+                }
+                if (kospiStartPrice === 0 && kospiHistory.length > 0) kospiStartPrice = kospiHistory[0].close;
+                const hasKospi = kospiStartPrice > 0;
 
-                const chartData = historyData.map((s, i) => {
+                const chartData = historyData.map((s) => {
                   const base: Record<string, any> = {
                     date: s.date,
                     label: new Date(s.date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
                     totalValue: Math.round(s.totalValue),
                     returnRate: Number(s.returnRate.toFixed(2)),
-                    // 시작값 대비 수익률 (%) - 차트 시작점 기준 정규화
                     myReturn: Number((((s.totalValue - startValue) / startValue) * 100).toFixed(2)),
                   };
-                  if (hasKospi && totalDays > 0) {
-                    const progress = i / totalDays;
-                    base.kospi = Math.round(startValue + progress * (kospiEndValue - startValue));
-                    base.kospiReturn = Number((kospiTotalReturn * progress * 100).toFixed(2));
+                  if (hasKospi) {
+                    // 해당 날짜의 KOSPI 종가 (없으면 이전 날짜 값 사용)
+                    let kospiClose = kospiMap.get(s.date);
+                    if (!kospiClose) {
+                      // 해당 날짜 이전의 가장 가까운 KOSPI 데이터
+                      for (const k of kospiHistory) {
+                        if (k.date <= s.date) kospiClose = k.close;
+                        else break;
+                      }
+                    }
+                    if (kospiClose) {
+                      base.kospiReturn = Number((((kospiClose - kospiStartPrice) / kospiStartPrice) * 100).toFixed(2));
+                      base.kospi = Math.round(startValue * (1 + (kospiClose - kospiStartPrice) / kospiStartPrice));
+                    }
                   }
                   return base;
                 });
@@ -922,7 +932,7 @@ const MyPortfolioPage = () => {
                         {hasKospi && (
                           <div className="flex items-center gap-1.5">
                             <span className="w-3 h-0.5 rounded-full border-t border-dashed border-gray-400" style={{ borderTopWidth: 2 }} />
-                            <span className="text-[11px] text-gray-400">KOSPI 수익률</span>
+                            <span className="text-[11px] text-gray-400">KOSPI</span>
                           </div>
                         )}
                       </div>
@@ -962,7 +972,7 @@ const MyPortfolioPage = () => {
                               contentStyle={{ borderRadius: '10px', fontSize: '13px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                               formatter={(value: number, name: string) => {
                                 if (name === 'myReturn') return [`${value >= 0 ? '+' : ''}${value.toFixed(2)}%`, '내 수익률'];
-                                if (name === 'kospiReturn') return [`${value >= 0 ? '+' : ''}${value.toFixed(2)}%`, 'KOSPI 수익률'];
+                                if (name === 'kospiReturn') return [`${value >= 0 ? '+' : ''}${value.toFixed(2)}%`, 'KOSPI'];
                                 return [value, name];
                               }}
                               labelFormatter={(label: string) => label}
@@ -990,11 +1000,9 @@ const MyPortfolioPage = () => {
                           </ComposedChart>
                         </ResponsiveContainer>
                       </div>
-                      {/* 벤치마크 안내 */}
                       <div className="mt-3 px-1">
                         <p className="text-[11px] text-gray-400 leading-relaxed">
-                          * 수익률은 차트 시작일 자산 기준으로 계산됩니다. KOSPI 수익률은 현재 일일 등락률을 기간에 걸쳐 선형 보간한 추정치입니다.
-                          BTC 벤치마크는 준비 중입니다.
+                          * 수익률은 차트 시작일 자산 기준으로 계산됩니다.{hasKospi && ' KOSPI 수익률은 실제 지수 일봉 데이터 기반입니다.'}
                         </p>
                       </div>
                     </>
@@ -1003,7 +1011,8 @@ const MyPortfolioPage = () => {
 
                 // ── 총 자산 모드 (기존) ──
                 const values = chartData.map((d) => d.totalValue);
-                const allValues = hasKospi ? [...values, startValue, kospiEndValue] : values;
+                const kospiValues = hasKospi ? chartData.filter(d => d.kospi != null).map(d => d.kospi as number) : [];
+                const allValues = [...values, ...kospiValues];
                 const minVal = Math.min(...allValues);
                 const maxVal = Math.max(...allValues);
                 const padding = Math.max((maxVal - minVal) * 0.1, 10000);

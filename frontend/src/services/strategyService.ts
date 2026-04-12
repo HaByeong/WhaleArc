@@ -10,7 +10,7 @@ export interface Strategy {
   exitConditions: Condition[];
   targetAssets: string[];
   targetAssetNames?: Record<string, string>;
-  assetType: 'CRYPTO' | 'STOCK' | 'MIXED';
+  assetType: 'CRYPTO' | 'STOCK' | 'US_STOCK' | 'MIXED';
   strategyLogic: string;
   applied: boolean;
   appliedSuccessCount?: number;
@@ -99,6 +99,9 @@ export interface BacktestResult {
   // 차트 데이터
   drawdownCurve?: EquityPoint[];
   priceData?: PricePoint[];
+  // 통화 정보 (US_STOCK: "USD", 그 외: "KRW")
+  currency?: string;
+  exchangeRate?: number; // USD/KRW 환율 (currency=USD일 때만)
   // 지표 요약 (0-trade 디버깅용)
   indicatorSummary?: Record<string, { min: number; max: number; avg: number; last: number }>;
 }

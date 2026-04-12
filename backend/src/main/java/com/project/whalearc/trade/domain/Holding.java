@@ -32,9 +32,14 @@ public class Holding {
         this.assetType = assetType;
     }
 
-    /** 주식 여부 판단 (null/빈값은 CRYPTO로 간주) */
+    /** 국내주식 여부 판단 (null/빈값은 CRYPTO로 간주) */
     public boolean isStock() {
         return "STOCK".equals(assetType);
+    }
+
+    /** 미국주식 여부 판단 */
+    public boolean isUsStock() {
+        return "US_STOCK".equals(assetType);
     }
 
     public BigDecimal getMarketValue() {

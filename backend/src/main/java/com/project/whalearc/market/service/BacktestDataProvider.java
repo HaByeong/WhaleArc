@@ -24,6 +24,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class BacktestDataProvider {
 
+    private final KisApiClient kisApiClient;
+    private final UsStockPriceProvider usStockPriceProvider;
+
+    public BacktestDataProvider(KisApiClient kisApiClient, UsStockPriceProvider usStockPriceProvider) {
+        this.kisApiClient = kisApiClient;
+        this.usStockPriceProvider = usStockPriceProvider;
+    }
+
     private static final ZoneOffset KST = ZoneOffset.of("+09:00");
     private static final int WARMUP_DAYS = 400; // 지표 워밍업 (MA200 + 여유)
 
@@ -133,6 +141,8 @@ public class BacktestDataProvider {
             List<CandlestickResponse> result;
             if ("STOCK".equalsIgnoreCase(assetType)) {
                 result = getStockCandles(symbol, warmupStart.toString(), endDate);
+            } else if ("US_STOCK".equalsIgnoreCase(assetType)) {
+                result = getUsStockCandles(symbol, warmupStart.toString(), endDate);
             } else {
                 result = getCryptoCandles(symbol, warmupStart.toString(), endDate);
             }
@@ -170,6 +180,92 @@ public class BacktestDataProvider {
             log.warn("Yahoo Finance 주식 데이터 없음: {}", stockCode);
         }
         return result;
+    }
+
+    /** 미국주식: Yahoo Finance 우선, 실패 시 KIS API 페이지네이션 폴백 (USD 원가 유지) */
+    private List<CandlestickResponse> getUsStockCandles(String symbol, String start, String end) {
+        // 1차: Yahoo Finance (전체 기간 한번에)
+        List<CandlestickResponse> result = fetchYahoo(symbol, start, end);
+
+        // 2차: Yahoo 실패 시 KIS 해외주식 API 페이지네이션으로 폴백
+        if (result.isEmpty() && kisApiClient.isConfigured()) {
+            log.info("Yahoo Finance 실패, KIS 해외주식 API 폴백 사용: {}", symbol);
+            result = fetchUsStockFromKis(symbol, start);
+        }
+
+        if (result.isEmpty()) {
+            log.warn("미국주식 백테스트 데이터 없음: {}", symbol);
+        }
+
+        // USD 원가 그대로 반환 — 시뮬레이션도 USD 단위로 실행
+        return result;
+    }
+
+    /** KIS 해외주식 일봉 페이지네이션 (BYMD 기반, 최대 10 페이지 = ~1000 거래일 ≈ 4년) */
+    private List<CandlestickResponse> fetchUsStockFromKis(String symbol, String startDate) {
+        String exchange = usStockPriceProvider.getExchange(symbol);
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd");
+        long startEpoch = LocalDate.parse(startDate).atStartOfDay().toEpochSecond(ZoneOffset.UTC);
+
+        List<CandlestickResponse> allCandles = new ArrayList<>();
+        String bymd = ""; // 빈값 = 오늘부터
+
+        for (int page = 0; page < 10; page++) {
+            try {
+                List<Map<String, String>> raw = kisApiClient.getUsStockDailyCandles(exchange, symbol, bymd);
+                if (raw == null || raw.isEmpty()) break;
+
+                String oldestDate = null;
+                boolean hasOlderData = false;
+
+                for (Map<String, String> row : raw) {
+                    String dateStr = row.get("xymd");
+                    if (dateStr == null || dateStr.isBlank()) continue;
+                    try {
+                        LocalDate date = LocalDate.parse(dateStr, fmt);
+                        long epochSec = date.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
+                        double open = Double.parseDouble(row.getOrDefault("open", "0"));
+                        double high = Double.parseDouble(row.getOrDefault("high", "0"));
+                        double low = Double.parseDouble(row.getOrDefault("low", "0"));
+                        double close = Double.parseDouble(row.getOrDefault("clos", "0"));
+                        double volume = Double.parseDouble(row.getOrDefault("tvol", "0"));
+                        if (close > 0) {
+                            allCandles.add(new CandlestickResponse(epochSec, open, high, low, close, volume));
+                        }
+                        if (oldestDate == null || dateStr.compareTo(oldestDate) < 0) {
+                            oldestDate = dateStr;
+                        }
+                        if (epochSec < startEpoch) {
+                            hasOlderData = true;
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                // 시작일보다 오래된 데이터까지 도달했으면 중단
+                if (hasOlderData || oldestDate == null) break;
+
+                // 다음 페이지: 가장 오래된 날짜로 이동
+                bymd = oldestDate;
+
+                // KIS API rate limit 준수
+                Thread.sleep(300);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            } catch (Exception e) {
+                log.warn("KIS 해외주식 페이지네이션 오류 [{}/page={}]: {}", symbol, page, e.getMessage());
+                break;
+            }
+        }
+
+        // 중복 제거 및 시간순 정렬
+        Map<Long, CandlestickResponse> deduped = new TreeMap<>();
+        for (CandlestickResponse c : allCandles) {
+            deduped.putIfAbsent(c.getTime(), c);
+        }
+
+        log.info("KIS 해외주식 백테스트 데이터 {}건 조회 완료: {}", deduped.size(), symbol);
+        return new ArrayList<>(deduped.values());
     }
 
     @SuppressWarnings("unchecked")

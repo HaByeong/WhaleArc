@@ -1,9 +1,7 @@
 package com.project.whalearc.trade.service;
 
 import com.project.whalearc.market.dto.MarketPriceResponse;
-import com.project.whalearc.market.service.CryptoPriceProvider;
-import com.project.whalearc.market.service.KisApiClient;
-import com.project.whalearc.market.service.StockPriceProvider;
+import com.project.whalearc.market.service.*;;
 import com.project.whalearc.notification.domain.Notification;
 import com.project.whalearc.notification.service.NotificationService;
 import com.project.whalearc.trade.domain.*;
@@ -31,7 +29,9 @@ public class OrderService {
     private final PortfolioService portfolioService;
     private final CryptoPriceProvider cryptoPriceProvider;
     private final StockPriceProvider stockPriceProvider;
+    private final UsStockPriceProvider usStockPriceProvider;
     private final KisApiClient kisApiClient;
+    private final ExchangeRateService exchangeRateService;
     private final NotificationService notificationService;
 
     // 유저별 동시 주문 방지 락 (최대 10,000개, 10분 미사용 시 자동 제거)
@@ -85,7 +85,7 @@ public class OrderService {
             throw new IllegalArgumentException("지정가 주문은 가격을 입력해야 합니다.");
         }
         // 주식은 정수 단위만 거래 가능
-        if ("STOCK".equals(assetType) && quantity.stripTrailingZeros().scale() > 0) {
+        if (("STOCK".equals(assetType) || "US_STOCK".equals(assetType)) && quantity.stripTrailingZeros().scale() > 0) {
             throw new IllegalArgumentException("주식은 1주 단위로만 거래할 수 있습니다.");
         }
 
@@ -100,7 +100,7 @@ public class OrderService {
 
             Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
 
-            validateOrder(orderType, stockCode, stockName, quantity, executionPrice, portfolio);
+            validateOrder(orderType, stockCode, stockName, quantity, executionPrice, portfolio, assetType);
 
             Order order = new Order(userId, stockCode, stockName, orderType, orderMethod, quantity, executionPrice, assetType);
             order.setMemo(memo);
@@ -122,8 +122,17 @@ public class OrderService {
      */
     private void validateOrder(Order.OrderType orderType, String stockCode, String stockName,
                                 BigDecimal quantity, BigDecimal executionPrice, Portfolio portfolio) {
+        validateOrder(orderType, stockCode, stockName, quantity, executionPrice, portfolio, null);
+    }
+
+    private void validateOrder(Order.OrderType orderType, String stockCode, String stockName,
+                                BigDecimal quantity, BigDecimal executionPrice, Portfolio portfolio, String assetType) {
         if (orderType == Order.OrderType.BUY) {
-            BigDecimal totalCost = executionPrice.multiply(quantity).multiply(BigDecimal.ONE.add(TradeRecord.COMMISSION_RATE)); // 수수료 포함
+            BigDecimal totalCost = executionPrice.multiply(quantity).multiply(BigDecimal.ONE.add(TradeRecord.COMMISSION_RATE));
+            // US_STOCK: USD 비용을 KRW로 환산
+            if ("US_STOCK".equals(assetType)) {
+                totalCost = exchangeRateService.usdToKrw(totalCost);
+            }
             if (portfolio.getCashBalance().compareTo(totalCost) < 0) {
                 log.warn("잔고 부족: userId={}, 필요={}, 보유={}", portfolio.getUserId(),
                         String.format("%,.0f", totalCost.doubleValue()),
@@ -158,9 +167,14 @@ public class OrderService {
         order.setUpdatedAt(Instant.now());
         orderRepository.save(order);
 
-        // 포트폴리오 업데이트
+        // 포트폴리오 업데이트 (US_STOCK은 USD→KRW 환전)
+        BigDecimal netAmountKrw = trade.getNetAmount();
+        if (order.isUsStock()) {
+            netAmountKrw = exchangeRateService.usdToKrw(trade.getNetAmount());
+        }
+
         if (order.getOrderType() == Order.OrderType.BUY) {
-            BigDecimal newBalance = portfolio.getCashBalance().subtract(trade.getNetAmount());
+            BigDecimal newBalance = portfolio.getCashBalance().subtract(netAmountKrw);
             if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
                 throw new IllegalStateException("체결 후 잔고가 음수가 됩니다. 주문을 처리할 수 없습니다.");
             }
@@ -168,7 +182,7 @@ public class OrderService {
             addOrUpdateHolding(portfolio, order.getStockCode(), order.getStockName(),
                     order.getQuantity(), executionPrice, order.getAssetType());
         } else {
-            portfolio.setCashBalance(portfolio.getCashBalance().add(trade.getNetAmount()));
+            portfolio.setCashBalance(portfolio.getCashBalance().add(netAmountKrw));
             reduceHolding(portfolio, order.getStockCode(), order.getQuantity());
         }
 
@@ -180,13 +194,22 @@ public class OrderService {
         // 시장가 주문 체결 알림
         if (order.getOrderMethod() == Order.OrderMethod.MARKET) {
             String typeLabel = order.getOrderType() == Order.OrderType.BUY ? "매수" : "매도";
-            String priceStr = executionPrice.setScale(0, RoundingMode.HALF_UP).toPlainString();
+            String priceStr;
+            String currencyUnit;
+            if (order.isUsStock()) {
+                priceStr = "$" + executionPrice.setScale(2, RoundingMode.HALF_UP).toPlainString();
+                BigDecimal krwEquiv = exchangeRateService.usdToKrw(executionPrice);
+                currencyUnit = priceStr + " (약 ₩" + krwEquiv.toPlainString() + ")";
+            } else {
+                priceStr = executionPrice.setScale(0, RoundingMode.HALF_UP).toPlainString();
+                currencyUnit = priceStr + "원";
+            }
             notificationService.createNotificationWithMeta(
                     order.getUserId(),
                     Notification.NotificationType.MARKET_ORDER_FILLED,
                     typeLabel + " 체결 완료",
                     order.getStockName() + " " + order.getQuantity().stripTrailingZeros().toPlainString()
-                            + "주를 " + priceStr + "원에 " + typeLabel + "했습니다.",
+                            + "주를 " + currencyUnit + "에 " + typeLabel + "했습니다.",
                     Map.of("orderId", order.getId(), "stockCode", order.getStockCode(),
                            "assetType", order.getAssetType() != null ? order.getAssetType() : "CRYPTO")
             );
@@ -239,6 +262,10 @@ public class OrderService {
             return getStockCurrentPrice(stockCode);
         }
 
+        if ("US_STOCK".equals(assetType)) {
+            return getUsStockCurrentPrice(stockCode);
+        }
+
         // 가상화폐: 빗썸 현재가
         List<MarketPriceResponse> prices = cryptoPriceProvider.getAllKrwTickers();
         if (prices.isEmpty()) {
@@ -269,6 +296,29 @@ public class OrderService {
         try { price = Long.parseLong(output.get("stck_prpr")); } catch (Exception ignored) {}
         if (price <= 0) {
             throw new IllegalStateException("유효하지 않은 주식 시세입니다: " + stockCode);
+        }
+        return BigDecimal.valueOf(price);
+    }
+
+    /** 미국주식 현재가 조회 (KIS 해외주식 API, USD 단위) */
+    private BigDecimal getUsStockCurrentPrice(String symbol) {
+        // 캐시에서 먼저 조회
+        List<MarketPriceResponse> cached = usStockPriceProvider.getAllUsStockPrices();
+        for (MarketPriceResponse p : cached) {
+            if (p.getSymbol().equals(symbol)) {
+                return BigDecimal.valueOf(p.getPrice());
+            }
+        }
+        // 캐시에 없으면 개별 조회
+        String exchange = usStockPriceProvider.getExchange(symbol);
+        Map<String, String> output = kisApiClient.getUsStockPrice(exchange, symbol);
+        if (output == null) {
+            throw new IllegalStateException("미국주식 시세를 불러올 수 없습니다: " + symbol);
+        }
+        double price = 0;
+        try { price = Double.parseDouble(output.get("last")); } catch (Exception ignored) {}
+        if (price <= 0) {
+            throw new IllegalStateException("유효하지 않은 미국주식 시세입니다: " + symbol);
         }
         return BigDecimal.valueOf(price);
     }
@@ -309,7 +359,7 @@ public class OrderService {
 
             try {
                 validateOrder(fresh.getOrderType(), fresh.getStockCode(), fresh.getStockName(),
-                        fresh.getQuantity(), fresh.getPrice(), portfolio);
+                        fresh.getQuantity(), fresh.getPrice(), portfolio, fresh.getAssetType());
             } catch (IllegalArgumentException e) {
                 log.warn("지정가 주문 자동 체결 검증 실패 → 자동 취소 [{}]: {}", fresh.getId(), e.getMessage());
                 fresh.setStatus(Order.OrderStatus.CANCELLED);

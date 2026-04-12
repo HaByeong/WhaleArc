@@ -22,6 +22,8 @@ import {
   type Condition,
 } from '../services/strategyService';
 import { tradeService, type StockPrice } from '../services/tradeService';
+import { marketService } from '../services/marketService';
+import { US_STOCK_NAMES } from '../services/quantStoreService';
 import GoldenCrossCanvasChart from '../components/GoldenCrossCanvasChart';
 import RSIChart from '../components/RSIChart';
 import BollingerChart from '../components/BollingerChart';
@@ -55,6 +57,8 @@ const StrategyPage = () => {
   const [isBacktesting, setIsBacktesting] = useState(false);
   const [stockList, setStockList] = useState<StockPrice[]>([]);
   const [krxStockList, setKrxStockList] = useState<StockPrice[]>([]);
+  const [usStockList, setUsStockList] = useState<StockPrice[]>([]);
+  const [searchedUsStocks, setSearchedUsStocks] = useState<{ code: string; name: string }[]>([]);
   const [_indicatorData] = useState<IndicatorData[]>([]);
 
   // 전략 생성/수정 모달 상태 (공유)
@@ -63,7 +67,7 @@ const StrategyPage = () => {
   const [newStrategyName, setNewStrategyName] = useState('');
   const [newStrategyDescription, setNewStrategyDescription] = useState('');
   const [newStrategyLogic, setNewStrategyLogic] = useState('');
-  const [newAssetType, setNewAssetType] = useState<'CRYPTO' | 'STOCK' | 'MIXED'>('CRYPTO');
+  const [newAssetType, setNewAssetType] = useState<'CRYPTO' | 'STOCK' | 'US_STOCK' | 'MIXED'>('CRYPTO');
   const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
   const [assetSearchQuery, setAssetSearchQuery] = useState('');
   const [searchedStocks, setSearchedStocks] = useState<{ code: string; name: string }[]>([]);
@@ -225,13 +229,15 @@ const StrategyPage = () => {
 
   const loadStockList = async () => {
     try {
-      const [cryptos, stocks] = await Promise.all([
+      const [cryptos, stocks, usStocks] = await Promise.all([
         tradeService.getStockList().catch(() => []),
         tradeService.getKrxStockList().catch(() => []),
+        tradeService.getUsStockList().catch(() => []),
       ]);
       setStockList(cryptos);
       setKrxStockList(stocks);
-      const allList = [...cryptos, ...stocks];
+      setUsStockList(usStocks);
+      const allList = [...cryptos, ...stocks, ...usStocks];
       void allList;
     } catch {
       // 에러 무시
@@ -257,6 +263,20 @@ const StrategyPage = () => {
           setSearchedStocks(results.map(r => ({ code: r.code, name: r.name })));
         } catch {
           setSearchedStocks([]);
+        } finally {
+          setIsSearchingStocks(false);
+        }
+      }, 300);
+    }
+    // 미국주식 검색
+    if (newAssetType === 'US_STOCK' || newAssetType === 'MIXED') {
+      setIsSearchingStocks(true);
+      searchTimerRef.current = setTimeout(async () => {
+        try {
+          const results = await marketService.searchUsStocks(query);
+          setSearchedUsStocks(results.map(r => ({ code: r.code, name: r.name })));
+        } catch {
+          setSearchedUsStocks([]);
         } finally {
           setIsSearchingStocks(false);
         }
@@ -295,6 +315,15 @@ const StrategyPage = () => {
       }
     }
 
+    // 미국주식: 검색어 있으면 검색 결과, 없으면 인기 30종목
+    if (newAssetType === 'US_STOCK' || newAssetType === 'MIXED') {
+      if (query && searchedUsStocks.length > 0) {
+        assets = [...assets, ...searchedUsStocks];
+      } else if (!query) {
+        assets = [...assets, ...usStockList.map(s => ({ code: s.stockCode, name: s.stockName }))];
+      }
+    }
+
     return assets.filter(a => !selectedAssets.includes(a.code));
   };
 
@@ -302,13 +331,14 @@ const StrategyPage = () => {
     if (!selectedAssets.includes(code)) {
       setSelectedAssets([...selectedAssets, code]);
       // 검색 결과에서 추가한 종목 이름 캐싱
-      const found = searchedStocks.find(s => s.code === code);
+      const found = searchedStocks.find(s => s.code === code) || searchedUsStocks.find(s => s.code === code);
       if (found) {
         setAssetNameCache(prev => ({ ...prev, [code]: found.name }));
       }
     }
     setAssetSearchQuery('');
     setSearchedStocks([]);
+    setSearchedUsStocks([]);
   };
 
   const handleRemoveAsset = (code: string) => {
@@ -320,6 +350,9 @@ const StrategyPage = () => {
     if (crypto) return crypto.stockName;
     const stock = krxStockList.find(s => s.stockCode === code);
     if (stock) return stock.stockName;
+    const usStock = usStockList.find(s => s.stockCode === code);
+    if (usStock) return usStock.stockName;
+    if (US_STOCK_NAMES[code]) return US_STOCK_NAMES[code];
     if (assetNameCache[code]) return assetNameCache[code];
     // DB에 저장된 자산명 맵에서 조회
     if (selectedStrategy?.targetAssetNames?.[code]) return selectedStrategy.targetAssetNames[code];
@@ -461,9 +494,14 @@ const StrategyPage = () => {
   const [backtestAssetType, setBacktestAssetType] = useState<string>('CRYPTO');
   const [showBacktestDropdown, setShowBacktestDropdown] = useState(false);
   const backtestSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const backtestJustSelectedRef = useRef(false);
 
   const handleBacktestSearch = (query: string) => {
     setBacktestSearchQuery(query);
+    if (backtestJustSelectedRef.current) {
+      backtestJustSelectedRef.current = false;
+      return;
+    }
     if (backtestSearchTimerRef.current) clearTimeout(backtestSearchTimerRef.current);
     if (!query.trim()) {
       setBacktestSearchResults([]);
@@ -478,7 +516,9 @@ const StrategyPage = () => {
           .map(s => ({ code: s.stockCode, name: s.stockName, market: 'CRYPTO' }));
         const krxResults = await tradeService.searchKrxStocks(query).catch(() => []);
         const krxMapped = krxResults.map((s: any) => ({ code: s.stockCode || s.code, name: s.stockName || s.name, market: 'STOCK' }));
-        setBacktestSearchResults([...cryptoResults.slice(0, 10), ...krxMapped.slice(0, 10)]);
+        const usResults = await marketService.searchUsStocks(query).catch(() => []);
+        const usMapped = usResults.map((s: any) => ({ code: s.code, name: s.name, market: 'US_STOCK' }));
+        setBacktestSearchResults([...cryptoResults.slice(0, 8), ...krxMapped.slice(0, 8), ...usMapped.slice(0, 8)]);
         setShowBacktestDropdown(true);
       } catch {
         setBacktestSearchResults([]);
@@ -491,6 +531,8 @@ const StrategyPage = () => {
   const handleBacktestStockSelect = (code: string, name: string, market?: string) => {
     // 백엔드가 내부적으로 _KRW / USDT 접미사를 붙이므로 중복 방지
     const cleanCode = code.replace(/_KRW$/, '');
+    backtestJustSelectedRef.current = true;
+    if (backtestSearchTimerRef.current) clearTimeout(backtestSearchTimerRef.current);
     setBacktestStockCode(cleanCode);
     setBacktestStockName(name);
     setBacktestAssetType(market || 'CRYPTO');
@@ -667,6 +709,7 @@ const StrategyPage = () => {
   const assetTypeLabel = (type: string) => {
     if (type === 'CRYPTO') return '가상화폐';
     if (type === 'STOCK') return '주식';
+    if (type === 'US_STOCK') return '미국주식';
     return '혼합';
   };
 
@@ -749,7 +792,7 @@ const StrategyPage = () => {
       whyUse: '가장 기본적인 전략으로, 큰 상승장을 놓치지 않으면서도 하락장에서 빠져나올 수 있어요. 초보자가 처음 배우기에 가장 좋은 전략입니다.',
       difficulty: '초급',
       strategyLogic: 'MA(20) > MA(60) → 매수 / MA(20) < MA(60) → 매도',
-      assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW', 'SOL_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)', SOL_KRW: '솔라나(SOL)' },
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
       indicators: [{ type: 'MA', parameters: { period: 20 } }, { type: 'MA', parameters: { period: 60 } }],
       entryConditions: [{ indicator: 'MA_20_CROSS_MA_60', operator: 'GT', value: 0, logic: 'AND' }],
       exitConditions: [{ indicator: 'MA_20_CROSSUNDER_MA_60', operator: 'GT', value: 0, logic: 'AND' }],
@@ -761,7 +804,7 @@ const StrategyPage = () => {
       whyUse: '급락 후 반등을 잡아내는 전략이라, 하락장에서도 수익 기회를 만들 수 있어요.',
       difficulty: '초급',
       strategyLogic: 'RSI < 30 → 매수 / RSI > 70 → 매도',
-      assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW', 'XRP_KRW', 'DOGE_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)', XRP_KRW: '리플(XRP)', DOGE_KRW: '도지코인(DOGE)' },
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
       indicators: [{ type: 'RSI', parameters: { period: 14 } }],
       entryConditions: [{ indicator: 'RSI', operator: 'LT', value: 30, logic: 'AND' }],
       exitConditions: [{ indicator: 'RSI', operator: 'GT', value: 70, logic: 'AND' }],
@@ -773,7 +816,7 @@ const StrategyPage = () => {
       whyUse: '횡보장에서 기다리다가 큰 움직임이 시작될 때만 거래해서, 불필요한 매매를 줄여줘요.',
       difficulty: '중급',
       strategyLogic: '%B > 1 → 매수 (상단 돌파) / %B < 0 → 매도 (하단 이탈)',
-      assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW', 'SOL_KRW', 'AVAX_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)', SOL_KRW: '솔라나(SOL)', AVAX_KRW: '아발란체(AVAX)' },
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
       indicators: [{ type: 'BOLLINGER_BANDS', parameters: { period: 20, stdDev: 2 } }],
       entryConditions: [{ indicator: 'BOLLINGER_PCT_B', operator: 'GT', value: 1, logic: 'AND' }],
       exitConditions: [{ indicator: 'BOLLINGER_PCT_B', operator: 'LT', value: 0, logic: 'AND' }],
@@ -785,7 +828,7 @@ const StrategyPage = () => {
       whyUse: '상승↔하락 전환 시점을 미리 감지할 수 있어서, 큰 흐름의 시작에 올라탈 수 있어요.',
       difficulty: '중급',
       strategyLogic: 'MACD 골든크로스 → 매수 / MACD 데드크로스 → 매도',
-      assetType: 'MIXED', targetAssets: ['BTC_KRW', 'ETH_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)' },
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
       indicators: [{ type: 'MACD', parameters: { fast: 12, slow: 26, signal: 9 } }],
       entryConditions: [{ indicator: 'MACD_CROSS_MACD_SIGNAL', operator: 'GT', value: 0, logic: 'AND' }],
       exitConditions: [{ indicator: 'MACD_CROSSUNDER_MACD_SIGNAL', operator: 'GT', value: 0, logic: 'AND' }],
@@ -797,7 +840,7 @@ const StrategyPage = () => {
       whyUse: '단기 매매에 적합하고, 매수/매도 타이밍을 비교적 명확하게 잡아줘요.',
       difficulty: '중급',
       strategyLogic: '%K ↑ %D 크로스 → 매수 / %K ↓ %D 크로스 → 매도',
-      assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW', 'XRP_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)', XRP_KRW: '리플(XRP)' },
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
       indicators: [{ type: 'STOCHASTIC', parameters: { kPeriod: 14, dPeriod: 3 } }],
       entryConditions: [{ indicator: 'STOCH_K_CROSS_STOCH_D', operator: 'GT', value: 0, logic: 'AND' }],
       exitConditions: [{ indicator: 'STOCH_K_CROSSUNDER_STOCH_D', operator: 'GT', value: 0, logic: 'AND' }],
@@ -809,7 +852,7 @@ const StrategyPage = () => {
       whyUse: '실제 월가에서 검증된 전략으로, 높은 승률이 특징이에요. 단, 단기 매매라 잦은 거래가 발생해요.',
       difficulty: '고급',
       strategyLogic: 'RSI(2) < 5 → 매수 (초단기 과매도) / RSI(2) > 60 → 매도 (반등 확인)',
-      assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)' },
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
       indicators: [{ type: 'RSI', parameters: { period: 2 } }],
       entryConditions: [{ indicator: 'RSI', operator: 'LT', value: 5, logic: 'AND' }],
       exitConditions: [{ indicator: 'RSI', operator: 'GT', value: 60, logic: 'AND' }],
@@ -821,7 +864,7 @@ const StrategyPage = () => {
       whyUse: '하루 단위로 매매해서 리스크가 제한적이고, 코인처럼 변동성 큰 자산에 잘 맞아요.',
       difficulty: '고급',
       strategyLogic: 'CLOSE > OPEN + (전일고가 - 전일저가) × 0.5 → 매수 / 다음날 시가 매도',
-      assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)' },
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
       indicators: [{ type: 'ATR', parameters: { period: 1 } }],
       entryConditions: [{ indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'OPEN + (PREV_HIGH - PREV_LOW) * 0.5' }],
       exitConditions: [{ indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'OPEN + (PREV_HIGH - PREV_LOW) * 0.3' }],
@@ -1045,13 +1088,16 @@ const StrategyPage = () => {
                       {/* 하단 메타 행 */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
-                          {strategy.assetType && (
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                              strategy.assetType === 'CRYPTO' ? (isDark ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-600') :
-                              strategy.assetType === 'STOCK' ? (isDark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') :
-                              (isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600')
-                            }`}>{assetTypeLabel(strategy.assetType)}</span>
-                          )}
+                          {(() => {
+                            const isMulti = strategy.id === 'preset-safe-rebalancing';
+                            return (
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                                isMulti
+                                  ? (!isVirt ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600')
+                                  : (!isVirt ? 'bg-cyan-500/10 text-cyan-400' : 'bg-cyan-50 text-cyan-600')
+                              }`}>{isMulti ? '다수 종목' : '단일 종목'}</span>
+                            );
+                          })()}
                           {(strategy.entryConditions?.length || 0) > 0 && (
                             <span className={`text-[9px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
                               조건 {(strategy.entryConditions?.length || 0) + (strategy.exitConditions?.length || 0)}개
@@ -1755,10 +1801,28 @@ const StrategyPage = () => {
                 </div>
 
                 {/* 가격 차트 + 매매 마커 */}
-                {backtestResult.priceData && backtestResult.priceData.length > 0 && (
-                  <div className={`rounded-xl p-4 ${isDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                    <h3 className={`text-sm font-bold mb-1 ${isDark ? 'text-white' : 'text-whale-dark'}`}>가격 차트 & 매매 포인트</h3>
-                    <p className={`text-xs mb-3 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>빨강 = 매수 / 파랑 = 매도 / 보라 = 숏진입 / 남색 = 숏청산</p>
+                {backtestResult.priceData && backtestResult.priceData.length > 0 && (() => {
+                  const isUsd = backtestResult.currency === 'USD';
+                  const xRate = backtestResult.exchangeRate || 1400;
+                  const fmtUsd = (v: number) => v >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${v.toFixed(0)}`;
+                  const fmtPriceAxis = isUsd
+                    ? (v: number) => fmtUsd(v)
+                    : (v: number) => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : `${v}`;
+                  const fmtTooltip = (value: number, name: string): [React.ReactNode, string] => {
+                    const label = name === 'buySignal' ? '매수' : name === 'sellSignal' ? '매도' : name === 'shortSignal' ? '숏진입' : name === 'coverSignal' ? '숏청산' : '종가';
+                    if (isUsd) {
+                      const krw = Math.round(value * xRate);
+                      return [<span key="v">${value.toFixed(2)} <span style={{ opacity: 0.5, fontSize: 10 }}>(₩{krw.toLocaleString()})</span></span>, label];
+                    }
+                    return [formatCurrency(value), label];
+                  };
+                  return (
+                  <div className={`rounded-xl p-4 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                    <h3 className={`text-sm font-bold mb-1 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
+                      가격 차트 & 매매 포인트
+                      {isUsd && <span className={`text-xs font-normal ml-2 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>USD 기준 (1$ ≈ ₩{xRate.toFixed(0)})</span>}
+                    </h3>
+                    <p className={`text-xs mb-3 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>빨강 = 매수 / 파랑 = 매도 / 보라 = 숏진입 / 남색 = 숏청산</p>
                     <ResponsiveContainer width="100%" height={260}>
                       <ComposedChart data={(() => {
                         const tradeMap = new Map<string, { type: string; price: number }>();
@@ -1775,12 +1839,12 @@ const StrategyPage = () => {
                           };
                         });
                       })()}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.06)' : '#e5e7eb'} />
-                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: isDark ? '#64748b' : '#6b7280' }} tickFormatter={(v) => v.substring(5)} />
-                        <YAxis tick={{ fontSize: 10, fill: isDark ? '#64748b' : '#6b7280' }} domain={['auto', 'auto']}
-                          tickFormatter={(v: number) => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : `${v}`} />
-                        <Tooltip contentStyle={isDark ? { backgroundColor: 'var(--wa-card-bg)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, color: '#ffffff', fontSize: 12 } : { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#1a2b4d', fontSize: 12 }}
-                          formatter={(value: number, name: string) => [formatCurrency(value), name === 'buySignal' ? '매수' : name === 'sellSignal' ? '매도' : name === 'shortSignal' ? '숏진입' : name === 'coverSignal' ? '숏청산' : '종가']} />
+                        <CartesianGrid strokeDasharray="3 3" stroke={!isVirt ? 'rgba(255,255,255,0.06)' : '#e5e7eb'} />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: !isVirt ? '#64748b' : '#6b7280' }} tickFormatter={(v) => v.substring(5)} />
+                        <YAxis tick={{ fontSize: 10, fill: !isVirt ? '#64748b' : '#6b7280' }} domain={['auto', 'auto']}
+                          tickFormatter={fmtPriceAxis} />
+                        <Tooltip contentStyle={!isVirt ? { backgroundColor: '#0a1628', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, color: '#ffffff', fontSize: 12 } : { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#1a2b4d', fontSize: 12 }}
+                          formatter={fmtTooltip} />
                         <Line type="monotone" dataKey="close" stroke="#4a90e2" strokeWidth={1.5} dot={false} name="종가" />
                         <Line type="monotone" dataKey="buySignal" stroke="none" dot={{ r: 5, fill: '#ef4444', stroke: '#ef4444' }} name="매수" legendType="triangle" />
                         <Line type="monotone" dataKey="sellSignal" stroke="none" dot={{ r: 5, fill: '#3b82f6', stroke: '#3b82f6' }} name="매도" legendType="triangle" />
@@ -1789,12 +1853,17 @@ const StrategyPage = () => {
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* 자산 변동 추이 */}
-                {backtestResult.equityCurve && backtestResult.equityCurve.length > 0 && (
-                  <div className={`rounded-xl p-4 ${isDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                    <h3 className={`text-sm font-bold mb-3 ${isDark ? 'text-white' : 'text-whale-dark'}`}>
+                {backtestResult.equityCurve && backtestResult.equityCurve.length > 0 && (() => {
+                  const isUsdEquity = backtestResult.currency === 'USD';
+                  const eqRate = backtestResult.exchangeRate || 1400;
+                  const toKrw = (v: number) => isUsdEquity ? Math.round(v * eqRate) : v;
+                  return (
+                  <div className={`rounded-xl p-4 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                    <h3 className={`text-sm font-bold mb-3 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
                       자산 변동 추이
                       {backtestResult.buyHoldCurve && <span className={`text-xs font-normal ml-2 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>전략 vs Buy & Hold</span>}
                     </h3>
@@ -1803,8 +1872,8 @@ const StrategyPage = () => {
                         const bhMap = new Map((backtestResult.buyHoldCurve || []).map(p => [p.date, p.value]));
                         return backtestResult.equityCurve.map(p => ({
                           date: p.date,
-                          value: p.value,
-                          buyHold: bhMap.get(p.date) ?? null,
+                          value: toKrw(p.value),
+                          buyHold: bhMap.has(p.date) ? toKrw(bhMap.get(p.date)!) : null,
                         }));
                       })()}>
                         <defs>
@@ -1818,7 +1887,7 @@ const StrategyPage = () => {
                         <YAxis tick={{ fontSize: 10, fill: isDark ? '#64748b' : '#6b7280' }} tickFormatter={(v: number) => v >= 1e8 ? `${(v / 1e8).toFixed(1)}억` : v >= 1e4 ? `${(v / 1e4).toFixed(0)}만` : `${v}`} />
                         <Tooltip contentStyle={isDark ? { backgroundColor: 'var(--wa-card-bg)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, color: '#ffffff', fontSize: 12 } : { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#1a2b4d', fontSize: 12 }}
                           formatter={(value: number, name: string) => [formatCurrency(value), name === 'buyHold' ? 'Buy & Hold' : '전략']} />
-                        <ReferenceLine y={backtestResult.initialCapital} stroke="#9ca3af" strokeDasharray="5 5" />
+                        <ReferenceLine y={toKrw(backtestResult.initialCapital)} stroke="#9ca3af" strokeDasharray="5 5" />
                         <Area type="monotone" dataKey="value" stroke="#4a90e2" fillOpacity={1} fill="url(#colorEquityLight)" strokeWidth={2} name="전략" />
                         {backtestResult.buyHoldCurve && (
                           <Area type="monotone" dataKey="buyHold" stroke="#f59e0b" fill="none" strokeWidth={1.5} strokeDasharray="6 3" name="buyHold" dot={false} />
@@ -1826,7 +1895,8 @@ const StrategyPage = () => {
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* 상세 지표 그리드 */}
                 <div className={`rounded-xl p-4 ${isDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
@@ -1834,7 +1904,7 @@ const StrategyPage = () => {
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {[
                       { label: '총 수익률', value: formatPercent(backtestResult.totalReturnRate), glossary: '' },
-                      { label: '최종 자산', value: formatCurrency(backtestResult.finalValue), glossary: '' },
+                      { label: '최종 자산', value: formatCurrency(backtestResult.currency === 'USD' ? Math.round(backtestResult.finalValue * (backtestResult.exchangeRate || 1400)) : backtestResult.finalValue), glossary: '' },
                       { label: 'CAGR', value: formatPercent(backtestResult.cagr ?? 0), glossary: 'CAGR' },
                       { label: 'Profit Factor', value: (backtestResult.profitFactor ?? 0).toFixed(2), glossary: 'ProfitFactor' },
                       { label: '소르티노', value: (backtestResult.sortinoRatio ?? 0).toFixed(2), glossary: '소르티노' },
@@ -1851,9 +1921,19 @@ const StrategyPage = () => {
                 </div>
 
                 {/* 거래 내역 테이블 (간소화) */}
-                {backtestResult.trades && backtestResult.trades.length > 0 && (
-                  <div className={`rounded-xl p-4 ${isDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
-                    <h3 className={`text-sm font-bold mb-3 ${isDark ? 'text-white' : 'text-whale-dark'}`}>거래 내역 ({backtestResult.trades.length}건)</h3>
+                {backtestResult.trades && backtestResult.trades.length > 0 && (() => {
+                  const isUsdTrade = backtestResult.currency === 'USD';
+                  const tradeRate = backtestResult.exchangeRate || 1400;
+                  const fmtTradePrice = (v: number) => isUsdTrade ? `$${v.toFixed(2)}` : formatCurrency(v);
+                  const fmtTradePnl = (v: number) => isUsdTrade
+                    ? `$${v >= 0 ? '+' : ''}${v.toFixed(2)} (₩${formatCurrency(Math.round(v * tradeRate))})`
+                    : formatCurrency(Math.round(v));
+                  return (
+                  <div className={`rounded-xl p-4 ${!isVirt ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+                    <h3 className={`text-sm font-bold mb-3 ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>
+                      거래 내역 ({backtestResult.trades.length}건)
+                      {isUsdTrade && <span className={`text-xs font-normal ml-2 ${!isVirt ? 'text-slate-500' : 'text-gray-400'}`}>USD</span>}
+                    </h3>
                     <div className="overflow-x-auto max-h-48">
                       <table className="w-full text-xs">
                         <thead>
@@ -1880,9 +1960,9 @@ const StrategyPage = () => {
                                     {trade.type === 'BUY' ? '매수' : trade.type === 'SHORT' ? '숏진입' : trade.type === 'COVER' ? '숏청산' : '매도'}
                                   </span>
                                 </td>
-                                <td className={`py-1.5 px-2 font-mono ${isDark ? 'text-white' : 'text-whale-dark'}`}>{formatCurrency(trade.price)}</td>
+                                <td className={`py-1.5 px-2 font-mono ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{fmtTradePrice(trade.price)}</td>
                                 <td className={`py-1.5 px-2 font-bold font-mono ${isEntry ? 'text-slate-600' : trade.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  {isExit ? formatCurrency(Math.round(trade.pnl)) : '-'}
+                                  {isExit ? fmtTradePnl(trade.pnl) : '-'}
                                 </td>
                                 <td className={`py-1.5 px-2 font-bold ${isEntry ? 'text-slate-600' : (trade.pnlPercent ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                   {isExit ? `${(trade.pnlPercent ?? 0) >= 0 ? '+' : ''}${(trade.pnlPercent ?? 0).toFixed(2)}%` : '-'}
@@ -1895,7 +1975,8 @@ const StrategyPage = () => {
                       </table>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 <div className={`mt-4 p-3 rounded-lg ${isDark ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
                   <p className={`text-[11px] leading-relaxed text-center ${isDark ? 'text-amber-400/80' : 'text-amber-700'}`}>
@@ -2008,12 +2089,14 @@ const StrategyPage = () => {
                   {selectedStrategy.targetAssets.map((assetCode) => {
                     const assetName = selectedStrategy.targetAssetNames?.[assetCode] || assetCode;
                     const isStock = /^\d{6}$/.test(assetCode);
+                    const isUsStock = !isStock && US_STOCK_NAMES[assetCode] !== undefined;
+                    const market = isStock ? 'STOCK' : isUsStock ? 'US_STOCK' : 'CRYPTO';
                     const isSel = backtestStockCode === assetCode;
                     return (
                       <button key={assetCode} type="button"
-                        onClick={() => handleBacktestStockSelect(assetCode, assetName, isStock ? 'STOCK' : 'CRYPTO')}
-                        className={`px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1 border ${isSel ? 'bg-gradient-to-r from-whale-light to-blue-500 text-white border-whale-light shadow-md' : isDark ? 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.05]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-whale-light hover:shadow-sm hover:shadow-whale-light/20'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${isStock ? 'bg-indigo-400' : 'bg-emerald-400'}`} />
+                        onClick={() => handleBacktestStockSelect(assetCode, assetName, market)}
+                        className={`px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1 border ${isSel ? 'bg-gradient-to-r from-whale-light to-blue-500 text-white border-whale-light shadow-md' : !isVirt ? 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.05]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-whale-light hover:shadow-sm hover:shadow-whale-light/20'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isStock ? 'bg-indigo-400' : isUsStock ? 'bg-blue-400' : 'bg-emerald-400'}`} />
                         {assetName}
                       </button>
                     );
@@ -2040,10 +2123,10 @@ const StrategyPage = () => {
                 )}
               </div>
               {backtestStockCode && (
-                <div className={`mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${isDark ? 'bg-white/[0.04] border border-white/[0.06]' : 'bg-gray-100 border border-gray-200'}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${backtestAssetType === 'STOCK' ? 'bg-indigo-400' : 'bg-emerald-400'}`} />
-                  <span className={`font-medium ${isDark ? 'text-white' : 'text-whale-dark'}`}>{backtestStockName}</span>
-                  <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({backtestStockCode})</span>
+                <div className={`mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${!isVirt ? 'bg-white/[0.04] border border-white/[0.06]' : 'bg-gray-100 border border-gray-200'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${backtestAssetType === 'STOCK' ? 'bg-indigo-400' : backtestAssetType === 'US_STOCK' ? 'bg-blue-400' : 'bg-emerald-400'}`} />
+                  <span className={`font-medium ${!isVirt ? 'text-white' : 'text-whale-dark'}`}>{backtestStockName}</span>
+                  <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>({backtestStockCode})</span>
                 </div>
               )}
               {showBacktestDropdown && backtestSearchResults.length > 0 && (
@@ -2051,10 +2134,10 @@ const StrategyPage = () => {
                   {backtestSearchResults.map((r) => (
                     <button key={`${r.market}-${r.code}`} type="button"
                       onClick={() => handleBacktestStockSelect(r.code, r.name, r.market)}
-                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between last:border-0 ${isDark ? 'hover:bg-white/[0.03] border-b border-white/[0.04] text-white' : 'hover:bg-gray-50 border-b border-gray-100 text-gray-800'}`}>
-                      <span>{r.name} <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({r.code})</span></span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                        {r.market === 'STOCK' ? '주식' : '코인'}
+                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between last:border-0 ${!isVirt ? 'hover:bg-white/[0.03] border-b border-white/[0.04] text-white' : 'hover:bg-gray-50 border-b border-gray-100 text-gray-800'}`}>
+                      <span>{r.name} <span className={!isVirt ? 'text-slate-500' : 'text-gray-400'}>({r.code})</span></span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : r.market === 'US_STOCK' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                        {r.market === 'STOCK' ? '주식' : r.market === 'US_STOCK' ? '미국주식' : '코인'}
                       </span>
                     </button>
                   ))}
@@ -2465,6 +2548,24 @@ const StrategyPage = () => {
                         key={entry.id}
                         onClick={() => {
                           setBacktestResult(entry.result);
+                          // 테스트 요약 동기화
+                          if (entry.result.stockCode) {
+                            const code = entry.result.stockCode;
+                            setBacktestStockCode(code);
+                            setBacktestStockName(entry.result.stockName || code);
+                            backtestJustSelectedRef.current = true;
+                            setBacktestSearchQuery(entry.result.stockName || code);
+                            // assetType 추론
+                            const isKrx = /^\d{6}$/.test(code);
+                            const isUs = !isKrx && US_STOCK_NAMES[code] !== undefined;
+                            setBacktestAssetType(isKrx ? 'STOCK' : isUs ? 'US_STOCK' : 'CRYPTO');
+                          }
+                          if (entry.result.startDate) setBacktestStartDate(entry.result.startDate);
+                          if (entry.result.endDate) setBacktestEndDate(entry.result.endDate);
+                          if (entry.result.initialCapital) setBacktestInitialCapital(String(entry.result.initialCapital));
+                          // 전략 매칭 (프리셋 + 사용자 전략에서 찾기)
+                          const matchedStrategy = allStrategies.find(s => s.id === entry.result.strategyId);
+                          if (matchedStrategy) setSelectedStrategy(matchedStrategy);
                           setShowHistoryDropdown(false);
                         }}
                         className={`w-full text-left px-3 py-2.5 text-xs transition-colors first:rounded-t-xl last:rounded-b-xl ${isDark ? 'hover:bg-white/[0.04] border-b border-white/[0.04] last:border-b-0' : 'hover:bg-blue-50 border-b border-gray-100 last:border-b-0'}`}
@@ -2543,13 +2644,14 @@ const StrategyPage = () => {
                   <span className={`font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>자산 유형</span>
                 </div>
                 <div className="flex gap-2 pl-8">
-                  {(['CRYPTO', 'STOCK', 'MIXED'] as const).map(type => (
+                  {(['CRYPTO', 'STOCK', 'US_STOCK', 'MIXED'] as const).map(type => (
                     <button key={type}
-                      onClick={() => { setNewAssetType(type); setSelectedAssets([]); }}
+                      onClick={() => { setNewAssetType(type); setSelectedAssets([]); setSearchedUsStocks([]); }}
                       className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
                         newAssetType === type
                           ? type === 'CRYPTO' ? 'bg-orange-500 text-white shadow-sm' :
-                            type === 'STOCK' ? 'bg-blue-500 text-white shadow-sm' :
+                            type === 'STOCK' ? 'bg-indigo-500 text-white shadow-sm' :
+                            type === 'US_STOCK' ? 'bg-blue-500 text-white shadow-sm' :
                             'bg-purple-500 text-white shadow-sm'
                           : isDark ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}>
@@ -2582,14 +2684,15 @@ const StrategyPage = () => {
                   )}
                   <input type="text" value={assetSearchQuery} onChange={(e) => handleAssetSearchChange(e.target.value)}
                     className="input-field"
-                    placeholder={newAssetType === 'CRYPTO' ? '가상화폐 검색 (BTC, ETH...)' : newAssetType === 'STOCK' ? '종목명 또는 종목코드로 검색' : '자산 검색'} />
-                  <div className={`mt-1 max-h-60 overflow-y-auto rounded-xl ${isDark ? 'border border-white/[0.06]' : 'border border-gray-200'}`}>
+                    placeholder={newAssetType === 'CRYPTO' ? '가상화폐 검색 (BTC, ETH...)' : newAssetType === 'US_STOCK' ? '미국주식 검색 (AAPL, TSLA...)' : newAssetType === 'STOCK' ? '종목명 또는 종목코드로 검색' : '자산 검색'} />
+                  <div className={`mt-1 max-h-60 overflow-y-auto rounded-xl ${!isVirt ? 'border border-white/[0.06]' : 'border border-gray-200'}`}>
                     {getAvailableAssets().slice(0, 50).map(asset => {
                       const isStock = asset.code.match(/^\d{6}$/);
+                      const isUsStock = !isStock && US_STOCK_NAMES[asset.code] !== undefined;
                       return (
                         <button key={asset.code} onClick={() => handleAddAsset(asset.code)}
-                          className={`w-full text-left px-3 py-2.5 text-sm last:border-0 transition-colors flex items-center gap-2 ${isDark ? 'hover:bg-white/[0.03] border-b border-white/[0.04]' : 'hover:bg-blue-50 border-b border-gray-50'}`}>
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-whale-dark flex-shrink-0 ${isStock ? 'bg-blue-400' : 'bg-orange-400'}`}>
+                          className={`w-full text-left px-3 py-2.5 text-sm last:border-0 transition-colors flex items-center gap-2 ${!isVirt ? 'hover:bg-white/[0.03] border-b border-white/[0.04]' : 'hover:bg-blue-50 border-b border-gray-50'}`}>
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-whale-dark flex-shrink-0 ${isStock ? 'bg-indigo-400' : isUsStock ? 'bg-blue-400' : 'bg-orange-400'}`}>
                             {asset.name.slice(0, 1)}
                           </div>
                           <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-800'}`}>{asset.name}</span>

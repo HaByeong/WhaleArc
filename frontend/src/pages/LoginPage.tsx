@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import apiClient from '../utils/api';
 
 interface IndexData {
@@ -31,7 +30,6 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { session } = useAuth();
-  const { isDark } = useTheme();
   const isVirtLogin = (location.state as any)?.from?.startsWith('/virt');
 
   // 이미 로그인된 경우 목적지로 이동
@@ -130,7 +128,7 @@ const LoginPage = () => {
       ),
       title: '1,000만원 가상자금',
       desc: '리스크 없이 실전처럼 투자 연습',
-      color: !isDark ? 'bg-blue-50 text-blue-600' : 'bg-blue-500/10 text-blue-400',
+      color: isVirtLogin ? 'bg-blue-50 text-blue-600' : 'bg-blue-500/10 text-blue-400',
     },
     {
       icon: (
@@ -140,7 +138,7 @@ const LoginPage = () => {
       ),
       title: '주식 + 가상화폐 통합',
       desc: 'KRX 전종목과 빗썸 가상화폐를 한 포트폴리오에서',
-      color: !isDark ? 'bg-emerald-50 text-emerald-600' : 'bg-emerald-500/10 text-emerald-400',
+      color: isVirtLogin ? 'bg-emerald-50 text-emerald-600' : 'bg-emerald-500/10 text-emerald-400',
     },
     {
       icon: (
@@ -150,7 +148,7 @@ const LoginPage = () => {
       ),
       title: '퀀트 전략 상점',
       desc: '터틀 트레이딩 등 검증된 알고리즘 자동매매',
-      color: !isDark ? 'bg-purple-50 text-purple-600' : 'bg-purple-500/10 text-purple-400',
+      color: isVirtLogin ? 'bg-purple-50 text-purple-600' : 'bg-purple-500/10 text-purple-400',
     },
     {
       icon: (
@@ -160,12 +158,12 @@ const LoginPage = () => {
       ),
       title: '포트폴리오 분석',
       desc: '자산 추이, 수익률, CSV 리포트까지',
-      color: !isDark ? 'bg-amber-50 text-amber-600' : 'bg-amber-500/10 text-amber-400',
+      color: isVirtLogin ? 'bg-amber-50 text-amber-600' : 'bg-amber-500/10 text-amber-400',
     },
   ];
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-[var(--wa-page-bg)] text-white' : 'bg-[var(--wa-page-bg)]'}`}>
+    <div className={`min-h-screen ${isVirtLogin ? 'bg-gray-50' : 'bg-[#060d18] text-white'}`}>
 
       {/* Non-Virt: 상단 히어로 배너 */}
       {!isVirtLogin && (
@@ -224,20 +222,20 @@ const LoginPage = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Login Form */}
-          <div className={!isDark ? 'card' : 'rounded-xl border border-white/[0.06] bg-white/[0.02] p-6'}>
+          <div className={isVirtLogin ? 'card' : 'rounded-xl border border-white/[0.06] bg-white/[0.02] p-6'}>
 
             <div className="mb-8">
-              <h2 className={`text-2xl font-bold ${!isDark ? 'text-whale-dark' : 'text-white'}`}>
-                {!isDark ? 'Virt에 오신 것을 환영해요' : '다시 만나서 반가워요'}
+              <h2 className={`text-2xl font-bold ${isVirtLogin ? 'text-whale-dark' : 'text-white'}`}>
+                {isVirtLogin ? 'Virt에 오신 것을 환영해요' : '다시 만나서 반가워요'}
               </h2>
-              <p className={`text-sm mt-1 ${!isDark ? 'text-gray-400' : 'text-slate-400'}`}>
-                {!isDark ? '로그인하고 내 실제 자산을 확인하세요' : '계정에 로그인하고 항해를 이어가세요'}
+              <p className={`text-sm mt-1 ${isVirtLogin ? 'text-gray-400' : 'text-slate-400'}`}>
+                {isVirtLogin ? '로그인하고 내 실제 자산을 확인하세요' : '계정에 로그인하고 항해를 이어가세요'}
               </p>
             </div>
 
             {/* 인앱 브라우저 경고 */}
             {isInApp && (
-              <div className={`rounded-lg p-4 mb-4 text-sm ${!isDark ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'}`}>
+              <div className={`rounded-lg p-4 mb-4 text-sm ${isVirtLogin ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'}`}>
                 <div className="font-semibold mb-1">외부 브라우저에서 열어주세요</div>
                 <p>현재 인앱 브라우저(네이버, 카카오톡 등)에서는 Google 로그인이 제한됩니다.</p>
                 <p className="mt-1">우측 상단 <strong>⋮</strong> 메뉴 → <strong>"기본 브라우저로 열기"</strong>를 눌러주세요.</p>
@@ -250,7 +248,7 @@ const LoginPage = () => {
                 type="button"
                 onClick={() => handleOAuthLogin('google')}
                 disabled={!!oauthLoading}
-                className={`w-full flex items-center justify-center space-x-3 px-4 py-3 rounded-lg transition-colors disabled:opacity-50 ${!isDark ? 'border border-gray-300 hover:bg-gray-50' : 'border border-white/10 bg-white/[0.04] hover:bg-white/[0.06]'}`}
+                className={`w-full flex items-center justify-center space-x-3 px-4 py-3 rounded-lg transition-colors disabled:opacity-50 ${isVirtLogin ? 'border border-gray-300 hover:bg-gray-50' : 'border border-white/10 bg-white/[0.04] hover:bg-white/[0.06]'}`}
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
@@ -258,28 +256,20 @@ const LoginPage = () => {
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                 </svg>
-                <span className={`font-medium ${!isDark ? 'text-gray-700' : 'text-slate-300'}`}>
+                <span className={`font-medium ${isVirtLogin ? 'text-gray-700' : 'text-slate-300'}`}>
                   {oauthLoading === 'google' ? '연결 중...' : 'Google로 로그인'}
                 </span>
               </button>
 
             </div>
 
-            <p className={`text-xs text-center ${isVirtLogin ? 'text-gray-400' : 'text-slate-500'}`}>
-              로그인 시{' '}
-              <a href="/terms" target="_blank" rel="noopener noreferrer" className={`underline hover:no-underline ${isVirtLogin ? 'text-gray-500 hover:text-whale-light' : 'text-slate-400 hover:text-cyan-400'}`}>이용약관</a>
-              {' '}및{' '}
-              <a href="/privacy" target="_blank" rel="noopener noreferrer" className={`underline hover:no-underline ${isVirtLogin ? 'text-gray-500 hover:text-whale-light' : 'text-slate-400 hover:text-cyan-400'}`}>개인정보처리방침</a>
-              에 동의하는 것으로 간주합니다.
-            </p>
-
             {/* 구분선 */}
             <div className="relative mb-6">
               <div className="absolute inset-0 flex items-center">
-                <div className={`w-full border-t ${!isDark ? 'border-gray-300' : 'border-white/[0.06]'}`} />
+                <div className={`w-full border-t ${isVirtLogin ? 'border-gray-300' : 'border-white/[0.06]'}`} />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className={`px-4 ${!isDark ? 'bg-white text-gray-500' : 'bg-[var(--wa-page-bg)] text-slate-500'}`}>또는 이메일로 로그인</span>
+                <span className={`px-4 ${isVirtLogin ? 'bg-white text-gray-500' : 'bg-[#060d18] text-slate-500'}`}>또는 이메일로 로그인</span>
               </div>
             </div>
 
@@ -287,7 +277,7 @@ const LoginPage = () => {
               {/* 안내 메시지 (리다이렉트로 인한 경우) */}
               {infoMessage && (
                 <div
-                  className={`rounded-lg p-4 text-sm flex items-start space-x-2 ${!isDark ? 'bg-blue-50 border border-blue-200 text-blue-800' : 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400'}`}
+                  className={`rounded-lg p-4 text-sm flex items-start space-x-2 ${isVirtLogin ? 'bg-blue-50 border border-blue-200 text-blue-800' : 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400'}`}
                   role="alert"
                   aria-live="polite"
                 >
@@ -301,7 +291,7 @@ const LoginPage = () => {
                   <button
                     type="button"
                     onClick={() => setInfoMessage(null)}
-                    className={`flex-shrink-0 ${!isDark ? 'text-blue-600 hover:text-blue-800' : 'text-cyan-400 hover:text-cyan-300'}`}
+                    className={`flex-shrink-0 ${isVirtLogin ? 'text-blue-600 hover:text-blue-800' : 'text-cyan-400 hover:text-cyan-300'}`}
                     aria-label="메시지 닫기"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -312,7 +302,7 @@ const LoginPage = () => {
               )}
 
               <div>
-                <label htmlFor="email" className={`block text-sm font-medium mb-2 ${!isDark ? 'text-gray-700' : 'text-slate-300'}`}>
+                <label htmlFor="email" className={`block text-sm font-medium mb-2 ${isVirtLogin ? 'text-gray-700' : 'text-slate-300'}`}>
                   이메일
                 </label>
                 <input
@@ -320,7 +310,7 @@ const LoginPage = () => {
                   id="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className={!isDark ? 'input-field' : 'w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40'}
+                  className={isVirtLogin ? 'input-field' : 'w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40'}
                   placeholder="email@example.com"
                   required
                   aria-required="true"
@@ -328,7 +318,7 @@ const LoginPage = () => {
                 />
               </div>
               <div>
-                <label htmlFor="password" className={`block text-sm font-medium mb-2 ${!isDark ? 'text-gray-700' : 'text-slate-300'}`}>
+                <label htmlFor="password" className={`block text-sm font-medium mb-2 ${isVirtLogin ? 'text-gray-700' : 'text-slate-300'}`}>
                   비밀번호
                 </label>
                 <input
@@ -336,7 +326,7 @@ const LoginPage = () => {
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={!isDark ? 'input-field' : 'w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40'}
+                  className={isVirtLogin ? 'input-field' : 'w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40'}
                   placeholder="6자 이상"
                   required
                   aria-required="true"
@@ -346,7 +336,7 @@ const LoginPage = () => {
               {error && (
                 <div
                   id="login-error"
-                  className={`rounded-lg p-3 text-sm ${!isDark ? 'bg-red-50 border border-red-200 text-red-800' : 'bg-red-500/10 border border-red-500/20 text-red-400'}`}
+                  className={`rounded-lg p-3 text-sm ${isVirtLogin ? 'bg-red-50 border border-red-200 text-red-800' : 'bg-red-500/10 border border-red-500/20 text-red-400'}`}
                   role="alert"
                   aria-live="polite"
                 >
@@ -362,14 +352,14 @@ const LoginPage = () => {
               </button>
             </form>
             <div className="mt-4 text-center space-y-2">
-              <p className={!isDark ? 'text-gray-600' : 'text-slate-400'}>
+              <p className={isVirtLogin ? 'text-gray-600' : 'text-slate-400'}>
                 계정이 없으신가요?{' '}
-                <Link to="/signup" className={`font-semibold hover:underline ${!isDark ? 'text-whale-light' : 'text-cyan-400'}`}>
+                <Link to="/signup" className={`font-semibold hover:underline ${isVirtLogin ? 'text-whale-light' : 'text-cyan-400'}`}>
                   회원가입
                 </Link>
               </p>
               <p>
-                <Link to="/forgot-password" className={`text-sm hover:underline ${!isDark ? 'text-gray-500 hover:text-whale-light' : 'text-slate-400 hover:text-cyan-400'}`}>
+                <Link to="/forgot-password" className={`text-sm hover:underline ${isVirtLogin ? 'text-gray-500 hover:text-whale-light' : 'text-slate-400 hover:text-cyan-400'}`}>
                   비밀번호를 잊으셨나요?
                 </Link>
               </p>
@@ -388,17 +378,17 @@ const LoginPage = () => {
                     {marketIndices.map((idx) => {
                       const isUp = idx.change >= 0;
                       return (
-                        <div key={idx.code} className={`rounded-2xl p-4 sm:p-5 ${!isDark ? (isUp ? 'bg-red-50' : 'bg-blue-50') : (isUp ? 'bg-red-500/10 border border-red-500/10' : 'bg-blue-500/10 border border-blue-500/10')}`}>
+                        <div key={idx.code} className={`rounded-2xl p-4 sm:p-5 ${isVirtLogin ? (isUp ? 'bg-red-50' : 'bg-blue-50') : (isUp ? 'bg-red-500/10 border border-red-500/10' : 'bg-blue-500/10 border border-blue-500/10')}`}>
                           <div className="flex items-center space-x-1.5 sm:space-x-2 mb-2 sm:mb-3">
-                            <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded ${!isDark ? (isUp ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700') : (isUp ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400')}`}>
+                            <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded ${isVirtLogin ? (isUp ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700') : (isUp ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400')}`}>
                               {idx.code}
                             </span>
-                            <span className={`text-xs sm:text-sm font-medium ${!isDark ? 'text-gray-500' : 'text-slate-400'}`}>{idx.name}</span>
+                            <span className={`text-xs sm:text-sm font-medium ${isVirtLogin ? 'text-gray-500' : 'text-slate-400'}`}>{idx.name}</span>
                           </div>
-                          <div className={`text-xl sm:text-2xl font-bold ${!isDark ? 'text-whale-dark' : 'text-white'}`}>
+                          <div className={`text-xl sm:text-2xl font-bold ${isVirtLogin ? 'text-whale-dark' : 'text-white'}`}>
                             {idx.price.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </div>
-                          <div className={`flex items-center space-x-1 mt-1 text-xs sm:text-sm font-semibold ${!isDark ? (isUp ? 'text-red-600' : 'text-blue-600') : (isUp ? 'text-red-400' : 'text-blue-400')}`}>
+                          <div className={`flex items-center space-x-1 mt-1 text-xs sm:text-sm font-semibold ${isVirtLogin ? (isUp ? 'text-red-600' : 'text-blue-600') : (isUp ? 'text-red-400' : 'text-blue-400')}`}>
                             <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               {isUp
                                 ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
@@ -406,7 +396,7 @@ const LoginPage = () => {
                               }
                             </svg>
                             <span>{Math.abs(idx.changeRate).toFixed(2)}%</span>
-                            <span className={`text-[10px] sm:text-xs font-normal ${!isDark ? 'text-gray-400' : 'text-slate-500'}`}>
+                            <span className={`text-[10px] sm:text-xs font-normal ${isVirtLogin ? 'text-gray-400' : 'text-slate-500'}`}>
                               ({isUp ? '+' : ''}{idx.change.toFixed(2)})
                             </span>
                           </div>
@@ -417,25 +407,25 @@ const LoginPage = () => {
                   {usdtIndex && (() => {
                     const isUp = usdtIndex.change >= 0;
                     return (
-                      <div className={`rounded-2xl px-4 py-3 flex items-center justify-between ${!isDark ? 'bg-gray-50 border border-gray-100' : 'bg-white/[0.02] border border-white/[0.06]'}`}>
+                      <div className={`rounded-2xl px-4 py-3 flex items-center justify-between ${isVirtLogin ? 'bg-gray-50 border border-gray-100' : 'bg-white/[0.02] border border-white/[0.06]'}`}>
                         <div className="flex items-center gap-2">
-                          <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded ${!isDark ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                          <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded ${isVirtLogin ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/20 text-emerald-400'}`}>
                             USDT
                           </span>
-                          <span className={`text-xs sm:text-sm font-medium ${!isDark ? 'text-gray-500' : 'text-slate-400'}`}>테더 환율</span>
+                          <span className={`text-xs sm:text-sm font-medium ${isVirtLogin ? 'text-gray-500' : 'text-slate-400'}`}>테더 환율</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className={`text-base sm:text-lg font-bold ${!isDark ? 'text-whale-dark' : 'text-white'}`}>
+                          <span className={`text-base sm:text-lg font-bold ${isVirtLogin ? 'text-whale-dark' : 'text-white'}`}>
                             ₩{usdtIndex.price.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
                           </span>
-                          <span className={`text-xs font-semibold ${!isDark ? (isUp ? 'text-red-600' : 'text-blue-600') : (isUp ? 'text-red-400' : 'text-blue-400')}`}>
+                          <span className={`text-xs font-semibold ${isVirtLogin ? (isUp ? 'text-red-600' : 'text-blue-600') : (isUp ? 'text-red-400' : 'text-blue-400')}`}>
                             {isUp ? '▲' : '▼'} {Math.abs(usdtIndex.changeRate).toFixed(2)}%
                           </span>
                         </div>
                       </div>
                     );
                   })()}
-                  <p className={`text-[10px] text-right ${!isDark ? 'text-gray-400' : 'text-slate-600'}`}>
+                  <p className={`text-[10px] text-right ${isVirtLogin ? 'text-gray-400' : 'text-slate-600'}`}>
                     * 지수: KIS API 기준 (15~20초 지연) · 환율: 업비트 실시간
                   </p>
                 </div>
@@ -443,45 +433,45 @@ const LoginPage = () => {
             })()}
 
             {/* WhaleArc를 만든 이유 */}
-            <div className={!isDark ? 'card border-l-4 border-l-whale-dark' : 'rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 border-l-4 border-l-cyan-500/40'}>
-              <p className={`text-xs font-semibold tracking-widest uppercase mb-3 ${!isDark ? 'text-whale-light' : 'text-cyan-400'}`}>Why WhaleArc</p>
-              <h3 className={`text-lg font-bold mb-4 ${!isDark ? 'text-whale-dark' : 'text-white'}`}>
+            <div className={isVirtLogin ? 'card border-l-4 border-l-whale-dark' : 'rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 border-l-4 border-l-cyan-500/40'}>
+              <p className={`text-xs font-semibold tracking-widest uppercase mb-3 ${isVirtLogin ? 'text-whale-light' : 'text-cyan-400'}`}>Why WhaleArc</p>
+              <h3 className={`text-lg font-bold mb-4 ${isVirtLogin ? 'text-whale-dark' : 'text-white'}`}>
                 투자, 누구에게나 열려 있어야 하니까.
               </h3>
-              <div className={`space-y-2.5 text-sm leading-relaxed ${!isDark ? 'text-gray-600' : 'text-slate-400'}`}>
+              <div className={`space-y-2.5 text-sm leading-relaxed ${isVirtLogin ? 'text-gray-600' : 'text-slate-400'}`}>
                 <p>
                   높은 진입장벽과 실패에 대한 두려움이
                   첫 걸음을 망설이게 만듭니다.
                 </p>
                 <p>
                   WhaleArc는 복잡한 설치 없이,
-                  <span className={`font-semibold ${!isDark ? 'text-whale-dark' : 'text-white'}`}> 웹 접속만으로 실시간 시세와
+                  <span className={`font-semibold ${isVirtLogin ? 'text-whale-dark' : 'text-white'}`}> 웹 접속만으로 실시간 시세와
                   함께 나만의 포트폴리오를 구성</span>하고
                   리스크 없이 투자를 경험할 수 있는 공간입니다.
                 </p>
               </div>
-              <p className={`mt-4 text-xs ${!isDark ? 'text-gray-400' : 'text-slate-600'}`}>
+              <p className={`mt-4 text-xs ${isVirtLogin ? 'text-gray-400' : 'text-slate-600'}`}>
                 당신의 첫 항해, WhaleArc가 함께합니다.
               </p>
             </div>
 
             {/* WhaleArc 기능 소개 카드 */}
-            <div className={!isDark ? 'card' : 'rounded-xl border border-white/[0.06] bg-white/[0.02] p-6'}>
-              <h3 className={`text-lg font-semibold mb-5 ${!isDark ? 'text-whale-dark' : 'text-white'}`}>
+            <div className={isVirtLogin ? 'card' : 'rounded-xl border border-white/[0.06] bg-white/[0.02] p-6'}>
+              <h3 className={`text-lg font-semibold mb-5 ${isVirtLogin ? 'text-whale-dark' : 'text-white'}`}>
                 WhaleArc에서 할 수 있는 것들
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {features.map((f, i) => (
                   <div
                     key={i}
-                    className={`flex items-start space-x-3 p-3 rounded-xl transition-colors ${!isDark ? 'hover:bg-gray-50' : 'hover:bg-white/[0.03]'}`}
+                    className={`flex items-start space-x-3 p-3 rounded-xl transition-colors ${isVirtLogin ? 'hover:bg-gray-50' : 'hover:bg-white/[0.03]'}`}
                   >
                     <div className={`p-2.5 rounded-xl flex-shrink-0 ${f.color}`}>
                       {f.icon}
                     </div>
                     <div className="min-w-0">
-                      <div className={`font-semibold text-sm ${!isDark ? 'text-whale-dark' : 'text-white'}`}>{f.title}</div>
-                      <div className={`text-xs mt-0.5 leading-relaxed ${!isDark ? 'text-gray-500' : 'text-slate-500'}`}>{f.desc}</div>
+                      <div className={`font-semibold text-sm ${isVirtLogin ? 'text-whale-dark' : 'text-white'}`}>{f.title}</div>
+                      <div className={`text-xs mt-0.5 leading-relaxed ${isVirtLogin ? 'text-gray-500' : 'text-slate-500'}`}>{f.desc}</div>
                     </div>
                   </div>
                 ))}

@@ -1,12 +1,10 @@
 import { Link, useNavigate } from 'react-router-dom';
 import WhaleTailLogo from '../components/WhaleTailLogo';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 
 const LandingPage = () => {
   const navigate = useNavigate();
   const { session } = useAuth();
-  const { isDark } = useTheme();
 
   const handleFeatureClick = (path: string) => {
     if (!session) {
@@ -22,9 +20,9 @@ const LandingPage = () => {
   };
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className={isDark ? 'bg-[#060d18]' : 'bg-whale-dark'}>
+      <header className="bg-whale-dark">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
@@ -54,9 +52,9 @@ const LandingPage = () => {
       </header>
 
       {/* Hero Section */}
-      <div className={`relative text-white min-h-[75vh] flex items-center overflow-hidden ${isDark ? 'bg-[#060d18]' : 'bg-whale-dark'}`}>
+      <div className="relative bg-whale-dark text-white min-h-[75vh] flex items-center overflow-hidden">
         {/* 배경 그라데이션 효과 */}
-        <div className={`absolute inset-0 opacity-90 ${isDark ? 'bg-gradient-to-br from-[#060d18] via-[#0c1e3a] to-[#060d18]' : 'bg-gradient-to-br from-whale-dark via-blue-900 to-whale-dark'}`}></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-whale-dark via-blue-900 to-whale-dark opacity-90"></div>
         
         {/* 배경 장식 요소 */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-whale-light opacity-5 rounded-full blur-3xl"></div>
@@ -186,13 +184,13 @@ const LandingPage = () => {
       </div>
 
       {/* Feature Cards Section */}
-      <div className={`bg-gradient-to-b ${isDark ? 'from-[#0a1628] to-[#060d18]' : 'from-white to-gray-50'} py-20`}>
+      <div className="bg-gradient-to-b from-white to-gray-50 py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className={`text-3xl md:text-4xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'} mb-4`}>
+            <h2 className="text-3xl md:text-4xl font-bold text-whale-dark mb-4">
               이런 것들을 할 수 있어요
             </h2>
-            <p className={`${isDark ? 'text-gray-400' : 'text-gray-600'} text-lg`}>
+            <p className="text-gray-600 text-lg">
               WhaleArc와 함께 항해를 시작해보세요
             </p>
           </div>
@@ -265,15 +263,15 @@ const LandingPage = () => {
               <div
                 key={feature.title}
                 onClick={() => handleFeatureClick(feature.route)}
-                className={`group card text-center hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 border ${isDark ? 'border-white/10 hover:border-whale-light bg-white/[0.04]' : 'border-gray-100 hover:border-whale-light'} cursor-pointer`}
+                className="group card text-center hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 border border-gray-100 hover:border-whale-light cursor-pointer"
               >
                 <div className="w-16 h-16 bg-gradient-to-br from-whale-light to-whale-accent rounded-xl mx-auto mb-4 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg">
                   {feature.icon}
                 </div>
-                <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-whale-dark'} mb-1.5 group-hover:text-whale-light transition-colors`}>
+                <h3 className="text-lg font-bold text-whale-dark mb-1.5 group-hover:text-whale-light transition-colors">
                   {feature.title}
                 </h3>
-                <p className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-sm leading-relaxed`}>
+                <p className="text-gray-500 text-sm leading-relaxed">
                   {feature.desc}
                 </p>
               </div>
@@ -283,7 +281,7 @@ const LandingPage = () => {
       </div>
 
       {/* 용어 가이드 섹션 */}
-      <div className={`relative text-white py-20 overflow-hidden ${isDark ? 'bg-[#060d18]' : 'bg-whale-dark'}`}>
+      <div className="relative bg-whale-dark text-white py-20 overflow-hidden">
         {/* 배경 장식 */}
         <div className="absolute top-10 left-10 w-72 h-72 bg-whale-light opacity-[0.03] rounded-full blur-3xl" />
         <div className="absolute bottom-10 right-10 w-96 h-96 bg-whale-accent opacity-[0.03] rounded-full blur-3xl" />
@@ -360,7 +358,7 @@ const LandingPage = () => {
       </div>
 
       {/* Footer */}
-      <footer className={`border-t border-white/10 ${isDark ? 'bg-[#060d18]' : 'bg-whale-dark'}`}>
+      <footer className="bg-whale-dark border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center mb-6 px-4">
             <p className="text-[11px] text-gray-500 leading-relaxed max-w-3xl mx-auto">
@@ -374,12 +372,6 @@ const LandingPage = () => {
               &copy; 2025 WhaleArc. All rights reserved.
               <span className="mx-2 text-white/20">|</span>
               <a href="mailto:khyun1109@gmail.com,jhschris8080@naver.com" className="text-gray-300 hover:text-white transition-colors underline underline-offset-4 decoration-gray-500 hover:decoration-white">문의하기</a>
-              <span className="mx-2 text-white/20">|</span>
-              <Link to="/terms" className="text-gray-300 hover:text-white transition-colors underline underline-offset-4 decoration-gray-500 hover:decoration-white">이용약관</Link>
-              <span className="mx-2 text-white/20">|</span>
-              <Link to="/privacy" className="text-gray-300 hover:text-white transition-colors underline underline-offset-4 decoration-gray-500 hover:decoration-white">개인정보처리방침</Link>
-              <span className="mx-2 text-white/20">|</span>
-              <Link to="/disclaimer" className="text-gray-300 hover:text-white transition-colors underline underline-offset-4 decoration-gray-500 hover:decoration-white">투자 면책 고지</Link>
             </p>
             <p className="text-gray-500 italic">
               고래처럼, 시장을 유영하듯

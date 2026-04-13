@@ -69,9 +69,6 @@ const Header = ({ showNav = false }: HeaderProps) => {
               <span className={`text-xl ${isDarkNav ? 'whalearc-text' : showNav ? 'whalearc-text-nav' : 'whalearc-text'}`}>
                 WHALEARC{isVirt && <span className="text-cyan-400">-VIRT</span>}
               </span>
-              <span className={`wt-beta-badge text-[10px] font-bold px-2 py-0.5 rounded-full ${isDarkNav ? 'bg-cyan-500/15 text-cyan-400/80 border border-cyan-500/25' : showNav ? 'bg-gradient-to-r from-whale-light to-whale-accent text-white shadow-sm' : 'bg-gradient-to-r from-blue-400 to-blue-500 text-white shadow-sm shadow-blue-400/30'}`}>
-                BETA
-              </span>
             </div>
           </Link>
           

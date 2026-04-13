@@ -9,9 +9,20 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
     defaults:
       run:
         working-directory: backend
+    env:
+      # 테스트 시 application.yml 의 placeholder 가 해석되도록 최소 더미 값 주입
+      JWT_SECRET_KEY: test-jwt-secret-key-for-ci-only-not-used-in-prod
+      VIRT_ENCRYPTION_KEY: test-virt-encryption-key-for-ci-only
+      SPRING_PROFILES_ACTIVE: test
+      MONGODB_URI: mongodb://localhost:27017/whaleArc_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

@@ -163,7 +163,7 @@ const LoginPage = () => {
   ];
 
   return (
-    <div className={`min-h-screen ${isVirtLogin ? 'bg-gray-50' : 'bg-[#060d18] text-white'}`}>
+    <div className={`min-h-screen ${isVirtLogin ? 'bg-gray-50' : 'wa-force-dark bg-[#060d18] text-white'}`}>
 
       {/* Non-Virt: 상단 히어로 배너 */}
       {!isVirtLogin && (
@@ -185,8 +185,8 @@ const LoginPage = () => {
             <h3 className="whalearc-text text-3xl md:text-4xl font-bold tracking-tighter mb-2">
               WHALEARC
             </h3>
-            <p className="text-slate-400 text-base mb-2">내 실제 자산을, 한 곳에서</p>
-            <p className="text-sm text-slate-600 mb-5 max-w-md mx-auto">
+            <p className="text-slate-300 text-base mb-2">내 실제 자산을, 한 곳에서</p>
+            <p className="text-sm text-slate-400 mb-5 max-w-md mx-auto">
               증권사와 거래소 API를 연동하면 흩어진 내 자산을 하나의 화면에서 확인할 수 있습니다
             </p>
             <div className="flex items-center gap-2 justify-center">

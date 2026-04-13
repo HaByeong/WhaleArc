@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    allowedHosts: ['kh.tail504583.ts.net', 'whale-arc.com'],
+    allowedHosts: ['kh.tail504583.ts.net', 'whale-arc.com', 'test.whale-arc.com'],
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

@@ -103,6 +103,80 @@ git clone git@github.com:YOUR_ORG_NAME/WhaleArc.git
 
 ---
 
+## 4-1. 브랜치 전략 (베타 종료 이후)
+
+### 브랜치 구조
+
+| 브랜치 | 역할 | 자동 배포 대상 |
+|--------|------|----------------|
+| `main` | 운영 (prod) | `https://whale-arc.com` |
+| `test` | 통합 스테이징 | `https://test.whale-arc.com` |
+| `feat/*`, `fix/*`, `test-kh`, `test-bh` | 개인 작업 브랜치 | 배포 없음 |
+| `hotfix/*` | prod 긴급 수정 | main 머지 시 prod 자동 배포 |
+
+### 일반 작업 흐름
+
+```
+1. test 브랜치에서 분기
+   git checkout test && git pull
+   git checkout -b feat/어쩌구
+
+2. 작업 → 커밋 → push
+   git push -u origin feat/어쩌구
+
+3. GitHub에서 feat/어쩌구 → test 로 PR 올리고 셀프리뷰 → 머지
+   → test.whale-arc.com 에 자동 배포됨
+
+4. test 서버에서 확인 후 문제 없으면
+   GitHub에서 test → main 으로 PR 올리고 머지
+   → whale-arc.com 에 자동 배포됨
+
+5. 개인 브랜치는 머지 후 삭제 (장기 유지 금지 — 머지 지옥 방지)
+```
+
+### Hotfix (prod 긴급 수정)
+
+```
+1. main 에서 분기
+   git checkout main && git pull
+   git checkout -b hotfix/짧은이름
+
+2. 최소 수정 → PR → main 머지 → 자동 prod 배포
+
+3. 반드시 main → test 역머지 (test가 뒤처지지 않게)
+   git checkout test && git pull
+   git merge main && git push
+```
+
+### 브랜치 보호 규칙 (GitHub → Settings → Branches)
+
+- `main`: PR 필수, CI 통과 필수, 직접 push 금지
+- `test`: PR 필수, CI 통과 필수
+
+### 피해야 할 것
+
+- `main`에 직접 push (실수 원인 1순위)
+- `test-kh`/`test-bh`를 수개월 장기 유지 (머지 충돌 폭탄)
+- `test`를 건너뛰고 개인 브랜치 → `main` 직행 (hotfix 제외)
+
+---
+
+## 4-2. 환경 분리
+
+| 구분 | prod | test |
+|------|------|------|
+| 도메인 | `whale-arc.com`, `api.whale-arc.com` | `test.whale-arc.com` |
+| 백엔드 포트 | 8080 | 8081 |
+| MongoDB DB명 | `whaleArc` | `whaleArc_test` |
+| Supabase 프로젝트 | `tkkbawoknwumqdqxypwd` | `ivcentmbrxqebqtjsnsj` |
+| Spring profile | `prod` | `test` |
+| Frontend 빌드 | `npm run build:prod` | `npm run build:test` |
+| systemd service | `whalearc-prod` | `whalearc-test` |
+
+**중요**: test 환경에서 만든 사용자 계정으로 prod에 로그인할 수 없습니다 (Supabase 프로젝트가 완전 분리됨). prod 사용자 데이터를 건드릴 위험 없이 test에서 자유롭게 실험 가능합니다.
+
+---
+
 ## 5. 팀만 보는 문서 (외부에 안 보이게)
 
 다음 경로는 **`.gitignore`에 있어서 GitHub에 올라가지 않습니다.** 팀원만 로컬에서 볼 수 있습니다.

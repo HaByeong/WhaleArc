@@ -2,6 +2,10 @@
 
 WhaleArc(프론트엔드 + 백엔드)를 서버에 올리는 방법입니다.
 
+> **현재 운영 방식**: 단일 VPS에 prod(8080) + test(8081) 백엔드를 동시 기동하고, Nginx가 `whale-arc.com` / `test.whale-arc.com` 서브도메인으로 라우팅합니다. 배포는 GitHub Actions가 `main`/`test` 브랜치 push를 받아 자동 수행합니다. 상세 흐름은 [GIT_TEAM_SETUP.md](GIT_TEAM_SETUP.md) 4-1절 참고.
+>
+> 아래 "방법 1/2"는 역사적/대안 가이드이며 실제 운영은 "현재 운영 방식 상세" 섹션을 따릅니다.
+
 ---
 
 ## 배포 전 준비사항
@@ -160,3 +164,195 @@ server {
 - [ ] 배포 후 로그인/회원가입/토큰 재발급 동작 확인
 
 이 가이드대로 하시면 WhaleArc을 서버에 올려서 외부에서 접속할 수 있습니다. 특정 플랫폼(Railway, Vercel 등)으로 할 때 단계가 더 필요하면 그 플랫폼 이름을 알려주시면 그에 맞춰 정리해 드리겠습니다.
+
+---
+
+## 현재 운영 방식 상세 (prod + test 이중 환경)
+
+### VPS 디렉터리 구조 (가정)
+
+```
+/opt/whalearc/
+├── prod/app.jar           ← 백엔드 JAR (prod)
+└── test/app.jar           ← 백엔드 JAR (test)
+
+/var/www/
+├── whalearc-prod/         ← 프론트 dist (prod)
+└── whalearc-test/         ← 프론트 dist (test)
+
+/etc/whalearc/
+├── prod.env               ← 백엔드 환경 변수 (prod)
+└── test.env               ← 백엔드 환경 변수 (test)
+```
+
+### systemd unit 예시 — `/etc/systemd/system/whalearc-prod.service`
+
+```ini
+[Unit]
+Description=WhaleArc Backend (prod)
+After=network.target mongod.service
+
+[Service]
+Type=simple
+User=whalearc
+EnvironmentFile=/etc/whalearc/prod.env
+Environment=SPRING_PROFILES_ACTIVE=prod
+ExecStart=/usr/bin/java -jar /opt/whalearc/prod/app.jar
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### systemd unit 예시 — `/etc/systemd/system/whalearc-test.service`
+
+```ini
+[Unit]
+Description=WhaleArc Backend (test)
+After=network.target mongod.service
+
+[Service]
+Type=simple
+User=whalearc
+EnvironmentFile=/etc/whalearc/test.env
+Environment=SPRING_PROFILES_ACTIVE=test
+Environment=PORT=8081
+ExecStart=/usr/bin/java -jar /opt/whalearc/test/app.jar
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`/etc/whalearc/prod.env` 와 `test.env` 파일은 권한 `600`, 소유자 `whalearc:whalearc`. 내용 예시:
+
+```
+# /etc/whalearc/prod.env
+JWT_SECRET_KEY=<랜덤 32자 이상>
+VIRT_ENCRYPTION_KEY=<랜덤 32자 이상>
+MONGODB_URI=mongodb://localhost:27017/whaleArc
+CORS_ALLOWED_ORIGINS=https://whale-arc.com,https://api.whale-arc.com
+SUPABASE_JWKS_URI=https://tkkbawoknwumqdqxypwd.supabase.co/auth/v1/.well-known/jwks.json
+```
+
+```
+# /etc/whalearc/test.env
+JWT_SECRET_KEY=<prod와 다른 랜덤 값>
+VIRT_ENCRYPTION_KEY=<prod와 다른 랜덤 값>
+MONGODB_URI=mongodb://localhost:27017/whaleArc_test
+CORS_ALLOWED_ORIGINS=https://test.whale-arc.com
+SUPABASE_JWKS_URI=https://ivcentmbrxqebqtjsnsj.supabase.co/auth/v1/.well-known/jwks.json
+```
+
+활성화:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now whalearc-prod whalearc-test
+```
+
+### Nginx server block — `/etc/nginx/sites-available/whale-arc.com`
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name whale-arc.com;
+
+    ssl_certificate     /etc/letsencrypt/live/whale-arc.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/whale-arc.com/privkey.pem;
+
+    root /var/www/whalearc-prod;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /ws/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 3600s;
+    }
+}
+```
+
+### Nginx server block — `/etc/nginx/sites-available/test.whale-arc.com`
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name test.whale-arc.com;
+
+    ssl_certificate     /etc/letsencrypt/live/test.whale-arc.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/test.whale-arc.com/privkey.pem;
+
+    root /var/www/whalearc-test;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /ws/ {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 3600s;
+    }
+}
+```
+
+> **Cloudflare Proxied(주황 구름)** 상태에서는 Let's Encrypt HTTP-01 challenge가 실패할 수 있습니다. 다음 중 하나 선택:
+> - Certbot DNS-01 challenge (Cloudflare API 토큰 사용)
+> - 인증서 발급 동안 잠시 Proxy 끄기(회색 구름) → 발급 완료 후 다시 켜기
+> - Cloudflare Origin Certificate 발급해서 VPS에 설치 (15년 유효, 권장)
+
+### GitHub Secrets (Repo Settings → Secrets and variables → Actions)
+
+| Secret | 설명 |
+|--------|------|
+| `VPS_SSH_HOST` | VPS 공인 IP 또는 호스트명 |
+| `VPS_SSH_USER` | SSH 사용자 (예: `whalearc` 또는 `ubuntu`) |
+| `VPS_SSH_KEY` | Ed25519 개인키 전체 내용 (GitHub Actions 전용으로 새로 발급해서 VPS `~/.ssh/authorized_keys`에 공개키 등록) |
+| `PROD_SUPABASE_URL` | `https://tkkbawoknwumqdqxypwd.supabase.co` |
+| `PROD_SUPABASE_ANON_KEY` | prod Supabase anon/publishable key |
+| `TEST_SUPABASE_URL` | `https://ivcentmbrxqebqtjsnsj.supabase.co` |
+| `TEST_SUPABASE_ANON_KEY` | test Supabase publishable key |
+
+배포 워크플로우 파일:
+- [.github/workflows/ci.yml](.github/workflows/ci.yml) — PR/push 시 빌드+테스트 검증
+- [.github/workflows/deploy-test.yml](.github/workflows/deploy-test.yml) — `test` push 시 자동 배포
+- [.github/workflows/deploy-prod.yml](.github/workflows/deploy-prod.yml) — `main` push 시 자동 배포
+
+### 필요한 VPS sudoers 설정
+
+GitHub Actions 배포 시 `systemctl restart`와 `nginx reload`를 암호 없이 실행하려면:
+
+```
+# /etc/sudoers.d/whalearc-deploy
+whalearc ALL=(ALL) NOPASSWD: /bin/systemctl restart whalearc-prod, /bin/systemctl restart whalearc-test, /bin/systemctl reload nginx
+```
+
+(`whalearc`는 `VPS_SSH_USER` 값에 맞춰 변경)

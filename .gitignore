@@ -36,12 +36,24 @@ out/
 ### VS Code ###
 .vscode/
 
+### Build artifacts ###
+frontend/dist
+frontend/dist-test
+frontend/dist-prod
+
+### Runtime data (user uploads, etc.) ###
+backend/uploads/
+
+### Stray root package-lock (no matching package.json) ###
+/package-lock.json
+
 ### Environment variables ###
 frontend/.env
 frontend/.env.*
 !frontend/.env.example
 backend/.env
 backend/src/main/resources/application-prod.yml
+backend/src/main/resources/application-test.yml
 backend/src/main/resources/application-local.yml
 
 ### Documentation (Private) - 팀만 보는 문서 (GitHub에 올라가지 않음) ###

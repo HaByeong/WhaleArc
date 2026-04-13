@@ -54,4 +54,4 @@ spring.security:
   oauth2:
     resourceserver:
       jwt:
-        jwk-set-uri: https://tkkbawoknwumqdqxypwd.supabase.co/auth/v1/.well-known/jwks.json
+        jwk-set-uri: ${SUPABASE_JWKS_URI:https://tkkbawoknwumqdqxypwd.supabase.co/auth/v1/.well-known/jwks.json}

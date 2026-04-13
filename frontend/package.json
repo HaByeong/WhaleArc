@@ -6,8 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:test": "tsc -b && vite build --mode test --outDir dist-test",
+    "build:prod": "tsc -b && vite build --mode production --outDir dist-prod",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "serve:test": "vite preview --mode test --outDir dist-test --port 5174 --host",
+    "serve:prod": "vite preview --mode production --outDir dist-prod --port 5173 --host"
   },
   "dependencies": {
     "@stomp/stompjs": "^7.3.0",

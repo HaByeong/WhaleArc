@@ -359,7 +359,6 @@ const DashboardPage = () => {
                 <div>
                   <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
                     {displayName}님, 다시 바다에 오셨군요!
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white/40 text-white/80 align-middle">BETA</span>
                   </h1>
                   <p className="text-blue-100 text-sm md:text-base mt-1">
                     오늘도 시장의 바다를 유영해볼까요?

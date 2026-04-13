@@ -477,6 +477,53 @@ body.whalearc-dark .whalearc-text-nav {
   -webkit-text-fill-color: transparent !important;
 }
 
+/* ═══════════════════════════════════════
+   wa-force-dark: 항상 다크톤으로 유지되어야 하는 섹션/페이지용
+   (ex. LandingPage 용어 가이드 섹션, LoginPage 히어로 배너)
+   라이트 모드에서 전역 fake-dark 오버라이드를 되돌린다.
+   ═══════════════════════════════════════ */
+body:not(.whalearc-dark) .wa-force-dark [class*="bg-white/[0.02]"],
+body:not(.whalearc-dark) .wa-force-dark [class*="bg-white/[0.03]"],
+body:not(.whalearc-dark) .wa-force-dark [class*="bg-white/[0.04]"],
+body:not(.whalearc-dark) .wa-force-dark [class*="bg-white/[0.06]"],
+body:not(.whalearc-dark) .wa-force-dark [class*="bg-white/[0.08]"] {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+body:not(.whalearc-dark) .wa-force-dark [class*="hover:bg-white/[0.02]"]:hover,
+body:not(.whalearc-dark) .wa-force-dark [class*="hover:bg-white/[0.03]"]:hover,
+body:not(.whalearc-dark) .wa-force-dark [class*="hover:bg-white/[0.04]"]:hover,
+body:not(.whalearc-dark) .wa-force-dark [class*="hover:bg-white/[0.06]"]:hover,
+body:not(.whalearc-dark) .wa-force-dark [class*="hover:bg-white/[0.08]"]:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+body:not(.whalearc-dark) .wa-force-dark [class*="bg-white/[0.02]"] .text-white,
+body:not(.whalearc-dark) .wa-force-dark [class*="bg-white/[0.03]"] .text-white,
+body:not(.whalearc-dark) .wa-force-dark [class*="bg-white/[0.04]"] .text-white,
+body:not(.whalearc-dark) .wa-force-dark .text-white {
+  color: #ffffff !important;
+}
+body:not(.whalearc-dark) .wa-force-dark [class*="border-white/[0.04]"],
+body:not(.whalearc-dark) .wa-force-dark [class*="border-white/[0.06]"],
+body:not(.whalearc-dark) .wa-force-dark [class*="border-white/[0.08]"],
+body:not(.whalearc-dark) .wa-force-dark [class*="border-white/10"] {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+body:not(.whalearc-dark) .wa-force-dark .text-slate-100 { color: #f1f5f9 !important; }
+body:not(.whalearc-dark) .wa-force-dark .text-slate-200 { color: #e2e8f0 !important; }
+body:not(.whalearc-dark) .wa-force-dark .text-slate-300 { color: #cbd5e1 !important; }
+body:not(.whalearc-dark) .wa-force-dark .text-slate-400 { color: #94a3b8 !important; }
+body:not(.whalearc-dark) .wa-force-dark .text-slate-500 { color: #94a3b8 !important; }
+body:not(.whalearc-dark) .wa-force-dark .text-slate-600 { color: #94a3b8 !important; }
+body:not(.whalearc-dark) .wa-force-dark .text-cyan-200 { color: #a5f3fc !important; }
+body:not(.whalearc-dark) .wa-force-dark .text-cyan-300 { color: #67e8f9 !important; }
+body:not(.whalearc-dark) .wa-force-dark .text-cyan-400 { color: #22d3ee !important; }
+
+/* 다크 모드: .wa-force-dark 내부의 어두운 slate 텍스트가 너무 희미해지는 문제 대응 */
+body.whalearc-dark .wa-force-dark .text-slate-500,
+body.whalearc-dark .wa-force-dark .text-slate-600 {
+  color: #94a3b8 !important;
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;

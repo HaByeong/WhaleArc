@@ -29,7 +29,6 @@ const LandingPage = () => {
             <Link to="/" className="flex items-center space-x-2">
               <WhaleTailLogo size={40} />
               <span className="text-xl ml-1 whalearc-text">WHALEARC</span>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-400 text-white">BETA</span>
             </Link>
             
             {session ? (
@@ -184,7 +183,7 @@ const LandingPage = () => {
       </div>
 
       {/* Feature Cards Section */}
-      <div className="bg-gradient-to-b from-white to-gray-50 py-20">
+      <div className="bg-gray-50 py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-whale-dark mb-4">
@@ -281,7 +280,7 @@ const LandingPage = () => {
       </div>
 
       {/* 용어 가이드 섹션 */}
-      <div className="relative bg-whale-dark text-white py-20 overflow-hidden">
+      <div className="wa-force-dark relative bg-whale-dark text-white py-20 overflow-hidden">
         {/* 배경 장식 */}
         <div className="absolute top-10 left-10 w-72 h-72 bg-whale-light opacity-[0.03] rounded-full blur-3xl" />
         <div className="absolute bottom-10 right-10 w-96 h-96 bg-whale-accent opacity-[0.03] rounded-full blur-3xl" />

@@ -8,12 +8,14 @@ import UnstableCurrent from '../components/UnstableCurrent';
 import { type RankingType, type RankingEntry } from '../services/rankingService';
 import { virtService, type VirtCredentialInfo, type VirtPortfolio, type VirtHolding } from '../services/virtService';
 import apiClient from '../utils/api';
+import { useTheme } from '../contexts/ThemeContext';
 
 /* ═══════════════════════════════════════════════════
    실계좌 투자 현황 (일반 모드)
    ═══════════════════════════════════════════════════ */
 const RealInvestmentStatusPage = () => {
   const navigate = useVirtNavigate();
+  const { isDark } = useTheme();
   const [serviceTab, setServiceTab] = useState<'kis' | 'upbit' | 'bitget' | 'all'>('all');
   const [kisCredInfo, setKisCredInfo] = useState<VirtCredentialInfo | null>(null);
   const [upbitCredInfo, setUpbitCredInfo] = useState<VirtCredentialInfo | null>(null);
@@ -92,13 +94,13 @@ const RealInvestmentStatusPage = () => {
   if (loading) return <SplashLoading message="실계좌 투자 현황을 불러오는 중..." />;
 
   return (
-    <div className="min-h-screen bg-[var(--wa-page-bg)] text-white">
+    <div className={`min-h-screen bg-[var(--wa-page-bg)] ${isDark ? 'text-white' : 'text-gray-900'}`}>
       <Header showNav={true} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-white">투자 현황</h1>
-          <p className="mt-2 text-base text-slate-400">
+          <h1 className={`text-3xl md:text-4xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>투자 현황</h1>
+          <p className={`mt-2 text-base ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
             연동된 실계좌의 자산 현황을 한눈에 확인하세요.
           </p>
         </div>

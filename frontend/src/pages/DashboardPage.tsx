@@ -14,6 +14,7 @@ import { virtService, type VirtCredentialInfo, type VirtPortfolio } from '../ser
 import SplashLoading from '../components/SplashLoading';
 import UnstableCurrent from '../components/UnstableCurrent';
 import GuideTour, { type TourStep } from '../components/GuideTour';
+import { useTheme } from '../contexts/ThemeContext';
 
 const CHART_COLORS = ['#3b82f6', '#22d3ee', '#818cf8', '#a78bfa', '#34d399', '#f472b6', '#fb923c', '#94a3b8'];
 
@@ -21,6 +22,7 @@ const CHART_COLORS = ['#3b82f6', '#22d3ee', '#818cf8', '#a78bfa', '#34d399', '#f
 const DashboardPage = () => {
   const navigate = useVirtNavigate();
   const { isVirt } = useRoutePrefix();
+  const { isDark } = useTheme();
   const { user, profileName } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [watchlist, setWatchlist] = useState<StockPrice[]>([]);
@@ -312,7 +314,7 @@ const DashboardPage = () => {
     }).format(value);
   };
 
-  const pageBg = !isVirt ? 'bg-[#060d18] text-white' : 'bg-gray-50';
+  const pageBg = isDark ? 'bg-[#060d18] text-white' : 'bg-gray-50';
 
   if (loading) {
     if (!isVirt) return <SplashLoading message="실계좌 자산을 불러오는 중..." />;

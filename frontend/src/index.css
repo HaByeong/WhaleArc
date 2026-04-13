@@ -325,24 +325,30 @@ body.whalearc-dark .border-gray-300 {
   border-color: rgba(255,255,255,0.1) !important;
 }
 body.whalearc-dark .text-whale-dark {
-  color: #e2e8f0 !important;
+  color: #f1f5f9 !important;
+}
+body.whalearc-dark .text-gray-900 {
+  color: #f8fafc !important;
 }
 body.whalearc-dark .text-gray-800 {
-  color: #e2e8f0 !important;
+  color: #f1f5f9 !important;
 }
 body.whalearc-dark .text-gray-700 {
-  color: #cbd5e1 !important;
+  color: #e2e8f0 !important;
 }
 body.whalearc-dark .text-gray-600 {
-  color: #94a3b8 !important;
+  color: #cbd5e1 !important;
 }
 body.whalearc-dark .text-gray-500 {
-  color: #64748b !important;
+  color: #94a3b8 !important;
 }
 body.whalearc-dark .text-gray-400 {
-  color: #475569 !important;
+  color: #94a3b8 !important;
 }
 body.whalearc-dark .text-gray-300 {
+  color: #64748b !important;
+}
+body.whalearc-dark .text-gray-200 {
   color: #475569 !important;
 }
 body.whalearc-dark .bg-blue-50,
@@ -357,6 +363,111 @@ body.whalearc-dark .bg-green-50 {
 }
 body.whalearc-dark .hover\:bg-gray-50:hover {
   background-color: rgba(255,255,255,0.04) !important;
+}
+
+/* ═══════════════════════════════════════
+   라이트 모드: 다크 전용 패턴 오버라이드
+   "fake dark card" (bg-white/[0.02~0.04]) 패턴을 라이트로 전환
+   attribute selector로 escape 이슈 우회
+   ═══════════════════════════════════════ */
+body:not(.whalearc-dark) [class*="bg-white/[0.02]"],
+body:not(.whalearc-dark) [class*="bg-white/[0.03]"],
+body:not(.whalearc-dark) [class*="bg-white/[0.04]"] {
+  background-color: #ffffff !important;
+}
+/* fake dark 카드의 hover 배경도 라이트로 */
+body:not(.whalearc-dark) [class*="hover:bg-white/[0.02]"]:hover,
+body:not(.whalearc-dark) [class*="hover:bg-white/[0.03]"]:hover,
+body:not(.whalearc-dark) [class*="hover:bg-white/[0.04]"]:hover,
+body:not(.whalearc-dark) [class*="hover:bg-white/[0.05]"]:hover,
+body:not(.whalearc-dark) [class*="hover:bg-white/[0.06]"]:hover,
+body:not(.whalearc-dark) [class*="hover:bg-white/[0.08]"]:hover {
+  background-color: #f3f4f6 !important;
+}
+/* fake dark 카드의 자손 text-white를 어둡게 (selected/active 상태 포함) */
+body:not(.whalearc-dark) [class*="bg-white/[0.02]"] .text-white,
+body:not(.whalearc-dark) [class*="bg-white/[0.03]"] .text-white,
+body:not(.whalearc-dark) [class*="bg-white/[0.04]"] .text-white {
+  color: #1f2937 !important;
+}
+/* hover/focus/active 상태에서 text-white로 바뀌는 패턴도 처리 */
+body:not(.whalearc-dark) [class*="hover:text-white"]:hover,
+body:not(.whalearc-dark) [class*="focus:text-white"]:focus,
+body:not(.whalearc-dark) [class*="group"]:hover [class*="group-hover:text-white"] {
+  color: #1f2937 !important;
+}
+
+/* 라이트 모드: 활성 탭 패턴 (bg-white/10 + text-white를 동시에 가진 버튼)
+   다크 테마 디자인에서 액티브 탭을 표시하던 패턴 → 라이트 모드 다크 블루로 */
+body:not(.whalearc-dark) button[class*="bg-white/10"][class*="text-white"],
+body:not(.whalearc-dark) a[class*="bg-white/10"][class*="text-white"] {
+  background-color: #1e3a5f !important;
+  border-color: #1e3a5f !important;
+  color: #ffffff !important;
+}
+/* 같은 패턴의 자손 text-* 도 시인성 확보 */
+body:not(.whalearc-dark) button[class*="bg-white/10"][class*="text-white"] [class*="text-slate-"],
+body:not(.whalearc-dark) a[class*="bg-white/10"][class*="text-white"] [class*="text-slate-"] {
+  color: rgba(255,255,255,0.7) !important;
+}
+/* 라이트 모드에서 text-white 인 단독 요소: 다크 배경(whale-dark, gradient) 위가 아니면 어둡게
+   안전을 위해 fake dark 카드 안의 자식만 처리 (위에서 이미 처리) */
+body:not(.whalearc-dark) [class*="border-white/[0.04]"],
+body:not(.whalearc-dark) [class*="border-white/[0.06]"],
+body:not(.whalearc-dark) [class*="border-white/[0.08]"] {
+  border-color: #e5e7eb !important;
+}
+body:not(.whalearc-dark) .text-slate-100,
+body:not(.whalearc-dark) .text-slate-200 {
+  color: #1f2937 !important;
+}
+body:not(.whalearc-dark) .text-slate-300 {
+  color: #374151 !important;
+}
+body:not(.whalearc-dark) .text-slate-400 {
+  color: #4b5563 !important;
+}
+body:not(.whalearc-dark) .text-slate-500 {
+  color: #6b7280 !important;
+}
+body:not(.whalearc-dark) .text-slate-600 {
+  color: #9ca3af !important;
+}
+/* 다크 톤 cyan 텍스트를 라이트 모드에서 진한 cyan으로 (시인성 확보) */
+body:not(.whalearc-dark) .text-cyan-200,
+body:not(.whalearc-dark) .text-cyan-300 {
+  color: #0e7490 !important;
+}
+body:not(.whalearc-dark) .text-cyan-400 {
+  color: #0891b2 !important;
+}
+/* 동일하게 라이트 모드에서 cyan 배경 톤도 좀 더 진하게 */
+body:not(.whalearc-dark) .bg-cyan-500\/\[0\.04\],
+body:not(.whalearc-dark) [class*="bg-cyan-500/[0.04]"] {
+  background-color: rgba(14,116,144,0.06) !important;
+}
+body:not(.whalearc-dark) .bg-cyan-500\/\[0\.08\],
+body:not(.whalearc-dark) [class*="bg-cyan-500/[0.08]"] {
+  background-color: rgba(14,116,144,0.12) !important;
+}
+body:not(.whalearc-dark) .bg-cyan-500\/20,
+body:not(.whalearc-dark) [class*="bg-cyan-500/20"] {
+  background-color: rgba(8,145,178,0.18) !important;
+}
+body:not(.whalearc-dark) .border-cyan-500\/20,
+body:not(.whalearc-dark) [class*="border-cyan-500/20"] {
+  border-color: rgba(8,145,178,0.35) !important;
+}
+body:not(.whalearc-dark) .border-cyan-500\/30,
+body:not(.whalearc-dark) [class*="border-cyan-500/30"] {
+  border-color: rgba(8,145,178,0.45) !important;
+}
+body:not(.whalearc-dark) .hover\:bg-white\/\[0\.03\]:hover,
+body:not(.whalearc-dark) .hover\:bg-white\/\[0\.04\]:hover {
+  background-color: #f9fafb !important;
+}
+body:not(.whalearc-dark) .hover\:text-slate-300:hover {
+  color: #1f2937 !important;
 }
 
 /* 그래디언트 텍스트 보호 */

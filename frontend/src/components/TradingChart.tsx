@@ -203,7 +203,36 @@ const TradingChart = ({
       volumeSeriesRef.current = null;
       overlaySeriesRef.current.clear();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ─── 테마 변경 시 차트 색상만 업데이트 ─────────────────
+  useEffect(() => {
+    if (chartRef.current) {
+      chartRef.current.applyOptions({
+        layout: {
+          background: { color: isDark ? '#0a1628' : '#ffffff' },
+          textColor: isDark ? '#475569' : '#6b7280',
+        },
+        grid: {
+          vertLines: { color: isDark ? 'rgba(255,255,255,0.04)' : '#f3f4f6' },
+          horzLines: { color: isDark ? 'rgba(255,255,255,0.04)' : '#f3f4f6' },
+        },
+      });
+    }
+    for (const [, info] of subChartsRef.current.entries()) {
+      info.chart.applyOptions({
+        layout: {
+          background: { color: isDark ? '#0a1628' : '#ffffff' },
+          textColor: isDark ? '#475569' : '#6b7280',
+        },
+        grid: {
+          vertLines: { color: isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb' },
+          horzLines: { color: isDark ? 'rgba(255,255,255,0.04)' : '#f3f4f6' },
+        },
+      });
+    }
+  }, [isDark]);
 
   // ─── 서브차트 생성/제거 (제네릭) ──────────────────────
   useEffect(() => {

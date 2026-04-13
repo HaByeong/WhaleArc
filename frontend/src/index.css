@@ -94,6 +94,24 @@
    virt/novirt × light/dark
    ═══════════════════════════════════════ */
 
+/* 라이트 모드 기본 변수 (인증/랜딩 등 virt/novirt 클래스 없는 페이지용 fallback) */
+body:not(.whalearc-dark):not(.whalearc-virt):not(.whalearc-novirt) {
+  --wa-page-bg: #f8fafc;
+  --wa-header-bg: #ffffff;
+  --wa-header-border: #e2e8f0;
+  --wa-card-bg: #ffffff;
+  --wa-card-border: #e2e8f0;
+  --wa-card-hover-border: rgba(14,165,233,0.4);
+  --wa-text-primary: #0f172a;
+  --wa-text-secondary: #64748b;
+  --wa-text-muted: #94a3b8;
+  --wa-accent: #0ea5e9;
+  --wa-accent-soft: rgba(14,165,233,0.1);
+  --wa-input-bg: #ffffff;
+  --wa-input-border: #d1d5db;
+  --wa-select-bg: #ffffff;
+}
+
 /* Virt Light — 수면 위, 밝고 친근한 */
 body.whalearc-virt:not(.whalearc-dark) {
   --wa-page-bg: #f8fafc;
@@ -185,6 +203,22 @@ body.whalearc-dark.whalearc-novirt {
 /* ═══════════════════════════════════════
    WhaleArc 다크 모드 공통 오버라이드
    ═══════════════════════════════════════ */
+
+/* 다크 모드 기본 변수 (인증/랜딩 등 virt/novirt 클래스 없는 페이지용 fallback) */
+body.whalearc-dark:not(.whalearc-virt):not(.whalearc-novirt) {
+  --wa-page-bg: #060d18;
+  --wa-card-bg: rgba(255,255,255,0.025);
+  --wa-card-border: rgba(255,255,255,0.06);
+  --wa-card-hover-border: rgba(56,189,248,0.3);
+  --wa-text-primary: #e2e8f0;
+  --wa-text-secondary: #64748b;
+  --wa-text-muted: #475569;
+  --wa-accent: #38bdf8;
+  --wa-accent-soft: rgba(56,189,248,0.1);
+  --wa-input-bg: rgba(255,255,255,0.04);
+  --wa-input-border: rgba(255,255,255,0.1);
+  --wa-select-bg: #0c1a2e;
+}
 body.whalearc-dark {
   background-color: var(--wa-page-bg, #060d18);
   color: var(--wa-text-primary, #e2e8f0);
@@ -260,6 +294,69 @@ body.whalearc-novirt:not(.whalearc-dark) .card {
 }
 body.whalearc-novirt:not(.whalearc-dark) .input-field {
   border-color: var(--wa-input-border);
+}
+
+/* ═══════════════════════════════════════
+   다크 모드: Tailwind 유틸리티 오버라이드
+   bg-white, bg-gray-50 등을 다크 톤으로 자동 전환
+   ═══════════════════════════════════════ */
+body.whalearc-dark .bg-white {
+  background-color: var(--wa-card-bg, rgba(255,255,255,0.025)) !important;
+}
+body.whalearc-dark .bg-gray-50 {
+  background-color: rgba(255,255,255,0.03) !important;
+}
+body.whalearc-dark .bg-gray-100 {
+  background-color: rgba(255,255,255,0.05) !important;
+}
+body.whalearc-dark .shadow-lg {
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.06) !important;
+}
+body.whalearc-dark .shadow-md {
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.04) !important;
+}
+body.whalearc-dark .border-gray-100 {
+  border-color: rgba(255,255,255,0.06) !important;
+}
+body.whalearc-dark .border-gray-200 {
+  border-color: rgba(255,255,255,0.08) !important;
+}
+body.whalearc-dark .border-gray-300 {
+  border-color: rgba(255,255,255,0.1) !important;
+}
+body.whalearc-dark .text-whale-dark {
+  color: #e2e8f0 !important;
+}
+body.whalearc-dark .text-gray-800 {
+  color: #e2e8f0 !important;
+}
+body.whalearc-dark .text-gray-700 {
+  color: #cbd5e1 !important;
+}
+body.whalearc-dark .text-gray-600 {
+  color: #94a3b8 !important;
+}
+body.whalearc-dark .text-gray-500 {
+  color: #64748b !important;
+}
+body.whalearc-dark .text-gray-400 {
+  color: #475569 !important;
+}
+body.whalearc-dark .text-gray-300 {
+  color: #475569 !important;
+}
+body.whalearc-dark .bg-blue-50,
+body.whalearc-dark .bg-blue-50\/40 {
+  background-color: rgba(56,189,248,0.06) !important;
+}
+body.whalearc-dark .bg-red-50 {
+  background-color: rgba(239,68,68,0.08) !important;
+}
+body.whalearc-dark .bg-green-50 {
+  background-color: rgba(34,197,94,0.08) !important;
+}
+body.whalearc-dark .hover\:bg-gray-50:hover {
+  background-color: rgba(255,255,255,0.04) !important;
 }
 
 /* 그래디언트 텍스트 보호 */

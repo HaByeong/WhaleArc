@@ -140,19 +140,19 @@ const Header = ({ showNav = false }: HeaderProps) => {
 
                       {/* 알림 드롭다운 */}
                       {showNotifPanel && (
-                        <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
-                          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
-                            <span className="text-sm font-bold text-gray-800">알림</span>
+                        <div className={`absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl shadow-2xl border z-50 overflow-hidden ${isDarkNav ? 'bg-[#0f1b2d] border-white/10' : 'bg-white border-gray-100'}`}>
+                          <div className={`flex items-center justify-between px-4 py-3 border-b ${isDarkNav ? 'border-white/10 bg-white/[0.03]' : 'border-gray-100 bg-gray-50'}`}>
+                            <span className={`text-sm font-bold ${isDarkNav ? 'text-white' : 'text-gray-800'}`}>알림</span>
                             {unreadCount > 0 && (
-                              <button onClick={markAllAsRead} className="text-xs text-whale-light hover:underline">
+                              <button onClick={markAllAsRead} className={`text-xs hover:underline ${isDarkNav ? 'text-cyan-400' : 'text-whale-light'}`}>
                                 모두 읽음
                               </button>
                             )}
                           </div>
                           <div className="max-h-72 overflow-y-auto">
                             {notifications.length === 0 ? (
-                              <div className="py-8 text-center text-sm text-gray-400">
-                                <svg className="w-8 h-8 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <div className={`py-8 text-center text-sm ${isDarkNav ? 'text-slate-500' : 'text-gray-400'}`}>
+                                <svg className={`w-8 h-8 mx-auto mb-2 ${isDarkNav ? 'text-slate-600' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                                 </svg>
                                 아직 알림이 없어요
@@ -161,15 +161,15 @@ const Header = ({ showNav = false }: HeaderProps) => {
                               notifications.slice(0, 20).map(n => (
                                 <div
                                   key={n.id}
-                                  className={`px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors ${!n.read ? 'bg-blue-50/50' : ''}`}
+                                  className={`px-4 py-3 border-b cursor-pointer transition-colors ${isDarkNav ? `border-white/[0.04] hover:bg-white/[0.04] ${!n.read ? 'bg-cyan-500/[0.06]' : ''}` : `border-gray-50 hover:bg-gray-50 ${!n.read ? 'bg-blue-50/50' : ''}`}`}
                                   onClick={() => { markAsRead(n.id); if (n.metadata?.stockCode) navigate(`${prefix}/trade?code=${n.metadata.stockCode}&type=${n.metadata.assetType || 'CRYPTO'}`); setShowNotifPanel(false); }}
                                 >
                                   <div className="flex items-start gap-2.5">
-                                    <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${!n.read ? 'bg-whale-light' : 'bg-transparent'}`} />
+                                    <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${!n.read ? (isDarkNav ? 'bg-cyan-400' : 'bg-whale-light') : 'bg-transparent'}`} />
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-semibold text-gray-800">{n.title}</p>
-                                      <p className="text-xs text-gray-500 mt-0.5">{n.message}</p>
-                                      <p className="text-[10px] text-gray-300 mt-1">
+                                      <p className={`text-sm font-semibold ${isDarkNav ? 'text-slate-100' : 'text-gray-800'}`}>{n.title}</p>
+                                      <p className={`text-xs mt-0.5 ${isDarkNav ? 'text-slate-400' : 'text-gray-500'}`}>{n.message}</p>
+                                      <p className={`text-[10px] mt-1 ${isDarkNav ? 'text-slate-600' : 'text-gray-300'}`}>
                                         {new Date(n.createdAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                       </p>
                                     </div>

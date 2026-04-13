@@ -24,7 +24,7 @@ const LandingPage = () => {
   return (
     <div className={`min-h-screen ${isDark ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
       {/* Header */}
-      <header className="bg-whale-dark">
+      <header className={isDark ? 'bg-[#060d18]' : 'bg-whale-dark'}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
@@ -54,9 +54,9 @@ const LandingPage = () => {
       </header>
 
       {/* Hero Section */}
-      <div className="relative bg-whale-dark text-white min-h-[75vh] flex items-center overflow-hidden">
+      <div className={`relative text-white min-h-[75vh] flex items-center overflow-hidden ${isDark ? 'bg-[#060d18]' : 'bg-whale-dark'}`}>
         {/* 배경 그라데이션 효과 */}
-        <div className="absolute inset-0 bg-gradient-to-br from-whale-dark via-blue-900 to-whale-dark opacity-90"></div>
+        <div className={`absolute inset-0 opacity-90 ${isDark ? 'bg-gradient-to-br from-[#060d18] via-[#0c1e3a] to-[#060d18]' : 'bg-gradient-to-br from-whale-dark via-blue-900 to-whale-dark'}`}></div>
         
         {/* 배경 장식 요소 */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-whale-light opacity-5 rounded-full blur-3xl"></div>
@@ -283,7 +283,7 @@ const LandingPage = () => {
       </div>
 
       {/* 용어 가이드 섹션 */}
-      <div className="relative bg-whale-dark text-white py-20 overflow-hidden">
+      <div className={`relative text-white py-20 overflow-hidden ${isDark ? 'bg-[#060d18]' : 'bg-whale-dark'}`}>
         {/* 배경 장식 */}
         <div className="absolute top-10 left-10 w-72 h-72 bg-whale-light opacity-[0.03] rounded-full blur-3xl" />
         <div className="absolute bottom-10 right-10 w-96 h-96 bg-whale-accent opacity-[0.03] rounded-full blur-3xl" />
@@ -360,7 +360,7 @@ const LandingPage = () => {
       </div>
 
       {/* Footer */}
-      <footer className="bg-whale-dark border-t border-white/10">
+      <footer className={`border-t border-white/10 ${isDark ? 'bg-[#060d18]' : 'bg-whale-dark'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center mb-6 px-4">
             <p className="text-[11px] text-gray-500 leading-relaxed max-w-3xl mx-auto">

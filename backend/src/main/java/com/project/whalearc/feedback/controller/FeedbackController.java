@@ -48,12 +48,26 @@ public class FeedbackController {
         return adminUserIds.contains(userId);
     }
 
+    /**
+     * 현재 로그인 사용자가 피드백 관리자인지 반환.
+     * 프런트엔드가 페이지 진입 시 호출해 관리자 전용 UI 를 분기한다.
+     */
+    @GetMapping("/me")
+    public ApiResponse<Map<String, Object>> getMyFeedbackRole(@AuthenticationPrincipal Jwt jwt) {
+        String userId = jwt.getSubject();
+        return ApiResponse.ok(Map.of("isAdmin", isAdmin(userId)));
+    }
+
     @GetMapping
     public ApiResponse<List<Map<String, Object>>> getFeedbacks(
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String category) {
 
         String userId = jwt.getSubject();
+        // 비관리자는 목록 조회 불가 (타 사용자 글/이름 노출 방지)
+        if (!isAdmin(userId)) {
+            throw new IllegalArgumentException("피드백 목록 조회 권한이 없습니다.");
+        }
         Feedback.FeedbackCategory cat = null;
         if (category != null && !category.isBlank()) {
             try {

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
@@ -53,6 +53,9 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 const FeedbackPage = () => {
   const { isDark } = useTheme();
   const { profileName, user } = useAuth();
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminChecking, setAdminChecking] = useState(true);
 
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -252,8 +255,30 @@ const FeedbackPage = () => {
     }
   };
 
-  // 최초 로드
-  if (!loadedOnce && !loading) {
+  // 관리자 여부 확인 (최초 1회)
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get('/api/feedback/me')
+      .then((res) => {
+        if (cancelled) return;
+        setIsAdmin(!!res.data?.data?.isAdmin);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setIsAdmin(false);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setAdminChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 관리자에게만 목록 최초 로드
+  if (isAdmin && !loadedOnce && !loading) {
     loadFeedbacks();
   }
 
@@ -353,23 +378,36 @@ const FeedbackPage = () => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>
-              피드백
+              {isAdmin ? '피드백 관리' : '의견 보내기'}
             </h1>
             <p className={`mt-1 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-              WhaleArc를 함께 만들어주세요. 베타 테스터분들의 소중한 의견을 기다립니다.
+              {isAdmin
+                ? '사용자 의견을 검토하고 응답할 수 있습니다.'
+                : 'WhaleArc를 더 좋게 만들 수 있도록 의견을 들려주세요.'}
             </p>
           </div>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              showForm
-                ? isDark ? 'bg-white/10 text-slate-300 hover:bg-white/15' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                : 'bg-gradient-to-r from-whale-light to-whale-accent text-white shadow-lg shadow-whale-light/25 hover:shadow-whale-light/40'
-            }`}
-          >
-            {showForm ? '취소' : '피드백 작성'}
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                showForm
+                  ? isDark ? 'bg-white/10 text-slate-300 hover:bg-white/15' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                  : 'bg-gradient-to-r from-whale-light to-whale-accent text-white shadow-lg shadow-whale-light/25 hover:shadow-whale-light/40'
+              }`}
+            >
+              {showForm ? '취소' : '피드백 작성'}
+            </button>
+          )}
         </div>
+
+        {/* 관리자 체크 로딩 */}
+        {adminChecking && (
+          <div className="flex justify-center py-16">
+            <div className={`w-8 h-8 border-2 rounded-full animate-spin ${
+              isDark ? 'border-cyan-500/30 border-t-cyan-400' : 'border-whale-light/30 border-t-whale-light'
+            }`} />
+          </div>
+        )}
 
         {/* 성공 메시지 */}
         {submitSuccess && (
@@ -389,13 +427,13 @@ const FeedbackPage = () => {
           </div>
         )}
 
-        {/* 피드백 작성 폼 */}
-        {showForm && (
+        {/* 피드백 작성 폼 — 비관리자는 항상 노출, 관리자는 토글 */}
+        {!adminChecking && (showForm || !isAdmin) && (
           <form onSubmit={handleSubmit} className={`mb-8 p-6 rounded-2xl border ${
             isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-white border-gray-100 shadow-sm'
           }`}>
             <h2 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-800'}`}>
-              새 피드백 작성
+              {isAdmin ? '새 피드백 작성' : '의견을 들려주세요'}
             </h2>
 
             {/* 카테고리 선택 */}
@@ -471,51 +509,55 @@ const FeedbackPage = () => {
               inputRef={fileInputRef}
             />
 
-            {/* 작성자 설정 */}
-            <div className="mb-5">
-              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                작성자
-              </label>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {([
-                  { value: 'real' as const, label: displayName },
-                  { value: 'custom' as const, label: '다른 닉네임' },
-                  { value: 'anonymous' as const, label: '익명' },
-                ]).map(opt => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setAuthorMode(opt.value)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
-                      authorMode === opt.value
-                        ? 'bg-gradient-to-r from-whale-light to-whale-accent text-white border-transparent shadow-sm'
-                        : isDark ? 'border-white/10 text-slate-500 hover:border-white/20' : 'border-gray-200 text-gray-400 hover:border-gray-300'
+            {/* 작성자 설정 — 관리자만 익명/다른 닉네임 옵션 노출 */}
+            {isAdmin && (
+              <div className="mb-5">
+                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                  작성자
+                </label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {([
+                    { value: 'real' as const, label: displayName },
+                    { value: 'custom' as const, label: '다른 닉네임' },
+                    { value: 'anonymous' as const, label: '익명' },
+                  ]).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setAuthorMode(opt.value)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                        authorMode === opt.value
+                          ? 'bg-gradient-to-r from-whale-light to-whale-accent text-white border-transparent shadow-sm'
+                          : isDark ? 'border-white/10 text-slate-500 hover:border-white/20' : 'border-gray-200 text-gray-400 hover:border-gray-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {authorMode === 'custom' && (
+                  <input
+                    type="text"
+                    value={customName}
+                    onChange={e => setCustomName(e.target.value)}
+                    placeholder="사용할 닉네임을 입력하세요"
+                    maxLength={20}
+                    className={`w-full px-4 py-2.5 rounded-xl text-sm border transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light ${
+                      isDark
+                        ? 'bg-white/[0.04] border-white/[0.08] text-white placeholder-slate-600'
+                        : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'
                     }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                  />
+                )}
               </div>
-              {authorMode === 'custom' && (
-                <input
-                  type="text"
-                  value={customName}
-                  onChange={e => setCustomName(e.target.value)}
-                  placeholder="사용할 닉네임을 입력하세요"
-                  maxLength={20}
-                  className={`w-full px-4 py-2.5 rounded-xl text-sm border transition-colors focus:outline-none focus:ring-2 focus:ring-whale-light ${
-                    isDark
-                      ? 'bg-white/[0.04] border-white/[0.08] text-white placeholder-slate-600'
-                      : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'
-                  }`}
-                />
-              )}
-            </div>
+            )}
 
             {/* 제출 버튼 */}
             <div className="flex items-center justify-between">
               <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
-                {authorMode === 'anonymous' ? '익명으로' : authorMode === 'custom' ? (customName.trim() || '닉네임') + '(으)로' : displayName + '님으로'} 제출됩니다
+                {isAdmin
+                  ? (authorMode === 'anonymous' ? '익명으로' : authorMode === 'custom' ? (customName.trim() || '닉네임') + '(으)로' : displayName + '님으로') + ' 제출됩니다'
+                  : '제출하신 의견은 운영자만 확인합니다.'}
               </p>
               <button
                 type="submit"
@@ -528,7 +570,8 @@ const FeedbackPage = () => {
           </form>
         )}
 
-        {/* 필터 */}
+        {/* 필터 — 관리자 전용 */}
+        {!adminChecking && isAdmin && (
         <div className="mb-6 flex flex-wrap gap-2">
           {(['all', 'bug', 'feature', 'ui', 'other'] as const).map(cat => (
             <button
@@ -544,9 +587,10 @@ const FeedbackPage = () => {
             </button>
           ))}
         </div>
+        )}
 
-        {/* 피드백 목록 */}
-        {loading ? (
+        {/* 피드백 목록 — 관리자 전용 */}
+        {!adminChecking && isAdmin && (loading ? (
           <div className="flex justify-center py-16">
             <div className={`w-8 h-8 border-2 rounded-full animate-spin ${
               isDark ? 'border-cyan-500/30 border-t-cyan-400' : 'border-whale-light/30 border-t-whale-light'
@@ -802,7 +846,7 @@ const FeedbackPage = () => {
               </div>
             ))}
           </div>
-        )}
+        ))}
       </div>
 
       {/* 이미지 라이트박스 */}

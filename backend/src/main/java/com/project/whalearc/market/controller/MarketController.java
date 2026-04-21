@@ -27,6 +27,7 @@ public class MarketController {
 
     private final StockPriceProvider stockPriceProvider;
     private final UsStockPriceProvider usStockPriceProvider;
+    private final UsEtfPriceProvider usEtfPriceProvider;
     private final CryptoPriceProvider cryptoPriceProvider;
     private final RealtimePriceHolder realtimePriceHolder;
     private final CandlestickService candlestickService;
@@ -46,6 +47,7 @@ public class MarketController {
             List<MarketPriceResponse> prices = switch (type) {
                 case STOCK -> stockPriceProvider.getAllStockPrices();
                 case US_STOCK -> usStockPriceProvider.getAllUsStockPrices();
+                case ETF -> usEtfPriceProvider.getAllEtfPrices();
                 case CRYPTO -> {
                     // REST 데이터를 기본으로, 실시간 WebSocket 데이터로 덮어쓰기
                     List<MarketPriceResponse> restData = cryptoPriceProvider.getAllKrwTickers();
@@ -146,6 +148,25 @@ public class MarketController {
             return ResponseEntity.ok(dto);
         } catch (Exception e) {
             log.error("미국주식 개별 조회 실패 [{}]: {}", symbol, e.getMessage());
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /* ───── 미국 ETF 엔드포인트 ───── */
+
+    @GetMapping("/etf/search")
+    public ResponseEntity<List<Map<String, String>>> searchEtfs(@RequestParam String keyword) {
+        return ResponseEntity.ok(usEtfPriceProvider.search(keyword));
+    }
+
+    @GetMapping("/etf/price/{symbol}")
+    public ResponseEntity<MarketPriceResponse> getEtfPrice(@PathVariable String symbol) {
+        try {
+            MarketPriceResponse dto = usEtfPriceProvider.getEtfPriceBySymbol(symbol.toUpperCase());
+            if (dto == null) return ResponseEntity.notFound().build();
+            return ResponseEntity.ok(dto);
+        } catch (Exception e) {
+            log.error("미국 ETF 개별 조회 실패 [{}]: {}", symbol, e.getMessage());
             return ResponseEntity.internalServerError().build();
         }
     }

@@ -4,6 +4,8 @@ import com.project.whalearc.market.dto.CandlestickResponse;
 import com.project.whalearc.market.service.BacktestDataProvider;
 import com.project.whalearc.market.service.CandlestickService;
 import com.project.whalearc.market.service.IndicatorCalculator;
+import com.project.whalearc.market.service.UsEtfCatalog;
+import com.project.whalearc.market.service.UsStockPriceProvider;
 import com.project.whalearc.strategy.domain.Condition;
 import com.project.whalearc.strategy.domain.Indicator;
 import com.project.whalearc.strategy.domain.Strategy;
@@ -30,6 +32,8 @@ public class BacktestService {
     private final CandlestickService candlestickService;
     private final BacktestDataProvider backtestDataProvider;
     private final ExchangeRateService exchangeRateService;
+    private final UsEtfCatalog usEtfCatalog;
+    private final UsStockPriceProvider usStockPriceProvider;
 
     private static final double DEFAULT_COMMISSION_RATE = 0.001; // 0.1%
     private static final ZoneOffset KST = ZoneOffset.of("+09:00");
@@ -70,10 +74,19 @@ public class BacktestService {
             }
         }
 
-        // 자산 타입 자동 감지
+        // 자산 타입 자동 감지 (명시 전송 우선, 화이트리스트 → 폴백 순)
         String assetType = request.getAssetType();
         if (assetType == null || assetType.isEmpty()) {
-            assetType = request.getStockCode().matches("\\d{6}") ? "STOCK" : "CRYPTO";
+            String code = request.getStockCode();
+            if (code != null && code.matches("\\d{6}")) {
+                assetType = "STOCK";
+            } else if (code != null && usEtfCatalog.isEtfSymbol(code)) {
+                assetType = "ETF";
+            } else if (code != null && usStockPriceProvider.exists(code.toUpperCase())) {
+                assetType = "US_STOCK";
+            } else {
+                assetType = "CRYPTO";
+            }
         }
 
         // 캔들스틱 데이터 조회 (Yahoo Finance / Binance 우선, 실패 시 기존 소스 폴백)
@@ -82,7 +95,7 @@ public class BacktestService {
 
         if (allCandles == null || allCandles.isEmpty()) {
             log.info("백테스트 데이터 폴백: 기존 CandlestickService 사용 ({})", request.getStockCode());
-            String interval = ("STOCK".equals(assetType) || "US_STOCK".equals(assetType)) ? "1d" : "24h";
+            String interval = ("STOCK".equals(assetType) || "US_STOCK".equals(assetType) || "ETF".equals(assetType)) ? "1d" : "24h";
             allCandles = candlestickService.getCandlesticks(
                     request.getStockCode(), interval, assetType);
         }

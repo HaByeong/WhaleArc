@@ -26,10 +26,14 @@ public class BacktestDataProvider {
 
     private final KisApiClient kisApiClient;
     private final UsStockPriceProvider usStockPriceProvider;
+    private final UsEtfCatalog usEtfCatalog;
 
-    public BacktestDataProvider(KisApiClient kisApiClient, UsStockPriceProvider usStockPriceProvider) {
+    public BacktestDataProvider(KisApiClient kisApiClient,
+                                UsStockPriceProvider usStockPriceProvider,
+                                UsEtfCatalog usEtfCatalog) {
         this.kisApiClient = kisApiClient;
         this.usStockPriceProvider = usStockPriceProvider;
+        this.usEtfCatalog = usEtfCatalog;
     }
 
     private static final ZoneOffset KST = ZoneOffset.of("+09:00");
@@ -141,8 +145,8 @@ public class BacktestDataProvider {
             List<CandlestickResponse> result;
             if ("STOCK".equalsIgnoreCase(assetType)) {
                 result = getStockCandles(symbol, warmupStart.toString(), endDate);
-            } else if ("US_STOCK".equalsIgnoreCase(assetType)) {
-                result = getUsStockCandles(symbol, warmupStart.toString(), endDate);
+            } else if ("US_STOCK".equalsIgnoreCase(assetType) || "ETF".equalsIgnoreCase(assetType)) {
+                result = getUsStockCandles(symbol, warmupStart.toString(), endDate, assetType);
             } else {
                 result = getCryptoCandles(symbol, warmupStart.toString(), endDate);
             }
@@ -182,19 +186,19 @@ public class BacktestDataProvider {
         return result;
     }
 
-    /** 미국주식: Yahoo Finance 우선, 실패 시 KIS API 페이지네이션 폴백 (USD 원가 유지) */
-    private List<CandlestickResponse> getUsStockCandles(String symbol, String start, String end) {
-        // 1차: Yahoo Finance (전체 기간 한번에)
+    /** 미국주식/ETF: Yahoo Finance 우선, 실패 시 KIS API 페이지네이션 폴백 (USD 원가 유지) */
+    private List<CandlestickResponse> getUsStockCandles(String symbol, String start, String end, String assetType) {
+        // 1차: Yahoo Finance (전체 기간 한번에, ETF 심볼도 동일 네임스페이스)
         List<CandlestickResponse> result = fetchYahoo(symbol, start, end);
 
         // 2차: Yahoo 실패 시 KIS 해외주식 API 페이지네이션으로 폴백
         if (result.isEmpty() && kisApiClient.isConfigured()) {
             log.info("Yahoo Finance 실패, KIS 해외주식 API 폴백 사용: {}", symbol);
-            result = fetchUsStockFromKis(symbol, start);
+            result = fetchUsStockFromKis(symbol, start, assetType);
         }
 
         if (result.isEmpty()) {
-            log.warn("미국주식 백테스트 데이터 없음: {}", symbol);
+            log.warn("미국주식/ETF 백테스트 데이터 없음: {}", symbol);
         }
 
         // USD 원가 그대로 반환 — 시뮬레이션도 USD 단위로 실행
@@ -202,8 +206,10 @@ public class BacktestDataProvider {
     }
 
     /** KIS 해외주식 일봉 페이지네이션 (BYMD 기반, 최대 10 페이지 = ~1000 거래일 ≈ 4년) */
-    private List<CandlestickResponse> fetchUsStockFromKis(String symbol, String startDate) {
-        String exchange = usStockPriceProvider.getExchange(symbol);
+    private List<CandlestickResponse> fetchUsStockFromKis(String symbol, String startDate, String assetType) {
+        String exchange = "ETF".equalsIgnoreCase(assetType)
+                ? usEtfCatalog.getExchange(symbol)
+                : usStockPriceProvider.getExchange(symbol);
         java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd");
         long startEpoch = LocalDate.parse(startDate).atStartOfDay().toEpochSecond(ZoneOffset.UTC);
 

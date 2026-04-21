@@ -28,6 +28,7 @@ public class CandlestickService {
 
     private final KisApiClient kisApiClient;
     private final UsStockPriceProvider usStockPriceProvider;
+    private final UsEtfCatalog usEtfCatalog;
 
     @Value("${bithumb.api.base-url:https://api.bithumb.com}")
     private String baseUrl;
@@ -72,7 +73,9 @@ public class CandlestickService {
     public List<CandlestickResponse> getCandlesticks(String symbol, String interval, String assetType) {
         boolean isStock = "STOCK".equalsIgnoreCase(assetType);
         boolean isUsStock = "US_STOCK".equalsIgnoreCase(assetType);
-        String cacheKey = symbol + ":" + interval + ":" + (isStock ? "STOCK" : isUsStock ? "US_STOCK" : "CRYPTO");
+        boolean isEtf = "ETF".equalsIgnoreCase(assetType);
+        String cacheKey = symbol + ":" + interval + ":"
+                + (isStock ? "STOCK" : isUsStock ? "US_STOCK" : isEtf ? "ETF" : "CRYPTO");
 
         // 캐시 확인
         CandleCache cached = candleCache.get(cacheKey);
@@ -81,19 +84,19 @@ public class CandlestickService {
             return cached.data();
         }
 
-        // API 조회
+        // API 조회 — ETF 는 미국주식과 동일한 KIS 해외주식 파이프라인 재사용
         List<CandlestickResponse> result;
         if (isStock) {
             result = getStockCandlesticks(symbol);
-        } else if (isUsStock) {
-            result = getUsStockCandlesticks(symbol);
+        } else if (isUsStock || isEtf) {
+            result = getUsStockCandlesticks(symbol, assetType);
         } else {
             result = getCryptoCandlesticks(symbol, interval);
         }
 
         // 빈 응답은 캐시하지 않음
         if (!result.isEmpty()) {
-            long ttl = (isStock || isUsStock) ? STOCK_CACHE_TTL : CRYPTO_CACHE_TTL;
+            long ttl = (isStock || isUsStock || isEtf) ? STOCK_CACHE_TTL : CRYPTO_CACHE_TTL;
             candleCache.put(cacheKey, new CandleCache(result, System.currentTimeMillis() + ttl));
 
             // 캐시 크기 제한
@@ -201,13 +204,15 @@ public class CandlestickService {
         };
     }
 
-    /** 미국주식 일봉 (KIS 해외주식 API) — BYMD 페이지네이션으로 최대 2년치 조회 */
-    private List<CandlestickResponse> getUsStockCandlesticks(String symbol) {
+    /** 미국주식/ETF 일봉 (KIS 해외주식 API) — BYMD 페이지네이션으로 최대 2년치 조회 */
+    private List<CandlestickResponse> getUsStockCandlesticks(String symbol, String assetType) {
         if (!kisApiClient.isConfigured()) {
             return List.of();
         }
         try {
-            String exchange = usStockPriceProvider.getExchange(symbol);
+            String exchange = "ETF".equalsIgnoreCase(assetType)
+                    ? usEtfCatalog.getExchange(symbol)
+                    : usStockPriceProvider.getExchange(symbol);
             DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
 
             Map<Long, CandlestickResponse> deduped = new java.util.TreeMap<>();

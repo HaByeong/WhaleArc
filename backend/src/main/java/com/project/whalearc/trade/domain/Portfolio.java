@@ -52,14 +52,14 @@ public class Portfolio {
         return cb.add(holdingsValue).add(ta);
     }
 
-    /** US_STOCK 홀딩을 환율 적용하여 KRW로 합산한 총 자산가치 */
+    /** US_STOCK / ETF 홀딩(USD 표기)을 환율 적용하여 KRW로 합산한 총 자산가치 */
     public BigDecimal getTotalValueWithExchangeRate(double usdKrwRate) {
         BigDecimal cb = cashBalance != null ? cashBalance : BigDecimal.ZERO;
         BigDecimal ta = turtleAllocated != null ? turtleAllocated : BigDecimal.ZERO;
         BigDecimal holdingsValue = BigDecimal.ZERO;
         for (Holding h : (holdings != null ? holdings : java.util.List.<Holding>of())) {
             BigDecimal mv = h.getMarketValue();
-            if (h.isUsStock()) {
+            if (h.isUsStock() || h.isEtf()) {
                 mv = mv.multiply(BigDecimal.valueOf(usdKrwRate));
             }
             holdingsValue = holdingsValue.add(mv);

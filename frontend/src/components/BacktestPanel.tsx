@@ -5,6 +5,7 @@ import {
   type BacktestResult,
 } from '../services/strategyService';
 import { tradeService, type StockPrice } from '../services/tradeService';
+import { marketService } from '../services/marketService';
 
 /* 숫자 포맷 */
 const _fmtPct  = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
@@ -96,7 +97,11 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
           .map(s => ({ code: s.stockCode, name: s.stockName, market: 'CRYPTO' }));
         const krx = await tradeService.searchKrxStocks(q).catch(() => []);
         const mapped = krx.slice(0, 8).map((s: any) => ({ code: s.code || s.stockCode, name: s.name || s.stockName, market: 'STOCK' }));
-        setSearchResults([...crypto, ...mapped]);
+        const us = await marketService.searchUsStocks(q).catch(() => []);
+        const usMapped = us.slice(0, 8).map((s: any) => ({ code: s.code, name: s.name, market: 'US_STOCK' }));
+        const etfs = await marketService.searchEtfs(q).catch(() => []);
+        const etfMapped = etfs.slice(0, 8).map((s: any) => ({ code: s.code, name: s.name, market: 'ETF' }));
+        setSearchResults([...crypto, ...mapped, ...usMapped, ...etfMapped]);
         setShowDropdown(true);
       } finally {
         setIsSearching(false);
@@ -201,8 +206,8 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
                 <button key={`${r.market}-${r.code}`} type="button" onClick={() => selectStock(r.code, r.name, r.market)}
                   className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs flex items-center justify-between transition-colors first:rounded-t-xl last:rounded-b-xl">
                   <span className="font-medium text-gray-800 truncate">{r.name} <span className="text-gray-400">({r.code})</span></span>
-                  <span className={`ml-2 flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                    {r.market === 'STOCK' ? '주식' : '코인'}
+                  <span className={`ml-2 flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-50 text-indigo-600' : r.market === 'US_STOCK' ? 'bg-blue-50 text-blue-600' : r.market === 'ETF' ? 'bg-teal-50 text-teal-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                    {r.market === 'STOCK' ? '주식' : r.market === 'US_STOCK' ? '미국주식' : r.market === 'ETF' ? 'ETF' : '코인'}
                   </span>
                 </button>
               ))}

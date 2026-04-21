@@ -1,6 +1,6 @@
 import apiClient from '../utils/api';
 
-export type AssetType = 'STOCK' | 'CRYPTO' | 'US_STOCK';
+export type AssetType = 'STOCK' | 'CRYPTO' | 'US_STOCK' | 'ETF';
 
 export interface MarketPrice {
   assetType: AssetType;
@@ -49,7 +49,7 @@ export const marketService = {
 
     // 빈 응답은 캐시하지 않음 (재시도 시 다시 요청하도록)
     if (res.data.length > 0) {
-      const ttl = (assetType === 'STOCK' || assetType === 'US_STOCK') ? STOCK_CACHE_TTL : CRYPTO_CACHE_TTL;
+      const ttl = (assetType === 'STOCK' || assetType === 'US_STOCK' || assetType === 'ETF') ? STOCK_CACHE_TTL : CRYPTO_CACHE_TTL;
       candleCache.set(cacheKey, { data: res.data, expireAt: Date.now() + ttl });
     }
 
@@ -87,6 +87,20 @@ export const marketService = {
   /** 미국주식 개별 종목 현재가 조회 */
   getUsStockPrice: async (symbol: string): Promise<MarketPrice> => {
     const res = await apiClient.get<MarketPrice>(`/api/market/us-stock/price/${symbol}`);
+    return res.data;
+  },
+
+  /** 미국 ETF 검색 (심볼/한글명 부분 매칭) */
+  searchEtfs: async (keyword: string): Promise<{ code: string; name: string; market: string; category?: string; assetType?: string }[]> => {
+    const res = await apiClient.get<{ code: string; name: string; market: string; category?: string; assetType?: string }[]>('/api/market/etf/search', {
+      params: { keyword },
+    });
+    return res.data;
+  },
+
+  /** 미국 ETF 개별 현재가 조회 */
+  getEtfPrice: async (symbol: string): Promise<MarketPrice> => {
+    const res = await apiClient.get<MarketPrice>(`/api/market/etf/price/${symbol}`);
     return res.data;
   },
 

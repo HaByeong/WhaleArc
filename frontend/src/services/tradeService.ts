@@ -13,7 +13,7 @@ export interface StockPrice {
   open: number;
   previousClose: number;
   timestamp: string;
-  assetType?: 'STOCK' | 'CRYPTO' | 'US_STOCK';
+  assetType?: 'STOCK' | 'CRYPTO' | 'US_STOCK' | 'ETF';
 }
 
 export interface OrderRequest {
@@ -23,7 +23,7 @@ export interface OrderRequest {
   orderMethod: 'MARKET' | 'LIMIT';
   quantity: number;
   price?: number; // 지정가 주문일 때만 필요
-  assetType?: 'STOCK' | 'CRYPTO' | 'US_STOCK';
+  assetType?: 'STOCK' | 'CRYPTO' | 'US_STOCK' | 'ETF';
   memo?: string;
 }
 
@@ -112,7 +112,7 @@ const mapMarketToStockPrice = (item: {
   change: number;
   changeRate: number;
   volume: number;
-}, assetType: 'STOCK' | 'CRYPTO' | 'US_STOCK' = 'CRYPTO'): StockPrice => ({
+}, assetType: 'STOCK' | 'CRYPTO' | 'US_STOCK' | 'ETF' = 'CRYPTO'): StockPrice => ({
   stockCode: item.symbol,
   stockName: item.name,
   currentPrice: item.price,
@@ -165,6 +165,15 @@ export const tradeService = {
     });
     const list: any[] = response.data;
     return list.map((item) => mapMarketToStockPrice(item, 'US_STOCK'));
+  },
+
+  // 미국 ETF 종목 목록 조회
+  getEtfList: async (): Promise<StockPrice[]> => {
+    const response = await apiClient.get('/api/market/prices', {
+      params: { type: 'ETF' },
+    });
+    const list: any[] = response.data;
+    return list.map((item) => mapMarketToStockPrice(item, 'ETF'));
   },
 
   // 주식 종목 검색 (전체 KRX)

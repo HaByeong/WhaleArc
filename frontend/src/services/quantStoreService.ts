@@ -154,6 +154,20 @@ export const US_STOCK_NAMES: Record<string, string> = {
   'COIN': '코인베이스', 'PLTR': '팔란티어',
 };
 
+// 미국 ETF 심볼 → 한글 이름 매핑 (백엔드 UsEtfCatalog 와 동기화)
+export const US_ETF_NAMES: Record<string, string> = {
+  'QQQ':  'Invesco QQQ (나스닥100)',
+  'SCHD': 'Schwab 미국 배당주 ETF',
+  'SOXX': 'iShares 반도체 ETF',
+  'SMH':  'VanEck 반도체 ETF',
+  'GLD':  'SPDR 골드 쉐어',
+  'SLV':  'iShares 실버 트러스트',
+  'XLK':  'Technology Select Sector',
+  'XLF':  'Financial Select Sector',
+  'XLE':  'Energy Select Sector',
+  'XLV':  'Health Care Select Sector',
+};
+
 /** 심볼 코드를 "한글명(코드)" 형태로 변환 (주식 종목코드도 지원) */
 export const cryptoDisplayName = (code: string): string => {
   const cryptoName = CRYPTO_NAMES[code];
@@ -163,13 +177,16 @@ export const cryptoDisplayName = (code: string): string => {
   return code;
 };
 
-/** 주식/가상화폐 통합: 심볼 코드를 한글명으로 변환 */
+/** 주식/가상화폐/ETF 통합: 심볼 코드를 한글명으로 변환 */
 export const assetDisplayName = (code: string, assetType?: string): string => {
   if (assetType === 'STOCK') {
     return STOCK_NAMES[code] || code;
   }
   if (assetType === 'US_STOCK') {
     return US_STOCK_NAMES[code] || code;
+  }
+  if (assetType === 'ETF') {
+    return US_ETF_NAMES[code] || code;
   }
   return CRYPTO_NAMES[code] ? `${CRYPTO_NAMES[code]}(${code})` : code;
 };

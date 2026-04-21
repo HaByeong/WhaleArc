@@ -23,7 +23,7 @@ import {
 } from '../services/strategyService';
 import { tradeService, type StockPrice } from '../services/tradeService';
 import { marketService } from '../services/marketService';
-import { US_STOCK_NAMES } from '../services/quantStoreService';
+import { US_STOCK_NAMES, US_ETF_NAMES } from '../services/quantStoreService';
 import GoldenCrossCanvasChart from '../components/GoldenCrossCanvasChart';
 import RSIChart from '../components/RSIChart';
 import BollingerChart from '../components/BollingerChart';
@@ -518,7 +518,9 @@ const StrategyPage = () => {
         const krxMapped = krxResults.map((s: any) => ({ code: s.stockCode || s.code, name: s.stockName || s.name, market: 'STOCK' }));
         const usResults = await marketService.searchUsStocks(query).catch(() => []);
         const usMapped = usResults.map((s: any) => ({ code: s.code, name: s.name, market: 'US_STOCK' }));
-        setBacktestSearchResults([...cryptoResults.slice(0, 8), ...krxMapped.slice(0, 8), ...usMapped.slice(0, 8)]);
+        const etfResults = await marketService.searchEtfs(query).catch(() => []);
+        const etfMapped = etfResults.map((s: any) => ({ code: s.code, name: s.name, market: 'ETF' }));
+        setBacktestSearchResults([...cryptoResults.slice(0, 8), ...krxMapped.slice(0, 8), ...usMapped.slice(0, 8), ...etfMapped.slice(0, 8)]);
         setShowBacktestDropdown(true);
       } catch {
         setBacktestSearchResults([]);
@@ -710,6 +712,7 @@ const StrategyPage = () => {
     if (type === 'CRYPTO') return '가상화폐';
     if (type === 'STOCK') return '주식';
     if (type === 'US_STOCK') return '미국주식';
+    if (type === 'ETF') return 'ETF';
     return '혼합';
   };
 
@@ -2089,14 +2092,15 @@ const StrategyPage = () => {
                   {selectedStrategy.targetAssets.map((assetCode) => {
                     const assetName = selectedStrategy.targetAssetNames?.[assetCode] || assetCode;
                     const isStock = /^\d{6}$/.test(assetCode);
-                    const isUsStock = !isStock && US_STOCK_NAMES[assetCode] !== undefined;
-                    const market = isStock ? 'STOCK' : isUsStock ? 'US_STOCK' : 'CRYPTO';
+                    const isEtfAsset = !isStock && US_ETF_NAMES[assetCode] !== undefined;
+                    const isUsStock = !isStock && !isEtfAsset && US_STOCK_NAMES[assetCode] !== undefined;
+                    const market = isStock ? 'STOCK' : isEtfAsset ? 'ETF' : isUsStock ? 'US_STOCK' : 'CRYPTO';
                     const isSel = backtestStockCode === assetCode;
                     return (
                       <button key={assetCode} type="button"
                         onClick={() => handleBacktestStockSelect(assetCode, assetName, market)}
                         className={`px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1 border ${isSel ? 'bg-gradient-to-r from-whale-light to-blue-500 text-white border-whale-light shadow-md' : isDark ? 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:border-cyan-400/30 hover:bg-white/[0.05]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-whale-light hover:shadow-sm hover:shadow-whale-light/20'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${isStock ? 'bg-indigo-400' : isUsStock ? 'bg-blue-400' : 'bg-emerald-400'}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full ${isStock ? 'bg-indigo-400' : isEtfAsset ? 'bg-teal-400' : isUsStock ? 'bg-blue-400' : 'bg-emerald-400'}`} />
                         {assetName}
                       </button>
                     );
@@ -2124,7 +2128,7 @@ const StrategyPage = () => {
               </div>
               {backtestStockCode && (
                 <div className={`mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${isDark ? 'bg-white/[0.04] border border-white/[0.06]' : 'bg-gray-100 border border-gray-200'}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${backtestAssetType === 'STOCK' ? 'bg-indigo-400' : backtestAssetType === 'US_STOCK' ? 'bg-blue-400' : 'bg-emerald-400'}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${backtestAssetType === 'STOCK' ? 'bg-indigo-400' : backtestAssetType === 'US_STOCK' ? 'bg-blue-400' : backtestAssetType === 'ETF' ? 'bg-teal-400' : 'bg-emerald-400'}`} />
                   <span className={`font-medium ${isDark ? 'text-white' : 'text-whale-dark'}`}>{backtestStockName}</span>
                   <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({backtestStockCode})</span>
                 </div>
@@ -2136,8 +2140,8 @@ const StrategyPage = () => {
                       onClick={() => handleBacktestStockSelect(r.code, r.name, r.market)}
                       className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between last:border-0 ${isDark ? 'hover:bg-white/[0.03] border-b border-white/[0.04] text-white' : 'hover:bg-gray-50 border-b border-gray-100 text-gray-800'}`}>
                       <span>{r.name} <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({r.code})</span></span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : r.market === 'US_STOCK' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                        {r.market === 'STOCK' ? '주식' : r.market === 'US_STOCK' ? '미국주식' : '코인'}
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : r.market === 'US_STOCK' ? 'bg-blue-100 text-blue-600' : r.market === 'ETF' ? 'bg-teal-100 text-teal-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                        {r.market === 'STOCK' ? '주식' : r.market === 'US_STOCK' ? '미국주식' : r.market === 'ETF' ? 'ETF' : '코인'}
                       </span>
                     </button>
                   ))}
@@ -2555,10 +2559,11 @@ const StrategyPage = () => {
                             setBacktestStockName(entry.result.stockName || code);
                             backtestJustSelectedRef.current = true;
                             setBacktestSearchQuery(entry.result.stockName || code);
-                            // assetType 추론
+                            // assetType 추론 (ETF 카탈로그 → US 인기종목 → 숫자 6자리 순)
                             const isKrx = /^\d{6}$/.test(code);
-                            const isUs = !isKrx && US_STOCK_NAMES[code] !== undefined;
-                            setBacktestAssetType(isKrx ? 'STOCK' : isUs ? 'US_STOCK' : 'CRYPTO');
+                            const isEtf = !isKrx && US_ETF_NAMES[code] !== undefined;
+                            const isUs = !isKrx && !isEtf && US_STOCK_NAMES[code] !== undefined;
+                            setBacktestAssetType(isKrx ? 'STOCK' : isEtf ? 'ETF' : isUs ? 'US_STOCK' : 'CRYPTO');
                           }
                           if (entry.result.startDate) setBacktestStartDate(entry.result.startDate);
                           if (entry.result.endDate) setBacktestEndDate(entry.result.endDate);

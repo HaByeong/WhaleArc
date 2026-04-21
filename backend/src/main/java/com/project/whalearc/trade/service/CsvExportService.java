@@ -43,7 +43,7 @@ public class CsvExportService {
             sb.append(KST_FMT.format(t.getExecutedAt())).append(',');
             sb.append(t.getStockCode()).append(',');
             sb.append(csvEscape(t.getStockName())).append(',');
-            sb.append("STOCK".equals(t.getAssetType()) ? "주식" : "가상화폐").append(',');
+            sb.append(assetTypeLabel(t.getAssetType())).append(',');
             sb.append(t.getOrderType().name().equals("BUY") ? "매수" : "매도").append(',');
             sb.append(formatQty(t.getQuantity(), t.getAssetType())).append(',');
             sb.append(csvEscape(numFmt().format(roundBd(t.getPrice())))).append(',');
@@ -92,11 +92,11 @@ public class CsvExportService {
         sb.append("종목코드,종목명,자산유형,수량,평균매수가,현재가,평가금액,평가손익,수익률(%)\n");
 
         for (Holding h : portfolio.getHoldings()) {
-            boolean isStock = h.isStock();
+            String assetType = h.getAssetType();
             sb.append(h.getStockCode()).append(',');
             sb.append(csvEscape(h.getStockName())).append(',');
-            sb.append(isStock ? "주식" : "가상화폐").append(',');
-            sb.append(formatQty(h.getQuantity(), isStock ? "STOCK" : "CRYPTO")).append(',');
+            sb.append(assetTypeLabel(assetType)).append(',');
+            sb.append(formatQty(h.getQuantity(), assetType)).append(',');
             sb.append(csvEscape(numFmt().format(roundBd(h.getAveragePrice())))).append(',');
             sb.append(csvEscape(numFmt().format(roundBd(h.getCurrentPrice())))).append(',');
             sb.append(csvEscape(numFmt().format(roundBd(h.getMarketValue())))).append(',');
@@ -116,11 +116,18 @@ public class CsvExportService {
     }
 
     private String formatQty(BigDecimal qty, String assetType) {
-        if ("STOCK".equals(assetType)) {
+        if ("STOCK".equals(assetType) || "US_STOCK".equals(assetType) || "ETF".equals(assetType)) {
             return String.valueOf(qty.intValue());
         }
-        // 가상화폐: 소수점 이하 불필요한 0 제거
+        // 가상화폐(및 null): 소수점 이하 불필요한 0 제거
         return qty.stripTrailingZeros().toPlainString();
+    }
+
+    private String assetTypeLabel(String assetType) {
+        if ("STOCK".equals(assetType)) return "주식";
+        if ("US_STOCK".equals(assetType)) return "미국주식";
+        if ("ETF".equals(assetType)) return "ETF";
+        return "가상화폐";
     }
 
     private long roundBd(BigDecimal value) {

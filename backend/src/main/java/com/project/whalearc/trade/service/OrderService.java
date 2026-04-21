@@ -30,6 +30,8 @@ public class OrderService {
     private final CryptoPriceProvider cryptoPriceProvider;
     private final StockPriceProvider stockPriceProvider;
     private final UsStockPriceProvider usStockPriceProvider;
+    private final UsEtfPriceProvider usEtfPriceProvider;
+    private final UsEtfCatalog usEtfCatalog;
     private final KisApiClient kisApiClient;
     private final ExchangeRateService exchangeRateService;
     private final NotificationService notificationService;
@@ -84,9 +86,10 @@ public class OrderService {
         if (orderMethod == Order.OrderMethod.LIMIT && (limitPrice == null || limitPrice.compareTo(BigDecimal.ZERO) <= 0)) {
             throw new IllegalArgumentException("지정가 주문은 가격을 입력해야 합니다.");
         }
-        // 주식은 정수 단위만 거래 가능
-        if (("STOCK".equals(assetType) || "US_STOCK".equals(assetType)) && quantity.stripTrailingZeros().scale() > 0) {
-            throw new IllegalArgumentException("주식은 1주 단위로만 거래할 수 있습니다.");
+        // 주식·ETF 는 정수 단위만 거래 가능
+        if (("STOCK".equals(assetType) || "US_STOCK".equals(assetType) || "ETF".equals(assetType))
+                && quantity.stripTrailingZeros().scale() > 0) {
+            throw new IllegalArgumentException("주식·ETF 는 1주 단위로만 거래할 수 있습니다.");
         }
 
         ReentrantLock lock = getUserLock(userId);
@@ -129,8 +132,8 @@ public class OrderService {
                                 BigDecimal quantity, BigDecimal executionPrice, Portfolio portfolio, String assetType) {
         if (orderType == Order.OrderType.BUY) {
             BigDecimal totalCost = executionPrice.multiply(quantity).multiply(BigDecimal.ONE.add(TradeRecord.COMMISSION_RATE));
-            // US_STOCK: USD 비용을 KRW로 환산
-            if ("US_STOCK".equals(assetType)) {
+            // US_STOCK / ETF: USD 비용을 KRW로 환산
+            if ("US_STOCK".equals(assetType) || "ETF".equals(assetType)) {
                 totalCost = exchangeRateService.usdToKrw(totalCost);
             }
             if (portfolio.getCashBalance().compareTo(totalCost) < 0) {
@@ -167,9 +170,9 @@ public class OrderService {
         order.setUpdatedAt(Instant.now());
         orderRepository.save(order);
 
-        // 포트폴리오 업데이트 (US_STOCK은 USD→KRW 환전)
+        // 포트폴리오 업데이트 (US_STOCK / ETF 는 USD→KRW 환전)
         BigDecimal netAmountKrw = trade.getNetAmount();
-        if (order.isUsStock()) {
+        if (order.isUsStock() || order.isEtf()) {
             netAmountKrw = exchangeRateService.usdToKrw(trade.getNetAmount());
         }
 
@@ -196,7 +199,7 @@ public class OrderService {
             String typeLabel = order.getOrderType() == Order.OrderType.BUY ? "매수" : "매도";
             String priceStr;
             String currencyUnit;
-            if (order.isUsStock()) {
+            if (order.isUsStock() || order.isEtf()) {
                 priceStr = "$" + executionPrice.setScale(2, RoundingMode.HALF_UP).toPlainString();
                 BigDecimal krwEquiv = exchangeRateService.usdToKrw(executionPrice);
                 currencyUnit = priceStr + " (약 ₩" + krwEquiv.toPlainString() + ")";
@@ -266,6 +269,10 @@ public class OrderService {
             return getUsStockCurrentPrice(stockCode);
         }
 
+        if ("ETF".equals(assetType)) {
+            return getEtfCurrentPrice(stockCode);
+        }
+
         // 가상화폐: 빗썸 현재가
         List<MarketPriceResponse> prices = cryptoPriceProvider.getAllKrwTickers();
         if (prices.isEmpty()) {
@@ -296,6 +303,30 @@ public class OrderService {
         try { price = Long.parseLong(output.get("stck_prpr")); } catch (Exception ignored) {}
         if (price <= 0) {
             throw new IllegalStateException("유효하지 않은 주식 시세입니다: " + stockCode);
+        }
+        return BigDecimal.valueOf(price);
+    }
+
+    /** 미국 ETF 현재가 조회 (KIS 해외주식 API, USD 단위) */
+    private BigDecimal getEtfCurrentPrice(String symbol) {
+        String upper = symbol == null ? "" : symbol.toUpperCase();
+        // ETF 캐시에서 먼저 조회
+        List<MarketPriceResponse> cached = usEtfPriceProvider.getAllEtfPrices();
+        for (MarketPriceResponse p : cached) {
+            if (p.getSymbol().equals(upper)) {
+                return BigDecimal.valueOf(p.getPrice());
+            }
+        }
+        // 캐시에 없으면 개별 조회 (카탈로그 거래소로 KIS 호출)
+        String exchange = usEtfCatalog.getExchange(upper);
+        Map<String, String> output = kisApiClient.getUsStockPrice(exchange, upper);
+        if (output == null) {
+            throw new IllegalStateException("미국 ETF 시세를 불러올 수 없습니다: " + upper);
+        }
+        double price = 0;
+        try { price = Double.parseDouble(output.get("last")); } catch (Exception ignored) {}
+        if (price <= 0) {
+            throw new IllegalStateException("유효하지 않은 미국 ETF 시세입니다: " + upper);
         }
         return BigDecimal.valueOf(price);
     }

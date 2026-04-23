@@ -11,7 +11,9 @@ import java.util.Map;
  * UsEtfPriceProvider, BacktestDataProvider, CandlestickService, MarketController 가
  * 모두 이 카탈로그를 참조해 거래소·카테고리를 일관되게 해석한다.
  *
- * 초기 공급: NAS/NYS 상장 10종 (AMS 상장은 KIS AMS 지원 확인 후 Phase 2)
+ * KIS 해외주식 API 의 EXCD 코드:
+ *   NAS = Nasdaq, NYS = NYSE 본장, AMS = NYSE American + NYSE Arca
+ * 대부분의 ETF 는 NYSE Arca 상장이므로 `AMS` 로 지정해야 정상 조회된다.
  */
 @Component
 public class UsEtfCatalog {
@@ -20,16 +22,18 @@ public class UsEtfCatalog {
 
     private static final LinkedHashMap<String, EtfInfo> CATALOG = new LinkedHashMap<>();
     static {
+        // Nasdaq 상장
         put("QQQ",  "Invesco QQQ (나스닥100)",          "NAS", "Index");
-        put("SCHD", "Schwab 미국 배당주 ETF",           "NAS", "Dividend");
         put("SOXX", "iShares 반도체 ETF",               "NAS", "Sector");
         put("SMH",  "VanEck 반도체 ETF",                "NAS", "Sector");
-        put("GLD",  "SPDR 골드 쉐어",                   "NYS", "Commodity");
-        put("SLV",  "iShares 실버 트러스트",            "NYS", "Commodity");
-        put("XLK",  "Technology Select Sector",          "NYS", "Sector");
-        put("XLF",  "Financial Select Sector",           "NYS", "Sector");
-        put("XLE",  "Energy Select Sector",              "NYS", "Sector");
-        put("XLV",  "Health Care Select Sector",         "NYS", "Sector");
+        // NYSE Arca 상장 → KIS 에서는 EXCD=AMS
+        put("SCHD", "Schwab 미국 배당주 ETF",           "AMS", "Dividend");
+        put("GLD",  "SPDR 골드 쉐어",                   "AMS", "Commodity");
+        put("SLV",  "iShares 실버 트러스트",            "AMS", "Commodity");
+        put("XLK",  "Technology Select Sector",          "AMS", "Sector");
+        put("XLF",  "Financial Select Sector",           "AMS", "Sector");
+        put("XLE",  "Energy Select Sector",              "AMS", "Sector");
+        put("XLV",  "Health Care Select Sector",         "AMS", "Sector");
     }
 
     private static void put(String symbol, String name, String exchange, String category) {

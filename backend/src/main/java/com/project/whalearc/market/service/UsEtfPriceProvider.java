@@ -111,7 +111,7 @@ public class UsEtfPriceProvider {
                 results.add(Map.of(
                         "code", info.symbol(),
                         "name", info.koreanName(),
-                        "market", "NAS".equals(info.exchange()) ? "NASDAQ" : "NYSE",
+                        "market", exchangeLabel(info.exchange()),
                         "category", info.category(),
                         "assetType", "ETF"
                 ));
@@ -156,9 +156,19 @@ public class UsEtfPriceProvider {
         dto.setChange(parseDouble(output.get("diff")));
         dto.setChangeRate(parseDouble(output.get("rate")));
         dto.setVolume(parseLong(output.get("tvol")));
-        dto.setMarket("NAS".equals(info.exchange()) ? "NASDAQ" : "NYSE");
+        dto.setMarket(exchangeLabel(info.exchange()));
         dto.setCurrency("USD");
         return dto;
+    }
+
+    /** KIS EXCD 를 사람이 읽는 거래소 이름으로 변환 */
+    private static String exchangeLabel(String excd) {
+        return switch (excd) {
+            case "NAS" -> "NASDAQ";
+            case "NYS" -> "NYSE";
+            case "AMS" -> "NYSE Arca";
+            default -> excd;
+        };
     }
 
     private List<MarketPriceResponse> getMockEtfTickers() {

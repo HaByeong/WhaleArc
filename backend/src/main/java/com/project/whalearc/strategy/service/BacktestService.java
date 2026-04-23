@@ -193,6 +193,15 @@ public class BacktestService {
         if (request.getMaxPositions() != null && (request.getMaxPositions() < 1 || request.getMaxPositions() > 20)) {
             throw new IllegalArgumentException("최대 포지션 수는 1~20 사이로 설정해주세요.");
         }
+        if (request.getMonthlyContribution() != null) {
+            double mc = request.getMonthlyContribution();
+            if (mc < 0) {
+                throw new IllegalArgumentException("월 적립금은 0 이상이어야 합니다.");
+            }
+            if (mc > 100_000_000_000L) {
+                throw new IllegalArgumentException("월 적립금은 1,000억원 이하로 설정해주세요.");
+            }
+        }
     }
 
     // ── 지표 계산 ─────────────────────────────────────────────────────────
@@ -384,6 +393,14 @@ public class BacktestService {
         double cash = initialCapital;
         double peakEquity = initialCapital;
 
+        // 적립식 (매월 첫 거래일에 cash 가산) — monthlyNative 는 시뮬레이션 단위(USD 또는 KRW)
+        double monthlyKrw = request.getMonthlyContribution() != null ? request.getMonthlyContribution() : 0.0;
+        double monthlyNative = isUsStock && monthlyKrw > 0 ? monthlyKrw / usdKrwRate : monthlyKrw;
+        boolean isMonthlyMode = monthlyNative > 0;
+        double cumContribNative = initialCapital; // 현재 시점까지 누적 납입액 (수익률 분모)
+        int contribCount = 0;
+        java.time.YearMonth prevYm = null;
+
         // 다중 포지션 추적 (signed: long=양수, short=음수)
         List<PosEntry> posEntries = new ArrayList<>();
         String currentDir = "NONE"; // LONG, SHORT, NONE
@@ -430,8 +447,18 @@ public class BacktestService {
             CandlestickResponse candle = candles.get(i);
             int gi = globalOffset + i;
             double price = candle.getClose();
-            String date = Instant.ofEpochSecond(candle.getTime())
-                    .atZone(KST).toLocalDate().format(DATE_FMT);
+            java.time.LocalDate curDate = Instant.ofEpochSecond(candle.getTime())
+                    .atZone(KST).toLocalDate();
+            String date = curDate.format(DATE_FMT);
+
+            // 매월 첫 거래일에 적립금 가산 (시작 캔들은 제외 — initialCapital 이 이미 시작점)
+            java.time.YearMonth curYm = java.time.YearMonth.from(curDate);
+            if (isMonthlyMode && prevYm != null && !curYm.equals(prevYm)) {
+                cash += monthlyNative;
+                cumContribNative += monthlyNative;
+                contribCount++;
+            }
+            prevYm = curYm;
 
             priceData.add(BacktestResponse.PricePointDto.builder()
                     .date(date).open(candle.getOpen()).high(candle.getHigh())
@@ -687,7 +714,7 @@ public class BacktestService {
                     .date(date).value(Math.round(-drawdown * 100.0) / 100.0).build());
 
             double dailyReturn = prevEquity > 0 ? (equity - prevEquity) / prevEquity * 100 : 0;
-            double cumulativeReturn = (equity - initialCapital) / initialCapital * 100;
+            double cumulativeReturn = cumContribNative > 0 ? (equity - cumContribNative) / cumContribNative * 100 : 0;
 
             equityCurve.add(BacktestResponse.EquityPointDto.builder()
                     .date(date).value(equity).build());
@@ -725,7 +752,7 @@ public class BacktestService {
             // 마지막 equity/daily 갱신
             double finalEquity = cash;
             double dailyReturn = prevEquity > 0 ? (finalEquity - prevEquity) / prevEquity * 100 : 0;
-            double cumulativeReturn = (finalEquity - initialCapital) / initialCapital * 100;
+            double cumulativeReturn = cumContribNative > 0 ? (finalEquity - cumContribNative) / cumContribNative * 100 : 0;
             if (!equityCurve.isEmpty()) {
                 equityCurve.set(equityCurve.size() - 1,
                         BacktestResponse.EquityPointDto.builder().date(lastDate).value(finalEquity).build());
@@ -741,8 +768,10 @@ public class BacktestService {
 
         // ── 최종 지표 계산 ──
         double finalValue = cash;
-        double totalReturn = finalValue - initialCapital;
-        double totalReturnRate = (totalReturn / initialCapital) * 100;
+        // 적립식 모드 여부와 상관없이 "지금까지 납입한 총 자본" 기준으로 수익률 계산
+        // (적립식 off 일 때 cumContribNative == initialCapital 이라 기존 동작과 동일)
+        double totalReturn = finalValue - cumContribNative;
+        double totalReturnRate = cumContribNative > 0 ? (totalReturn / cumContribNative) * 100 : 0;
         int totalTrades = profitableTrades + losingTrades;
         double winRate = totalTrades > 0 ? (double) profitableTrades / totalTrades * 100 : 0;
 
@@ -766,12 +795,13 @@ public class BacktestService {
         // Payoff Ratio (RR 비율)
         double payoffRatio = avgLoss > 0 ? avgWin / avgLoss : avgWin > 0 ? Double.MAX_VALUE : 0;
 
-        // CAGR (실제 달력 일수 기반)
+        // CAGR (실제 달력 일수 기반) — 분모는 총 납입액
+        // 주의: 적립식의 money-weighted IRR 완전 대체는 아니지만 MVP 근사로 충분
         LocalDate actualStart = LocalDate.parse(request.getStartDate());
         LocalDate actualEnd = LocalDate.parse(request.getEndDate());
         long calendarDays = java.time.temporal.ChronoUnit.DAYS.between(actualStart, actualEnd);
         double years = Math.max(calendarDays, 1) / 365.0;
-        double cagrRatio = finalValue / initialCapital;
+        double cagrRatio = cumContribNative > 0 ? finalValue / cumContribNative : 0;
         double cagr = years > 0.01 && cagrRatio > 0
                 ? (Math.pow(cagrRatio, 1.0 / years) - 1) * 100
                 : totalReturnRate;
@@ -781,17 +811,43 @@ public class BacktestService {
                 : (totalReturnRate > 0 ? 999.99 : 0);
 
         // Buy & Hold 벤치마크
-        double firstPrice = candles.get(0).getClose();
-        double buyHoldQuantity = (initialCapital * (1 - commissionRate)) / firstPrice;
+        // 적립식 off: 시작일 initialCapital 일시불 매수 후 보유 (기존 로직)
+        // 적립식 on : 시작일 initialCapital 매수 + 매월 첫 거래일마다 monthlyNative 로 추가 매수 (DCA Buy&Hold)
         List<BacktestResponse.EquityPointDto> buyHoldCurve = new ArrayList<>();
-        for (CandlestickResponse c : candles) {
-            String d = Instant.ofEpochSecond(c.getTime()).atZone(KST).toLocalDate().format(DATE_FMT);
-            double bhValue = buyHoldQuantity * c.getClose();
-            buyHoldCurve.add(BacktestResponse.EquityPointDto.builder()
-                    .date(d).value(Math.round(bhValue)).build());
+        double buyHoldFinal;
+        if (isMonthlyMode) {
+            double bhQty = 0;
+            java.time.YearMonth bhPrevYm = null;
+            for (int i = 0; i < candles.size(); i++) {
+                CandlestickResponse c = candles.get(i);
+                double p = c.getClose();
+                java.time.LocalDate dLocal = Instant.ofEpochSecond(c.getTime()).atZone(KST).toLocalDate();
+                java.time.YearMonth ym = java.time.YearMonth.from(dLocal);
+                if (i == 0) {
+                    bhQty = (initialCapital * (1 - commissionRate)) / p;
+                } else if (bhPrevYm != null && !ym.equals(bhPrevYm) && monthlyNative > 0) {
+                    bhQty += (monthlyNative * (1 - commissionRate)) / p;
+                }
+                bhPrevYm = ym;
+                double bhValue = bhQty * p;
+                buyHoldCurve.add(BacktestResponse.EquityPointDto.builder()
+                        .date(dLocal.format(DATE_FMT)).value(Math.round(bhValue)).build());
+            }
+            buyHoldFinal = bhQty * candles.get(candles.size() - 1).getClose();
+        } else {
+            double firstPrice = candles.get(0).getClose();
+            double buyHoldQuantity = (initialCapital * (1 - commissionRate)) / firstPrice;
+            for (CandlestickResponse c : candles) {
+                String d = Instant.ofEpochSecond(c.getTime()).atZone(KST).toLocalDate().format(DATE_FMT);
+                double bhValue = buyHoldQuantity * c.getClose();
+                buyHoldCurve.add(BacktestResponse.EquityPointDto.builder()
+                        .date(d).value(Math.round(bhValue)).build());
+            }
+            buyHoldFinal = buyHoldQuantity * candles.get(candles.size() - 1).getClose();
         }
-        double buyHoldFinal = buyHoldQuantity * candles.get(candles.size() - 1).getClose();
-        double buyHoldReturnRate = (buyHoldFinal - initialCapital) / initialCapital * 100;
+        double buyHoldReturnRate = cumContribNative > 0
+                ? (buyHoldFinal - cumContribNative) / cumContribNative * 100
+                : 0;
 
         // 지표 요약 (조건이 왜 트리거되지 않았는지 디버깅용)
         Map<String, BacktestResponse.IndicatorSummaryDto> indicatorSummary = new HashMap<>();
@@ -885,6 +941,10 @@ public class BacktestService {
                 // 통화 정보
                 .currency(isUsStock ? "USD" : "KRW")
                 .exchangeRate(isUsStock ? usdKrwRate : 0)
+                // 적립식 투자
+                .monthlyContribution(monthlyNative)
+                .totalContribution(cumContribNative)
+                .contributionCount(contribCount)
                 .build();
     }
 

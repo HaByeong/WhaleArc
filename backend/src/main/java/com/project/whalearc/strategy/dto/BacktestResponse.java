@@ -59,6 +59,12 @@ public class BacktestResponse {
     private String currency;
     private double exchangeRate; // 시뮬레이션 시점의 USD/KRW 환율 (currency=USD일 때만 유효)
 
+    // 적립식 투자 (monthlyContribution > 0 일 때만 의미 있음)
+    // 단위는 initialCapital / finalValue 와 동일(native): currency=USD면 USD, KRW면 KRW.
+    private double monthlyContribution;  // 월 납입액
+    private double totalContribution;    // initialCapital + monthlyContribution × contributionCount
+    private int contributionCount;       // 실제 적립 발생 횟수 (월 첫 거래일 hits)
+
     // 지표 요약 (0-trade 디버깅용: 지표명 → {min, max, avg, last})
     private Map<String, IndicatorSummaryDto> indicatorSummary;
 

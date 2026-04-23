@@ -47,4 +47,8 @@ public class BacktestRequest {
 
     // 다중 포지션 (분할매수)
     private Integer maxPositions;       // 최대 동시 포지션 수 (기본: 1)
+
+    // 적립식 투자: 매월 첫 거래일에 추가 납입할 금액 (KRW)
+    // null 또는 0 이면 적립식 off (기존 동작). 양수면 시뮬레이션 중 매월 첫 거래일마다 cash 에 가산.
+    private Double monthlyContribution;
 }

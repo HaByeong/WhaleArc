@@ -99,6 +99,10 @@ const StrategyPage = () => {
   const [backtestEndDate, setBacktestEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [backtestInitialCapital, setBacktestInitialCapital] = useState('10000000');
 
+  // 적립식 투자 (매월 첫 거래일 추가 납입)
+  const [useMonthlyContribution, setUseMonthlyContribution] = useState(false);
+  const [monthlyContribution, setMonthlyContribution] = useState('');
+
   // 리스크 관리
   const [stopLossPercent, setStopLossPercent] = useState('');
   const [takeProfitPercent, setTakeProfitPercent] = useState('');
@@ -608,6 +612,9 @@ const StrategyPage = () => {
       }
       if (tradeDirection !== 'LONG_ONLY') request.tradeDirection = tradeDirection;
       if (parseInt(maxPositions) > 1) request.maxPositions = parseInt(maxPositions);
+      if (useMonthlyContribution && monthlyContribution && parseFloat(monthlyContribution) > 0) {
+        request.monthlyContribution = parseFloat(monthlyContribution);
+      }
 
       if (backtestMode === 'strategy') {
         // 프리셋 전략이고 지표/조건이 편집됐으면 직접 조건으로 전송
@@ -1864,11 +1871,15 @@ const StrategyPage = () => {
                   const isUsdEquity = backtestResult.currency === 'USD';
                   const eqRate = backtestResult.exchangeRate || 1400;
                   const toKrw = (v: number) => isUsdEquity ? Math.round(v * eqRate) : v;
+                  const isDcaMode = (backtestResult.monthlyContribution ?? 0) > 0;
+                  const baselineNative = isDcaMode
+                    ? (backtestResult.totalContribution ?? backtestResult.initialCapital)
+                    : backtestResult.initialCapital;
                   return (
                   <div className={`rounded-xl p-4 ${isDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
                     <h3 className={`text-sm font-bold mb-3 ${isDark ? 'text-white' : 'text-whale-dark'}`}>
                       자산 변동 추이
-                      {backtestResult.buyHoldCurve && <span className={`text-xs font-normal ml-2 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>전략 vs Buy & Hold</span>}
+                      {backtestResult.buyHoldCurve && <span className={`text-xs font-normal ml-2 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>전략 vs Buy & Hold{isDcaMode ? ' (DCA)' : ''}</span>}
                     </h3>
                     <ResponsiveContainer width="100%" height={200}>
                       <AreaChart data={(() => {
@@ -1889,8 +1900,9 @@ const StrategyPage = () => {
                         <XAxis dataKey="date" tick={{ fontSize: 10, fill: isDark ? '#64748b' : '#6b7280' }} tickFormatter={(v) => v.substring(5)} />
                         <YAxis tick={{ fontSize: 10, fill: isDark ? '#64748b' : '#6b7280' }} tickFormatter={(v: number) => v >= 1e8 ? `${(v / 1e8).toFixed(1)}억` : v >= 1e4 ? `${(v / 1e4).toFixed(0)}만` : `${v}`} />
                         <Tooltip contentStyle={isDark ? { backgroundColor: 'var(--wa-card-bg)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, color: '#ffffff', fontSize: 12 } : { backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#1a2b4d', fontSize: 12 }}
-                          formatter={(value: number, name: string) => [formatCurrency(value), name === 'buyHold' ? 'Buy & Hold' : '전략']} />
-                        <ReferenceLine y={toKrw(backtestResult.initialCapital)} stroke="#9ca3af" strokeDasharray="5 5" />
+                          formatter={(value: number, name: string) => [formatCurrency(value), name === 'buyHold' ? (isDcaMode ? 'Buy & Hold (DCA)' : 'Buy & Hold') : '전략']} />
+                        <ReferenceLine y={toKrw(baselineNative)} stroke="#9ca3af" strokeDasharray="5 5"
+                          label={isDcaMode ? { value: '총 납입액', position: 'insideBottomRight', fill: isDark ? '#64748b' : '#9ca3af', fontSize: 10 } : undefined} />
                         <Area type="monotone" dataKey="value" stroke="#4a90e2" fillOpacity={1} fill="url(#colorEquityLight)" strokeWidth={2} name="전략" />
                         {backtestResult.buyHoldCurve && (
                           <Area type="monotone" dataKey="buyHold" stroke="#f59e0b" fill="none" strokeWidth={1.5} strokeDasharray="6 3" name="buyHold" dot={false} />
@@ -1904,6 +1916,21 @@ const StrategyPage = () => {
                 {/* 상세 지표 그리드 */}
                 <div className={`rounded-xl p-4 ${isDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
                   <h3 className={`text-sm font-bold mb-3 ${isDark ? 'text-white' : 'text-whale-dark'}`}>상세 성과 지표</h3>
+                  {(backtestResult.monthlyContribution ?? 0) > 0 && (() => {
+                    const rate = backtestResult.currency === 'USD' ? (backtestResult.exchangeRate || 1400) : 1;
+                    const totalKrw = Math.round((backtestResult.totalContribution ?? backtestResult.initialCapital) * rate);
+                    const initialKrw = Math.round(backtestResult.initialCapital * rate);
+                    const monthlyKrw = Math.round((backtestResult.monthlyContribution ?? 0) * rate);
+                    const count = backtestResult.contributionCount ?? 0;
+                    return (
+                      <div className={`mb-3 px-3 py-2 rounded-lg text-xs ${isDark ? 'bg-white/[0.03] border border-white/[0.06] text-slate-300' : 'bg-white border border-gray-100 text-gray-600'}`}>
+                        <span className="font-semibold">총 납입액 {formatCurrency(totalKrw)}</span>
+                        <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>
+                          {' '}= 초기 {formatCurrency(initialKrw)} + 월 {formatCurrency(monthlyKrw)} × {count}회
+                        </span>
+                      </div>
+                    );
+                  })()}
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {[
                       { label: '총 수익률', value: formatPercent(backtestResult.totalReturnRate), glossary: '' },
@@ -2226,6 +2253,43 @@ const StrategyPage = () => {
                   {v >= 1e8 ? `${v/1e8}억` : `${v/1e4}만`}
                 </button>
               ))}
+            </div>
+
+            {/* 적립식 투자 (매월 첫 거래일 현금 추가) */}
+            <div className={`rounded-xl p-3 space-y-2 ${isDark ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-gray-50 border border-gray-200'}`}>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={useMonthlyContribution}
+                  onChange={e => setUseMonthlyContribution(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded accent-whale-light" />
+                <span className={`text-xs font-semibold ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
+                  적립식 투자 (매월 첫 거래일)
+                </span>
+              </label>
+              {useMonthlyContribution && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <input type="number" value={monthlyContribution}
+                      onChange={e => {
+                        const v = e.target.value;
+                        if (v === '' || parseInt(v) >= 0) setMonthlyContribution(v);
+                      }}
+                      min="0" placeholder="1,000,000"
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-whale-light focus:border-whale-light transition-all ${isDark ? 'bg-white/[0.04] border border-white/10 text-white placeholder-slate-600' : 'bg-white border border-gray-200 text-gray-800'}`} />
+                    <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>원 / 월</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[500000, 1000000, 2000000, 3000000].map(v => (
+                      <button key={v} onClick={() => setMonthlyContribution(String(v))}
+                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-semibold transition-all border ${monthlyContribution === String(v) ? 'bg-whale-light text-white border-whale-light' : isDark ? 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:bg-white/[0.05]' : 'bg-white text-gray-600 border-gray-200 hover:border-whale-light'}`}>
+                        {v/1e4}만
+                      </button>
+                    ))}
+                  </div>
+                  <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+                    시작일 이후 매월 첫 거래일마다 현금 잔고에 자동 추가. 매수 시점은 전략 진입 신호를 따릅니다.
+                  </p>
+                </>
+              )}
             </div>
 
             {/* 고급 설정 (접이식) */}

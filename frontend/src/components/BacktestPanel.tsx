@@ -49,6 +49,10 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [capital, setCapital] = useState('10000000');
 
+  /* 적립식 투자 */
+  const [useMonthlyContribution, setUseMonthlyContribution] = useState(false);
+  const [monthlyContribution, setMonthlyContribution] = useState('');
+
   /* 리스크 관리 & 고급 설정 */
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [stopLossPercent, setStopLossPercent] = useState('');
@@ -138,6 +142,9 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
       if (positionSizing !== 'ALL_IN') {
         req.positionSizing = positionSizing;
         if (positionValue) req.positionValue = parseFloat(positionValue);
+      }
+      if (useMonthlyContribution && monthlyContribution && parseFloat(monthlyContribution) > 0) {
+        req.monthlyContribution = parseFloat(monthlyContribution);
       }
       const res = await strategyService.runBacktest(req);
       setResult(res);
@@ -234,6 +241,24 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
           <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">초기 투자금 (원)</label>
           <input type="number" value={capital} onChange={e => setCapital(e.target.value)} placeholder="10000000"
             className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-400 outline-none" />
+        </div>
+
+        {/* 적립식 투자 */}
+        <div className="p-2.5 bg-gray-50/80 rounded-xl border border-gray-200 space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={useMonthlyContribution}
+              onChange={e => setUseMonthlyContribution(e.target.checked)}
+              className="w-3.5 h-3.5 rounded" />
+            <span className="text-xs font-semibold text-gray-700">적립식 투자 (매월 첫 거래일)</span>
+          </label>
+          {useMonthlyContribution && (
+            <div className="flex items-center gap-2">
+              <input type="number" value={monthlyContribution} onChange={e => setMonthlyContribution(e.target.value)}
+                min="0" placeholder="1000000"
+                className="flex-1 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs focus:ring-1 focus:ring-blue-400 outline-none" />
+              <span className="text-[10px] text-gray-500">원 / 월</span>
+            </div>
+          )}
         </div>
 
         {/* 리스크 관리 & 고급 설정 토글 */}

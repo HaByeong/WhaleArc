@@ -53,6 +53,8 @@ export interface BacktestRequest {
   // 매매 방향 & 다중 포지션
   tradeDirection?: 'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT';
   maxPositions?: number;
+  // 적립식 투자: 매월 첫 거래일에 추가 납입할 금액 (KRW). 0/undefined 면 off
+  monthlyContribution?: number;
   // 종목 분석 모드: 직접 조건 입력
   indicators?: Indicator[];
   entryConditions?: Condition[];
@@ -102,6 +104,11 @@ export interface BacktestResult {
   // 통화 정보 (US_STOCK: "USD", 그 외: "KRW")
   currency?: string;
   exchangeRate?: number; // USD/KRW 환율 (currency=USD일 때만)
+  // 적립식 투자 (monthlyContribution > 0 일 때만 의미 있음)
+  // 단위는 initialCapital / finalValue 와 동일(native)
+  monthlyContribution?: number;  // 월 납입액
+  totalContribution?: number;    // initialCapital + monthlyContribution × contributionCount
+  contributionCount?: number;    // 실제 적립 발생 횟수
   // 지표 요약 (0-trade 디버깅용)
   indicatorSummary?: Record<string, { min: number; max: number; avg: number; last: number }>;
 }

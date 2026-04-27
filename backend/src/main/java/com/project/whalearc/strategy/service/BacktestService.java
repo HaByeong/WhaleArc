@@ -190,8 +190,10 @@ public class BacktestService {
         if (request.getCommissionRate() != null && (request.getCommissionRate() < 0 || request.getCommissionRate() > 10)) {
             throw new IllegalArgumentException("수수료율은 0~10% 사이로 설정해주세요.");
         }
-        if (request.getMaxPositions() != null && (request.getMaxPositions() < 1 || request.getMaxPositions() > 20)) {
-            throw new IllegalArgumentException("최대 포지션 수는 1~20 사이로 설정해주세요.");
+        if (request.getMaxPositions() != null && (request.getMaxPositions() < 1 || request.getMaxPositions() > 999)) {
+            // 적립식(DCA) + Buy & Hold 조합에서는 매월 추가 매수마다 PosEntry 가 생성돼
+            // 장기간(예: 30년 × 12개월) 시나리오까지 커버하려면 한도가 충분히 커야 한다.
+            throw new IllegalArgumentException("최대 포지션 수는 1~999 사이로 설정해주세요.");
         }
         if (request.getMonthlyContribution() != null) {
             double mc = request.getMonthlyContribution();

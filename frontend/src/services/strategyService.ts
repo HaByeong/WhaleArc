@@ -55,6 +55,11 @@ export interface BacktestRequest {
   maxPositions?: number;
   // 적립식 투자: 매월 첫 거래일에 추가 납입할 금액 (KRW). 0/undefined 면 off
   monthlyContribution?: number;
+  // 2자산 리밸런싱 (둘 다 채워졌을 때만 활성)
+  secondStockCode?: string;
+  secondStockName?: string;
+  secondAssetType?: string;
+  firstAssetWeight?: number;  // 0~100, 기본 50
   // 종목 분석 모드: 직접 조건 입력
   indicators?: Indicator[];
   entryConditions?: Condition[];
@@ -109,6 +114,16 @@ export interface BacktestResult {
   monthlyContribution?: number;  // 월 납입액
   totalContribution?: number;    // initialCapital + monthlyContribution × contributionCount
   contributionCount?: number;    // 실제 적립 발생 횟수
+  // 2자산 리밸런싱 결과 (secondStockCode 채워졌을 때만)
+  secondStockCode?: string;
+  secondStockName?: string;
+  firstAssetWeight?: number;
+  secondAssetWeight?: number;
+  firstAssetFinalValue?: number;
+  secondAssetFinalValue?: number;
+  firstAssetTradeCount?: number;
+  secondAssetTradeCount?: number;
+  rebalanceCount?: number;
   // 지표 요약 (0-trade 디버깅용)
   indicatorSummary?: Record<string, { min: number; max: number; avg: number; last: number }>;
 }

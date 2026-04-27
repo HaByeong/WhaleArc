@@ -615,6 +615,13 @@ const StrategyPage = () => {
       if (useMonthlyContribution && monthlyContribution && parseFloat(monthlyContribution) > 0) {
         request.monthlyContribution = parseFloat(monthlyContribution);
       }
+      // Buy & Hold 프리셋은 적립식과 결합될 때 매월 추가 매수(DCA) 가 일어나야 의미가 있으므로
+      // 사용자가 maxPositions 를 따로 지정하지 않았다면 자동으로 매우 크게 세팅한다.
+      // 적립이 없으면 첫 캔들에 ALL_IN 매수 후 cash=0 이라 추가 매수가 발생하지 않아 무해.
+      if (selectedStrategy?.id === 'preset-buy-hold'
+          && (!request.maxPositions || request.maxPositions <= 1)) {
+        request.maxPositions = 999;
+      }
 
       if (backtestMode === 'strategy') {
         // 프리셋은 DB 에 없으므로 항상 indicators/conditions 를 직접 전송. 사용자 전략은 strategyId 로.

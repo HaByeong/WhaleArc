@@ -615,11 +615,18 @@ const StrategyPage = () => {
       if (useMonthlyContribution && monthlyContribution && parseFloat(monthlyContribution) > 0) {
         request.monthlyContribution = parseFloat(monthlyContribution);
       }
+      // Buy & Hold 프리셋은 적립식과 결합될 때 매월 추가 매수(DCA) 가 일어나야 의미가 있으므로
+      // 사용자가 maxPositions 를 따로 지정하지 않았다면 자동으로 매우 크게 세팅한다.
+      // 적립이 없으면 첫 캔들에 ALL_IN 매수 후 cash=0 이라 추가 매수가 발생하지 않아 무해.
+      if (selectedStrategy?.id === 'preset-buy-hold'
+          && (!request.maxPositions || request.maxPositions <= 1)) {
+        request.maxPositions = 999;
+      }
 
       if (backtestMode === 'strategy') {
-        // 프리셋 전략이고 지표/조건이 편집됐으면 직접 조건으로 전송
+        // 프리셋은 DB 에 없으므로 항상 indicators/conditions 를 직접 전송. 사용자 전략은 strategyId 로.
         const isPreset = selectedStrategy!.id.startsWith('preset-');
-        if (isPreset && editableIndicators.length > 0) {
+        if (isPreset) {
           request.indicators = editableIndicators;
           request.entryConditions = editableEntryConditions;
           request.exitConditions = editableExitConditions;
@@ -881,14 +888,15 @@ const StrategyPage = () => {
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-safe-rebalancing', name: '안전 자산 리밸런싱', description: 'BTC 60% + ETH 30% + 스테이블 10% 비율을 매주 리밸런싱하는 보수적 전략입니다. 장기 안정적 수익을 추구합니다.',
-      beginnerTip: '쉽게 말하면: "달걀을 한 바구니에 담지 마라"를 자동으로 실행하는 전략이에요. 비율이 틀어지면 알아서 맞춰줘요.',
-      whyUse: '가장 안전한 전략이에요. 복잡한 매매 타이밍 없이, 분산 투자를 자동으로 유지해줘요. 장기 투자자에게 추천!',
+      id: 'preset-buy-hold', name: 'Buy & Hold (장기 보유)', description: '시작 시점에 매수 후 종료 시점까지 그대로 보유하는 가장 단순한 전략입니다. 매매 타이밍을 잡지 않고 시간의 힘에 맡기는 방식이며, 적립식 투자와 결합하면 직장인의 표준 투자법이 됩니다.',
+      beginnerTip: '쉽게 말하면: "사고 묻어두면 된다". 기술적 분석 없이 그냥 보유하는 가장 직관적인 전략이에요.',
+      whyUse: '장기 우상향 시장에선 매매 비용이 거의 없고, 잦은 매매로 인한 실수도 없어 어떤 트레이딩 전략보다 우수한 결과가 나오는 경우가 많아요. 적립식 투자와 결합하면 시장 타이밍 부담 없이 매월 자동 매수 → 장기 보유 패턴이 됩니다.',
       difficulty: '초급',
-      strategyLogic: '목표 비율 유지: BTC 60%, ETH 30%, USDT 10%',
-      assetType: 'CRYPTO', targetAssets: ['BTC_KRW', 'ETH_KRW', 'USDT_KRW'], targetAssetNames: { BTC_KRW: '비트코인(BTC)', ETH_KRW: '이더리움(ETH)', USDT_KRW: 'USDT' },
+      strategyLogic: '시작일 매수 → 종료일까지 보유 (청산 없음)',
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
       indicators: [],
-      entryConditions: [], exitConditions: [],
+      entryConditions: [{ indicator: 'PRICE', operator: 'GT', value: 0, logic: 'AND' }],
+      exitConditions: [{ indicator: 'PRICE', operator: 'LT', value: 0, logic: 'AND' }],
       applied: false, createdAt: '', updatedAt: '',
     },
   ];
@@ -1098,16 +1106,6 @@ const StrategyPage = () => {
                       {/* 하단 메타 행 */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
-                          {(() => {
-                            const isMulti = strategy.id === 'preset-safe-rebalancing';
-                            return (
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                                isMulti
-                                  ? (isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600')
-                                  : (isDark ? 'bg-cyan-500/10 text-cyan-400' : 'bg-cyan-50 text-cyan-600')
-                              }`}>{isMulti ? '다수 종목' : '단일 종목'}</span>
-                            );
-                          })()}
                           {(strategy.entryConditions?.length || 0) > 0 && (
                             <span className={`text-[9px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
                               조건 {(strategy.entryConditions?.length || 0) + (strategy.exitConditions?.length || 0)}개
@@ -1529,41 +1527,32 @@ const StrategyPage = () => {
                             </div>
                           </div>
                         );
-                      } else if (sid === 'preset-safe-rebalancing') {
+                      } else if (sid === 'preset-buy-hold') {
                         return (
                           <div className="space-y-4">
                             <div className="flex items-start gap-3">
                               <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isDark ? 'bg-emerald-500/10' : 'bg-emerald-100'}`}>
-                                <span className="text-base">⚖️</span>
+                                <span className="text-base">🪨</span>
                               </div>
                               <div>
-                                <p className={`text-sm font-semibold mb-1 ${isDark ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: 리밸런싱 (자산 재배분)</p>
+                                <p className={`text-sm font-semibold mb-1 ${isDark ? 'text-white' : 'text-whale-dark'}`}>핵심 개념: Buy & Hold (장기 보유)</p>
                                 <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                                  여러 자산에 정해진 비율로 나누어 투자하고, 시간이 지나 비율이 틀어지면 원래 비율로 되돌리는 전략입니다.
-                                  "달걀을 한 바구니에 담지 마라"는 분산투자의 원칙을 따릅니다.
+                                  시작 시점에 매수한 뒤 종료 시점까지 그대로 보유하는 가장 단순한 전략입니다.
+                                  매매 타이밍을 맞히려고 애쓰지 않고 자산이 시간 안에서 성장하도록 두는 방식이에요.
                                 </p>
                               </div>
                             </div>
                             <div className={`rounded-lg p-4 ${isDark ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-white border border-gray-100'}`}>
-                              <p className={`text-xs font-bold mb-2 ${isDark ? 'text-white' : 'text-whale-dark'}`}>목표 자산 배분</p>
-                              <div className="flex gap-2">
-                                <div className={`flex-[6] rounded-lg p-2 text-center ${isDark ? 'bg-orange-500/10' : 'bg-orange-50'}`}>
-                                  <p className={`text-xs font-bold ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>BTC 60%</p>
-                                  <p className={`text-[9px] ${isDark ? 'text-orange-400/60' : 'text-orange-400'}`}>핵심 자산</p>
-                                </div>
-                                <div className={`flex-[3] rounded-lg p-2 text-center ${isDark ? 'bg-blue-500/10' : 'bg-blue-50'}`}>
-                                  <p className={`text-xs font-bold ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>ETH 30%</p>
-                                  <p className={`text-[9px] ${isDark ? 'text-blue-400/60' : 'text-blue-400'}`}>성장 자산</p>
-                                </div>
-                                <div className={`flex-[1] rounded-lg p-2 text-center ${isDark ? 'bg-green-500/10' : 'bg-green-50'}`}>
-                                  <p className={`text-xs font-bold ${isDark ? 'text-green-400' : 'text-green-600'}`}>USDT 10%</p>
-                                  <p className={`text-[9px] ${isDark ? 'text-green-400/60' : 'text-green-400'}`}>안전 자산</p>
-                                </div>
-                              </div>
+                              <p className={`text-xs font-bold mb-2 ${isDark ? 'text-white' : 'text-whale-dark'}`}>적립식 투자와 잘 맞는 이유</p>
+                              <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                                매월 첫 거래일 자동 매수 → 끝까지 보유. 시장이 비쌀 때는 적게, 쌀 때는 많이 사게 되어
+                                평균 매입가가 자연스럽게 분산됩니다. 백테스트 우측 패널의 <strong>적립식 투자</strong> 토글과
+                                함께 켜고 돌려보면 직장인의 가장 표준적인 투자 패턴을 시뮬레이션할 수 있어요.
+                              </p>
                             </div>
                             <div className={`rounded-lg p-3 ${isDark ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
                               <p className={`text-xs font-semibold mb-1 ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>초보자 TIP</p>
-                              <p className={`text-xs ${isDark ? 'text-amber-400/80' : 'text-amber-600'}`}>리밸런싱은 가장 안전한 투자 방식 중 하나입니다. 자동으로 "비싸진 건 팔고, 싸진 건 사는" 효과가 있어 장기적으로 안정적인 수익을 기대할 수 있습니다. 투자가 처음이라면 이 전략부터 시작해보세요.</p>
+                              <p className={`text-xs ${isDark ? 'text-amber-400/80' : 'text-amber-600'}`}>다른 매매 전략이 시장을 이기려고 노력하는 동안, Buy &amp; Hold 는 시간을 우군으로 삼습니다. 장기 우상향 자산(미국 ETF·우량 종목)에 가장 잘 맞고, 매매 비용이 거의 없어 누적 효과가 크답니다.</p>
                             </div>
                           </div>
                         );

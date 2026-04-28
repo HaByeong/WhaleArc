@@ -75,7 +75,8 @@ public class BacktestResponse {
     private double secondAssetFinalValue;   // 자산2 의 종료 시점 평가가치
     private int firstAssetTradeCount;       // 자산1 매매 발생 횟수
     private int secondAssetTradeCount;      // 자산2 매매 발생 횟수
-    private int rebalanceCount;             // 매월 첫 거래일 리밸런싱 발생 횟수
+    private int rebalanceCount;             // 리밸런싱 발생 횟수
+    private String rebalanceFrequency;      // MONTHLY / QUARTERLY / YEARLY
 
     // 지표 요약 (0-trade 디버깅용: 지표명 → {min, max, avg, last})
     private Map<String, IndicatorSummaryDto> indicatorSummary;

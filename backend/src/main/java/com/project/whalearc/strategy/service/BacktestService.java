@@ -1022,6 +1022,11 @@ public class BacktestService {
         double initialCap = isUsd ? request.getInitialCapital() / usdKrwRate : request.getInitialCapital();
         double weightA = (request.getFirstAssetWeight() != null ? request.getFirstAssetWeight() : 50.0) / 100.0;
         double weightB = 1.0 - weightA;
+        // 리밸런싱 주기: MONTHLY (기본) / QUARTERLY / YEARLY
+        String rebalanceFreq = request.getRebalanceFrequency() != null ? request.getRebalanceFrequency().toUpperCase() : "MONTHLY";
+        if (!"MONTHLY".equals(rebalanceFreq) && !"QUARTERLY".equals(rebalanceFreq) && !"YEARLY".equals(rebalanceFreq)) {
+            rebalanceFreq = "MONTHLY";
+        }
 
         // Inner join by epoch second
         java.util.Map<Long, Integer> aIndexByTime = new java.util.HashMap<>();
@@ -1083,14 +1088,22 @@ public class BacktestService {
                     .date(date).open(cA.getOpen()).high(cA.getHigh()).low(cA.getLow())
                     .close(cA.getClose()).volume(cA.getVolume()).build());
 
-            // ── 월 첫 거래일: 적립 + 리밸런싱 ──
+            // ── 월 첫 거래일: 적립(항상 매월) + 리밸런싱(freq 에 따라) ──
             if (prevYm != null && !curYm.equals(prevYm)) {
+                // 적립금은 항상 매월 (사용자 결정에 따라 적립과 리밸런싱은 분리)
                 if (isMonthly) {
                     cashA += monthlyNative * weightA;
                     cashB += monthlyNative * weightB;
                     cumContribNative += monthlyNative;
                     contribCount++;
                 }
+                // 리밸런싱 주기 판단
+                int curMonth = curYm.getMonthValue();
+                boolean doRebalance =
+                        "MONTHLY".equals(rebalanceFreq)
+                        || ("QUARTERLY".equals(rebalanceFreq) && (curMonth == 1 || curMonth == 4 || curMonth == 7 || curMonth == 10))
+                        || ("YEARLY".equals(rebalanceFreq) && curMonth == 1);
+                if (doRebalance) {
                 // 리밸런싱: 두 자산 측의 총 가치(cash + 보유 평가)를 비중대로 재조정.
                 // 한 측이 과다하면 그 측에서 (cash 우선, 부족분은 보유 일부 매도) 다른 측 cash 로 이전.
                 // 다른 측의 매수는 룰 일관성을 위해 다음 entry 신호 시점에 발생하도록 둠.
@@ -1145,6 +1158,7 @@ public class BacktestService {
                     }
                 }
                 rebalanceCount++;
+                }  // doRebalance
             }
             prevYm = curYm;
 
@@ -1352,6 +1366,7 @@ public class BacktestService {
                 .firstAssetTradeCount(aTrades)
                 .secondAssetTradeCount(bTrades)
                 .rebalanceCount(rebalanceCount)
+                .rebalanceFrequency(rebalanceFreq)
                 .build();
     }
 

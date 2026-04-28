@@ -109,6 +109,7 @@ const StrategyPage = () => {
   const [secondStockName, setSecondStockName] = useState('');
   const [secondAssetType, setSecondAssetType] = useState('CRYPTO');
   const [firstAssetWeight, setFirstAssetWeight] = useState('50');
+  const [rebalanceFrequency, setRebalanceFrequency] = useState<'MONTHLY' | 'QUARTERLY' | 'YEARLY'>('MONTHLY');
   const [secondAssetSearchQuery, setSecondAssetSearchQuery] = useState('');
   const [secondAssetSearchResults, setSecondAssetSearchResults] = useState<{ code: string; name: string; market: string }[]>([]);
   const [showSecondAssetDropdown, setShowSecondAssetDropdown] = useState(false);
@@ -675,6 +676,7 @@ const StrategyPage = () => {
         const w = parseFloat(firstAssetWeight);
         if (!isNaN(w) && w > 0 && w < 100) request.firstAssetWeight = w;
         else request.firstAssetWeight = 50;
+        request.rebalanceFrequency = rebalanceFrequency;
       }
 
       if (backtestMode === 'strategy') {
@@ -1983,11 +1985,13 @@ const StrategyPage = () => {
                     const aTrades = backtestResult.firstAssetTradeCount ?? 0;
                     const bTrades = backtestResult.secondAssetTradeCount ?? 0;
                     const rebalances = backtestResult.rebalanceCount ?? 0;
+                    const freq = backtestResult.rebalanceFrequency;
+                    const freqLabel = freq === 'YEARLY' ? '매년' : freq === 'QUARTERLY' ? '매 분기' : '매월';
                     return (
                       <div className={`mb-3 px-3 py-2 rounded-lg text-xs space-y-1 ${isDark ? 'bg-purple-500/5 border border-purple-500/20 text-slate-300' : 'bg-purple-50 border border-purple-200 text-gray-700'}`}>
                         <div className="font-semibold flex items-center gap-1.5">
                           <span className={isDark ? 'text-purple-400' : 'text-purple-600'}>2자산 리밸런싱</span>
-                          <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>· 비중 {aWeight.toFixed(0)} / {bWeight.toFixed(0)} · 리밸런싱 {rebalances}회</span>
+                          <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>· 비중 {aWeight.toFixed(0)} / {bWeight.toFixed(0)} · {freqLabel} 주기 · 총 {rebalances}회</span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-[11px]">
                           <div>
@@ -2564,6 +2568,19 @@ const StrategyPage = () => {
                             <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>자산 2: {Math.max(0, 100 - (parseFloat(firstAssetWeight) || 0))}%</span>
                           </div>
                           <p className={`text-[10px] mt-0.5 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>기본값 50/50. 두 자산 통화는 같아야 합니다 (둘 다 미국주식·ETF 이거나 둘 다 그 외).</p>
+                        </div>
+                        <div>
+                          <label className={`block text-[10px] font-semibold mb-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>리밸런싱 주기</label>
+                          <select value={rebalanceFrequency}
+                            onChange={(e) => setRebalanceFrequency(e.target.value as 'MONTHLY' | 'QUARTERLY' | 'YEARLY')}
+                            className={`w-full px-2 py-1.5 rounded-lg text-xs ${isDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
+                            <option value="MONTHLY">매월 첫 거래일 (적립식과 동기)</option>
+                            <option value="QUARTERLY">매 분기 첫 거래일 (1·4·7·10월)</option>
+                            <option value="YEARLY">매년 첫 거래일 (1월)</option>
+                          </select>
+                          <p className={`text-[10px] mt-0.5 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                            적립금은 항상 매월 첫 거래일에 비중대로 추가됩니다. 리밸런싱(보유 비중 재조정) 만 이 주기에 따라 일어납니다.
+                          </p>
                         </div>
                       </div>
                     )}

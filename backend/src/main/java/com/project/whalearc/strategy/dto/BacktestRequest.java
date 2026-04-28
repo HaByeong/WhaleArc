@@ -51,4 +51,13 @@ public class BacktestRequest {
     // 적립식 투자: 매월 첫 거래일에 추가 납입할 금액 (KRW)
     // null 또는 0 이면 적립식 off (기존 동작). 양수면 시뮬레이션 중 매월 첫 거래일마다 cash 에 가산.
     private Double monthlyContribution;
+
+    // ─── 2자산 리밸런싱 (둘 다 채워져 있을 때만 활성화) ───
+    // 두 자산 각각이 자기 캔들·지표로 매수/매도 신호를 평가하고,
+    // 매수 시점 + 매월 첫 거래일에 비중을 firstAssetWeight 로 재조정한다.
+    private String secondStockCode;
+    private String secondStockName;
+    private String secondAssetType;     // STOCK / CRYPTO / US_STOCK / ETF
+    private Double firstAssetWeight;    // 0~100. 자산1 비중 (%). 자산2 비중 = 100 - 이 값. 기본 50.
+    private String rebalanceFrequency;  // MONTHLY (기본) / QUARTERLY / YEARLY
 }

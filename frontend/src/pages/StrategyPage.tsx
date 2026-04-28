@@ -103,6 +103,18 @@ const StrategyPage = () => {
   const [useMonthlyContribution, setUseMonthlyContribution] = useState(false);
   const [monthlyContribution, setMonthlyContribution] = useState('');
 
+  // 2자산 리밸런싱 (두 번째 자산 + 비중)
+  const [useRebalance, setUseRebalance] = useState(false);
+  const [secondStockCode, setSecondStockCode] = useState('');
+  const [secondStockName, setSecondStockName] = useState('');
+  const [secondAssetType, setSecondAssetType] = useState('CRYPTO');
+  const [firstAssetWeight, setFirstAssetWeight] = useState('50');
+  const [rebalanceFrequency, setRebalanceFrequency] = useState<'MONTHLY' | 'QUARTERLY' | 'YEARLY'>('MONTHLY');
+  const [secondAssetSearchQuery, setSecondAssetSearchQuery] = useState('');
+  const [secondAssetSearchResults, setSecondAssetSearchResults] = useState<{ code: string; name: string; market: string }[]>([]);
+  const [showSecondAssetDropdown, setShowSecondAssetDropdown] = useState(false);
+  const secondAssetSearchTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
   // 리스크 관리
   const [stopLossPercent, setStopLossPercent] = useState('');
   const [takeProfitPercent, setTakeProfitPercent] = useState('');
@@ -534,6 +546,40 @@ const StrategyPage = () => {
     }, 300);
   };
 
+  // 2자산 리밸런싱 — 두 번째 자산 검색 (백테스트 검색과 동일 패턴, 통합 풀)
+  const handleSecondAssetSearch = (query: string) => {
+    setSecondAssetSearchQuery(query);
+    if (secondAssetSearchTimerRef.current) clearTimeout(secondAssetSearchTimerRef.current);
+    if (!query.trim()) { setSecondAssetSearchResults([]); setShowSecondAssetDropdown(false); return; }
+    secondAssetSearchTimerRef.current = setTimeout(async () => {
+      try {
+        const cryptoResults = stockList
+          .filter(s => s.stockName.includes(query) || s.stockCode.toLowerCase().includes(query.toLowerCase()))
+          .map(s => ({ code: s.stockCode, name: s.stockName, market: 'CRYPTO' }));
+        const krxResults = await tradeService.searchKrxStocks(query).catch(() => []);
+        const krxMapped = krxResults.map((s: any) => ({ code: s.stockCode || s.code, name: s.stockName || s.name, market: 'STOCK' }));
+        const usResults = await marketService.searchUsStocks(query).catch(() => []);
+        const usMapped = usResults.map((s: any) => ({ code: s.code, name: s.name, market: 'US_STOCK' }));
+        const etfResults = await marketService.searchEtfs(query).catch(() => []);
+        const etfMapped = etfResults.map((s: any) => ({ code: s.code, name: s.name, market: 'ETF' }));
+        setSecondAssetSearchResults([...cryptoResults.slice(0, 5), ...krxMapped.slice(0, 5), ...usMapped.slice(0, 5), ...etfMapped.slice(0, 5)]);
+        setShowSecondAssetDropdown(true);
+      } catch {
+        setSecondAssetSearchResults([]);
+      }
+    }, 300);
+  };
+
+  const handleSecondAssetSelect = (code: string, name: string, market: string) => {
+    const cleanCode = code.replace(/_KRW$/, '');
+    setSecondStockCode(cleanCode);
+    setSecondStockName(name);
+    setSecondAssetType(market);
+    setSecondAssetSearchQuery(name);
+    setShowSecondAssetDropdown(false);
+    setSecondAssetSearchResults([]);
+  };
+
   const handleBacktestStockSelect = (code: string, name: string, market?: string) => {
     // 백엔드가 내부적으로 _KRW / USDT 접미사를 붙이므로 중복 방지
     const cleanCode = code.replace(/_KRW$/, '');
@@ -621,6 +667,16 @@ const StrategyPage = () => {
       if (selectedStrategy?.id === 'preset-buy-hold'
           && (!request.maxPositions || request.maxPositions <= 1)) {
         request.maxPositions = 999;
+      }
+      // 2자산 리밸런싱 (두 번째 자산이 선택돼 있을 때만)
+      if (useRebalance && secondStockCode && secondStockCode.trim() && secondStockCode !== backtestStockCode) {
+        request.secondStockCode = secondStockCode;
+        request.secondStockName = secondStockName || secondStockCode;
+        request.secondAssetType = secondAssetType;
+        const w = parseFloat(firstAssetWeight);
+        if (!isNaN(w) && w > 0 && w < 100) request.firstAssetWeight = w;
+        else request.firstAssetWeight = 50;
+        request.rebalanceFrequency = rebalanceFrequency;
       }
 
       if (backtestMode === 'strategy') {
@@ -1920,6 +1976,38 @@ const StrategyPage = () => {
                       </div>
                     );
                   })()}
+                  {backtestResult.secondStockCode && (() => {
+                    const rate = backtestResult.currency === 'USD' ? (backtestResult.exchangeRate || 1400) : 1;
+                    const aFinalKrw = Math.round((backtestResult.firstAssetFinalValue ?? 0) * rate);
+                    const bFinalKrw = Math.round((backtestResult.secondAssetFinalValue ?? 0) * rate);
+                    const aWeight = backtestResult.firstAssetWeight ?? 50;
+                    const bWeight = backtestResult.secondAssetWeight ?? 50;
+                    const aTrades = backtestResult.firstAssetTradeCount ?? 0;
+                    const bTrades = backtestResult.secondAssetTradeCount ?? 0;
+                    const rebalances = backtestResult.rebalanceCount ?? 0;
+                    const freq = backtestResult.rebalanceFrequency;
+                    const freqLabel = freq === 'YEARLY' ? '매년' : freq === 'QUARTERLY' ? '매 분기' : '매월';
+                    return (
+                      <div className={`mb-3 px-3 py-2 rounded-lg text-xs space-y-1 ${isDark ? 'bg-purple-500/5 border border-purple-500/20 text-slate-300' : 'bg-purple-50 border border-purple-200 text-gray-700'}`}>
+                        <div className="font-semibold flex items-center gap-1.5">
+                          <span className={isDark ? 'text-purple-400' : 'text-purple-600'}>2자산 리밸런싱</span>
+                          <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>· 비중 {aWeight.toFixed(0)} / {bWeight.toFixed(0)} · {freqLabel} 주기 · 총 {rebalances}회</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                          <div>
+                            <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>자산 1</span>{' '}
+                            <span className="font-semibold">{backtestResult.stockName || backtestResult.stockCode}</span>{' '}
+                            <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>· 종료 {formatCurrency(aFinalKrw)} · 매매 {aTrades}회</span>
+                          </div>
+                          <div>
+                            <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>자산 2</span>{' '}
+                            <span className="font-semibold">{backtestResult.secondStockName || backtestResult.secondStockCode}</span>{' '}
+                            <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>· 종료 {formatCurrency(bFinalKrw)} · 매매 {bTrades}회</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {[
                       { label: '총 수익률', value: formatPercent(backtestResult.totalReturnRate), glossary: '' },
@@ -2427,6 +2515,75 @@ const StrategyPage = () => {
                       <input type="number" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} placeholder="0.1"
                         className={`w-full px-2 py-1.5 rounded-lg text-xs ${isDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
                     </div>
+                  </div>
+
+                  {/* ── 2자산 리밸런싱 ── */}
+                  <div className={`pt-3 ${isDark ? 'border-t border-white/[0.06]' : 'border-t border-gray-200'}`}>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={useRebalance}
+                        onChange={e => setUseRebalance(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded accent-whale-light" />
+                      <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>2자산 리밸런싱</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'}`}>분산</span>
+                    </label>
+                    <p className={`text-[10px] mt-1 leading-relaxed ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                      두 번째 자산을 추가하고 자본을 비중대로 분배합니다. 두 자산이 각자 자기 캔들/지표로 매수·매도 신호를 평가하며, 매수 시점과 매월 첫 거래일에 비중을 재조정합니다.
+                    </p>
+                    {useRebalance && (
+                      <div className="mt-2 space-y-2">
+                        <div className="relative">
+                          <label className={`block text-[10px] font-semibold mb-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>두 번째 자산</label>
+                          <input type="text" value={secondAssetSearchQuery}
+                            onChange={(e) => handleSecondAssetSearch(e.target.value)}
+                            placeholder="종목명 또는 코드 검색 (예: ETH, AAPL, 005930)"
+                            className={`w-full px-2 py-1.5 rounded-lg text-xs ${isDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
+                          {showSecondAssetDropdown && secondAssetSearchResults.length > 0 && (
+                            <div className={`absolute z-20 w-full mt-1 rounded-xl shadow-xl max-h-40 overflow-y-auto ${isDark ? 'bg-[var(--wa-card-bg)] border border-white/[0.06]' : 'bg-white border border-gray-200'}`}>
+                              {secondAssetSearchResults.map((r) => (
+                                <button key={`${r.market}-${r.code}`} type="button"
+                                  onClick={() => handleSecondAssetSelect(r.code, r.name, r.market)}
+                                  className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between ${isDark ? 'hover:bg-white/[0.03] border-b border-white/[0.04] text-white' : 'hover:bg-gray-50 border-b border-gray-100 text-gray-800'}`}>
+                                  <span>{r.name} <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({r.code})</span></span>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : r.market === 'US_STOCK' ? 'bg-blue-100 text-blue-600' : r.market === 'ETF' ? 'bg-teal-100 text-teal-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                    {r.market === 'STOCK' ? '주식' : r.market === 'US_STOCK' ? '미국주식' : r.market === 'ETF' ? 'ETF' : '코인'}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {secondStockCode && (
+                            <div className={`mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] ${isDark ? 'bg-white/[0.04] border border-white/[0.06]' : 'bg-gray-100 border border-gray-200'}`}>
+                              <span className={isDark ? 'text-white' : 'text-whale-dark'}>{secondStockName}</span>
+                              <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({secondStockCode})</span>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <label className={`block text-[10px] font-semibold mb-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>비중 (자산 1)</label>
+                          <div className="flex items-center gap-2">
+                            <input type="number" min="1" max="99" value={firstAssetWeight}
+                              onChange={(e) => setFirstAssetWeight(e.target.value)}
+                              className={`w-20 px-2 py-1.5 rounded-lg text-xs ${isDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
+                            <span className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>%</span>
+                            <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>자산 2: {Math.max(0, 100 - (parseFloat(firstAssetWeight) || 0))}%</span>
+                          </div>
+                          <p className={`text-[10px] mt-0.5 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>기본값 50/50. 두 자산 통화는 같아야 합니다 (둘 다 미국주식·ETF 이거나 둘 다 그 외).</p>
+                        </div>
+                        <div>
+                          <label className={`block text-[10px] font-semibold mb-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>리밸런싱 주기</label>
+                          <select value={rebalanceFrequency}
+                            onChange={(e) => setRebalanceFrequency(e.target.value as 'MONTHLY' | 'QUARTERLY' | 'YEARLY')}
+                            className={`w-full px-2 py-1.5 rounded-lg text-xs ${isDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
+                            <option value="MONTHLY">매월 첫 거래일 (적립식과 동기)</option>
+                            <option value="QUARTERLY">매 분기 첫 거래일 (1·4·7·10월)</option>
+                            <option value="YEARLY">매년 첫 거래일 (1월)</option>
+                          </select>
+                          <p className={`text-[10px] mt-0.5 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                            적립금은 항상 매월 첫 거래일에 비중대로 추가됩니다. 리밸런싱(보유 비중 재조정) 만 이 주기에 따라 일어납니다.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* ── 커스텀 수식 조건 (선택) ── */}

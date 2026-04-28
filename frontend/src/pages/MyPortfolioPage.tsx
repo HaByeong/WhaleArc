@@ -1255,9 +1255,56 @@ const MyPortfolioPage = () => {
                         ) : null;
                       })()}
 
+                      {/* 미국주식 / ETF 섹션 */}
+                      {(() => {
+                        const usHoldings = portfolio.holdings.filter(h => h.assetType === 'US_STOCK' || h.assetType === 'ETF');
+                        return usHoldings.length > 0 ? (
+                          <div className="mb-5">
+                            <div className="flex items-center gap-1.5 mb-3 px-1">
+                              <img src="/whales/spotted-dolphin.png" alt="미국주식/ETF" className="w-5 h-5 object-contain" />
+                              <span className="text-sm font-bold text-blue-600">미국주식 / ETF</span>
+                              <span className="text-xs text-gray-400">{usHoldings.length}종목</span>
+                            </div>
+                            <div className="space-y-3">
+                              {usHoldings.map((h) => (
+                                <div
+                                  key={h.stockCode}
+                                  className="flex items-center justify-between p-2.5 md:p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-gray-100"
+                                  onClick={() => navigate(`/trade?code=${h.stockCode}&type=${h.assetType}`)}
+                                >
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-semibold text-sm text-whale-dark">{h.stockName || h.stockCode}</span>
+                                      {h.assetType === 'ETF' && (
+                                        <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-teal-50 text-teal-600 rounded">ETF</span>
+                                      )}
+                                      {h.assetType === 'US_STOCK' && (
+                                        <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-blue-50 text-blue-600 rounded">미국주식</span>
+                                      )}
+                                      {assetRouteMap[h.stockCode]?.map((routeName) => (
+                                        <span key={routeName} className="px-1.5 py-0.5 text-[9px] font-semibold bg-whale-light/10 text-whale-light rounded">
+                                          {routeName}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    <div className="text-xs text-gray-400">{h.stockCode} · {Math.floor(h.quantity)}주</div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="font-semibold text-sm">${h.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                    <div className={`text-xs font-semibold ${returnColor(h.returnRate)}`}>
+                                      {h.returnRate >= 0 ? '▲ ' : '▼ '}{signPrefix(h.returnRate)}{h.returnRate.toFixed(2)}%
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
+
                       {/* 가상화폐 섹션 */}
                       {(() => {
-                        const cryptoHoldings = portfolio.holdings.filter(h => h.assetType !== 'STOCK');
+                        const cryptoHoldings = portfolio.holdings.filter(h => h.assetType !== 'STOCK' && h.assetType !== 'US_STOCK' && h.assetType !== 'ETF');
                         return cryptoHoldings.length > 0 ? (
                           <div>
                             <div className="flex items-center gap-1.5 mb-3 px-1">

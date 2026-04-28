@@ -59,6 +59,29 @@ public class BacktestResponse {
     private String currency;
     private double exchangeRate; // 시뮬레이션 시점의 USD/KRW 환율 (currency=USD일 때만 유효)
 
+    // 적립식 투자 (monthlyContribution > 0 일 때만 의미 있음)
+    // 단위는 initialCapital / finalValue 와 동일(native): currency=USD면 USD, KRW면 KRW.
+    private double monthlyContribution;  // 월 납입액
+    private double totalContribution;    // initialCapital + monthlyContribution × contributionCount
+    private int contributionCount;       // 실제 적립 발생 횟수 (월 첫 거래일 hits)
+
+    // ─── 2자산 리밸런싱 (secondStockCode 가 채워졌을 때만 의미) ───
+    private String secondStockCode;
+    private String secondStockName;
+    private double firstAssetWeight;        // 0~100
+    private double secondAssetWeight;       // 100 - firstAssetWeight
+    // 단위는 initialCapital 과 동일(native, USD/KRW).
+    private double firstAssetFinalValue;    // 자산1 의 종료 시점 평가가치 (cash + 보유)
+    private double secondAssetFinalValue;   // 자산2 의 종료 시점 평가가치
+    private int firstAssetTradeCount;       // 자산1 매매 발생 횟수
+    private int secondAssetTradeCount;      // 자산2 매매 발생 횟수
+    private int rebalanceCount;             // 리밸런싱 발생 횟수
+    private String rebalanceFrequency;      // MONTHLY / QUARTERLY / YEARLY
+
+    // 배당 처리
+    private boolean dividendReinvest;       // true = adjclose 사용 (자동 재투자)
+    private double totalDividendsReceived;  // OFF 모드일 때 누적 배당 cash 입금액 (native 단위)
+
     // 지표 요약 (0-trade 디버깅용: 지표명 → {min, max, avg, last})
     private Map<String, IndicatorSummaryDto> indicatorSummary;
 

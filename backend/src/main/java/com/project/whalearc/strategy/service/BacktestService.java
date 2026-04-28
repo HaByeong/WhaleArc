@@ -4,6 +4,8 @@ import com.project.whalearc.market.dto.CandlestickResponse;
 import com.project.whalearc.market.service.BacktestDataProvider;
 import com.project.whalearc.market.service.CandlestickService;
 import com.project.whalearc.market.service.IndicatorCalculator;
+import com.project.whalearc.market.service.UsEtfCatalog;
+import com.project.whalearc.market.service.UsStockPriceProvider;
 import com.project.whalearc.strategy.domain.Condition;
 import com.project.whalearc.strategy.domain.Indicator;
 import com.project.whalearc.strategy.domain.Strategy;
@@ -30,6 +32,8 @@ public class BacktestService {
     private final CandlestickService candlestickService;
     private final BacktestDataProvider backtestDataProvider;
     private final ExchangeRateService exchangeRateService;
+    private final UsEtfCatalog usEtfCatalog;
+    private final UsStockPriceProvider usStockPriceProvider;
 
     private static final double DEFAULT_COMMISSION_RATE = 0.001; // 0.1%
     private static final ZoneOffset KST = ZoneOffset.of("+09:00");
@@ -70,19 +74,33 @@ public class BacktestService {
             }
         }
 
-        // 자산 타입 자동 감지
+        // 자산 타입 자동 감지 (명시 전송 우선, 화이트리스트 → 폴백 순)
         String assetType = request.getAssetType();
         if (assetType == null || assetType.isEmpty()) {
-            assetType = request.getStockCode().matches("\\d{6}") ? "STOCK" : "CRYPTO";
+            String code = request.getStockCode();
+            if (code != null && code.matches("\\d{6}")) {
+                assetType = "STOCK";
+            } else if (code != null && usEtfCatalog.isEtfSymbol(code)) {
+                assetType = "ETF";
+            } else if (code != null && usStockPriceProvider.exists(code.toUpperCase())) {
+                assetType = "US_STOCK";
+            } else {
+                assetType = "CRYPTO";
+            }
         }
+
+        // 배당 처리 모드 결정 (US_STOCK·ETF 한정. null/true=재투자 ON → adjclose, false=OFF → 일반 close + 배당 cash 입금)
+        boolean isUsAsset = "US_STOCK".equalsIgnoreCase(assetType) || "ETF".equalsIgnoreCase(assetType);
+        boolean dividendReinvest = request.getDividendReinvest() == null || request.getDividendReinvest();
+        boolean useAdjclose = isUsAsset && dividendReinvest;
 
         // 캔들스틱 데이터 조회 (Yahoo Finance / Binance 우선, 실패 시 기존 소스 폴백)
         List<CandlestickResponse> allCandles = backtestDataProvider.getBacktestCandles(
-                request.getStockCode(), assetType, request.getStartDate(), request.getEndDate());
+                request.getStockCode(), assetType, request.getStartDate(), request.getEndDate(), useAdjclose);
 
         if (allCandles == null || allCandles.isEmpty()) {
             log.info("백테스트 데이터 폴백: 기존 CandlestickService 사용 ({})", request.getStockCode());
-            String interval = ("STOCK".equals(assetType) || "US_STOCK".equals(assetType)) ? "1d" : "24h";
+            String interval = ("STOCK".equals(assetType) || "US_STOCK".equals(assetType) || "ETF".equals(assetType)) ? "1d" : "24h";
             allCandles = candlestickService.getCandlesticks(
                     request.getStockCode(), interval, assetType);
         }
@@ -126,8 +144,66 @@ public class BacktestService {
             }
         }
 
+        // 자산 A 의 배당 맵 (OFF 모드 + US 자산 한정)
+        Map<LocalDate, Double> dividendsA = fetchDividendsByDate(
+                request.getStockCode(), assetType, request.getStartDate(), request.getEndDate(),
+                isUsAsset, dividendReinvest);
+
+        // 2자산 리밸런싱 모드: secondStockCode 가 채워져 있으면 별도 시뮬레이션 경로
+        if (request.getSecondStockCode() != null && !request.getSecondStockCode().isBlank()) {
+            String assetTypeB = request.getSecondAssetType();
+            boolean isUsAssetB = "US_STOCK".equalsIgnoreCase(assetTypeB) || "ETF".equalsIgnoreCase(assetTypeB);
+            boolean useAdjcloseB = isUsAssetB && dividendReinvest;
+            List<CandlestickResponse> allCandlesB = backtestDataProvider.getBacktestCandles(
+                    request.getSecondStockCode(), assetTypeB, request.getStartDate(), request.getEndDate(), useAdjcloseB);
+            if (allCandlesB == null || allCandlesB.isEmpty()) {
+                String intervalB = ("STOCK".equals(assetTypeB) || "US_STOCK".equals(assetTypeB) || "ETF".equals(assetTypeB)) ? "1d" : "24h";
+                allCandlesB = candlestickService.getCandlesticks(request.getSecondStockCode(), intervalB, assetTypeB);
+            }
+            if (allCandlesB == null || allCandlesB.isEmpty()) {
+                throw new IllegalArgumentException("두 번째 자산의 캔들스틱 데이터를 가져올 수 없습니다: " + request.getSecondStockCode());
+            }
+            allCandlesB = allCandlesB.stream().sorted(Comparator.comparingLong(CandlestickResponse::getTime)).toList();
+            List<CandlestickResponse> candlesB = allCandlesB.stream()
+                    .filter(c -> c.getTime() >= startEpoch && c.getTime() < endEpoch)
+                    .sorted(Comparator.comparingLong(CandlestickResponse::getTime)).toList();
+            if (candlesB.size() < 2) {
+                throw new IllegalArgumentException("두 번째 자산: 선택한 기간에 충분한 데이터가 없습니다.");
+            }
+            Map<String, double[]> indicatorValuesB = calculateIndicators(
+                    allCandlesB, indicators, entryConditions, exitConditions);
+            int globalOffsetB = 0;
+            for (int i = 0; i < allCandlesB.size(); i++) {
+                if (allCandlesB.get(i).getTime() == candlesB.get(0).getTime()) { globalOffsetB = i; break; }
+            }
+            Map<LocalDate, Double> dividendsB = fetchDividendsByDate(
+                    request.getSecondStockCode(), assetTypeB, request.getStartDate(), request.getEndDate(),
+                    isUsAssetB, dividendReinvest);
+            return simulateRebalance(strategyId, strategyName, entryConditions, exitConditions,
+                    candles, indicatorValues, globalOffset, assetType, dividendsA,
+                    candlesB, indicatorValuesB, globalOffsetB, assetTypeB, dividendsB,
+                    request, dividendReinvest);
+        }
+
         return simulate(strategyId, strategyName, entryConditions, exitConditions,
-                candles, indicatorValues, globalOffset, request, assetType);
+                candles, indicatorValues, globalOffset, request, assetType,
+                dividendsA, dividendReinvest);
+    }
+
+    /** OFF 모드 + US 자산일 때만 배당 맵 (LocalDate→divPerShare). 그 외엔 빈 맵. */
+    private Map<LocalDate, Double> fetchDividendsByDate(String symbol, String assetType,
+                                                        String startDate, String endDate,
+                                                        boolean isUsAsset, boolean dividendReinvest) {
+        if (!isUsAsset || dividendReinvest) return Map.of();
+        Map<Long, Double> raw = backtestDataProvider.getBacktestDividends(symbol, assetType, startDate, endDate);
+        if (raw == null || raw.isEmpty()) return Map.of();
+        HashMap<LocalDate, Double> out = new HashMap<>();
+        for (Map.Entry<Long, Double> e : raw.entrySet()) {
+            LocalDate d = Instant.ofEpochSecond(e.getKey()).atZone(KST).toLocalDate();
+            out.merge(d, e.getValue(), Double::sum);
+        }
+        log.info("배당 이벤트 조회 완료: symbol={} 건수={}", symbol, out.size());
+        return out;
     }
 
     // ── 입력 검증 ─────────────────────────────────────────────────────────
@@ -177,8 +253,39 @@ public class BacktestService {
         if (request.getCommissionRate() != null && (request.getCommissionRate() < 0 || request.getCommissionRate() > 10)) {
             throw new IllegalArgumentException("수수료율은 0~10% 사이로 설정해주세요.");
         }
-        if (request.getMaxPositions() != null && (request.getMaxPositions() < 1 || request.getMaxPositions() > 20)) {
-            throw new IllegalArgumentException("최대 포지션 수는 1~20 사이로 설정해주세요.");
+        if (request.getMaxPositions() != null && (request.getMaxPositions() < 1 || request.getMaxPositions() > 999)) {
+            // 적립식(DCA) + Buy & Hold 조합에서는 매월 추가 매수마다 PosEntry 가 생성돼
+            // 장기간(예: 30년 × 12개월) 시나리오까지 커버하려면 한도가 충분히 커야 한다.
+            throw new IllegalArgumentException("최대 포지션 수는 1~999 사이로 설정해주세요.");
+        }
+        if (request.getMonthlyContribution() != null) {
+            double mc = request.getMonthlyContribution();
+            if (mc < 0) {
+                throw new IllegalArgumentException("월 적립금은 0 이상이어야 합니다.");
+            }
+            if (mc > 100_000_000_000L) {
+                throw new IllegalArgumentException("월 적립금은 1,000억원 이하로 설정해주세요.");
+            }
+        }
+        // 2자산 리밸런싱 검증
+        if (request.getSecondStockCode() != null && !request.getSecondStockCode().isBlank()) {
+            if (request.getSecondAssetType() == null || request.getSecondAssetType().isBlank()) {
+                throw new IllegalArgumentException("두 번째 자산의 자산 타입을 입력해주세요.");
+            }
+            if (request.getSecondStockCode().equalsIgnoreCase(request.getStockCode())) {
+                throw new IllegalArgumentException("두 자산은 서로 다른 종목이어야 합니다.");
+            }
+            // 통화가 같아야 합산 의미가 있음 (USD vs KRW 혼합 금지)
+            boolean firstUsd = "US_STOCK".equalsIgnoreCase(request.getAssetType()) || "ETF".equalsIgnoreCase(request.getAssetType());
+            boolean secondUsd = "US_STOCK".equalsIgnoreCase(request.getSecondAssetType()) || "ETF".equalsIgnoreCase(request.getSecondAssetType());
+            if (firstUsd != secondUsd) {
+                throw new IllegalArgumentException("두 자산의 통화가 같아야 합니다 (둘 다 미국주식·ETF 이거나, 둘 다 그 외).");
+            }
+            Double w = request.getFirstAssetWeight();
+            if (w == null) w = 50.0;
+            if (w <= 0 || w >= 100) {
+                throw new IllegalArgumentException("첫 자산 비중은 0%와 100% 사이여야 합니다.");
+            }
         }
     }
 
@@ -360,16 +467,27 @@ public class BacktestService {
                                        List<Condition> entryConditions, List<Condition> exitConditions,
                                        List<CandlestickResponse> candles,
                                        Map<String, double[]> indicatorValues,
-                                       int globalOffset, BacktestRequest request, String assetType) {
+                                       int globalOffset, BacktestRequest request, String assetType,
+                                       Map<LocalDate, Double> dividendsByDate, boolean dividendReinvest) {
 
-        boolean isUsStock = "US_STOCK".equalsIgnoreCase(assetType);
+        // USD 자산 (US_STOCK + ETF) 은 USD 단위 시뮬레이션. KRW 자산은 그대로.
+        boolean isUsStock = "US_STOCK".equalsIgnoreCase(assetType) || "ETF".equalsIgnoreCase(assetType);
         double usdKrwRate = isUsStock ? exchangeRateService.getUsdKrwRate() : 0;
-        // US_STOCK: KRW 투자금을 USD로 변환하여 USD 단위 시뮬레이션
+        // USD 자산: KRW 투자금을 USD로 변환하여 USD 단위 시뮬레이션
         double initialCapital = isUsStock
                 ? request.getInitialCapital() / usdKrwRate
                 : request.getInitialCapital();
         double cash = initialCapital;
         double peakEquity = initialCapital;
+        double totalDividendsReceived = 0; // OFF 모드 누적 배당 cash (native 단위)
+
+        // 적립식 (매월 첫 거래일에 cash 가산) — monthlyNative 는 시뮬레이션 단위(USD 또는 KRW)
+        double monthlyKrw = request.getMonthlyContribution() != null ? request.getMonthlyContribution() : 0.0;
+        double monthlyNative = isUsStock && monthlyKrw > 0 ? monthlyKrw / usdKrwRate : monthlyKrw;
+        boolean isMonthlyMode = monthlyNative > 0;
+        double cumContribNative = initialCapital; // 현재 시점까지 누적 납입액 (수익률 분모)
+        int contribCount = 0;
+        java.time.YearMonth prevYm = null;
 
         // 다중 포지션 추적 (signed: long=양수, short=음수)
         List<PosEntry> posEntries = new ArrayList<>();
@@ -417,8 +535,18 @@ public class BacktestService {
             CandlestickResponse candle = candles.get(i);
             int gi = globalOffset + i;
             double price = candle.getClose();
-            String date = Instant.ofEpochSecond(candle.getTime())
-                    .atZone(KST).toLocalDate().format(DATE_FMT);
+            java.time.LocalDate curDate = Instant.ofEpochSecond(candle.getTime())
+                    .atZone(KST).toLocalDate();
+            String date = curDate.format(DATE_FMT);
+
+            // 매월 첫 거래일에 적립금 가산 (시작 캔들은 제외 — initialCapital 이 이미 시작점)
+            java.time.YearMonth curYm = java.time.YearMonth.from(curDate);
+            if (isMonthlyMode && prevYm != null && !curYm.equals(prevYm)) {
+                cash += monthlyNative;
+                cumContribNative += monthlyNative;
+                contribCount++;
+            }
+            prevYm = curYm;
 
             priceData.add(BacktestResponse.PricePointDto.builder()
                     .date(date).open(candle.getOpen()).high(candle.getHigh())
@@ -428,6 +556,17 @@ public class BacktestService {
             double totalQty = posEntries.stream().mapToDouble(PosEntry::quantity).sum();
             double totalCost = posEntries.stream().mapToDouble(PosEntry::cost).sum();
             boolean hasPosition = !posEntries.isEmpty();
+
+            // ── 배당 현금 입금 (DRIP off 모드 + 롱 포지션 한정) ──
+            // 숏 포지션은 이론상 배당 지급 의무가 있으나 단순화를 위해 무시.
+            if (!dividendsByDate.isEmpty() && totalQty > 0 && "LONG".equals(currentDir)) {
+                Double divPerShare = dividendsByDate.get(curDate);
+                if (divPerShare != null && divPerShare > 0) {
+                    double divCash = totalQty * divPerShare;
+                    cash += divCash;
+                    totalDividendsReceived += divCash;
+                }
+            }
 
             // ── 자산 가치 계산 ──
             // LONG: cash + qty * price, SHORT: cash - qty * price + shortEntryValue
@@ -674,7 +813,7 @@ public class BacktestService {
                     .date(date).value(Math.round(-drawdown * 100.0) / 100.0).build());
 
             double dailyReturn = prevEquity > 0 ? (equity - prevEquity) / prevEquity * 100 : 0;
-            double cumulativeReturn = (equity - initialCapital) / initialCapital * 100;
+            double cumulativeReturn = cumContribNative > 0 ? (equity - cumContribNative) / cumContribNative * 100 : 0;
 
             equityCurve.add(BacktestResponse.EquityPointDto.builder()
                     .date(date).value(equity).build());
@@ -712,7 +851,7 @@ public class BacktestService {
             // 마지막 equity/daily 갱신
             double finalEquity = cash;
             double dailyReturn = prevEquity > 0 ? (finalEquity - prevEquity) / prevEquity * 100 : 0;
-            double cumulativeReturn = (finalEquity - initialCapital) / initialCapital * 100;
+            double cumulativeReturn = cumContribNative > 0 ? (finalEquity - cumContribNative) / cumContribNative * 100 : 0;
             if (!equityCurve.isEmpty()) {
                 equityCurve.set(equityCurve.size() - 1,
                         BacktestResponse.EquityPointDto.builder().date(lastDate).value(finalEquity).build());
@@ -728,8 +867,10 @@ public class BacktestService {
 
         // ── 최종 지표 계산 ──
         double finalValue = cash;
-        double totalReturn = finalValue - initialCapital;
-        double totalReturnRate = (totalReturn / initialCapital) * 100;
+        // 적립식 모드 여부와 상관없이 "지금까지 납입한 총 자본" 기준으로 수익률 계산
+        // (적립식 off 일 때 cumContribNative == initialCapital 이라 기존 동작과 동일)
+        double totalReturn = finalValue - cumContribNative;
+        double totalReturnRate = cumContribNative > 0 ? (totalReturn / cumContribNative) * 100 : 0;
         int totalTrades = profitableTrades + losingTrades;
         double winRate = totalTrades > 0 ? (double) profitableTrades / totalTrades * 100 : 0;
 
@@ -753,12 +894,13 @@ public class BacktestService {
         // Payoff Ratio (RR 비율)
         double payoffRatio = avgLoss > 0 ? avgWin / avgLoss : avgWin > 0 ? Double.MAX_VALUE : 0;
 
-        // CAGR (실제 달력 일수 기반)
+        // CAGR (실제 달력 일수 기반) — 분모는 총 납입액
+        // 주의: 적립식의 money-weighted IRR 완전 대체는 아니지만 MVP 근사로 충분
         LocalDate actualStart = LocalDate.parse(request.getStartDate());
         LocalDate actualEnd = LocalDate.parse(request.getEndDate());
         long calendarDays = java.time.temporal.ChronoUnit.DAYS.between(actualStart, actualEnd);
         double years = Math.max(calendarDays, 1) / 365.0;
-        double cagrRatio = finalValue / initialCapital;
+        double cagrRatio = cumContribNative > 0 ? finalValue / cumContribNative : 0;
         double cagr = years > 0.01 && cagrRatio > 0
                 ? (Math.pow(cagrRatio, 1.0 / years) - 1) * 100
                 : totalReturnRate;
@@ -768,17 +910,43 @@ public class BacktestService {
                 : (totalReturnRate > 0 ? 999.99 : 0);
 
         // Buy & Hold 벤치마크
-        double firstPrice = candles.get(0).getClose();
-        double buyHoldQuantity = (initialCapital * (1 - commissionRate)) / firstPrice;
+        // 적립식 off: 시작일 initialCapital 일시불 매수 후 보유 (기존 로직)
+        // 적립식 on : 시작일 initialCapital 매수 + 매월 첫 거래일마다 monthlyNative 로 추가 매수 (DCA Buy&Hold)
         List<BacktestResponse.EquityPointDto> buyHoldCurve = new ArrayList<>();
-        for (CandlestickResponse c : candles) {
-            String d = Instant.ofEpochSecond(c.getTime()).atZone(KST).toLocalDate().format(DATE_FMT);
-            double bhValue = buyHoldQuantity * c.getClose();
-            buyHoldCurve.add(BacktestResponse.EquityPointDto.builder()
-                    .date(d).value(Math.round(bhValue)).build());
+        double buyHoldFinal;
+        if (isMonthlyMode) {
+            double bhQty = 0;
+            java.time.YearMonth bhPrevYm = null;
+            for (int i = 0; i < candles.size(); i++) {
+                CandlestickResponse c = candles.get(i);
+                double p = c.getClose();
+                java.time.LocalDate dLocal = Instant.ofEpochSecond(c.getTime()).atZone(KST).toLocalDate();
+                java.time.YearMonth ym = java.time.YearMonth.from(dLocal);
+                if (i == 0) {
+                    bhQty = (initialCapital * (1 - commissionRate)) / p;
+                } else if (bhPrevYm != null && !ym.equals(bhPrevYm) && monthlyNative > 0) {
+                    bhQty += (monthlyNative * (1 - commissionRate)) / p;
+                }
+                bhPrevYm = ym;
+                double bhValue = bhQty * p;
+                buyHoldCurve.add(BacktestResponse.EquityPointDto.builder()
+                        .date(dLocal.format(DATE_FMT)).value(Math.round(bhValue)).build());
+            }
+            buyHoldFinal = bhQty * candles.get(candles.size() - 1).getClose();
+        } else {
+            double firstPrice = candles.get(0).getClose();
+            double buyHoldQuantity = (initialCapital * (1 - commissionRate)) / firstPrice;
+            for (CandlestickResponse c : candles) {
+                String d = Instant.ofEpochSecond(c.getTime()).atZone(KST).toLocalDate().format(DATE_FMT);
+                double bhValue = buyHoldQuantity * c.getClose();
+                buyHoldCurve.add(BacktestResponse.EquityPointDto.builder()
+                        .date(d).value(Math.round(bhValue)).build());
+            }
+            buyHoldFinal = buyHoldQuantity * candles.get(candles.size() - 1).getClose();
         }
-        double buyHoldFinal = buyHoldQuantity * candles.get(candles.size() - 1).getClose();
-        double buyHoldReturnRate = (buyHoldFinal - initialCapital) / initialCapital * 100;
+        double buyHoldReturnRate = cumContribNative > 0
+                ? (buyHoldFinal - cumContribNative) / cumContribNative * 100
+                : 0;
 
         // 지표 요약 (조건이 왜 트리거되지 않았는지 디버깅용)
         Map<String, BacktestResponse.IndicatorSummaryDto> indicatorSummary = new HashMap<>();
@@ -872,6 +1040,406 @@ public class BacktestService {
                 // 통화 정보
                 .currency(isUsStock ? "USD" : "KRW")
                 .exchangeRate(isUsStock ? usdKrwRate : 0)
+                // 적립식 투자
+                .monthlyContribution(monthlyNative)
+                .totalContribution(cumContribNative)
+                .contributionCount(contribCount)
+                // 배당 처리
+                .dividendReinvest(dividendReinvest)
+                .totalDividendsReceived(Math.round(totalDividendsReceived * 100.0) / 100.0)
+                .build();
+    }
+
+    // ── 2자산 리밸런싱 시뮬레이션 ───────────────────────────────────────────
+    // 단순화 사양 (Phase 1):
+    //   - 두 자산이 각자 자기 캔들·지표로 entry/exit 신호 평가 (같은 conditions 공유)
+    //   - tradeDirection LONG_ONLY 고정 (자산당 단일 진입/청산, 분할매수 없음)
+    //   - positionSizing ALL_IN (자산별 cash 의 100% 매수)
+    //   - stopLoss/takeProfit/trailingStop 미지원
+    //   - 두 자산이 같은 통화(USD or KRW). validateRequest 에서 강제.
+    //   - 캔들 inner join: 두 자산 모두 거래일인 시점만 시뮬레이션.
+    //   - 매월 첫 거래일: 적립금 비중대로 분배 + 비중 재조정 (cash 만 옮김 → 다음 신호에 매매)
+    private BacktestResponse simulateRebalance(
+            String strategyId, String strategyName,
+            List<Condition> entryConditions, List<Condition> exitConditions,
+            List<CandlestickResponse> candlesA, Map<String, double[]> indicatorsA, int globalOffsetA, String assetTypeA,
+            Map<LocalDate, Double> dividendsA,
+            List<CandlestickResponse> candlesB, Map<String, double[]> indicatorsB, int globalOffsetB, String assetTypeB,
+            Map<LocalDate, Double> dividendsB,
+            BacktestRequest request, boolean dividendReinvest) {
+
+        boolean isUsd = "US_STOCK".equalsIgnoreCase(assetTypeA) || "ETF".equalsIgnoreCase(assetTypeA);
+        double usdKrwRate = isUsd ? exchangeRateService.getUsdKrwRate() : 0;
+        double initialCap = isUsd ? request.getInitialCapital() / usdKrwRate : request.getInitialCapital();
+        double weightA = (request.getFirstAssetWeight() != null ? request.getFirstAssetWeight() : 50.0) / 100.0;
+        double weightB = 1.0 - weightA;
+        // 리밸런싱 주기: MONTHLY (기본) / QUARTERLY / YEARLY
+        String rebalanceFreq = request.getRebalanceFrequency() != null ? request.getRebalanceFrequency().toUpperCase() : "MONTHLY";
+        if (!"MONTHLY".equals(rebalanceFreq) && !"QUARTERLY".equals(rebalanceFreq) && !"YEARLY".equals(rebalanceFreq)) {
+            rebalanceFreq = "MONTHLY";
+        }
+
+        // Inner join by epoch second
+        java.util.Map<Long, Integer> aIndexByTime = new java.util.HashMap<>();
+        for (int i = 0; i < candlesA.size(); i++) aIndexByTime.put(candlesA.get(i).getTime(), i);
+        List<int[]> joined = new java.util.ArrayList<>();   // [aIdx, bIdx]
+        for (int i = 0; i < candlesB.size(); i++) {
+            Integer ai = aIndexByTime.get(candlesB.get(i).getTime());
+            if (ai != null) joined.add(new int[]{ai, i});
+        }
+        if (joined.size() < 2) {
+            throw new IllegalArgumentException("두 자산의 공통 거래일이 충분하지 않습니다.");
+        }
+
+        // 자본 분배
+        double cashA = initialCap * weightA;
+        double cashB = initialCap * weightB;
+        double qtyA = 0, qtyB = 0;
+        double entryPriceA = 0, entryPriceB = 0;
+        int entryDayIndexA = 0, entryDayIndexB = 0;
+
+        // 적립식
+        double monthlyKrw = request.getMonthlyContribution() != null ? request.getMonthlyContribution() : 0.0;
+        double monthlyNative = isUsd && monthlyKrw > 0 ? monthlyKrw / usdKrwRate : monthlyKrw;
+        boolean isMonthly = monthlyNative > 0;
+        double cumContribNative = initialCap;
+        int contribCount = 0;
+
+        // 매매 파라미터
+        double slippage = request.getSlippagePercent() != null ? request.getSlippagePercent() / 100.0 : 0;
+        double commissionRate = request.getCommissionRate() != null ? request.getCommissionRate() / 100.0 : DEFAULT_COMMISSION_RATE;
+
+        List<BacktestResponse.TradeDto> trades = new java.util.ArrayList<>();
+        List<BacktestResponse.EquityPointDto> equityCurve = new java.util.ArrayList<>();
+        List<BacktestResponse.EquityPointDto> drawdownCurve = new java.util.ArrayList<>();
+        List<BacktestResponse.DailyReturnDto> dailyReturns = new java.util.ArrayList<>();
+        List<BacktestResponse.PricePointDto> priceData = new java.util.ArrayList<>();
+
+        int aTrades = 0, bTrades = 0, rebalanceCount = 0;
+        int profitable = 0, losing = 0;
+        double prevEquity = initialCap;
+        double peakEquity = initialCap;
+        double maxDrawdown = 0;
+        double totalDividendsReceived = 0; // OFF 모드 누적 배당 cash (native 단위)
+        java.time.YearMonth prevYm = null;
+
+        for (int idx = 0; idx < joined.size(); idx++) {
+            int aIdx = joined.get(idx)[0];
+            int bIdx = joined.get(idx)[1];
+            CandlestickResponse cA = candlesA.get(aIdx);
+            CandlestickResponse cB = candlesB.get(bIdx);
+            int gA = globalOffsetA + aIdx;
+            int gB = globalOffsetB + bIdx;
+            double priceA = cA.getClose();
+            double priceB = cB.getClose();
+            java.time.LocalDate curDate = Instant.ofEpochSecond(cA.getTime()).atZone(KST).toLocalDate();
+            String date = curDate.format(DATE_FMT);
+            java.time.YearMonth curYm = java.time.YearMonth.from(curDate);
+
+            priceData.add(BacktestResponse.PricePointDto.builder()
+                    .date(date).open(cA.getOpen()).high(cA.getHigh()).low(cA.getLow())
+                    .close(cA.getClose()).volume(cA.getVolume()).build());
+
+            // ── 배당 현금 입금 (DRIP off + 자산별 보유 한정) ──
+            if (!dividendsA.isEmpty() && qtyA > 0) {
+                Double divPerShare = dividendsA.get(curDate);
+                if (divPerShare != null && divPerShare > 0) {
+                    double divCash = qtyA * divPerShare;
+                    cashA += divCash;
+                    totalDividendsReceived += divCash;
+                }
+            }
+            if (!dividendsB.isEmpty() && qtyB > 0) {
+                Double divPerShare = dividendsB.get(curDate);
+                if (divPerShare != null && divPerShare > 0) {
+                    double divCash = qtyB * divPerShare;
+                    cashB += divCash;
+                    totalDividendsReceived += divCash;
+                }
+            }
+
+            // ── 월 첫 거래일: 적립(항상 매월) + 리밸런싱(freq 에 따라) ──
+            if (prevYm != null && !curYm.equals(prevYm)) {
+                // 적립금은 항상 매월 (사용자 결정에 따라 적립과 리밸런싱은 분리)
+                if (isMonthly) {
+                    cashA += monthlyNative * weightA;
+                    cashB += monthlyNative * weightB;
+                    cumContribNative += monthlyNative;
+                    contribCount++;
+                }
+                // 리밸런싱 주기 판단
+                int curMonth = curYm.getMonthValue();
+                boolean doRebalance =
+                        "MONTHLY".equals(rebalanceFreq)
+                        || ("QUARTERLY".equals(rebalanceFreq) && (curMonth == 1 || curMonth == 4 || curMonth == 7 || curMonth == 10))
+                        || ("YEARLY".equals(rebalanceFreq) && curMonth == 1);
+                if (doRebalance) {
+                // 리밸런싱: 두 자산 측의 총 가치(cash + 보유 평가)를 비중대로 재조정.
+                // 한 측이 과다하면 그 측에서 (cash 우선, 부족분은 보유 일부 매도) 다른 측 cash 로 이전.
+                // 다른 측의 매수는 룰 일관성을 위해 다음 entry 신호 시점에 발생하도록 둠.
+                double vA = cashA + qtyA * priceA;
+                double vB = cashB + qtyB * priceB;
+                double total = vA + vB;
+                double targetA = total * weightA;
+                double diff = vA - targetA;
+                if (Math.abs(diff) > total * 0.005 && total > 0) {
+                    if (diff > 0) {
+                        double moveAmount = diff;
+                        double fromCashA = Math.min(cashA, moveAmount);
+                        if (fromCashA > 0) {
+                            cashA -= fromCashA;
+                            cashB += fromCashA;
+                            moveAmount -= fromCashA;
+                        }
+                        if (moveAmount > 0 && qtyA > 0) {
+                            double sellExec = priceA * (1 - slippage);
+                            double sellQty = Math.min(qtyA, moveAmount / (sellExec * (1 - commissionRate)));
+                            double sellProceeds = sellQty * sellExec * (1 - commissionRate);
+                            qtyA -= sellQty;
+                            cashB += sellProceeds;
+                            trades.add(BacktestResponse.TradeDto.builder()
+                                    .date(date).type("REBALANCE_SELL_A").price(round2(sellExec)).quantity(sellQty)
+                                    .pnl(0).pnlPercent(0).reason("리밸런싱: 자산A 일부 매도").holdingDays(0)
+                                    .balance(Math.round(cashA + cashB + qtyA * priceA + qtyB * priceB))
+                                    .build());
+                            aTrades++;
+                        }
+                    } else {
+                        double moveAmount = -diff;
+                        double fromCashB = Math.min(cashB, moveAmount);
+                        if (fromCashB > 0) {
+                            cashB -= fromCashB;
+                            cashA += fromCashB;
+                            moveAmount -= fromCashB;
+                        }
+                        if (moveAmount > 0 && qtyB > 0) {
+                            double sellExec = priceB * (1 - slippage);
+                            double sellQty = Math.min(qtyB, moveAmount / (sellExec * (1 - commissionRate)));
+                            double sellProceeds = sellQty * sellExec * (1 - commissionRate);
+                            qtyB -= sellQty;
+                            cashA += sellProceeds;
+                            trades.add(BacktestResponse.TradeDto.builder()
+                                    .date(date).type("REBALANCE_SELL_B").price(round2(sellExec)).quantity(sellQty)
+                                    .pnl(0).pnlPercent(0).reason("리밸런싱: 자산B 일부 매도").holdingDays(0)
+                                    .balance(Math.round(cashA + cashB + qtyA * priceA + qtyB * priceB))
+                                    .build());
+                            bTrades++;
+                        }
+                    }
+                }
+                rebalanceCount++;
+                }  // doRebalance
+            }
+            prevYm = curYm;
+
+            // ── 자산A: 자기 신호로 매매 ──
+            if (qtyA == 0 && cashA > 0
+                    && evaluateConditions(entryConditions, indicatorsA, gA, priceA, candlesA, globalOffsetA, aIdx)) {
+                double execPrice = priceA * (1 + slippage);
+                double commAmt = cashA * commissionRate;
+                double buyQty = (cashA - commAmt) / execPrice;
+                qtyA = buyQty;
+                entryPriceA = execPrice;
+                entryDayIndexA = idx;
+                cashA = 0;
+                trades.add(BacktestResponse.TradeDto.builder()
+                        .date(date).type("BUY_A").price(round2(execPrice)).quantity(buyQty)
+                        .pnl(-commAmt).pnlPercent(0).reason("자산A 진입").holdingDays(0)
+                        .balance(Math.round(cashA + cashB + qtyA * priceA + qtyB * priceB))
+                        .build());
+                aTrades++;
+            } else if (qtyA > 0
+                    && evaluateConditions(exitConditions, indicatorsA, gA, priceA, candlesA, globalOffsetA, aIdx)) {
+                double execPrice = priceA * (1 - slippage);
+                double sellProceeds = qtyA * execPrice * (1 - commissionRate);
+                double pnl = sellProceeds - qtyA * entryPriceA;
+                double pnlRate = entryPriceA > 0 ? (execPrice - entryPriceA) / entryPriceA * 100 : 0;
+                if (pnl >= 0) profitable++; else losing++;
+                cashA += sellProceeds;
+                trades.add(BacktestResponse.TradeDto.builder()
+                        .date(date).type("SELL_A").price(round2(execPrice)).quantity(qtyA)
+                        .pnl(round2(pnl)).pnlPercent(round2(pnlRate)).reason("자산A 청산")
+                        .holdingDays(idx - entryDayIndexA)
+                        .balance(Math.round(cashA + cashB + qtyB * priceB))
+                        .build());
+                qtyA = 0;
+                entryPriceA = 0;
+                aTrades++;
+            }
+
+            // ── 자산B: 자기 신호로 매매 ──
+            if (qtyB == 0 && cashB > 0
+                    && evaluateConditions(entryConditions, indicatorsB, gB, priceB, candlesB, globalOffsetB, bIdx)) {
+                double execPrice = priceB * (1 + slippage);
+                double commAmt = cashB * commissionRate;
+                double buyQty = (cashB - commAmt) / execPrice;
+                qtyB = buyQty;
+                entryPriceB = execPrice;
+                entryDayIndexB = idx;
+                cashB = 0;
+                trades.add(BacktestResponse.TradeDto.builder()
+                        .date(date).type("BUY_B").price(round2(execPrice)).quantity(buyQty)
+                        .pnl(-commAmt).pnlPercent(0).reason("자산B 진입").holdingDays(0)
+                        .balance(Math.round(cashA + cashB + qtyA * priceA + qtyB * priceB))
+                        .build());
+                bTrades++;
+            } else if (qtyB > 0
+                    && evaluateConditions(exitConditions, indicatorsB, gB, priceB, candlesB, globalOffsetB, bIdx)) {
+                double execPrice = priceB * (1 - slippage);
+                double sellProceeds = qtyB * execPrice * (1 - commissionRate);
+                double pnl = sellProceeds - qtyB * entryPriceB;
+                double pnlRate = entryPriceB > 0 ? (execPrice - entryPriceB) / entryPriceB * 100 : 0;
+                if (pnl >= 0) profitable++; else losing++;
+                cashB += sellProceeds;
+                trades.add(BacktestResponse.TradeDto.builder()
+                        .date(date).type("SELL_B").price(round2(execPrice)).quantity(qtyB)
+                        .pnl(round2(pnl)).pnlPercent(round2(pnlRate)).reason("자산B 청산")
+                        .holdingDays(idx - entryDayIndexB)
+                        .balance(Math.round(cashA + cashB + qtyA * priceA))
+                        .build());
+                qtyB = 0;
+                entryPriceB = 0;
+                bTrades++;
+            }
+
+            // ── equity / drawdown / dailyReturn ──
+            double equity = cashA + qtyA * priceA + cashB + qtyB * priceB;
+            if (equity >= peakEquity) peakEquity = equity;
+            double drawdown = peakEquity > 0 ? (peakEquity - equity) / peakEquity * 100 : 0;
+            if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+            drawdownCurve.add(BacktestResponse.EquityPointDto.builder().date(date).value(Math.round(-drawdown * 100.0) / 100.0).build());
+            equityCurve.add(BacktestResponse.EquityPointDto.builder().date(date).value(equity).build());
+            double dailyReturn = prevEquity > 0 ? (equity - prevEquity) / prevEquity * 100 : 0;
+            double cumReturn = cumContribNative > 0 ? (equity - cumContribNative) / cumContribNative * 100 : 0;
+            dailyReturns.add(BacktestResponse.DailyReturnDto.builder()
+                    .date(date).dailyReturn(dailyReturn).cumulativeReturn(cumReturn)
+                    .portfolioValue(equity).build());
+            prevEquity = equity;
+        }
+
+        // ── 강제 청산 ──
+        int lastIdx = joined.size() - 1;
+        double lastPriceA = candlesA.get(joined.get(lastIdx)[0]).getClose();
+        double lastPriceB = candlesB.get(joined.get(lastIdx)[1]).getClose();
+        String lastDate = Instant.ofEpochSecond(candlesA.get(joined.get(lastIdx)[0]).getTime()).atZone(KST).toLocalDate().format(DATE_FMT);
+        if (qtyA > 0) {
+            double execPrice = lastPriceA * (1 - slippage);
+            double proceeds = qtyA * execPrice * (1 - commissionRate);
+            double pnl = proceeds - qtyA * entryPriceA;
+            if (pnl >= 0) profitable++; else losing++;
+            cashA += proceeds;
+            trades.add(BacktestResponse.TradeDto.builder()
+                    .date(lastDate).type("SELL_A").price(round2(execPrice)).quantity(qtyA)
+                    .pnl(round2(pnl)).pnlPercent(0).reason("종료 강제 청산 (자산A)")
+                    .holdingDays(lastIdx - entryDayIndexA).balance(Math.round(cashA + cashB))
+                    .build());
+            qtyA = 0;
+            aTrades++;
+        }
+        if (qtyB > 0) {
+            double execPrice = lastPriceB * (1 - slippage);
+            double proceeds = qtyB * execPrice * (1 - commissionRate);
+            double pnl = proceeds - qtyB * entryPriceB;
+            if (pnl >= 0) profitable++; else losing++;
+            cashB += proceeds;
+            trades.add(BacktestResponse.TradeDto.builder()
+                    .date(lastDate).type("SELL_B").price(round2(execPrice)).quantity(qtyB)
+                    .pnl(round2(pnl)).pnlPercent(0).reason("종료 강제 청산 (자산B)")
+                    .holdingDays(lastIdx - entryDayIndexB).balance(Math.round(cashA + cashB))
+                    .build());
+            qtyB = 0;
+            bTrades++;
+        }
+
+        double finalValue = cashA + cashB;
+        double totalReturn = finalValue - cumContribNative;
+        double totalReturnRate = cumContribNative > 0 ? (totalReturn / cumContribNative) * 100 : 0;
+        int totalTradeCount = profitable + losing;
+        double winRate = totalTradeCount > 0 ? (double) profitable / totalTradeCount * 100 : 0;
+
+        // Sharpe / Sortino — 단일 자산 시뮬레이션과 동일 helper 재사용
+        double sharpeRatio = calculateSharpeRatio(dailyReturns, assetTypeA);
+        double sortinoRatio = calculateSortinoRatio(dailyReturns, assetTypeA);
+
+        // CAGR
+        java.time.LocalDate actualStart = java.time.LocalDate.parse(request.getStartDate());
+        java.time.LocalDate actualEnd = java.time.LocalDate.parse(request.getEndDate());
+        long calendarDays = java.time.temporal.ChronoUnit.DAYS.between(actualStart, actualEnd);
+        double years = Math.max(calendarDays, 1) / 365.0;
+        double cagrRatio = cumContribNative > 0 ? finalValue / cumContribNative : 0;
+        double cagr = years > 0.01 && cagrRatio > 0
+                ? (Math.pow(cagrRatio, 1.0 / years) - 1) * 100
+                : totalReturnRate;
+
+        // ── Buy & Hold 벤치마크 (두 자산 비중대로 시작 매수, 적립이면 매월 추가 매수) ──
+        List<BacktestResponse.EquityPointDto> bhCurve = new java.util.ArrayList<>();
+        double bhQtyA = (initialCap * weightA * (1 - commissionRate)) / candlesA.get(joined.get(0)[0]).getClose();
+        double bhQtyB = (initialCap * weightB * (1 - commissionRate)) / candlesB.get(joined.get(0)[1]).getClose();
+        java.time.YearMonth bhPrevYm = null;
+        for (int idx = 0; idx < joined.size(); idx++) {
+            CandlestickResponse cA = candlesA.get(joined.get(idx)[0]);
+            CandlestickResponse cB = candlesB.get(joined.get(idx)[1]);
+            java.time.LocalDate dLocal = Instant.ofEpochSecond(cA.getTime()).atZone(KST).toLocalDate();
+            java.time.YearMonth ym = java.time.YearMonth.from(dLocal);
+            if (idx > 0 && bhPrevYm != null && !ym.equals(bhPrevYm) && isMonthly) {
+                bhQtyA += (monthlyNative * weightA * (1 - commissionRate)) / cA.getClose();
+                bhQtyB += (monthlyNative * weightB * (1 - commissionRate)) / cB.getClose();
+            }
+            bhPrevYm = ym;
+            double bhValue = bhQtyA * cA.getClose() + bhQtyB * cB.getClose();
+            bhCurve.add(BacktestResponse.EquityPointDto.builder()
+                    .date(dLocal.format(DATE_FMT)).value(Math.round(bhValue)).build());
+        }
+        double bhFinal = bhQtyA * lastPriceA + bhQtyB * lastPriceB;
+        double bhReturnRate = cumContribNative > 0 ? (bhFinal - cumContribNative) / cumContribNative * 100 : 0;
+
+        return BacktestResponse.builder()
+                .id("backtest-" + java.util.UUID.randomUUID().toString().substring(0, 8))
+                .strategyId(strategyId).strategyName(strategyName)
+                .stockCode(request.getStockCode())
+                .stockName(request.getStockName() != null && !request.getStockName().isEmpty()
+                        ? request.getStockName() : request.getStockCode())
+                .startDate(request.getStartDate()).endDate(request.getEndDate())
+                .initialCapital(initialCap)
+                .finalValue(Math.round(finalValue))
+                .totalReturn(Math.round(totalReturn))
+                .totalReturnRate(round2(totalReturnRate))
+                .maxDrawdown(round2(-maxDrawdown))
+                .sharpeRatio(round2(sharpeRatio))
+                .sortinoRatio(round2(sortinoRatio))
+                .winRate(round2(winRate))
+                .totalTrades(totalTradeCount)
+                .profitableTrades(profitable)
+                .losingTrades(losing)
+                .dailyReturns(dailyReturns)
+                .equityCurve(equityCurve)
+                .trades(trades)
+                .buyHoldReturnRate(round2(bhReturnRate))
+                .buyHoldCurve(bhCurve)
+                .cagr(round2(cagr))
+                .drawdownCurve(drawdownCurve)
+                .priceData(priceData)
+                .currency(isUsd ? "USD" : "KRW")
+                .exchangeRate(isUsd ? usdKrwRate : 0)
+                // 적립식
+                .monthlyContribution(monthlyNative)
+                .totalContribution(cumContribNative)
+                .contributionCount(contribCount)
+                // 2자산 리밸런싱
+                .secondStockCode(request.getSecondStockCode())
+                .secondStockName(request.getSecondStockName() != null && !request.getSecondStockName().isEmpty()
+                        ? request.getSecondStockName() : request.getSecondStockCode())
+                .firstAssetWeight(round2(weightA * 100))
+                .secondAssetWeight(round2(weightB * 100))
+                .firstAssetFinalValue(Math.round(cashA))
+                .secondAssetFinalValue(Math.round(cashB))
+                .firstAssetTradeCount(aTrades)
+                .secondAssetTradeCount(bTrades)
+                .rebalanceCount(rebalanceCount)
+                .rebalanceFrequency(rebalanceFreq)
+                // 배당 처리
+                .dividendReinvest(dividendReinvest)
+                .totalDividendsReceived(Math.round(totalDividendsReceived * 100.0) / 100.0)
                 .build();
     }
 

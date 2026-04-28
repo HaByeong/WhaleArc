@@ -17,7 +17,7 @@ public class Holding {
     private BigDecimal quantity;
     private BigDecimal averagePrice;
     private BigDecimal currentPrice;
-    private String assetType; // "STOCK" or "CRYPTO" (null → CRYPTO for backward compat)
+    private String assetType; // "STOCK", "CRYPTO", "US_STOCK", "ETF" (null → CRYPTO for backward compat)
 
     public Holding(String stockCode, String stockName, BigDecimal quantity, BigDecimal averagePrice) {
         this(stockCode, stockName, quantity, averagePrice, "CRYPTO");
@@ -40,6 +40,11 @@ public class Holding {
     /** 미국주식 여부 판단 */
     public boolean isUsStock() {
         return "US_STOCK".equals(assetType);
+    }
+
+    /** 미국 ETF 여부 판단 (USD 단위 거래·평가 — US_STOCK 과 동일 환율 파이프) */
+    public boolean isEtf() {
+        return "ETF".equals(assetType);
     }
 
     public BigDecimal getMarketValue() {

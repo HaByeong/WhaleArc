@@ -24,7 +24,7 @@ interface TradingChartProps {
   price: number;
   changeRate: number;
   className?: string;
-  assetType?: 'STOCK' | 'CRYPTO' | 'US_STOCK';
+  assetType?: 'STOCK' | 'CRYPTO' | 'US_STOCK' | 'ETF';
   activeIndicators?: string[];
   isDark?: boolean;
 }
@@ -81,6 +81,8 @@ const SUB_CHART_LABELS: Record<string, { label: string; guide?: string[] }> = {
 /** 가격대에 따라 소수점 정밀도 결정 */
 const getPriceFormat = (p: number, type?: string) => {
   if (type === 'STOCK') return { type: 'price' as const, precision: 0, minMove: 1 };
+  // 미국주식·ETF 는 USD 단위 (소수점 2자리)
+  if (type === 'US_STOCK' || type === 'ETF') return { type: 'price' as const, precision: 2, minMove: 0.01 };
   if (p >= 10000) return { type: 'price' as const, precision: 0, minMove: 1 };
   if (p >= 100) return { type: 'price' as const, precision: 1, minMove: 0.1 };
   if (p >= 1) return { type: 'price' as const, precision: 2, minMove: 0.01 };

@@ -35,7 +35,7 @@ const fmtUsd = (v: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 
 const assetName = (code: string, assetType?: string) => {
-  if (assetType === 'STOCK' || assetType === 'US_STOCK') return code; // 주식은 stockName 사용
+  if (assetType === 'STOCK' || assetType === 'US_STOCK' || assetType === 'ETF') return code; // 주식/ETF 는 stockName 사용
   return CRYPTO_NAMES[code] || code;
 };
 
@@ -45,16 +45,17 @@ const TradePage = () => {
   const _virtNavigate = useVirtNavigate(); void _virtNavigate;
   const [searchParams] = useSearchParams();
   const urlCode = searchParams.get('code');
-  const urlType = searchParams.get('type') as 'CRYPTO' | 'STOCK' | 'US_STOCK' | null;
+  const urlType = searchParams.get('type') as 'CRYPTO' | 'STOCK' | 'US_STOCK' | 'ETF' | null;
 
   /* ─── 마켓 탭 ─── */
-  const [marketTab, setMarketTab] = useState<'CRYPTO' | 'STOCK' | 'US_STOCK'>(urlType || 'STOCK');
+  const [marketTab, setMarketTab] = useState<'CRYPTO' | 'STOCK' | 'US_STOCK' | 'ETF'>(urlType || 'STOCK');
 
   /* ─── 상태 ─── */
   const [selectedStock, setSelectedStock] = useState<StockPrice | null>(null);
   const [stockList, setStockList] = useState<StockPrice[]>([]);
   const [krxStockList, setKrxStockList] = useState<StockPrice[]>([]);
   const [usStockList, setUsStockList] = useState<StockPrice[]>([]);
+  const [etfList, setEtfList] = useState<StockPrice[]>([]);
   const [usdKrwRate, setUsdKrwRate] = useState<number>(1400);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -97,6 +98,7 @@ const TradePage = () => {
   const mergedStockList = useMemo(() => {
     if (marketTab === 'STOCK') return krxStockList;
     if (marketTab === 'US_STOCK') return usStockList;
+    if (marketTab === 'ETF') return etfList;
     if (realtimePrices.size === 0) return stockList;
     return stockList.map(stock => {
       const rt = realtimePrices.get(stock.stockCode);
@@ -105,12 +107,12 @@ const TradePage = () => {
       }
       return stock;
     });
-  }, [stockList, krxStockList, usStockList, realtimePrices, marketTab]);
+  }, [stockList, krxStockList, usStockList, etfList, realtimePrices, marketTab]);
 
   // 선택된 종목도 실시간 반영
   const liveSelectedStock = useMemo(() => {
     if (!selectedStock) return null;
-    if (selectedStock.assetType === 'STOCK' || selectedStock.assetType === 'US_STOCK') return selectedStock;
+    if (selectedStock.assetType === 'STOCK' || selectedStock.assetType === 'US_STOCK' || selectedStock.assetType === 'ETF') return selectedStock;
     const rt = realtimePrices.get(selectedStock.stockCode);
     if (rt) {
       return { ...selectedStock, currentPrice: rt.price, change: rt.change, changeRate: rt.changeRate, volume: rt.volume };
@@ -133,10 +135,11 @@ const TradePage = () => {
     try {
       setLoading(true);
       setError(null);
-      const [stocks, krxStocks, usStocks, portfolioData, ordersData, tradesData] = await Promise.all([
+      const [stocks, krxStocks, usStocks, etfs, portfolioData, ordersData, tradesData] = await Promise.all([
         tradeService.getStockList(),
         tradeService.getKrxStockList(),
         tradeService.getUsStockList().catch(() => [] as StockPrice[]),
+        tradeService.getEtfList().catch(() => [] as StockPrice[]),
         tradeService.getPortfolio(),
         tradeService.getOrders(),
         tradeService.getTrades(),
@@ -144,6 +147,7 @@ const TradePage = () => {
       setStockList(stocks);
       setKrxStockList(krxStocks);
       setUsStockList(usStocks);
+      setEtfList(etfs);
       setPortfolio(portfolioData);
       setOrders(ordersData);
       setTrades(tradesData);
@@ -153,7 +157,7 @@ const TradePage = () => {
 
       // URL 파라미터로 전달된 종목 선택
       if (urlCode && !selectedStockRef.current) {
-        const targetList = urlType === 'CRYPTO' ? stocks : urlType === 'US_STOCK' ? usStocks : krxStocks;
+        const targetList = urlType === 'CRYPTO' ? stocks : urlType === 'US_STOCK' ? usStocks : urlType === 'ETF' ? etfs : krxStocks;
         const found = targetList.find(s => s.stockCode === urlCode);
         if (found) {
           setSelectedStock(found);
@@ -194,11 +198,36 @@ const TradePage = () => {
           } catch {
             if (usStocks.length > 0) setSelectedStock(usStocks[0]);
           }
+        } else if (urlType === 'ETF') {
+          // 카탈로그에 없는 ETF 심볼 → 개별 조회
+          try {
+            const etfPrice = await marketService.getEtfPrice(urlCode);
+            if (etfPrice) {
+              const mapped: StockPrice = {
+                stockCode: etfPrice.symbol,
+                stockName: etfPrice.name,
+                currentPrice: etfPrice.price,
+                change: etfPrice.change,
+                changeRate: etfPrice.changeRate,
+                volume: etfPrice.volume,
+                high: etfPrice.price,
+                low: etfPrice.price,
+                open: etfPrice.price - etfPrice.change,
+                previousClose: etfPrice.price - etfPrice.change,
+                timestamp: new Date().toISOString(),
+                assetType: 'ETF',
+              };
+              setEtfList(prev => [mapped, ...prev]);
+              setSelectedStock(mapped);
+            }
+          } catch {
+            if (etfs.length > 0) setSelectedStock(etfs[0]);
+          }
         } else {
           if (targetList.length > 0) setSelectedStock(targetList[0]);
         }
       } else if (!selectedStockRef.current) {
-        const defaultList = (urlType || 'STOCK') === 'CRYPTO' ? stocks : (urlType === 'US_STOCK' ? usStocks : krxStocks);
+        const defaultList = (urlType || 'STOCK') === 'CRYPTO' ? stocks : (urlType === 'US_STOCK' ? usStocks : urlType === 'ETF' ? etfs : krxStocks);
         if (defaultList.length > 0) setSelectedStock(defaultList[0]);
       }
     } catch (err: any) {
@@ -217,7 +246,7 @@ const TradePage = () => {
       isInitialMount.current = false;
       return; // 초기 마운트 시에는 URL 파라미터 선택을 유지
     }
-    const list = marketTab === 'CRYPTO' ? stockList : marketTab === 'US_STOCK' ? usStockList : krxStockList;
+    const list = marketTab === 'CRYPTO' ? stockList : marketTab === 'US_STOCK' ? usStockList : marketTab === 'ETF' ? etfList : krxStockList;
     if (list.length > 0) {
       setSelectedStock(list[0]);
     }
@@ -280,6 +309,23 @@ const TradePage = () => {
 
   usePolling(pollUsStockPrices, 30000);
 
+  // ETF 탭일 때 시세 폴링 (30초)
+  const pollEtfPrices = useCallback(async () => {
+    if (marketTab !== 'ETF') return;
+    try {
+      const fresh = await tradeService.getEtfList();
+      setEtfList(fresh);
+      if (selectedStockRef.current?.assetType === 'ETF') {
+        const updated = fresh.find(s => s.stockCode === selectedStockRef.current!.stockCode);
+        if (updated) {
+          setSelectedStock(prev => prev ? { ...prev, currentPrice: updated.currentPrice, change: updated.change, changeRate: updated.changeRate, volume: updated.volume } : prev);
+        }
+      }
+    } catch { /* ignore */ }
+  }, [marketTab]);
+
+  usePolling(pollEtfPrices, 30000);
+
   // 환율 폴링 (30초)
   const pollExchangeRate = useCallback(async () => {
     try {
@@ -311,7 +357,10 @@ const TradePage = () => {
   }, []);
 
   const handleRecentStockClick = useCallback((recent: RecentStock) => {
-    const list = recent.assetType === 'STOCK' ? krxStockList : recent.assetType === 'US_STOCK' ? usStockList : stockList;
+    const list = recent.assetType === 'STOCK' ? krxStockList
+      : recent.assetType === 'US_STOCK' ? usStockList
+      : recent.assetType === 'ETF' ? etfList
+      : stockList;
     const found = list.find(s => s.stockCode === recent.stockCode);
     if (found) {
       setSelectedStock(found);
@@ -319,7 +368,7 @@ const TradePage = () => {
       setQuantity('');
       setLimitPrice('');
     }
-  }, [krxStockList, usStockList, stockList]);
+  }, [krxStockList, usStockList, etfList, stockList]);
 
   /* ─── 종목 선택 ─── */
   const handleStockSelect = (stock: StockPrice) => {
@@ -333,7 +382,7 @@ const TradePage = () => {
   /* ─── 주식 검색 (디바운스) ─── */
   const handleStockSearch = (keyword: string) => {
     setSearchQuery(keyword);
-    if (marketTab !== 'STOCK' && marketTab !== 'US_STOCK') return;
+    if (marketTab !== 'STOCK' && marketTab !== 'US_STOCK' && marketTab !== 'ETF') return;
 
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     if (!keyword.trim()) {
@@ -347,6 +396,10 @@ const TradePage = () => {
         if (marketTab === 'US_STOCK') {
           const results = await marketService.searchUsStocks(keyword.trim());
           const existingCodes = new Set(usStockList.map(s => s.stockCode));
+          setStockSearchResults(results.filter(r => !existingCodes.has(r.code)));
+        } else if (marketTab === 'ETF') {
+          const results = await marketService.searchEtfs(keyword.trim());
+          const existingCodes = new Set(etfList.map(s => s.stockCode));
           setStockSearchResults(results.filter(r => !existingCodes.has(r.code)));
         } else {
           const results = await tradeService.searchKrxStocks(keyword.trim());
@@ -383,6 +436,25 @@ const TradePage = () => {
         setUsStockList(prev => [mapped, ...prev]);
         setSelectedStock(mapped);
         setActiveTab('chart');
+      } else if (marketTab === 'ETF') {
+        const etfPrice = await marketService.getEtfPrice(result.code);
+        const mapped: StockPrice = {
+          stockCode: etfPrice.symbol,
+          stockName: etfPrice.name,
+          currentPrice: etfPrice.price,
+          change: etfPrice.change,
+          changeRate: etfPrice.changeRate,
+          volume: etfPrice.volume,
+          high: etfPrice.price,
+          low: etfPrice.price,
+          open: etfPrice.price - etfPrice.change,
+          previousClose: etfPrice.price - etfPrice.change,
+          timestamp: new Date().toISOString(),
+          assetType: 'ETF',
+        };
+        setEtfList(prev => [mapped, ...prev]);
+        setSelectedStock(mapped);
+        setActiveTab('chart');
       } else {
         const stockPrice = await tradeService.getKrxStockPrice(result.code);
         stockPrice.stockName = result.name;
@@ -416,7 +488,7 @@ const TradePage = () => {
       return;
     }
 
-    const isStockLike = selectedStock.assetType === 'STOCK' || selectedStock.assetType === 'US_STOCK';
+    const isStockLike = selectedStock.assetType === 'STOCK' || selectedStock.assetType === 'US_STOCK' || selectedStock.assetType === 'ETF';
 
     // 주식은 정수 단위만
     if (isStockLike && qty !== Math.floor(qty)) {
@@ -437,7 +509,7 @@ const TradePage = () => {
     const currentPrice = rt ? rt.price : selectedStock.currentPrice;
     const price = orderMethod === 'MARKET' ? currentPrice : parseFloat(limitPrice);
     let total = price * qty * (1 + COMMISSION_RATE);
-    if (selectedStock.assetType === 'US_STOCK') {
+    if (selectedStock.assetType === 'US_STOCK' || selectedStock.assetType === 'ETF') {
       total *= usdKrwRate;
     }
     if (orderType === 'BUY' && portfolio && total > portfolio.cashBalance) {
@@ -514,7 +586,7 @@ const TradePage = () => {
   };
 
   const getDisplayName = (code: string, name?: string, type?: string) => {
-    if ((type === 'STOCK' || type === 'US_STOCK') && name) return name;
+    if ((type === 'STOCK' || type === 'US_STOCK' || type === 'ETF') && name) return name;
     return CRYPTO_NAMES[code] || name || code;
   };
 
@@ -536,14 +608,14 @@ const TradePage = () => {
   /* ─── 빠른 수량 버튼 계산 ─── */
   const setQuickQuantity = (pct: number) => {
     if (!selectedStock) return;
-    const isStockLike = selectedStock.assetType === 'STOCK' || selectedStock.assetType === 'US_STOCK';
+    const isStockLike = selectedStock.assetType === 'STOCK' || selectedStock.assetType === 'US_STOCK' || selectedStock.assetType === 'ETF';
     if (orderType === 'BUY') {
       const cash = portfolio?.cashBalance || 0;
       const rtPrice = !isStockLike ? (realtimePrices.get(selectedStock.stockCode)?.price ?? selectedStock.currentPrice) : selectedStock.currentPrice;
       const price = orderMethod === 'LIMIT' && limitPrice ? parseFloat(limitPrice) : rtPrice;
       if (price <= 0) return;
       let effectivePrice = price * (1 + COMMISSION_RATE);
-      if (selectedStock.assetType === 'US_STOCK') effectivePrice *= usdKrwRate;
+      if (selectedStock.assetType === 'US_STOCK' || selectedStock.assetType === 'ETF') effectivePrice *= usdKrwRate;
       const maxQty = (cash * pct) / effectivePrice;
       if (isStockLike) {
         setQuantity(Math.floor(maxQty).toString());
@@ -643,7 +715,7 @@ const TradePage = () => {
   const filteredStocks = mergedStockList.filter(s => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
-    const name = ((s.assetType === 'STOCK' || s.assetType === 'US_STOCK') ? s.stockName : assetName(s.stockCode)).toLowerCase();
+    const name = ((s.assetType === 'STOCK' || s.assetType === 'US_STOCK' || s.assetType === 'ETF') ? s.stockName : assetName(s.stockCode)).toLowerCase();
     return s.stockCode.toLowerCase().includes(q) || name.includes(q);
   });
 
@@ -660,7 +732,7 @@ const TradePage = () => {
   });
 
   /* ─── 현재 선택 종목이 주식인지 ─── */
-  const isSelectedStock = liveSelectedStock?.assetType === 'STOCK' || liveSelectedStock?.assetType === 'US_STOCK';
+  const isSelectedStock = liveSelectedStock?.assetType === 'STOCK' || liveSelectedStock?.assetType === 'US_STOCK' || liveSelectedStock?.assetType === 'ETF';
   const selectedDisplayName = liveSelectedStock
     ? (isSelectedStock ? liveSelectedStock.stockName : assetName(liveSelectedStock.stockCode))
     : '';
@@ -669,7 +741,7 @@ const TradePage = () => {
   const estimatedTotalRaw = liveSelectedStock && quantity
     ? (orderMethod === 'MARKET' ? liveSelectedStock.currentPrice : parseFloat(limitPrice) || 0) * parseFloat(quantity || '0') * (orderType === 'BUY' ? (1 + COMMISSION_RATE) : (1 - COMMISSION_RATE))
     : 0;
-  const estimatedTotal = liveSelectedStock?.assetType === 'US_STOCK' ? estimatedTotalRaw * usdKrwRate : estimatedTotalRaw;
+  const estimatedTotal = (liveSelectedStock?.assetType === 'US_STOCK' || liveSelectedStock?.assetType === 'ETF') ? estimatedTotalRaw * usdKrwRate : estimatedTotalRaw;
 
   /* ─── 로딩/에러 ─── */
   if (loading && stockList.length === 0) {
@@ -732,6 +804,16 @@ const TradePage = () => {
                 미국주식
               </button>
               <button
+                onClick={() => setMarketTab('ETF')}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                  marketTab === 'ETF'
+                    ? (d ? 'bg-white/10 text-cyan-400' : 'bg-white text-whale-dark shadow-sm')
+                    : (d ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600')
+                }`}
+              >
+                ETF
+              </button>
+              <button
                 onClick={() => setMarketTab('CRYPTO')}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
                   marketTab === 'CRYPTO'
@@ -773,8 +855,8 @@ const TradePage = () => {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={e => (marketTab === 'STOCK' || marketTab === 'US_STOCK') ? handleStockSearch(e.target.value) : setSearchQuery(e.target.value)}
-                placeholder={marketTab === 'CRYPTO' ? '가상화폐 검색 (비트코인, ETH...)' : marketTab === 'US_STOCK' ? '미국주식 검색 (애플, AAPL...)' : '전체 KOSPI/KOSDAQ 종목 검색...'}
+                onChange={e => (marketTab === 'STOCK' || marketTab === 'US_STOCK' || marketTab === 'ETF') ? handleStockSearch(e.target.value) : setSearchQuery(e.target.value)}
+                placeholder={marketTab === 'CRYPTO' ? '가상화폐 검색 (비트코인, ETH...)' : marketTab === 'US_STOCK' ? '미국주식 검색 (애플, AAPL...)' : marketTab === 'ETF' ? 'ETF 검색 (QQQ, SCHD...)' : '전체 KOSPI/KOSDAQ 종목 검색...'}
                 className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-whale-light/50 focus:border-whale-light ${
                   d ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-600' : 'border-gray-200'
                 }`}
@@ -791,7 +873,7 @@ const TradePage = () => {
               )}
 
               {/* 주식 검색 드롭다운 */}
-              {(marketTab === 'STOCK' || marketTab === 'US_STOCK') && stockSearchResults.length > 0 && (
+              {(marketTab === 'STOCK' || marketTab === 'US_STOCK' || marketTab === 'ETF') && stockSearchResults.length > 0 && (
                 <div className={`absolute top-full left-0 right-0 mt-1 rounded-xl shadow-xl border z-20 max-h-60 overflow-y-auto ${
                   d ? 'bg-[var(--wa-card-bg)] border-white/[0.06]' : 'bg-white border-gray-200'
                 }`}>
@@ -818,7 +900,7 @@ const TradePage = () => {
             <div className={`rounded-xl shadow-lg overflow-hidden ${d ? 'border border-white/[0.06] bg-white/[0.02]' : 'bg-white'}`}>
               <div className="px-4 py-3 bg-gradient-to-r from-whale-dark to-whale-light">
                 <div className="flex items-center justify-between text-white">
-                  <span className="text-sm font-semibold">{marketTab === 'CRYPTO' ? '가상화폐' : marketTab === 'US_STOCK' ? '미국주식' : '주식'}</span>
+                  <span className="text-sm font-semibold">{marketTab === 'CRYPTO' ? '가상화폐' : marketTab === 'US_STOCK' ? '미국주식' : marketTab === 'ETF' ? 'ETF' : '주식'}</span>
                   <span className="text-xs opacity-80">{sortedStocks.length}개</span>
                 </div>
               </div>
@@ -826,7 +908,7 @@ const TradePage = () => {
                 {sortedStocks.map(stock => {
                   const isSelected = selectedStock?.stockCode === stock.stockCode;
                   const isPopular = marketTab === 'CRYPTO' && POPULAR_COINS.includes(stock.stockCode);
-                  const name = (stock.assetType === 'STOCK' || stock.assetType === 'US_STOCK') ? stock.stockName : assetName(stock.stockCode);
+                  const name = (stock.assetType === 'STOCK' || stock.assetType === 'US_STOCK' || stock.assetType === 'ETF') ? stock.stockName : assetName(stock.stockCode);
                   return (
                     <div
                       key={stock.stockCode}
@@ -851,9 +933,9 @@ const TradePage = () => {
                         </div>
                         <div className="text-right flex-shrink-0 ml-2">
                           <div className={`text-sm font-semibold ${d ? 'text-slate-100' : 'text-gray-800'}`}>
-                            {stock.assetType === 'US_STOCK' ? fmtUsd(stock.currentPrice) : fmt(stock.currentPrice)}
+                            {(stock.assetType === 'US_STOCK' || stock.assetType === 'ETF') ? fmtUsd(stock.currentPrice) : fmt(stock.currentPrice)}
                           </div>
-                          {stock.assetType === 'US_STOCK' && (
+                          {(stock.assetType === 'US_STOCK' || stock.assetType === 'ETF') && (
                             <div className={`text-[10px] ${d ? 'text-slate-500' : 'text-gray-400'}`}>{fmt(Math.round(stock.currentPrice * usdKrwRate))}</div>
                           )}
                           <div className={`text-xs font-semibold ${stock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
@@ -876,6 +958,11 @@ const TradePage = () => {
               {marketTab === 'US_STOCK' && (
                 <p className={`text-[10px] text-right px-4 py-1.5 ${d ? 'text-slate-600' : 'text-gray-400'}`}>
                   * 미국주식 시세 · 환율 $1 = {fmt(usdKrwRate)}
+                </p>
+              )}
+              {marketTab === 'ETF' && (
+                <p className={`text-[10px] text-right px-4 py-1.5 ${d ? 'text-slate-600' : 'text-gray-400'}`}>
+                  * ETF 시세 · 환율 $1 = {fmt(usdKrwRate)}
                 </p>
               )}
             </div>
@@ -905,6 +992,9 @@ const TradePage = () => {
                         {liveSelectedStock.assetType === 'US_STOCK' && (
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${d ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>미국주식</span>
                         )}
+                        {liveSelectedStock.assetType === 'ETF' && (
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${d ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>ETF</span>
+                        )}
                         {hasMemo && (
                           <span className={`text-xs ${d ? 'text-amber-400' : 'text-amber-500'}`} title="메모 있음">
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
@@ -930,25 +1020,25 @@ const TradePage = () => {
                         </button>
                       </div>
                       <span className={`text-sm ${d ? 'text-slate-500' : 'text-gray-400'}`}>
-                        {liveSelectedStock.assetType === 'US_STOCK' ? `${liveSelectedStock.stockCode} · US` : isSelectedStock ? `${liveSelectedStock.stockCode} · KRX` : `${liveSelectedStock.stockCode}/KRW`}
+                        {liveSelectedStock.assetType === 'US_STOCK' ? `${liveSelectedStock.stockCode} · US` : liveSelectedStock.assetType === 'ETF' ? `${liveSelectedStock.stockCode} · ETF` : isSelectedStock ? `${liveSelectedStock.stockCode} · KRX` : `${liveSelectedStock.stockCode}/KRW`}
                       </span>
                     </div>
                     <div className="text-right">
                       <div className={`text-2xl font-bold ${d ? 'text-white' : 'text-whale-dark'}`}>
-                        {liveSelectedStock.assetType === 'US_STOCK' ? fmtUsd(liveSelectedStock.currentPrice) : fmt(liveSelectedStock.currentPrice)}
+                        {(liveSelectedStock.assetType === 'US_STOCK' || liveSelectedStock.assetType === 'ETF') ? fmtUsd(liveSelectedStock.currentPrice) : fmt(liveSelectedStock.currentPrice)}
                       </div>
-                      {liveSelectedStock.assetType === 'US_STOCK' && (
+                      {(liveSelectedStock.assetType === 'US_STOCK' || liveSelectedStock.assetType === 'ETF') && (
                         <div className={`text-xs ${d ? 'text-slate-400' : 'text-gray-500'}`}>{fmt(Math.round(liveSelectedStock.currentPrice * usdKrwRate))}</div>
                       )}
                       <div className={`text-sm font-semibold ${liveSelectedStock.changeRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                        {liveSelectedStock.changeRate >= 0 ? '+' : ''}{liveSelectedStock.assetType === 'US_STOCK' ? fmtUsd(liveSelectedStock.change) : fmt(liveSelectedStock.change)}
+                        {liveSelectedStock.changeRate >= 0 ? '+' : ''}{(liveSelectedStock.assetType === 'US_STOCK' || liveSelectedStock.assetType === 'ETF') ? fmtUsd(liveSelectedStock.change) : fmt(liveSelectedStock.change)}
                         <span className="ml-1">({liveSelectedStock.changeRate >= 0 ? '+' : ''}{liveSelectedStock.changeRate.toFixed(2)}%)</span>
                       </div>
                     </div>
                   </div>
 
                   {/* 미니 지표 */}
-                  {!isSelectedStock && liveSelectedStock.assetType !== 'US_STOCK' && (
+                  {!isSelectedStock && liveSelectedStock.assetType !== 'US_STOCK' && liveSelectedStock.assetType !== 'ETF' && (
                     <div className="grid grid-cols-4 gap-3">
                       {[
                         { label: '고가', value: fmt(liveSelectedStock.high), cls: 'text-red-500' },
@@ -967,7 +1057,7 @@ const TradePage = () => {
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         { label: '거래량', value: fmtNum(liveSelectedStock.volume), cls: d ? 'text-slate-300' : 'text-gray-700' },
-                        { label: '전일 종가', value: liveSelectedStock.assetType === 'US_STOCK' ? fmtUsd(liveSelectedStock.previousClose) : fmt(liveSelectedStock.previousClose), cls: d ? 'text-slate-300' : 'text-gray-700' },
+                        { label: '전일 종가', value: (liveSelectedStock.assetType === 'US_STOCK' || liveSelectedStock.assetType === 'ETF') ? fmtUsd(liveSelectedStock.previousClose) : fmt(liveSelectedStock.previousClose), cls: d ? 'text-slate-300' : 'text-gray-700' },
                       ].map(item => (
                         <div key={item.label} className={`rounded-lg p-2 text-center ${d ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
                           <div className={`text-[10px] mb-0.5 ${d ? 'text-slate-500' : 'text-gray-400'}`}>{item.label}</div>
@@ -1122,7 +1212,7 @@ const TradePage = () => {
                           symbol={liveSelectedStock.stockCode}
                           price={liveSelectedStock.currentPrice}
                           changeRate={liveSelectedStock.changeRate}
-                          assetType={liveSelectedStock.assetType === 'US_STOCK' ? 'US_STOCK' : liveSelectedStock.assetType === 'STOCK' ? 'STOCK' : undefined}
+                          assetType={liveSelectedStock.assetType === 'US_STOCK' ? 'US_STOCK' : liveSelectedStock.assetType === 'ETF' ? 'ETF' : liveSelectedStock.assetType === 'STOCK' ? 'STOCK' : undefined}
                           isDark={d}
                         />
                       </>
@@ -1150,9 +1240,10 @@ const TradePage = () => {
                                       <span className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{name}</span>
                                       {order.assetType === 'STOCK' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>}
                                       {order.assetType === 'US_STOCK' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>미국주식</span>}
+                                      {order.assetType === 'ETF' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>ETF</span>}
                                     </div>
                                     <div className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>
-                                      {order.orderMethod === 'MARKET' ? '시장가' : '지정가'} · {(order.assetType === 'STOCK' || order.assetType === 'US_STOCK') ? `${Math.floor(order.quantity)}주` : `${formatQuantity(order.quantity)}개`} · {order.assetType === 'US_STOCK' ? `${fmtUsd(order.price)} (${fmt(Math.round(order.price * usdKrwRate))})` : fmt(order.price)}
+                                      {order.orderMethod === 'MARKET' ? '시장가' : '지정가'} · {(order.assetType === 'STOCK' || order.assetType === 'US_STOCK' || order.assetType === 'ETF') ? `${Math.floor(order.quantity)}주` : `${formatQuantity(order.quantity)}개`} · {(order.assetType === 'US_STOCK' || order.assetType === 'ETF') ? `${fmtUsd(order.price)} (${fmt(Math.round(order.price * usdKrwRate))})` : fmt(order.price)}
                                     </div>
                                   </div>
                                 </div>
@@ -1191,9 +1282,10 @@ const TradePage = () => {
                                         <span className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{name}</span>
                                         {trade.assetType === 'STOCK' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>}
                                         {trade.assetType === 'US_STOCK' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>미국주식</span>}
+                                        {trade.assetType === 'ETF' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>ETF</span>}
                                       </div>
                                       <div className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>
-                                        {(trade.assetType === 'STOCK' || trade.assetType === 'US_STOCK') ? `${Math.floor(trade.quantity)}주` : `${formatQuantity(trade.quantity)}개`} · {trade.assetType === 'US_STOCK' ? `${fmtUsd(trade.price)} (${fmt(Math.round(trade.price * usdKrwRate))})` : fmt(trade.price)}
+                                        {(trade.assetType === 'STOCK' || trade.assetType === 'US_STOCK' || trade.assetType === 'ETF') ? `${Math.floor(trade.quantity)}주` : `${formatQuantity(trade.quantity)}개`} · {(trade.assetType === 'US_STOCK' || trade.assetType === 'ETF') ? `${fmtUsd(trade.price)} (${fmt(Math.round(trade.price * usdKrwRate))})` : fmt(trade.price)}
                                       </div>
                                     </div>
                                   </div>
@@ -1246,9 +1338,10 @@ const TradePage = () => {
                                     <span className={`text-sm font-semibold ${d ? 'text-slate-100' : ''}`}>{name}</span>
                                     {h.assetType === 'STOCK' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>}
                                     {h.assetType === 'US_STOCK' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>미국주식</span>}
+                                    {h.assetType === 'ETF' && <span className={`text-[9px] px-1 py-0.5 rounded ${d ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>ETF</span>}
                                   </div>
                                   <div className={`text-xs ${d ? 'text-slate-500' : 'text-gray-400'}`}>
-                                    {(h.assetType === 'STOCK' || h.assetType === 'US_STOCK') ? `${Math.floor(h.quantity)}주` : `${formatQuantity(h.quantity)}개`} · 평단 {h.assetType === 'US_STOCK' ? fmtUsd(h.averagePrice) : fmt(h.averagePrice)}
+                                    {(h.assetType === 'STOCK' || h.assetType === 'US_STOCK' || h.assetType === 'ETF') ? `${Math.floor(h.quantity)}주` : `${formatQuantity(h.quantity)}개`} · 평단 {(h.assetType === 'US_STOCK' || h.assetType === 'ETF') ? fmtUsd(h.averagePrice) : fmt(h.averagePrice)}
                                   </div>
                                 </div>
                                 <div className="text-right">
@@ -1368,7 +1461,7 @@ const TradePage = () => {
                     </div>
                     {orderMethod === 'MARKET' ? (
                       <div className={`text-lg font-bold ${d ? 'text-white' : 'text-whale-dark'}`}>
-                        {liveSelectedStock.assetType === 'US_STOCK' ? `${fmtUsd(liveSelectedStock.currentPrice)} (${fmt(Math.round(liveSelectedStock.currentPrice * usdKrwRate))})` : fmt(liveSelectedStock.currentPrice)}
+                        {(liveSelectedStock.assetType === 'US_STOCK' || liveSelectedStock.assetType === 'ETF') ? `${fmtUsd(liveSelectedStock.currentPrice)} (${fmt(Math.round(liveSelectedStock.currentPrice * usdKrwRate))})` : fmt(liveSelectedStock.currentPrice)}
                       </div>
                     ) : (
                       <>
@@ -1563,6 +1656,7 @@ const TradePage = () => {
                               {name}
                               {h.assetType === 'STOCK' && <span className={`text-[8px] px-1 rounded ${d ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>주식</span>}
                               {h.assetType === 'US_STOCK' && <span className={`text-[8px] px-1 rounded ${d ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>미국주식</span>}
+                              {h.assetType === 'ETF' && <span className={`text-[8px] px-1 rounded ${d ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>ETF</span>}
                             </span>
                             <span className={`text-xs font-semibold ${h.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
                               {h.returnRate >= 0 ? '+' : ''}{h.returnRate.toFixed(1)}%

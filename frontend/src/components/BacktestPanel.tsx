@@ -5,6 +5,7 @@ import {
   type BacktestResult,
 } from '../services/strategyService';
 import { tradeService, type StockPrice } from '../services/tradeService';
+import { marketService } from '../services/marketService';
 
 /* 숫자 포맷 */
 const _fmtPct  = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
@@ -47,6 +48,13 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
   });
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [capital, setCapital] = useState('10000000');
+
+  /* 적립식 투자 */
+  const [useMonthlyContribution, setUseMonthlyContribution] = useState(false);
+  const [monthlyContribution, setMonthlyContribution] = useState('');
+
+  /* 배당 자동 재투자 (DRIP, 미국주식·ETF 한정. true = adjclose, false = 일반 close + 배당 cash) */
+  const [dividendReinvest, setDividendReinvest] = useState(true);
 
   /* 리스크 관리 & 고급 설정 */
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -96,7 +104,11 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
           .map(s => ({ code: s.stockCode, name: s.stockName, market: 'CRYPTO' }));
         const krx = await tradeService.searchKrxStocks(q).catch(() => []);
         const mapped = krx.slice(0, 8).map((s: any) => ({ code: s.code || s.stockCode, name: s.name || s.stockName, market: 'STOCK' }));
-        setSearchResults([...crypto, ...mapped]);
+        const us = await marketService.searchUsStocks(q).catch(() => []);
+        const usMapped = us.slice(0, 8).map((s: any) => ({ code: s.code, name: s.name, market: 'US_STOCK' }));
+        const etfs = await marketService.searchEtfs(q).catch(() => []);
+        const etfMapped = etfs.slice(0, 8).map((s: any) => ({ code: s.code, name: s.name, market: 'ETF' }));
+        setSearchResults([...crypto, ...mapped, ...usMapped, ...etfMapped]);
         setShowDropdown(true);
       } finally {
         setIsSearching(false);
@@ -133,6 +145,13 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
       if (positionSizing !== 'ALL_IN') {
         req.positionSizing = positionSizing;
         if (positionValue) req.positionValue = parseFloat(positionValue);
+      }
+      if (useMonthlyContribution && monthlyContribution && parseFloat(monthlyContribution) > 0) {
+        req.monthlyContribution = parseFloat(monthlyContribution);
+      }
+      // 배당 자동 재투자: 미국주식·ETF 한정. 사용자가 OFF 했을 때만 false 전송 (기본값 true 는 생략).
+      if ((assetType === 'US_STOCK' || assetType === 'ETF') && !dividendReinvest) {
+        req.dividendReinvest = false;
       }
       const res = await strategyService.runBacktest(req);
       setResult(res);
@@ -201,8 +220,8 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
                 <button key={`${r.market}-${r.code}`} type="button" onClick={() => selectStock(r.code, r.name, r.market)}
                   className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs flex items-center justify-between transition-colors first:rounded-t-xl last:rounded-b-xl">
                   <span className="font-medium text-gray-800 truncate">{r.name} <span className="text-gray-400">({r.code})</span></span>
-                  <span className={`ml-2 flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                    {r.market === 'STOCK' ? '주식' : '코인'}
+                  <span className={`ml-2 flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-50 text-indigo-600' : r.market === 'US_STOCK' ? 'bg-blue-50 text-blue-600' : r.market === 'ETF' ? 'bg-teal-50 text-teal-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                    {r.market === 'STOCK' ? '주식' : r.market === 'US_STOCK' ? '미국주식' : r.market === 'ETF' ? 'ETF' : '코인'}
                   </span>
                 </button>
               ))}
@@ -229,6 +248,24 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
           <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">초기 투자금 (원)</label>
           <input type="number" value={capital} onChange={e => setCapital(e.target.value)} placeholder="10000000"
             className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-400 outline-none" />
+        </div>
+
+        {/* 적립식 투자 */}
+        <div className="p-2.5 bg-gray-50/80 rounded-xl border border-gray-200 space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={useMonthlyContribution}
+              onChange={e => setUseMonthlyContribution(e.target.checked)}
+              className="w-3.5 h-3.5 rounded" />
+            <span className="text-xs font-semibold text-gray-700">적립식 투자 (매월 첫 거래일)</span>
+          </label>
+          {useMonthlyContribution && (
+            <div className="flex items-center gap-2">
+              <input type="number" value={monthlyContribution} onChange={e => setMonthlyContribution(e.target.value)}
+                min="0" placeholder="1000000"
+                className="flex-1 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs focus:ring-1 focus:ring-blue-400 outline-none" />
+              <span className="text-[10px] text-gray-500">원 / 월</span>
+            </div>
+          )}
         </div>
 
         {/* 리스크 관리 & 고급 설정 토글 */}
@@ -316,6 +353,23 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
                   <input type="number" value={positionValue} onChange={e => setPositionValue(e.target.value)}
                     className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs"
                     placeholder={positionSizing === 'PERCENT' ? '50' : '5000000'} min="0" />
+                </div>
+              )}
+              {/* 배당 자동 재투자 (미국주식·ETF 한정) */}
+              {(assetType === 'US_STOCK' || assetType === 'ETF') && (
+                <div className="pt-2 border-t border-gray-200">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={dividendReinvest}
+                      onChange={e => setDividendReinvest(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded accent-blue-500" />
+                    <span className="text-[11px] font-semibold text-gray-700">배당 자동 재투자 (DRIP)</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-600">미국주식·ETF</span>
+                  </label>
+                  <p className="text-[10px] mt-1 text-gray-400 leading-relaxed">
+                    {dividendReinvest
+                      ? 'ON: 수정 종가(adjclose) 기반 — 배당이 자동으로 가격에 반영됩니다 (Total Return).'
+                      : 'OFF: 일반 종가 + 배당 지급일에 cash 누적. 결과에 누적 배당 합계 표기.'}
+                  </p>
                 </div>
               )}
             </div>

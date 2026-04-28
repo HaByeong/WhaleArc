@@ -37,7 +37,7 @@ public class Order {
     private OrderStatus status;
     private BigDecimal filledQuantity;
     private BigDecimal filledPrice;
-    private String assetType; // "STOCK" or "CRYPTO"
+    private String assetType; // "STOCK", "CRYPTO", "US_STOCK", "ETF" (null → CRYPTO)
     private String memo;
     private Instant createdAt;
     private Instant updatedAt;
@@ -75,5 +75,9 @@ public class Order {
 
     public boolean isUsStock() {
         return "US_STOCK".equals(assetType);
+    }
+
+    public boolean isEtf() {
+        return "ETF".equals(assetType);
     }
 }

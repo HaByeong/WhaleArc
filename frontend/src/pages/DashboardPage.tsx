@@ -987,9 +987,46 @@ const DashboardPage = () => {
                       </div>
                     ) : null;
                   })()}
+                  {/* 미국주식 / ETF 섹션 */}
+                  {(() => {
+                    const usHoldings = portfolio.holdings.filter(h => h.assetType === 'US_STOCK' || h.assetType === 'ETF');
+                    return usHoldings.length > 0 ? (
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <img src="/whales/spotted-dolphin.png" alt="미국주식/ETF" className="w-5 h-5 object-contain" loading="lazy" />
+                          <span className="text-sm font-bold text-blue-600">미국주식 / ETF</span>
+                          <span className="text-xs text-gray-400">{usHoldings.length}종목</span>
+                        </div>
+                        <div className="space-y-2">
+                          {usHoldings.slice(0, 5).map((holding) => (
+                            <div key={holding.stockCode} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-semibold text-sm text-gray-800">{holding.stockName || holding.stockCode}</span>
+                                  {holding.assetType === 'ETF' && (
+                                    <span className="px-1 py-0.5 text-[9px] font-semibold bg-teal-50 text-teal-600 rounded">ETF</span>
+                                  )}
+                                  {holding.assetType === 'US_STOCK' && (
+                                    <span className="px-1 py-0.5 text-[9px] font-semibold bg-blue-50 text-blue-600 rounded">미국주식</span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-400">{Math.floor(holding.quantity)}주 보유</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-semibold text-gray-800">${holding.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                <div className={`text-xs font-semibold ${holding.returnRate >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                                  {holding.returnRate >= 0 ? '▲ +' : '▼ '}{holding.returnRate.toFixed(2)}%
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
                   {/* 가상화폐 섹션 */}
                   {(() => {
-                    const cryptoHoldings = portfolio.holdings.filter(h => h.assetType !== 'STOCK');
+                    const cryptoHoldings = portfolio.holdings.filter(h => h.assetType !== 'STOCK' && h.assetType !== 'US_STOCK' && h.assetType !== 'ETF');
                     return cryptoHoldings.length > 0 ? (
                       <div>
                         <div className="flex items-center gap-1.5 mb-2">

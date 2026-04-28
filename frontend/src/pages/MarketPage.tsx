@@ -70,8 +70,8 @@ const MarketPage = () => {
   const [favoriteAssets, setFavoriteAssets] = useState<string[]>([]);
 
   // 탭별 데이터 캐시 (stale-while-revalidate)
-  const assetCacheRef = useRef<Record<AssetType, MarketPrice[]>>({ STOCK: [], CRYPTO: [], US_STOCK: [] });
-  const selectionCacheRef = useRef<Record<AssetType, MarketPrice | null>>({ STOCK: null, CRYPTO: null, US_STOCK: null });
+  const assetCacheRef = useRef<Record<AssetType, MarketPrice[]>>({ STOCK: [], CRYPTO: [], US_STOCK: [], ETF: [] });
+  const selectionCacheRef = useRef<Record<AssetType, MarketPrice | null>>({ STOCK: null, CRYPTO: null, US_STOCK: null, ETF: null });
 
   // 환율 상태 (미국주식 탭용)
   const [usdKrwRate, setUsdKrwRate] = useState<number>(1400);
@@ -87,7 +87,7 @@ const MarketPage = () => {
     setFilterText(keyword);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
-    if ((assetType !== 'STOCK' && assetType !== 'US_STOCK') || keyword.trim().length < 2) {
+    if ((assetType !== 'STOCK' && assetType !== 'US_STOCK' && assetType !== 'ETF') || keyword.trim().length < 2) {
       setSearchResults([]);
       return;
     }
@@ -98,6 +98,8 @@ const MarketPage = () => {
       try {
         const results = assetType === 'US_STOCK'
           ? await marketService.searchUsStocks(keyword)
+          : assetType === 'ETF'
+          ? await marketService.searchEtfs(keyword)
           : await marketService.searchStocks(keyword);
         // 이미 리스트에 있는 종목 제외
         const existing = new Set(assetList.map(a => a.symbol));
@@ -191,8 +193,8 @@ const MarketPage = () => {
   useEffect(() => {
     loadData();
 
-    // 주식/미국주식 탭: 10초마다 시세 갱신 (가상화폐는 WebSocket 사용)
-    if (assetType === 'STOCK' || assetType === 'US_STOCK') {
+    // 주식/미국주식/ETF 탭: 10초마다 시세 갱신 (가상화폐는 WebSocket 사용)
+    if (assetType === 'STOCK' || assetType === 'US_STOCK' || assetType === 'ETF') {
       let consecutiveFails = 0;
       const interval = setInterval(async () => {
         try {
@@ -403,8 +405,8 @@ const MarketPage = () => {
               </div>
             )}
           </div>
-          <p className={`mb-3 ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>주식/미국주식/가상화폐 시세를 한 곳에서 확인하세요</p>
-          <div className="flex space-x-3">
+          <p className={`mb-3 ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>주식/미국주식/ETF/가상화폐 시세를 한 곳에서 확인하세요</p>
+          <div className="flex flex-wrap gap-3">
             <button
               type="button"
               className={`px-4 py-2 rounded-lg text-sm font-semibold min-h-[44px] ${
@@ -426,6 +428,17 @@ const MarketPage = () => {
               onClick={() => { selectionCacheRef.current[assetType] = selectedAsset; searchAddedRef.current = []; setAssetType('US_STOCK'); setSelectedAsset(selectionCacheRef.current['US_STOCK']); setChartType('area'); }}
             >
               미국주식
+            </button>
+            <button
+              type="button"
+              className={`px-4 py-2 rounded-lg text-sm font-semibold min-h-[44px] ${
+                assetType === 'ETF'
+                  ? isDark ? 'bg-cyan-500 text-white shadow-md' : 'bg-whale-light text-white shadow-md'
+                  : isDark ? 'bg-white/[0.04] text-slate-400 border border-white/[0.06] hover:bg-white/[0.06]' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }`}
+              onClick={() => { selectionCacheRef.current[assetType] = selectedAsset; searchAddedRef.current = []; setAssetType('ETF'); setSelectedAsset(selectionCacheRef.current['ETF']); setChartType('area'); }}
+            >
+              ETF
             </button>
             <button
               type="button"
@@ -478,9 +491,9 @@ const MarketPage = () => {
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder={assetType === 'STOCK' ? '전체 KOSPI/KOSDAQ 종목 검색...' : assetType === 'US_STOCK' ? '미국주식 검색 (애플, AAPL...)' : '가상화폐 검색 (이름/코드)...'}
+                    placeholder={assetType === 'STOCK' ? '전체 KOSPI/KOSDAQ 종목 검색...' : assetType === 'US_STOCK' ? '미국주식 검색 (애플, AAPL...)' : assetType === 'ETF' ? '미국 ETF 검색 (QQQ, SCHD...)' : '가상화폐 검색 (이름/코드)...'}
                     value={filterText}
-                    onChange={(e) => (assetType === 'STOCK' || assetType === 'US_STOCK') ? handleStockSearch(e.target.value) : setFilterText(e.target.value)}
+                    onChange={(e) => (assetType === 'STOCK' || assetType === 'US_STOCK' || assetType === 'ETF') ? handleStockSearch(e.target.value) : setFilterText(e.target.value)}
                     className="input-field"
                   />
                   {searchLoading && (
@@ -564,16 +577,16 @@ const MarketPage = () => {
                             {isFavorite(asset) && <svg className={`w-3 h-3 flex-shrink-0 ${isDark ? 'text-cyan-400' : 'text-whale-light'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>}
                           </div>
                           <div className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
-                            {asset.symbol} {asset.assetType === 'CRYPTO' ? '/ KRW' : asset.assetType === 'US_STOCK' ? '/ USD' : ''}
+                            {asset.symbol} {asset.assetType === 'CRYPTO' ? '/ KRW' : (asset.assetType === 'US_STOCK' || asset.assetType === 'ETF') ? '/ USD' : ''}
                           </div>
                         </div>
                         <div className="text-right">
                           <div className={`font-semibold ${isDark ? 'text-slate-100' : 'text-whale-dark'}`}>
-                            {asset.assetType === 'US_STOCK'
+                            {(asset.assetType === 'US_STOCK' || asset.assetType === 'ETF')
                               ? `$${asset.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                               : formatCurrency(asset.price)}
                           </div>
-                          {asset.assetType === 'US_STOCK' && (
+                          {(asset.assetType === 'US_STOCK' || asset.assetType === 'ETF') && (
                             <div className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
                               {formatCurrency(Math.round(asset.price * usdKrwRate))}
                             </div>
@@ -600,6 +613,11 @@ const MarketPage = () => {
                   * 미국주식 시세는 약 15~20초 지연 · 환율 1$ ≈ ₩{usdKrwRate.toLocaleString()}
                 </p>
               )}
+              {assetType === 'ETF' && (
+                <p className={`text-[10px] text-right mt-2 ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+                  * ETF 시세는 약 15~20초 지연 · 환율 1$ ≈ ₩{usdKrwRate.toLocaleString()}
+                </p>
+              )}
             </div>
           </div>
 
@@ -614,16 +632,16 @@ const MarketPage = () => {
                       <h2 className={`text-xl md:text-2xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>{liveSelectedAsset.name}</h2>
                       <p className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
                         {liveSelectedAsset.symbol}
-                        {liveSelectedAsset.assetType === 'CRYPTO' ? ' / KRW' : liveSelectedAsset.assetType === 'US_STOCK' ? ' / USD' : ''}
+                        {liveSelectedAsset.assetType === 'CRYPTO' ? ' / KRW' : (liveSelectedAsset.assetType === 'US_STOCK' || liveSelectedAsset.assetType === 'ETF') ? ' / USD' : ''}
                       </p>
                     </div>
                     <div className="text-left sm:text-right">
                       <div className={`text-2xl md:text-3xl font-bold mb-1 ${isDark ? 'text-white' : 'text-whale-dark'}`}>
-                        {liveSelectedAsset.assetType === 'US_STOCK'
+                        {(liveSelectedAsset.assetType === 'US_STOCK' || liveSelectedAsset.assetType === 'ETF')
                           ? `$${liveSelectedAsset.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                           : formatCurrency(liveSelectedAsset.price)}
                       </div>
-                      {liveSelectedAsset.assetType === 'US_STOCK' && (
+                      {(liveSelectedAsset.assetType === 'US_STOCK' || liveSelectedAsset.assetType === 'ETF') && (
                         <div className={`text-sm mb-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                           {formatCurrency(Math.round(liveSelectedAsset.price * usdKrwRate))}
                         </div>
@@ -800,7 +818,7 @@ const MarketPage = () => {
                         symbol={liveSelectedAsset.symbol}
                         price={liveSelectedAsset.price}
                         changeRate={liveSelectedAsset.changeRate}
-                        assetType={assetType === 'US_STOCK' ? 'US_STOCK' : 'STOCK'}
+                        assetType={assetType === 'US_STOCK' ? 'US_STOCK' : assetType === 'ETF' ? 'ETF' : 'STOCK'}
                         activeIndicators={activeIndicators}
                         isDark={isDark}
                       />
@@ -813,7 +831,7 @@ const MarketPage = () => {
                   <div className="card text-center">
                     <div className={`text-sm mb-1 ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>전일 종가</div>
                     <div className={`text-lg md:text-xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>
-                      {liveSelectedAsset.assetType === 'US_STOCK'
+                      {(liveSelectedAsset.assetType === 'US_STOCK' || liveSelectedAsset.assetType === 'ETF')
                         ? `$${(liveSelectedAsset.price - liveSelectedAsset.change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                         : formatCurrency(liveSelectedAsset.price - liveSelectedAsset.change)}
                     </div>
@@ -828,7 +846,7 @@ const MarketPage = () => {
                     <div className={`text-sm mb-1 ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>등락액</div>
                     <div className={`text-xl font-bold ${liveSelectedAsset.change >= 0 ? 'price-up' : 'price-down'}`}>
                       {liveSelectedAsset.change >= 0 ? '+' : ''}
-                      {liveSelectedAsset.assetType === 'US_STOCK'
+                      {(liveSelectedAsset.assetType === 'US_STOCK' || liveSelectedAsset.assetType === 'ETF')
                         ? `$${Math.abs(liveSelectedAsset.change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                         : formatCurrency(liveSelectedAsset.change)}
                     </div>

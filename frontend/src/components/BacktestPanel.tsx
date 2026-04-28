@@ -53,6 +53,9 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
   const [useMonthlyContribution, setUseMonthlyContribution] = useState(false);
   const [monthlyContribution, setMonthlyContribution] = useState('');
 
+  /* 배당 자동 재투자 (DRIP, 미국주식·ETF 한정. true = adjclose, false = 일반 close + 배당 cash) */
+  const [dividendReinvest, setDividendReinvest] = useState(true);
+
   /* 리스크 관리 & 고급 설정 */
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [stopLossPercent, setStopLossPercent] = useState('');
@@ -145,6 +148,10 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
       }
       if (useMonthlyContribution && monthlyContribution && parseFloat(monthlyContribution) > 0) {
         req.monthlyContribution = parseFloat(monthlyContribution);
+      }
+      // 배당 자동 재투자: 미국주식·ETF 한정. 사용자가 OFF 했을 때만 false 전송 (기본값 true 는 생략).
+      if ((assetType === 'US_STOCK' || assetType === 'ETF') && !dividendReinvest) {
+        req.dividendReinvest = false;
       }
       const res = await strategyService.runBacktest(req);
       setResult(res);
@@ -346,6 +353,23 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
                   <input type="number" value={positionValue} onChange={e => setPositionValue(e.target.value)}
                     className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs"
                     placeholder={positionSizing === 'PERCENT' ? '50' : '5000000'} min="0" />
+                </div>
+              )}
+              {/* 배당 자동 재투자 (미국주식·ETF 한정) */}
+              {(assetType === 'US_STOCK' || assetType === 'ETF') && (
+                <div className="pt-2 border-t border-gray-200">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={dividendReinvest}
+                      onChange={e => setDividendReinvest(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded accent-blue-500" />
+                    <span className="text-[11px] font-semibold text-gray-700">배당 자동 재투자 (DRIP)</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-600">미국주식·ETF</span>
+                  </label>
+                  <p className="text-[10px] mt-1 text-gray-400 leading-relaxed">
+                    {dividendReinvest
+                      ? 'ON: 수정 종가(adjclose) 기반 — 배당이 자동으로 가격에 반영됩니다 (Total Return).'
+                      : 'OFF: 일반 종가 + 배당 지급일에 cash 누적. 결과에 누적 배당 합계 표기.'}
+                  </p>
                 </div>
               )}
             </div>

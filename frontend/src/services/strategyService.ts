@@ -61,6 +61,8 @@ export interface BacktestRequest {
   secondAssetType?: string;
   firstAssetWeight?: number;  // 0~100, 기본 50
   rebalanceFrequency?: 'MONTHLY' | 'QUARTERLY' | 'YEARLY';  // 기본 MONTHLY
+  // 배당 처리 (미국주식·ETF 한정. null/true=재투자 ON → adjclose, false=OFF → 일반 close + 배당 cash 입금)
+  dividendReinvest?: boolean;
   // 종목 분석 모드: 직접 조건 입력
   indicators?: Indicator[];
   entryConditions?: Condition[];
@@ -126,6 +128,9 @@ export interface BacktestResult {
   secondAssetTradeCount?: number;
   rebalanceCount?: number;
   rebalanceFrequency?: 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+  // 배당 처리
+  dividendReinvest?: boolean;       // true = adjclose 사용 (자동 재투자)
+  totalDividendsReceived?: number;  // OFF 모드일 때 누적 배당 cash 입금액 (native 단위)
   // 지표 요약 (0-trade 디버깅용)
   indicatorSummary?: Record<string, { min: number; max: number; avg: number; last: number }>;
 }

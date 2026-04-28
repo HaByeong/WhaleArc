@@ -103,6 +103,9 @@ const StrategyPage = () => {
   const [useMonthlyContribution, setUseMonthlyContribution] = useState(false);
   const [monthlyContribution, setMonthlyContribution] = useState('');
 
+  // 배당 처리 (미국주식·ETF 한정. true = adjclose 자동 재투자, false = 일반 close + 배당 cash 입금)
+  const [dividendReinvest, setDividendReinvest] = useState(true);
+
   // 2자산 리밸런싱 (두 번째 자산 + 비중)
   const [useRebalance, setUseRebalance] = useState(false);
   const [secondStockCode, setSecondStockCode] = useState('');
@@ -782,6 +785,12 @@ const StrategyPage = () => {
       if (selectedStrategy?.id === 'preset-buy-hold'
           && (!request.maxPositions || request.maxPositions <= 1)) {
         request.maxPositions = 999;
+      }
+      // 배당 처리: 미국주식·ETF 의 경우만 의미. 사용자가 명시적으로 OFF 했을 때만 false 전송 (기본값 true 는 생략)
+      const isUsAsset = backtestAssetType === 'US_STOCK' || backtestAssetType === 'ETF'
+        || secondAssetType === 'US_STOCK' || secondAssetType === 'ETF';
+      if (isUsAsset && !dividendReinvest) {
+        request.dividendReinvest = false;
       }
       // 2자산 리밸런싱 (두 번째 자산이 선택돼 있을 때만)
       if (useRebalance && secondStockCode && secondStockCode.trim() && secondStockCode !== backtestStockCode) {
@@ -2114,6 +2123,17 @@ const StrategyPage = () => {
                       </div>
                     );
                   })()}
+                  {backtestResult.dividendReinvest === false && (backtestResult.totalDividendsReceived ?? 0) > 0 && (() => {
+                    const rate = backtestResult.currency === 'USD' ? (backtestResult.exchangeRate || 1400) : 1;
+                    const divKrw = Math.round((backtestResult.totalDividendsReceived ?? 0) * rate);
+                    return (
+                      <div className={`mb-3 px-3 py-2 rounded-lg text-xs ${isDark ? 'bg-amber-500/5 border border-amber-500/20 text-slate-300' : 'bg-amber-50 border border-amber-200 text-gray-700'}`}>
+                        <span className={`font-semibold ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>받은 배당 합계</span>{' '}
+                        <span className="font-semibold">{formatCurrency(divKrw)}</span>{' '}
+                        <span className={isDark ? 'text-slate-500' : 'text-gray-500'}>· 배당 자동 재투자 OFF 모드 (배당 지급일에 cash 누적)</span>
+                      </div>
+                    );
+                  })()}
                   {backtestResult.secondStockCode && (() => {
                     const rate = backtestResult.currency === 'USD' ? (backtestResult.exchangeRate || 1400) : 1;
                     const aFinalKrw = Math.round((backtestResult.firstAssetFinalValue ?? 0) * rate);
@@ -2732,6 +2752,25 @@ const StrategyPage = () => {
                         className={`w-full px-2 py-1.5 rounded-lg text-xs ${isDark ? 'bg-white/[0.04] border border-white/10 text-white' : 'bg-white border border-gray-200 text-gray-800'}`} />
                     </div>
                   </div>
+
+                  {/* ── 배당 처리 (미국주식·ETF 한정) ── */}
+                  {(backtestAssetType === 'US_STOCK' || backtestAssetType === 'ETF'
+                    || (useRebalance && (secondAssetType === 'US_STOCK' || secondAssetType === 'ETF'))) && (
+                    <div className={`pt-3 ${isDark ? 'border-t border-white/[0.06]' : 'border-t border-gray-200'}`}>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={dividendReinvest}
+                          onChange={e => setDividendReinvest(e.target.checked)}
+                          className="w-3.5 h-3.5 rounded accent-whale-light" />
+                        <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>배당 자동 재투자 (DRIP)</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600'}`}>미국주식·ETF</span>
+                      </label>
+                      <p className={`text-[10px] mt-1 leading-relaxed ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                        {dividendReinvest
+                          ? '체크: 수정 종가(adjclose) 기반 — 배당이 자동으로 가격에 반영되어 재투자된 결과를 측정합니다 (Total Return).'
+                          : '체크 해제: 일반 종가 기반 + 배당 지급일에 보유 수량만큼 cash 추가. 결과 패널에 누적 배당 합계가 표시됩니다.'}
+                      </p>
+                    </div>
+                  )}
 
                   {/* ── 2자산 리밸런싱 ── */}
                   <div className={`pt-3 ${isDark ? 'border-t border-white/[0.06]' : 'border-t border-gray-200'}`}>

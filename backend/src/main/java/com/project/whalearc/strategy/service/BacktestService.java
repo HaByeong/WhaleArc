@@ -877,10 +877,10 @@ public class BacktestService {
         double sharpeRatio = calculateSharpeRatio(dailyReturns, assetType);
         double sortinoRatio = calculateSortinoRatio(dailyReturns, assetType);
 
-        // Profit Factor
+        // Profit Factor — 손실 거래가 하나도 없으면 "정의 불가". null 로 응답하고 프런트에서 "—" 표시.
         double totalWinAmount = winAmounts.stream().mapToDouble(Double::doubleValue).sum();
         double totalLossAmount = lossAmounts.stream().mapToDouble(Double::doubleValue).sum();
-        double profitFactor = totalLossAmount > 0 ? totalWinAmount / totalLossAmount : totalWinAmount > 0 ? Double.MAX_VALUE : 0;
+        Double profitFactor = totalLossAmount > 0 ? round2(totalWinAmount / totalLossAmount) : null;
 
         // 평균 이익/손실
         double avgWin = winAmounts.isEmpty() ? 0 : winAmounts.stream().mapToDouble(Double::doubleValue).average().orElse(0);
@@ -891,8 +891,8 @@ public class BacktestService {
         // 평균 보유기간
         double avgHoldingDays = holdingDaysList.isEmpty() ? 0 : holdingDaysList.stream().mapToInt(Integer::intValue).average().orElse(0);
 
-        // Payoff Ratio (RR 비율)
-        double payoffRatio = avgLoss > 0 ? avgWin / avgLoss : avgWin > 0 ? Double.MAX_VALUE : 0;
+        // Payoff Ratio (RR 비율) — avgLoss 0 이면 정의 불가 → null
+        Double payoffRatio = avgLoss > 0 ? round2(avgWin / avgLoss) : null;
 
         // CAGR (실제 달력 일수 기반) — 분모는 총 납입액
         // 주의: 적립식의 money-weighted IRR 완전 대체는 아니지만 MVP 근사로 충분
@@ -905,9 +905,8 @@ public class BacktestService {
                 ? (Math.pow(cagrRatio, 1.0 / years) - 1) * 100
                 : totalReturnRate;
 
-        // Recovery Factor (드로다운 없이 수익이면 최대값 표시)
-        double recoveryFactor = maxDrawdown > 0 ? totalReturnRate / maxDrawdown
-                : (totalReturnRate > 0 ? 999.99 : 0);
+        // Recovery Factor — maxDrawdown=0 이면 정의 불가 → null
+        Double recoveryFactor = maxDrawdown > 0 ? round2(totalReturnRate / maxDrawdown) : null;
 
         // Buy & Hold 벤치마크
         // 적립식 off: 시작일 initialCapital 일시불 매수 후 보유 (기존 로직)
@@ -1019,8 +1018,8 @@ public class BacktestService {
                 .trades(trades)
                 .buyHoldReturnRate(round2(buyHoldReturnRate))
                 .buyHoldCurve(buyHoldCurve)
-                // 고급 지표
-                .profitFactor(round2(Math.min(profitFactor, 9999)))
+                // 고급 지표 (정의 불가 분모면 null)
+                .profitFactor(profitFactor)
                 .sortinoRatio(round2(sortinoRatio))
                 .cagr(round2(cagr))
                 .avgWin(Math.round(avgWin))
@@ -1031,8 +1030,8 @@ public class BacktestService {
                 .maxConsecutiveLosses(maxLossStreak)
                 .avgHoldingDays(round2(avgHoldingDays))
                 .maxDrawdownDuration(maxDrawdownDuration)
-                .recoveryFactor(round2(recoveryFactor))
-                .payoffRatio(round2(Math.min(payoffRatio, 9999)))
+                .recoveryFactor(recoveryFactor)
+                .payoffRatio(payoffRatio)
                 // 차트 데이터
                 .drawdownCurve(drawdownCurve)
                 .priceData(priceData)
@@ -1122,6 +1121,16 @@ public class BacktestService {
         double maxDrawdown = 0;
         double totalDividendsReceived = 0; // OFF 모드 누적 배당 cash (native 단위)
         java.time.YearMonth prevYm = null;
+
+        // 고급 지표용 bookkeeping (simulate 와 동일한 트래킹 로직, 자산 A·B 합산)
+        List<Double> winAmounts = new ArrayList<>();
+        List<Double> lossAmounts = new ArrayList<>();
+        List<Double> winRates = new ArrayList<>();
+        List<Double> lossRates = new ArrayList<>();
+        List<Integer> holdingDaysList = new ArrayList<>();
+        int curStreak = 0, maxWinStreak = 0, maxLossStreak = 0;
+        int drawdownStart = -1;
+        int maxDrawdownDuration = 0;
 
         for (int idx = 0; idx < joined.size(); idx++) {
             int aIdx = joined.get(idx)[0];
@@ -1254,12 +1263,22 @@ public class BacktestService {
                 double sellProceeds = qtyA * execPrice * (1 - commissionRate);
                 double pnl = sellProceeds - qtyA * entryPriceA;
                 double pnlRate = entryPriceA > 0 ? (execPrice - entryPriceA) / entryPriceA * 100 : 0;
-                if (pnl >= 0) profitable++; else losing++;
+                int holdDays = idx - entryDayIndexA;
+                if (pnl > 0) {
+                    profitable++; winAmounts.add(pnl); winRates.add(pnlRate);
+                    curStreak = curStreak >= 0 ? curStreak + 1 : 1;
+                    if (curStreak > maxWinStreak) maxWinStreak = curStreak;
+                } else if (pnl < 0) {
+                    losing++; lossAmounts.add(Math.abs(pnl)); lossRates.add(Math.abs(pnlRate));
+                    curStreak = curStreak <= 0 ? curStreak - 1 : -1;
+                    if (-curStreak > maxLossStreak) maxLossStreak = -curStreak;
+                }
+                holdingDaysList.add(holdDays);
                 cashA += sellProceeds;
                 trades.add(BacktestResponse.TradeDto.builder()
                         .date(date).type("SELL_A").price(round2(execPrice)).quantity(qtyA)
                         .pnl(round2(pnl)).pnlPercent(round2(pnlRate)).reason("자산A 청산")
-                        .holdingDays(idx - entryDayIndexA)
+                        .holdingDays(holdDays)
                         .balance(Math.round(cashA + cashB + qtyB * priceB))
                         .build());
                 qtyA = 0;
@@ -1289,12 +1308,22 @@ public class BacktestService {
                 double sellProceeds = qtyB * execPrice * (1 - commissionRate);
                 double pnl = sellProceeds - qtyB * entryPriceB;
                 double pnlRate = entryPriceB > 0 ? (execPrice - entryPriceB) / entryPriceB * 100 : 0;
-                if (pnl >= 0) profitable++; else losing++;
+                int holdDays = idx - entryDayIndexB;
+                if (pnl > 0) {
+                    profitable++; winAmounts.add(pnl); winRates.add(pnlRate);
+                    curStreak = curStreak >= 0 ? curStreak + 1 : 1;
+                    if (curStreak > maxWinStreak) maxWinStreak = curStreak;
+                } else if (pnl < 0) {
+                    losing++; lossAmounts.add(Math.abs(pnl)); lossRates.add(Math.abs(pnlRate));
+                    curStreak = curStreak <= 0 ? curStreak - 1 : -1;
+                    if (-curStreak > maxLossStreak) maxLossStreak = -curStreak;
+                }
+                holdingDaysList.add(holdDays);
                 cashB += sellProceeds;
                 trades.add(BacktestResponse.TradeDto.builder()
                         .date(date).type("SELL_B").price(round2(execPrice)).quantity(qtyB)
                         .pnl(round2(pnl)).pnlPercent(round2(pnlRate)).reason("자산B 청산")
-                        .holdingDays(idx - entryDayIndexB)
+                        .holdingDays(holdDays)
                         .balance(Math.round(cashA + cashB + qtyA * priceA))
                         .build());
                 qtyB = 0;
@@ -1304,7 +1333,16 @@ public class BacktestService {
 
             // ── equity / drawdown / dailyReturn ──
             double equity = cashA + qtyA * priceA + cashB + qtyB * priceB;
-            if (equity >= peakEquity) peakEquity = equity;
+            if (equity >= peakEquity) {
+                peakEquity = equity;
+                if (drawdownStart >= 0) {
+                    int duration = idx - drawdownStart;
+                    if (duration > maxDrawdownDuration) maxDrawdownDuration = duration;
+                }
+                drawdownStart = -1;
+            } else if (drawdownStart < 0) {
+                drawdownStart = idx;
+            }
             double drawdown = peakEquity > 0 ? (peakEquity - equity) / peakEquity * 100 : 0;
             if (drawdown > maxDrawdown) maxDrawdown = drawdown;
             drawdownCurve.add(BacktestResponse.EquityPointDto.builder().date(date).value(Math.round(-drawdown * 100.0) / 100.0).build());
@@ -1317,6 +1355,12 @@ public class BacktestService {
             prevEquity = equity;
         }
 
+        // 마지막 낙폭 지속기간 마무리
+        if (drawdownStart >= 0) {
+            int duration = joined.size() - 1 - drawdownStart;
+            if (duration > maxDrawdownDuration) maxDrawdownDuration = duration;
+        }
+
         // ── 강제 청산 ──
         int lastIdx = joined.size() - 1;
         double lastPriceA = candlesA.get(joined.get(lastIdx)[0]).getClose();
@@ -1326,12 +1370,23 @@ public class BacktestService {
             double execPrice = lastPriceA * (1 - slippage);
             double proceeds = qtyA * execPrice * (1 - commissionRate);
             double pnl = proceeds - qtyA * entryPriceA;
-            if (pnl >= 0) profitable++; else losing++;
+            double pnlRate = entryPriceA > 0 ? (execPrice - entryPriceA) / entryPriceA * 100 : 0;
+            int holdDays = lastIdx - entryDayIndexA;
+            if (pnl > 0) {
+                profitable++; winAmounts.add(pnl); winRates.add(pnlRate);
+                curStreak = curStreak >= 0 ? curStreak + 1 : 1;
+                if (curStreak > maxWinStreak) maxWinStreak = curStreak;
+            } else if (pnl < 0) {
+                losing++; lossAmounts.add(Math.abs(pnl)); lossRates.add(Math.abs(pnlRate));
+                curStreak = curStreak <= 0 ? curStreak - 1 : -1;
+                if (-curStreak > maxLossStreak) maxLossStreak = -curStreak;
+            }
+            holdingDaysList.add(holdDays);
             cashA += proceeds;
             trades.add(BacktestResponse.TradeDto.builder()
                     .date(lastDate).type("SELL_A").price(round2(execPrice)).quantity(qtyA)
-                    .pnl(round2(pnl)).pnlPercent(0).reason("종료 강제 청산 (자산A)")
-                    .holdingDays(lastIdx - entryDayIndexA).balance(Math.round(cashA + cashB))
+                    .pnl(round2(pnl)).pnlPercent(round2(pnlRate)).reason("종료 강제 청산 (자산A)")
+                    .holdingDays(holdDays).balance(Math.round(cashA + cashB))
                     .build());
             qtyA = 0;
             aTrades++;
@@ -1340,12 +1395,23 @@ public class BacktestService {
             double execPrice = lastPriceB * (1 - slippage);
             double proceeds = qtyB * execPrice * (1 - commissionRate);
             double pnl = proceeds - qtyB * entryPriceB;
-            if (pnl >= 0) profitable++; else losing++;
+            double pnlRate = entryPriceB > 0 ? (execPrice - entryPriceB) / entryPriceB * 100 : 0;
+            int holdDays = lastIdx - entryDayIndexB;
+            if (pnl > 0) {
+                profitable++; winAmounts.add(pnl); winRates.add(pnlRate);
+                curStreak = curStreak >= 0 ? curStreak + 1 : 1;
+                if (curStreak > maxWinStreak) maxWinStreak = curStreak;
+            } else if (pnl < 0) {
+                losing++; lossAmounts.add(Math.abs(pnl)); lossRates.add(Math.abs(pnlRate));
+                curStreak = curStreak <= 0 ? curStreak - 1 : -1;
+                if (-curStreak > maxLossStreak) maxLossStreak = -curStreak;
+            }
+            holdingDaysList.add(holdDays);
             cashB += proceeds;
             trades.add(BacktestResponse.TradeDto.builder()
                     .date(lastDate).type("SELL_B").price(round2(execPrice)).quantity(qtyB)
-                    .pnl(round2(pnl)).pnlPercent(0).reason("종료 강제 청산 (자산B)")
-                    .holdingDays(lastIdx - entryDayIndexB).balance(Math.round(cashA + cashB))
+                    .pnl(round2(pnl)).pnlPercent(round2(pnlRate)).reason("종료 강제 청산 (자산B)")
+                    .holdingDays(holdDays).balance(Math.round(cashA + cashB))
                     .build());
             qtyB = 0;
             bTrades++;
@@ -1360,6 +1426,18 @@ public class BacktestService {
         // Sharpe / Sortino — 단일 자산 시뮬레이션과 동일 helper 재사용
         double sharpeRatio = calculateSharpeRatio(dailyReturns, assetTypeA);
         double sortinoRatio = calculateSortinoRatio(dailyReturns, assetTypeA);
+
+        // 고급 지표 (simulate 와 동일 공식)
+        double totalWinAmount = winAmounts.stream().mapToDouble(Double::doubleValue).sum();
+        double totalLossAmount = lossAmounts.stream().mapToDouble(Double::doubleValue).sum();
+        Double profitFactor = totalLossAmount > 0 ? round2(totalWinAmount / totalLossAmount) : null;
+        double avgWin = winAmounts.isEmpty() ? 0 : winAmounts.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double avgLoss = lossAmounts.isEmpty() ? 0 : lossAmounts.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double avgWinRate = winRates.isEmpty() ? 0 : winRates.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double avgLossRate = lossRates.isEmpty() ? 0 : lossRates.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double avgHoldingDays = holdingDaysList.isEmpty() ? 0 : holdingDaysList.stream().mapToInt(Integer::intValue).average().orElse(0);
+        Double payoffRatio = avgLoss > 0 ? round2(avgWin / avgLoss) : null;
+        Double recoveryFactor = maxDrawdown > 0 ? round2(totalReturnRate / maxDrawdown) : null;
 
         // CAGR
         java.time.LocalDate actualStart = java.time.LocalDate.parse(request.getStartDate());
@@ -1417,6 +1495,18 @@ public class BacktestService {
                 .buyHoldReturnRate(round2(bhReturnRate))
                 .buyHoldCurve(bhCurve)
                 .cagr(round2(cagr))
+                // 고급 지표 (정의 불가 분모면 null)
+                .profitFactor(profitFactor)
+                .avgWin(Math.round(avgWin))
+                .avgLoss(Math.round(avgLoss))
+                .avgWinRate(round2(avgWinRate))
+                .avgLossRate(round2(avgLossRate))
+                .maxConsecutiveWins(maxWinStreak)
+                .maxConsecutiveLosses(maxLossStreak)
+                .avgHoldingDays(round2(avgHoldingDays))
+                .maxDrawdownDuration(maxDrawdownDuration)
+                .recoveryFactor(recoveryFactor)
+                .payoffRatio(payoffRatio)
                 .drawdownCurve(drawdownCurve)
                 .priceData(priceData)
                 .currency(isUsd ? "USD" : "KRW")

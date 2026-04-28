@@ -2171,7 +2171,7 @@ const StrategyPage = () => {
                       { label: '총 수익률', value: formatPercent(backtestResult.totalReturnRate), glossary: '' },
                       { label: '최종 자산', value: formatCurrency(backtestResult.currency === 'USD' ? Math.round(backtestResult.finalValue * (backtestResult.exchangeRate || 1400)) : backtestResult.finalValue), glossary: '' },
                       { label: 'CAGR', value: formatPercent(backtestResult.cagr ?? 0), glossary: 'CAGR' },
-                      { label: 'Profit Factor', value: (backtestResult.profitFactor ?? 0).toFixed(2), glossary: 'ProfitFactor' },
+                      { label: 'Profit Factor', value: backtestResult.profitFactor != null ? backtestResult.profitFactor.toFixed(2) : '—', glossary: 'ProfitFactor' },
                       { label: '소르티노', value: (backtestResult.sortinoRatio ?? 0).toFixed(2), glossary: '소르티노' },
                       { label: '평균 보유', value: `${(backtestResult.avgHoldingDays ?? 0).toFixed(1)}일`, glossary: '평균보유' },
                       { label: '수익 거래', value: `${backtestResult.profitableTrades}회`, glossary: '' },

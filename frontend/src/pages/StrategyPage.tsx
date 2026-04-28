@@ -509,34 +509,57 @@ const StrategyPage = () => {
   const [backtestStockName, setBacktestStockName] = useState('');
   const [backtestAssetType, setBacktestAssetType] = useState<string>('CRYPTO');
   const [showBacktestDropdown, setShowBacktestDropdown] = useState(false);
+  const [quickPickCategory, setQuickPickCategory] = useState<'STOCK' | 'US_STOCK' | 'ETF' | 'CRYPTO'>('STOCK');
   const backtestSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backtestJustSelectedRef = useRef(false);
 
-  // 검색창 포커스 시 드롭다운에 보여줄 인기 종목 (빠른 선택용)
-  const BACKTEST_QUICK_PICKS: Array<{ market: string; label: string; items: { code: string; name: string }[] }> = [
-    { market: 'STOCK', label: '주식 (KRX)', items: [
+  // 검색창 포커스 시 드롭다운에 보여줄 인기 종목 (탭 + 스크롤 리스트)
+  const BACKTEST_QUICK_PICKS: Array<{ market: 'STOCK' | 'US_STOCK' | 'ETF' | 'CRYPTO'; label: string; items: { code: string; name: string }[] }> = [
+    { market: 'STOCK', label: '주식', items: [
       { code: '005930', name: '삼성전자' },
       { code: '000660', name: 'SK하이닉스' },
+      { code: '373220', name: 'LG에너지솔루션' },
+      { code: '207940', name: '삼성바이오로직스' },
+      { code: '005380', name: '현대차' },
+      { code: '000270', name: '기아' },
+      { code: '006400', name: '삼성SDI' },
+      { code: '051910', name: 'LG화학' },
       { code: '035420', name: 'NAVER' },
       { code: '035720', name: '카카오' },
-      { code: '005380', name: '현대차' },
-      { code: '207940', name: '삼성바이오로직스' },
+      { code: '068270', name: '셀트리온' },
+      { code: '105560', name: 'KB금융' },
+      { code: '055550', name: '신한지주' },
+      { code: '012330', name: '현대모비스' },
+      { code: '028260', name: '삼성물산' },
     ]},
     { market: 'US_STOCK', label: '미국주식', items: [
       { code: 'AAPL', name: '애플' },
-      { code: 'NVDA', name: '엔비디아' },
       { code: 'MSFT', name: '마이크로소프트' },
-      { code: 'TSLA', name: '테슬라' },
+      { code: 'NVDA', name: '엔비디아' },
       { code: 'GOOGL', name: '알파벳(구글)' },
+      { code: 'AMZN', name: '아마존' },
+      { code: 'TSLA', name: '테슬라' },
       { code: 'META', name: '메타' },
+      { code: 'AVGO', name: '브로드컴' },
+      { code: 'JPM', name: 'JP모건' },
+      { code: 'V', name: '비자' },
+      { code: 'WMT', name: '월마트' },
+      { code: 'COST', name: '코스트코' },
+      { code: 'NFLX', name: '넷플릭스' },
+      { code: 'AMD', name: 'AMD' },
+      { code: 'COIN', name: '코인베이스' },
     ]},
     { market: 'ETF', label: 'ETF', items: [
       { code: 'QQQ', name: 'Invesco QQQ (나스닥100)' },
-      { code: 'SCHD', name: 'Schwab 배당 ETF' },
+      { code: 'SCHD', name: 'Schwab 미국 배당주' },
       { code: 'SOXX', name: 'iShares 반도체' },
+      { code: 'SMH', name: 'VanEck 반도체' },
       { code: 'GLD', name: 'SPDR 골드' },
+      { code: 'SLV', name: 'iShares 실버' },
       { code: 'XLK', name: 'Tech Select Sector' },
       { code: 'XLF', name: 'Financial Select Sector' },
+      { code: 'XLE', name: 'Energy Select Sector' },
+      { code: 'XLV', name: 'Health Care Select Sector' },
     ]},
     { market: 'CRYPTO', label: '가상화폐', items: [
       { code: 'BTC', name: '비트코인' },
@@ -545,6 +568,15 @@ const StrategyPage = () => {
       { code: 'SOL', name: '솔라나' },
       { code: 'DOGE', name: '도지코인' },
       { code: 'ADA', name: '에이다' },
+      { code: 'AVAX', name: '아발란체' },
+      { code: 'LINK', name: '체인링크' },
+      { code: 'DOT', name: '폴카닷' },
+      { code: 'MATIC', name: '폴리곤' },
+      { code: 'TRX', name: '트론' },
+      { code: 'ATOM', name: '코스모스' },
+      { code: 'NEAR', name: '니어프로토콜' },
+      { code: 'APT', name: '앱토스' },
+      { code: 'SUI', name: '수이' },
     ]},
   ];
 
@@ -2320,30 +2352,44 @@ const StrategyPage = () => {
                     </div>
                   ) : null
                 ) : (
-                  // 카테고리 예시 모드 — 검색창이 비어있을 때
-                  <div className={`absolute z-20 w-full mt-1 rounded-xl shadow-xl max-h-72 overflow-y-auto ${isDark ? 'bg-[var(--wa-card-bg)] border border-white/[0.06]' : 'bg-white border border-gray-200'}`}>
-                    {BACKTEST_QUICK_PICKS.map((cat, ci) => (
-                      <div key={cat.market} className={ci > 0 ? (isDark ? 'border-t border-white/[0.04]' : 'border-t border-gray-100') : ''}>
-                        <div className={`flex items-center justify-between px-3 pt-2 pb-1 ${isDark ? 'bg-white/[0.02]' : 'bg-gray-50'}`}>
-                          <span className={`text-[10px] font-bold ${isDark ? 'text-slate-300' : 'text-whale-dark'}`}>{cat.label}</span>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${cat.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : cat.market === 'US_STOCK' ? 'bg-blue-100 text-blue-600' : cat.market === 'ETF' ? 'bg-teal-100 text-teal-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                            {cat.market === 'STOCK' ? '국내' : cat.market === 'US_STOCK' ? '미국' : cat.market === 'ETF' ? 'ETF' : '코인'}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-x-1 gap-y-0.5 px-2 py-1.5">
-                          {cat.items.map((it) => (
-                            <button key={`${cat.market}-${it.code}`} type="button"
-                              onMouseDown={(e) => { e.preventDefault(); handleBacktestStockSelect(it.code, it.name, cat.market); }}
-                              className={`text-left px-2 py-1.5 rounded-md text-[11px] truncate ${isDark ? 'hover:bg-white/[0.04] text-slate-300' : 'hover:bg-blue-50 text-gray-700'}`}>
-                              <span className="font-medium">{it.name}</span>{' '}
-                              <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({it.code})</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                    <div className={`px-3 py-2 text-[10px] ${isDark ? 'text-slate-500 border-t border-white/[0.04]' : 'text-gray-400 border-t border-gray-100'}`}>
-                      또는 위 검색창에 종목명·코드 입력 (BTC, 삼성전자, AAPL...)
+                  // 카테고리 모드 — 빈 검색창. 상단 탭 + 선택된 카테고리 종목 스크롤 리스트.
+                  <div className={`absolute z-20 w-full mt-1 rounded-xl shadow-xl overflow-hidden flex flex-col ${isDark ? 'bg-[var(--wa-card-bg)] border border-white/[0.06]' : 'bg-white border border-gray-200'}`}>
+                    {/* 카테고리 탭 */}
+                    <div className={`flex shrink-0 ${isDark ? 'border-b border-white/[0.06] bg-white/[0.02]' : 'border-b border-gray-200 bg-gray-50'}`}>
+                      {BACKTEST_QUICK_PICKS.map((cat) => {
+                        const active = quickPickCategory === cat.market;
+                        const dotColor = cat.market === 'STOCK' ? 'bg-indigo-400' : cat.market === 'US_STOCK' ? 'bg-blue-400' : cat.market === 'ETF' ? 'bg-teal-400' : 'bg-emerald-400';
+                        return (
+                          <button key={cat.market} type="button"
+                            onMouseDown={(e) => { e.preventDefault(); setQuickPickCategory(cat.market); }}
+                            className={`flex-1 py-2 px-2 text-[11px] font-semibold transition-colors border-b-2 flex items-center justify-center gap-1.5 ${
+                              active
+                                ? (isDark
+                                    ? 'text-cyan-400 border-cyan-400 bg-white/[0.04]'
+                                    : 'text-whale-light border-whale-light bg-white')
+                                : (isDark
+                                    ? 'text-slate-500 border-transparent hover:text-slate-300 hover:bg-white/[0.03]'
+                                    : 'text-gray-400 border-transparent hover:text-gray-600 hover:bg-white/80')
+                            }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                            {cat.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* 선택된 카테고리 종목 리스트 (스크롤) */}
+                    <div className="overflow-y-auto" style={{ maxHeight: '240px' }}>
+                      {(BACKTEST_QUICK_PICKS.find(c => c.market === quickPickCategory)?.items || []).map((it) => (
+                        <button key={`${quickPickCategory}-${it.code}`} type="button"
+                          onMouseDown={(e) => { e.preventDefault(); handleBacktestStockSelect(it.code, it.name, quickPickCategory); }}
+                          className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between last:border-0 ${isDark ? 'hover:bg-white/[0.04] border-b border-white/[0.04] text-white' : 'hover:bg-blue-50 border-b border-gray-50 text-gray-800'}`}>
+                          <span className="font-medium">{it.name}</span>
+                          <span className={`text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{it.code}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className={`shrink-0 px-3 py-1.5 text-[10px] ${isDark ? 'text-slate-500 border-t border-white/[0.04] bg-white/[0.02]' : 'text-gray-400 border-t border-gray-100 bg-gray-50'}`}>
+                      검색창에 직접 입력하면 전체 종목에서 검색합니다.
                     </div>
                   </div>
                 )

@@ -89,9 +89,14 @@ public class BacktestService {
             }
         }
 
+        // 배당 처리 모드 결정 (US_STOCK·ETF 한정. null/true=재투자 ON → adjclose, false=OFF → 일반 close + 배당 cash 입금)
+        boolean isUsAsset = "US_STOCK".equalsIgnoreCase(assetType) || "ETF".equalsIgnoreCase(assetType);
+        boolean dividendReinvest = request.getDividendReinvest() == null || request.getDividendReinvest();
+        boolean useAdjclose = isUsAsset && dividendReinvest;
+
         // 캔들스틱 데이터 조회 (Yahoo Finance / Binance 우선, 실패 시 기존 소스 폴백)
         List<CandlestickResponse> allCandles = backtestDataProvider.getBacktestCandles(
-                request.getStockCode(), assetType, request.getStartDate(), request.getEndDate());
+                request.getStockCode(), assetType, request.getStartDate(), request.getEndDate(), useAdjclose);
 
         if (allCandles == null || allCandles.isEmpty()) {
             log.info("백테스트 데이터 폴백: 기존 CandlestickService 사용 ({})", request.getStockCode());
@@ -139,11 +144,18 @@ public class BacktestService {
             }
         }
 
+        // 자산 A 의 배당 맵 (OFF 모드 + US 자산 한정)
+        Map<LocalDate, Double> dividendsA = fetchDividendsByDate(
+                request.getStockCode(), assetType, request.getStartDate(), request.getEndDate(),
+                isUsAsset, dividendReinvest);
+
         // 2자산 리밸런싱 모드: secondStockCode 가 채워져 있으면 별도 시뮬레이션 경로
         if (request.getSecondStockCode() != null && !request.getSecondStockCode().isBlank()) {
             String assetTypeB = request.getSecondAssetType();
+            boolean isUsAssetB = "US_STOCK".equalsIgnoreCase(assetTypeB) || "ETF".equalsIgnoreCase(assetTypeB);
+            boolean useAdjcloseB = isUsAssetB && dividendReinvest;
             List<CandlestickResponse> allCandlesB = backtestDataProvider.getBacktestCandles(
-                    request.getSecondStockCode(), assetTypeB, request.getStartDate(), request.getEndDate());
+                    request.getSecondStockCode(), assetTypeB, request.getStartDate(), request.getEndDate(), useAdjcloseB);
             if (allCandlesB == null || allCandlesB.isEmpty()) {
                 String intervalB = ("STOCK".equals(assetTypeB) || "US_STOCK".equals(assetTypeB) || "ETF".equals(assetTypeB)) ? "1d" : "24h";
                 allCandlesB = candlestickService.getCandlesticks(request.getSecondStockCode(), intervalB, assetTypeB);
@@ -164,14 +176,34 @@ public class BacktestService {
             for (int i = 0; i < allCandlesB.size(); i++) {
                 if (allCandlesB.get(i).getTime() == candlesB.get(0).getTime()) { globalOffsetB = i; break; }
             }
+            Map<LocalDate, Double> dividendsB = fetchDividendsByDate(
+                    request.getSecondStockCode(), assetTypeB, request.getStartDate(), request.getEndDate(),
+                    isUsAssetB, dividendReinvest);
             return simulateRebalance(strategyId, strategyName, entryConditions, exitConditions,
-                    candles, indicatorValues, globalOffset, assetType,
-                    candlesB, indicatorValuesB, globalOffsetB, assetTypeB,
-                    request);
+                    candles, indicatorValues, globalOffset, assetType, dividendsA,
+                    candlesB, indicatorValuesB, globalOffsetB, assetTypeB, dividendsB,
+                    request, dividendReinvest);
         }
 
         return simulate(strategyId, strategyName, entryConditions, exitConditions,
-                candles, indicatorValues, globalOffset, request, assetType);
+                candles, indicatorValues, globalOffset, request, assetType,
+                dividendsA, dividendReinvest);
+    }
+
+    /** OFF 모드 + US 자산일 때만 배당 맵 (LocalDate→divPerShare). 그 외엔 빈 맵. */
+    private Map<LocalDate, Double> fetchDividendsByDate(String symbol, String assetType,
+                                                        String startDate, String endDate,
+                                                        boolean isUsAsset, boolean dividendReinvest) {
+        if (!isUsAsset || dividendReinvest) return Map.of();
+        Map<Long, Double> raw = backtestDataProvider.getBacktestDividends(symbol, assetType, startDate, endDate);
+        if (raw == null || raw.isEmpty()) return Map.of();
+        HashMap<LocalDate, Double> out = new HashMap<>();
+        for (Map.Entry<Long, Double> e : raw.entrySet()) {
+            LocalDate d = Instant.ofEpochSecond(e.getKey()).atZone(KST).toLocalDate();
+            out.merge(d, e.getValue(), Double::sum);
+        }
+        log.info("배당 이벤트 조회 완료: symbol={} 건수={}", symbol, out.size());
+        return out;
     }
 
     // ── 입력 검증 ─────────────────────────────────────────────────────────
@@ -435,16 +467,19 @@ public class BacktestService {
                                        List<Condition> entryConditions, List<Condition> exitConditions,
                                        List<CandlestickResponse> candles,
                                        Map<String, double[]> indicatorValues,
-                                       int globalOffset, BacktestRequest request, String assetType) {
+                                       int globalOffset, BacktestRequest request, String assetType,
+                                       Map<LocalDate, Double> dividendsByDate, boolean dividendReinvest) {
 
-        boolean isUsStock = "US_STOCK".equalsIgnoreCase(assetType);
+        // USD 자산 (US_STOCK + ETF) 은 USD 단위 시뮬레이션. KRW 자산은 그대로.
+        boolean isUsStock = "US_STOCK".equalsIgnoreCase(assetType) || "ETF".equalsIgnoreCase(assetType);
         double usdKrwRate = isUsStock ? exchangeRateService.getUsdKrwRate() : 0;
-        // US_STOCK: KRW 투자금을 USD로 변환하여 USD 단위 시뮬레이션
+        // USD 자산: KRW 투자금을 USD로 변환하여 USD 단위 시뮬레이션
         double initialCapital = isUsStock
                 ? request.getInitialCapital() / usdKrwRate
                 : request.getInitialCapital();
         double cash = initialCapital;
         double peakEquity = initialCapital;
+        double totalDividendsReceived = 0; // OFF 모드 누적 배당 cash (native 단위)
 
         // 적립식 (매월 첫 거래일에 cash 가산) — monthlyNative 는 시뮬레이션 단위(USD 또는 KRW)
         double monthlyKrw = request.getMonthlyContribution() != null ? request.getMonthlyContribution() : 0.0;
@@ -521,6 +556,17 @@ public class BacktestService {
             double totalQty = posEntries.stream().mapToDouble(PosEntry::quantity).sum();
             double totalCost = posEntries.stream().mapToDouble(PosEntry::cost).sum();
             boolean hasPosition = !posEntries.isEmpty();
+
+            // ── 배당 현금 입금 (DRIP off 모드 + 롱 포지션 한정) ──
+            // 숏 포지션은 이론상 배당 지급 의무가 있으나 단순화를 위해 무시.
+            if (!dividendsByDate.isEmpty() && totalQty > 0 && "LONG".equals(currentDir)) {
+                Double divPerShare = dividendsByDate.get(curDate);
+                if (divPerShare != null && divPerShare > 0) {
+                    double divCash = totalQty * divPerShare;
+                    cash += divCash;
+                    totalDividendsReceived += divCash;
+                }
+            }
 
             // ── 자산 가치 계산 ──
             // LONG: cash + qty * price, SHORT: cash - qty * price + shortEntryValue
@@ -998,6 +1044,9 @@ public class BacktestService {
                 .monthlyContribution(monthlyNative)
                 .totalContribution(cumContribNative)
                 .contributionCount(contribCount)
+                // 배당 처리
+                .dividendReinvest(dividendReinvest)
+                .totalDividendsReceived(Math.round(totalDividendsReceived * 100.0) / 100.0)
                 .build();
     }
 
@@ -1014,8 +1063,10 @@ public class BacktestService {
             String strategyId, String strategyName,
             List<Condition> entryConditions, List<Condition> exitConditions,
             List<CandlestickResponse> candlesA, Map<String, double[]> indicatorsA, int globalOffsetA, String assetTypeA,
+            Map<LocalDate, Double> dividendsA,
             List<CandlestickResponse> candlesB, Map<String, double[]> indicatorsB, int globalOffsetB, String assetTypeB,
-            BacktestRequest request) {
+            Map<LocalDate, Double> dividendsB,
+            BacktestRequest request, boolean dividendReinvest) {
 
         boolean isUsd = "US_STOCK".equalsIgnoreCase(assetTypeA) || "ETF".equalsIgnoreCase(assetTypeA);
         double usdKrwRate = isUsd ? exchangeRateService.getUsdKrwRate() : 0;
@@ -1069,6 +1120,7 @@ public class BacktestService {
         double prevEquity = initialCap;
         double peakEquity = initialCap;
         double maxDrawdown = 0;
+        double totalDividendsReceived = 0; // OFF 모드 누적 배당 cash (native 단위)
         java.time.YearMonth prevYm = null;
 
         for (int idx = 0; idx < joined.size(); idx++) {
@@ -1087,6 +1139,24 @@ public class BacktestService {
             priceData.add(BacktestResponse.PricePointDto.builder()
                     .date(date).open(cA.getOpen()).high(cA.getHigh()).low(cA.getLow())
                     .close(cA.getClose()).volume(cA.getVolume()).build());
+
+            // ── 배당 현금 입금 (DRIP off + 자산별 보유 한정) ──
+            if (!dividendsA.isEmpty() && qtyA > 0) {
+                Double divPerShare = dividendsA.get(curDate);
+                if (divPerShare != null && divPerShare > 0) {
+                    double divCash = qtyA * divPerShare;
+                    cashA += divCash;
+                    totalDividendsReceived += divCash;
+                }
+            }
+            if (!dividendsB.isEmpty() && qtyB > 0) {
+                Double divPerShare = dividendsB.get(curDate);
+                if (divPerShare != null && divPerShare > 0) {
+                    double divCash = qtyB * divPerShare;
+                    cashB += divCash;
+                    totalDividendsReceived += divCash;
+                }
+            }
 
             // ── 월 첫 거래일: 적립(항상 매월) + 리밸런싱(freq 에 따라) ──
             if (prevYm != null && !curYm.equals(prevYm)) {
@@ -1367,6 +1437,9 @@ public class BacktestService {
                 .secondAssetTradeCount(bTrades)
                 .rebalanceCount(rebalanceCount)
                 .rebalanceFrequency(rebalanceFreq)
+                // 배당 처리
+                .dividendReinvest(dividendReinvest)
+                .totalDividendsReceived(Math.round(totalDividendsReceived * 100.0) / 100.0)
                 .build();
     }
 

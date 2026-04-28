@@ -53,13 +53,31 @@ public class BacktestDataProvider {
     private String yahooCookie;
     private long yahooCrumbExpiry;
 
-    // ── 데이터 캐시 (종목+기간 → 캔들 리스트, 30분 TTL) ──
+    // ── 데이터 캐시 (종목+기간 → 캔들 + adjclose + 배당, 30분 TTL) ──
     private static final long CACHE_TTL_MS = 30 * 60 * 1000; // 30분
     private static final int MAX_CACHE_SIZE = 100;
     private final ConcurrentHashMap<String, CacheEntry> candleCache = new ConcurrentHashMap<>();
 
-    private record CacheEntry(List<CandlestickResponse> data, long expiry) {
+    private record CacheEntry(FetchResult data, long expiry) {
         boolean isExpired() { return System.currentTimeMillis() > expiry; }
+    }
+
+    /**
+     * 내부 페치 결과: regular close 캔들 + (옵션) adjclose 평행 리스트 + (옵션) 배당 맵.
+     * 도메스틱/암호화폐는 adjcloses=빈 리스트, dividends=빈 맵.
+     */
+    private record FetchResult(
+            List<CandlestickResponse> candles,
+            List<Double> adjcloses,                        // candles 와 같은 size 이거나 빈 리스트
+            java.util.SortedMap<Long, Double> dividends   // epoch(초) → dividend per share
+    ) {
+        static FetchResult empty() {
+            return new FetchResult(List.of(), List.of(), new java.util.TreeMap<>());
+        }
+        static FetchResult ofCandlesOnly(List<CandlestickResponse> c) {
+            return new FetchResult(c, List.of(), new java.util.TreeMap<>());
+        }
+        boolean isEmpty() { return candles.isEmpty(); }
     }
 
     @PostConstruct
@@ -127,81 +145,112 @@ public class BacktestDataProvider {
     }
 
     /**
-     * 백테스트용 캔들 데이터 조회 (지표 워밍업 기간 포함, 30분 캐시)
+     * 백테스트용 캔들 데이터 조회 (지표 워밍업 기간 포함, 30분 캐시).
+     * 기본 close 사용. 미국주식/ETF 의 adjclose 가 필요하면 오버로드를 사용.
      */
     public List<CandlestickResponse> getBacktestCandles(String symbol, String assetType,
                                                          String startDate, String endDate) {
+        return getBacktestCandles(symbol, assetType, startDate, endDate, false);
+    }
+
+    /**
+     * useAdjclose=true 이고 미국주식/ETF 면 close 자리에 adjclose 를 채워서 반환.
+     * 그 외 자산은 useAdjclose 를 무시하고 일반 close.
+     */
+    public List<CandlestickResponse> getBacktestCandles(String symbol, String assetType,
+                                                         String startDate, String endDate,
+                                                         boolean useAdjclose) {
+        FetchResult fr = getOrFetch(symbol, assetType, startDate, endDate);
+        if (!useAdjclose || fr.adjcloses().isEmpty() || fr.adjcloses().size() != fr.candles().size()) {
+            return fr.candles();
+        }
+        List<CandlestickResponse> out = new ArrayList<>(fr.candles().size());
+        for (int i = 0; i < fr.candles().size(); i++) {
+            CandlestickResponse c = fr.candles().get(i);
+            Double adj = fr.adjcloses().get(i);
+            if (adj != null && adj > 0) {
+                out.add(new CandlestickResponse(c.getTime(), c.getOpen(), c.getHigh(), c.getLow(), adj, c.getVolume()));
+            } else {
+                out.add(c);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 종목 배당 이벤트 조회. 키는 Yahoo 가 알려주는 ex-dividend epoch(초), 값은 주당 배당.
+     * 미국주식/ETF 만 의미 있음. 그 외는 빈 맵 반환.
+     */
+    public Map<Long, Double> getBacktestDividends(String symbol, String assetType,
+                                                   String startDate, String endDate) {
+        FetchResult fr = getOrFetch(symbol, assetType, startDate, endDate);
+        return fr.dividends();
+    }
+
+    private FetchResult getOrFetch(String symbol, String assetType, String startDate, String endDate) {
         LocalDate warmupStart = LocalDate.parse(startDate).minusDays(WARMUP_DAYS);
         String cacheKey = symbol + ":" + assetType + ":" + warmupStart + ":" + endDate;
 
-        // 캐시 히트 확인
         CacheEntry cached = candleCache.get(cacheKey);
         if (cached != null && !cached.isExpired()) {
-            log.debug("캔들 캐시 히트: {} ({}건)", cacheKey, cached.data().size());
+            log.debug("캔들 캐시 히트: {} ({}건)", cacheKey, cached.data().candles().size());
             return cached.data();
         }
 
         try {
-            List<CandlestickResponse> result;
+            FetchResult result;
             if ("STOCK".equalsIgnoreCase(assetType)) {
-                result = getStockCandles(symbol, warmupStart.toString(), endDate);
+                result = FetchResult.ofCandlesOnly(getStockCandles(symbol, warmupStart.toString(), endDate));
             } else if ("US_STOCK".equalsIgnoreCase(assetType) || "ETF".equalsIgnoreCase(assetType)) {
-                result = getUsStockCandles(symbol, warmupStart.toString(), endDate, assetType);
+                result = getUsStockData(symbol, warmupStart.toString(), endDate, assetType);
             } else {
-                result = getCryptoCandles(symbol, warmupStart.toString(), endDate);
+                result = FetchResult.ofCandlesOnly(getCryptoCandles(symbol, warmupStart.toString(), endDate));
             }
 
-            // 결과가 있으면 캐시 저장
             if (!result.isEmpty()) {
-                // 캐시 크기 초과 시 만료된 항목 정리
                 if (candleCache.size() >= MAX_CACHE_SIZE) {
                     candleCache.entrySet().removeIf(e -> e.getValue().isExpired());
-                    // 그래도 초과면 전체 초기화
                     if (candleCache.size() >= MAX_CACHE_SIZE) {
                         candleCache.clear();
                     }
                 }
-                candleCache.put(cacheKey, new CacheEntry(List.copyOf(result),
+                candleCache.put(cacheKey, new CacheEntry(result,
                         System.currentTimeMillis() + CACHE_TTL_MS));
             }
-
             return result;
         } catch (Exception e) {
             log.error("백테스트 데이터 조회 실패: symbol={}, error={}", symbol, e.getMessage());
-            return List.of();
+            return FetchResult.empty();
         }
     }
 
     // ── 주식: Yahoo Finance ──────────────────────────────────────────────
 
     private List<CandlestickResponse> getStockCandles(String stockCode, String start, String end) {
-        // KOSPI (.KS) → KOSDAQ (.KQ) 순서로 시도
-        List<CandlestickResponse> result = fetchYahoo(stockCode + ".KS", start, end);
+        // KOSPI (.KS) → KOSDAQ (.KQ) 순서로 시도. 국내는 KIS 수정주가 정책상 close 만 사용.
+        FetchResult result = fetchYahoo(stockCode + ".KS", start, end);
         if (result.isEmpty()) {
             result = fetchYahoo(stockCode + ".KQ", start, end);
         }
         if (result.isEmpty()) {
             log.warn("Yahoo Finance 주식 데이터 없음: {}", stockCode);
         }
-        return result;
+        return result.candles();
     }
 
-    /** 미국주식/ETF: Yahoo Finance 우선, 실패 시 KIS API 페이지네이션 폴백 (USD 원가 유지) */
-    private List<CandlestickResponse> getUsStockCandles(String symbol, String start, String end, String assetType) {
-        // 1차: Yahoo Finance (전체 기간 한번에, ETF 심볼도 동일 네임스페이스)
-        List<CandlestickResponse> result = fetchYahoo(symbol, start, end);
+    /** 미국주식/ETF: Yahoo Finance(adjclose+배당 포함) 우선, 실패 시 KIS API 페이지네이션 폴백 (USD 원가 유지) */
+    private FetchResult getUsStockData(String symbol, String start, String end, String assetType) {
+        FetchResult result = fetchYahoo(symbol, start, end);
 
-        // 2차: Yahoo 실패 시 KIS 해외주식 API 페이지네이션으로 폴백
         if (result.isEmpty() && kisApiClient.isConfigured()) {
             log.info("Yahoo Finance 실패, KIS 해외주식 API 폴백 사용: {}", symbol);
-            result = fetchUsStockFromKis(symbol, start, assetType);
+            // KIS 폴백은 adjclose / 배당 정보가 없음 → DRIP off 모드는 효과 없음, 그냥 close 만 채움
+            result = FetchResult.ofCandlesOnly(fetchUsStockFromKis(symbol, start, assetType));
         }
 
         if (result.isEmpty()) {
             log.warn("미국주식/ETF 백테스트 데이터 없음: {}", symbol);
         }
-
-        // USD 원가 그대로 반환 — 시뮬레이션도 USD 단위로 실행
         return result;
     }
 
@@ -275,14 +324,15 @@ public class BacktestDataProvider {
     }
 
     @SuppressWarnings("unchecked")
-    private List<CandlestickResponse> fetchYahoo(String symbol, String start, String end) {
+    private FetchResult fetchYahoo(String symbol, String start, String end) {
         ensureYahooCrumb();
 
         long p1 = LocalDate.parse(start).atStartOfDay().toEpochSecond(KST);
         long p2 = LocalDate.parse(end).plusDays(1).atStartOfDay().toEpochSecond(KST);
 
+        // events=div 로 배당 이벤트도 같이 받음
         String url = "https://query2.finance.yahoo.com/v8/finance/chart/" + symbol
-                + "?period1=" + p1 + "&period2=" + p2 + "&interval=1d";
+                + "?period1=" + p1 + "&period2=" + p2 + "&interval=1d&events=div";
         if (yahooCrumb != null) {
             url += "&crumb=" + URLEncoder.encode(yahooCrumb, StandardCharsets.UTF_8);
         }
@@ -298,23 +348,23 @@ public class BacktestDataProvider {
                     url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
 
             Map<String, Object> body = resp.getBody();
-            if (body == null) return List.of();
+            if (body == null) return FetchResult.empty();
 
             Map<String, Object> chart = (Map<String, Object>) body.get("chart");
-            if (chart == null) return List.of();
+            if (chart == null) return FetchResult.empty();
 
             List<Map<String, Object>> results = (List<Map<String, Object>>) chart.get("result");
-            if (results == null || results.isEmpty()) return List.of();
+            if (results == null || results.isEmpty()) return FetchResult.empty();
 
             Map<String, Object> result = results.get(0);
             List<Number> timestamps = (List<Number>) result.get("timestamp");
-            if (timestamps == null || timestamps.isEmpty()) return List.of();
+            if (timestamps == null || timestamps.isEmpty()) return FetchResult.empty();
 
             Map<String, Object> indicators = (Map<String, Object>) result.get("indicators");
-            if (indicators == null) return List.of();
+            if (indicators == null) return FetchResult.empty();
             List<Map<String, Object>> quotes =
                     (List<Map<String, Object>>) indicators.get("quote");
-            if (quotes == null || quotes.isEmpty()) return List.of();
+            if (quotes == null || quotes.isEmpty()) return FetchResult.empty();
             Map<String, Object> q = quotes.get(0);
 
             List<Number> opens   = (List<Number>) q.get("open");
@@ -323,7 +373,16 @@ public class BacktestDataProvider {
             List<Number> closes  = (List<Number>) q.get("close");
             List<Number> volumes = (List<Number>) q.get("volume");
 
+            // adjclose 평행 리스트 (timestamps 와 동일 인덱스)
+            List<Number> adjcloseRaw = null;
+            List<Map<String, Object>> adjList =
+                    (List<Map<String, Object>>) indicators.get("adjclose");
+            if (adjList != null && !adjList.isEmpty()) {
+                adjcloseRaw = (List<Number>) adjList.get(0).get("adjclose");
+            }
+
             List<CandlestickResponse> candles = new ArrayList<>();
+            List<Double> adjcloses = new ArrayList<>();
             for (int i = 0; i < timestamps.size(); i++) {
                 if (closes.get(i) == null) continue; // 거래 없는 날 건너뛰기
                 candles.add(new CandlestickResponse(
@@ -331,14 +390,40 @@ public class BacktestDataProvider {
                         num(opens, i), num(highs, i), num(lows, i),
                         num(closes, i), num(volumes, i)
                 ));
+                if (adjcloseRaw != null && i < adjcloseRaw.size() && adjcloseRaw.get(i) != null) {
+                    adjcloses.add(adjcloseRaw.get(i).doubleValue());
+                } else {
+                    adjcloses.add(null);
+                }
             }
 
-            log.info("Yahoo Finance 조회 성공: {} → {}건 ({}~{})",
-                    symbol, candles.size(), start, end);
-            return candles;
+            // 배당 이벤트: events.dividends → { "<epochSec>": { amount, date } }
+            java.util.SortedMap<Long, Double> dividends = new java.util.TreeMap<>();
+            Map<String, Object> events = (Map<String, Object>) result.get("events");
+            if (events != null) {
+                Map<String, Object> divMap = (Map<String, Object>) events.get("dividends");
+                if (divMap != null) {
+                    for (Map.Entry<String, Object> e : divMap.entrySet()) {
+                        try {
+                            Map<String, Object> div = (Map<String, Object>) e.getValue();
+                            Number amount = (Number) div.get("amount");
+                            Number date = (Number) div.get("date");
+                            if (amount != null && date != null && amount.doubleValue() > 0) {
+                                dividends.put(date.longValue(), amount.doubleValue());
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
+            }
+
+            // adjclose 가 전부 null 이면 빈 리스트로 교체 (도메스틱 등 일부 심볼 대비)
+            boolean hasAnyAdj = adjcloses.stream().anyMatch(d -> d != null && d > 0);
+            log.info("Yahoo Finance 조회 성공: {} → {}건, adjclose={}, 배당={}건 ({}~{})",
+                    symbol, candles.size(), hasAnyAdj ? "있음" : "없음", dividends.size(), start, end);
+            return new FetchResult(candles, hasAnyAdj ? adjcloses : List.of(), dividends);
         } catch (Exception e) {
             log.debug("Yahoo Finance 조회 실패 ({}): {}", symbol, e.getMessage());
-            return List.of();
+            return FetchResult.empty();
         }
     }
 

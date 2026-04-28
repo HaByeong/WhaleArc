@@ -60,4 +60,9 @@ public class BacktestRequest {
     private String secondAssetType;     // STOCK / CRYPTO / US_STOCK / ETF
     private Double firstAssetWeight;    // 0~100. 자산1 비중 (%). 자산2 비중 = 100 - 이 값. 기본 50.
     private String rebalanceFrequency;  // MONTHLY (기본) / QUARTERLY / YEARLY
+
+    // 배당 처리 (미국주식·ETF 한정. 국내주식은 KIS 수정주가, 가상화폐는 무관)
+    // null/true (기본): adjclose 사용 → 배당 자동 재투자 (Total Return)
+    // false: 일반 close + 배당 지급일에 cash += qty × dividendPerShare (DRIP off, 현금 누적)
+    private Boolean dividendReinvest;
 }

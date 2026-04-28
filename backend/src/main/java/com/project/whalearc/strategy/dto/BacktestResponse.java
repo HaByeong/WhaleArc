@@ -78,6 +78,10 @@ public class BacktestResponse {
     private int rebalanceCount;             // 리밸런싱 발생 횟수
     private String rebalanceFrequency;      // MONTHLY / QUARTERLY / YEARLY
 
+    // 배당 처리
+    private boolean dividendReinvest;       // true = adjclose 사용 (자동 재투자)
+    private double totalDividendsReceived;  // OFF 모드일 때 누적 배당 cash 입금액 (native 단위)
+
     // 지표 요약 (0-trade 디버깅용: 지표명 → {min, max, avg, last})
     private Map<String, IndicatorSummaryDto> indicatorSummary;
 

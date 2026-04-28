@@ -510,10 +510,11 @@ const StrategyPage = () => {
   const [backtestAssetType, setBacktestAssetType] = useState<string>('CRYPTO');
   const [showBacktestDropdown, setShowBacktestDropdown] = useState(false);
   const [quickPickCategory, setQuickPickCategory] = useState<'STOCK' | 'US_STOCK' | 'ETF' | 'CRYPTO'>('STOCK');
+  const [quickPickVisibleCount, setQuickPickVisibleCount] = useState(15);
   const backtestSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backtestJustSelectedRef = useRef(false);
 
-  // 검색창 포커스 시 드롭다운에 보여줄 인기 종목 (탭 + 스크롤 리스트)
+  // 검색창 포커스 시 드롭다운에 보여줄 종목 (탭 + 스크롤 리스트, 시총 추정 순)
   const BACKTEST_QUICK_PICKS: Array<{ market: 'STOCK' | 'US_STOCK' | 'ETF' | 'CRYPTO'; label: string; items: { code: string; name: string }[] }> = [
     { market: 'STOCK', label: '주식', items: [
       { code: '005930', name: '삼성전자' },
@@ -522,15 +523,30 @@ const StrategyPage = () => {
       { code: '207940', name: '삼성바이오로직스' },
       { code: '005380', name: '현대차' },
       { code: '000270', name: '기아' },
-      { code: '006400', name: '삼성SDI' },
-      { code: '051910', name: 'LG화학' },
       { code: '035420', name: 'NAVER' },
-      { code: '035720', name: '카카오' },
       { code: '068270', name: '셀트리온' },
       { code: '105560', name: 'KB금융' },
       { code: '055550', name: '신한지주' },
+      { code: '035720', name: '카카오' },
+      { code: '051910', name: 'LG화학' },
+      { code: '006400', name: '삼성SDI' },
       { code: '012330', name: '현대모비스' },
       { code: '028260', name: '삼성물산' },
+      { code: '086790', name: '하나금융지주' },
+      { code: '003670', name: '포스코퓨처엠' },
+      { code: '247540', name: '에코프로비엠' },
+      { code: '096770', name: 'SK이노베이션' },
+      { code: '066570', name: 'LG전자' },
+      { code: '034730', name: 'SK' },
+      { code: '003550', name: 'LG' },
+      { code: '032830', name: '삼성생명' },
+      { code: '030200', name: 'KT' },
+      { code: '017670', name: 'SK텔레콤' },
+      { code: '009150', name: '삼성전기' },
+      { code: '010130', name: '고려아연' },
+      { code: '033780', name: 'KT&G' },
+      { code: '329180', name: '현대중공업' },
+      { code: '352820', name: '하이브' },
     ]},
     { market: 'US_STOCK', label: '미국주식', items: [
       { code: 'AAPL', name: '애플' },
@@ -538,16 +554,31 @@ const StrategyPage = () => {
       { code: 'NVDA', name: '엔비디아' },
       { code: 'GOOGL', name: '알파벳(구글)' },
       { code: 'AMZN', name: '아마존' },
-      { code: 'TSLA', name: '테슬라' },
       { code: 'META', name: '메타' },
       { code: 'AVGO', name: '브로드컴' },
+      { code: 'TSLA', name: '테슬라' },
       { code: 'JPM', name: 'JP모건' },
       { code: 'V', name: '비자' },
       { code: 'WMT', name: '월마트' },
+      { code: 'XOM', name: '엑슨모빌' },
+      { code: 'JNJ', name: '존슨앤존슨' },
+      { code: 'MA', name: '마스터카드' },
+      { code: 'PG', name: 'P&G' },
       { code: 'COST', name: '코스트코' },
+      { code: 'HD', name: '홈디포' },
       { code: 'NFLX', name: '넷플릭스' },
+      { code: 'BAC', name: '뱅크오브아메리카' },
+      { code: 'ADBE', name: '어도비' },
       { code: 'AMD', name: 'AMD' },
+      { code: 'DIS', name: '디즈니' },
+      { code: 'CRM', name: '세일즈포스' },
       { code: 'COIN', name: '코인베이스' },
+      { code: 'INTC', name: '인텔' },
+      { code: 'KO', name: '코카콜라' },
+      { code: 'PEP', name: '펩시코' },
+      { code: 'NKE', name: '나이키' },
+      { code: 'PYPL', name: '페이팔' },
+      { code: 'PLTR', name: '팔란티어' },
     ]},
     { market: 'ETF', label: 'ETF', items: [
       { code: 'QQQ', name: 'Invesco QQQ (나스닥100)' },
@@ -566,17 +597,32 @@ const StrategyPage = () => {
       { code: 'ETH', name: '이더리움' },
       { code: 'XRP', name: '리플' },
       { code: 'SOL', name: '솔라나' },
-      { code: 'DOGE', name: '도지코인' },
       { code: 'ADA', name: '에이다' },
+      { code: 'DOGE', name: '도지코인' },
       { code: 'AVAX', name: '아발란체' },
-      { code: 'LINK', name: '체인링크' },
       { code: 'DOT', name: '폴카닷' },
+      { code: 'LINK', name: '체인링크' },
       { code: 'MATIC', name: '폴리곤' },
+      { code: 'SHIB', name: '시바이누' },
       { code: 'TRX', name: '트론' },
-      { code: 'ATOM', name: '코스모스' },
       { code: 'NEAR', name: '니어프로토콜' },
       { code: 'APT', name: '앱토스' },
+      { code: 'ATOM', name: '코스모스' },
+      { code: 'ICP', name: '인터넷컴퓨터' },
+      { code: 'UNI', name: '유니스왑' },
+      { code: 'ARB', name: '아비트럼' },
+      { code: 'OP', name: '옵티미즘' },
       { code: 'SUI', name: '수이' },
+      { code: 'SEI', name: '세이' },
+      { code: 'STX', name: '스택스' },
+      { code: 'IMX', name: '이뮤터블엑스' },
+      { code: 'FIL', name: '파일코인' },
+      { code: 'HBAR', name: '헤데라' },
+      { code: 'AAVE', name: '에이브' },
+      { code: 'BCH', name: '비트코인캐시' },
+      { code: 'LTC', name: '라이트코인' },
+      { code: 'ETC', name: '이더리움클래식' },
+      { code: 'XLM', name: '스텔라루멘' },
     ]},
   ];
 
@@ -2361,7 +2407,11 @@ const StrategyPage = () => {
                         const dotColor = cat.market === 'STOCK' ? 'bg-indigo-400' : cat.market === 'US_STOCK' ? 'bg-blue-400' : cat.market === 'ETF' ? 'bg-teal-400' : 'bg-emerald-400';
                         return (
                           <button key={cat.market} type="button"
-                            onMouseDown={(e) => { e.preventDefault(); setQuickPickCategory(cat.market); }}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setQuickPickCategory(cat.market);
+                              setQuickPickVisibleCount(15);  // 카테고리 전환 시 카운터 리셋
+                            }}
                             className={`flex-1 py-2 px-2 text-[11px] font-semibold transition-colors border-b-2 flex items-center justify-center gap-1.5 ${
                               active
                                 ? (isDark
@@ -2377,20 +2427,43 @@ const StrategyPage = () => {
                         );
                       })}
                     </div>
-                    {/* 선택된 카테고리 종목 리스트 (스크롤) */}
-                    <div className="overflow-y-auto" style={{ maxHeight: '240px' }}>
-                      {(BACKTEST_QUICK_PICKS.find(c => c.market === quickPickCategory)?.items || []).map((it) => (
-                        <button key={`${quickPickCategory}-${it.code}`} type="button"
-                          onMouseDown={(e) => { e.preventDefault(); handleBacktestStockSelect(it.code, it.name, quickPickCategory); }}
-                          className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between last:border-0 ${isDark ? 'hover:bg-white/[0.04] border-b border-white/[0.04] text-white' : 'hover:bg-blue-50 border-b border-gray-50 text-gray-800'}`}>
-                          <span className="font-medium">{it.name}</span>
-                          <span className={`text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{it.code}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <div className={`shrink-0 px-3 py-1.5 text-[10px] ${isDark ? 'text-slate-500 border-t border-white/[0.04] bg-white/[0.02]' : 'text-gray-400 border-t border-gray-100 bg-gray-50'}`}>
-                      검색창에 직접 입력하면 전체 종목에서 검색합니다.
-                    </div>
+                    {/* 선택된 카테고리 종목 리스트 (시총순, 스크롤 끝 도달 시 +15 무한 로드) */}
+                    {(() => {
+                      const allItems = BACKTEST_QUICK_PICKS.find(c => c.market === quickPickCategory)?.items || [];
+                      const visibleItems = allItems.slice(0, quickPickVisibleCount);
+                      const hasMore = visibleItems.length < allItems.length;
+                      return (
+                        <>
+                          <div
+                            className="overflow-y-auto"
+                            style={{ maxHeight: '240px' }}
+                            onScroll={(e) => {
+                              const el = e.currentTarget;
+                              if (hasMore && el.scrollTop + el.clientHeight >= el.scrollHeight - 24) {
+                                setQuickPickVisibleCount(c => Math.min(c + 15, allItems.length));
+                              }
+                            }}
+                          >
+                            {visibleItems.map((it) => (
+                              <button key={`${quickPickCategory}-${it.code}`} type="button"
+                                onMouseDown={(e) => { e.preventDefault(); handleBacktestStockSelect(it.code, it.name, quickPickCategory); }}
+                                className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between last:border-0 ${isDark ? 'hover:bg-white/[0.04] border-b border-white/[0.04] text-white' : 'hover:bg-blue-50 border-b border-gray-50 text-gray-800'}`}>
+                                <span className="font-medium">{it.name}</span>
+                                <span className={`text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{it.code}</span>
+                              </button>
+                            ))}
+                            {hasMore && (
+                              <div className={`px-3 py-2 text-center text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                                스크롤 시 더 불러오기 ({visibleItems.length}/{allItems.length})
+                              </div>
+                            )}
+                          </div>
+                          <div className={`shrink-0 px-3 py-1.5 text-[10px] ${isDark ? 'text-slate-500 border-t border-white/[0.04] bg-white/[0.02]' : 'text-gray-400 border-t border-gray-100 bg-gray-50'}`}>
+                            시총 추정 순서로 정렬됨 · 검색창에 직접 입력하면 전체 종목에서 검색
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )
               )}

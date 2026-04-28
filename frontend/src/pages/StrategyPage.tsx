@@ -512,6 +512,42 @@ const StrategyPage = () => {
   const backtestSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backtestJustSelectedRef = useRef(false);
 
+  // 검색창 포커스 시 드롭다운에 보여줄 인기 종목 (빠른 선택용)
+  const BACKTEST_QUICK_PICKS: Array<{ market: string; label: string; items: { code: string; name: string }[] }> = [
+    { market: 'STOCK', label: '주식 (KRX)', items: [
+      { code: '005930', name: '삼성전자' },
+      { code: '000660', name: 'SK하이닉스' },
+      { code: '035420', name: 'NAVER' },
+      { code: '035720', name: '카카오' },
+      { code: '005380', name: '현대차' },
+      { code: '207940', name: '삼성바이오로직스' },
+    ]},
+    { market: 'US_STOCK', label: '미국주식', items: [
+      { code: 'AAPL', name: '애플' },
+      { code: 'NVDA', name: '엔비디아' },
+      { code: 'MSFT', name: '마이크로소프트' },
+      { code: 'TSLA', name: '테슬라' },
+      { code: 'GOOGL', name: '알파벳(구글)' },
+      { code: 'META', name: '메타' },
+    ]},
+    { market: 'ETF', label: 'ETF', items: [
+      { code: 'QQQ', name: 'Invesco QQQ (나스닥100)' },
+      { code: 'SCHD', name: 'Schwab 배당 ETF' },
+      { code: 'SOXX', name: 'iShares 반도체' },
+      { code: 'GLD', name: 'SPDR 골드' },
+      { code: 'XLK', name: 'Tech Select Sector' },
+      { code: 'XLF', name: 'Financial Select Sector' },
+    ]},
+    { market: 'CRYPTO', label: '가상화폐', items: [
+      { code: 'BTC', name: '비트코인' },
+      { code: 'ETH', name: '이더리움' },
+      { code: 'XRP', name: '리플' },
+      { code: 'SOL', name: '솔라나' },
+      { code: 'DOGE', name: '도지코인' },
+      { code: 'ADA', name: '에이다' },
+    ]},
+  ];
+
   const handleBacktestSearch = (query: string) => {
     setBacktestSearchQuery(query);
     if (backtestJustSelectedRef.current) {
@@ -521,7 +557,8 @@ const StrategyPage = () => {
     if (backtestSearchTimerRef.current) clearTimeout(backtestSearchTimerRef.current);
     if (!query.trim()) {
       setBacktestSearchResults([]);
-      setShowBacktestDropdown(false);
+      // 빈 query 라도 dropdown 은 열어두어 카테고리 예시(QUICK_PICKS)를 보여줌
+      setShowBacktestDropdown(true);
       return;
     }
     setIsBacktestSearching(true);
@@ -2237,7 +2274,8 @@ const StrategyPage = () => {
 
               <div className="relative">
                 <input type="text" value={backtestSearchQuery} onChange={(e) => handleBacktestSearch(e.target.value)}
-                  onFocus={() => { if (backtestSearchResults.length > 0) setShowBacktestDropdown(true); }}
+                  onFocus={() => setShowBacktestDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowBacktestDropdown(false), 200)}
                   className={`w-full px-3 py-2.5 rounded-xl text-sm pr-8 focus:ring-2 focus:ring-whale-light focus:border-whale-light ${isDark ? 'bg-white/[0.04] border border-white/10 text-white placeholder-slate-600' : 'bg-gray-50 border border-gray-200 text-gray-800'}`}
                   placeholder="BTC, 삼성전자, AAPL..." />
                 {isBacktestSearching && (
@@ -2260,19 +2298,55 @@ const StrategyPage = () => {
                   <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({backtestStockCode})</span>
                 </div>
               )}
-              {showBacktestDropdown && backtestSearchResults.length > 0 && (
-                <div className={`absolute z-20 w-full mt-1 rounded-xl shadow-xl max-h-48 overflow-y-auto ${isDark ? 'bg-[var(--wa-card-bg)] border border-white/[0.06]' : 'bg-white border border-gray-200'}`}>
-                  {backtestSearchResults.map((r) => (
-                    <button key={`${r.market}-${r.code}`} type="button"
-                      onClick={() => handleBacktestStockSelect(r.code, r.name, r.market)}
-                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between last:border-0 ${isDark ? 'hover:bg-white/[0.03] border-b border-white/[0.04] text-white' : 'hover:bg-gray-50 border-b border-gray-100 text-gray-800'}`}>
-                      <span>{r.name} <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({r.code})</span></span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : r.market === 'US_STOCK' ? 'bg-blue-100 text-blue-600' : r.market === 'ETF' ? 'bg-teal-100 text-teal-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                        {r.market === 'STOCK' ? '주식' : r.market === 'US_STOCK' ? '미국주식' : r.market === 'ETF' ? 'ETF' : '코인'}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+              {showBacktestDropdown && (
+                backtestSearchQuery.trim() ? (
+                  // 검색 결과 모드 — 사용자가 입력 중
+                  backtestSearchResults.length > 0 ? (
+                    <div className={`absolute z-20 w-full mt-1 rounded-xl shadow-xl max-h-60 overflow-y-auto ${isDark ? 'bg-[var(--wa-card-bg)] border border-white/[0.06]' : 'bg-white border border-gray-200'}`}>
+                      {backtestSearchResults.map((r) => (
+                        <button key={`${r.market}-${r.code}`} type="button"
+                          onMouseDown={(e) => { e.preventDefault(); handleBacktestStockSelect(r.code, r.name, r.market); }}
+                          className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between last:border-0 ${isDark ? 'hover:bg-white/[0.03] border-b border-white/[0.04] text-white' : 'hover:bg-gray-50 border-b border-gray-100 text-gray-800'}`}>
+                          <span>{r.name} <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({r.code})</span></span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : r.market === 'US_STOCK' ? 'bg-blue-100 text-blue-600' : r.market === 'ETF' ? 'bg-teal-100 text-teal-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                            {r.market === 'STOCK' ? '주식' : r.market === 'US_STOCK' ? '미국주식' : r.market === 'ETF' ? 'ETF' : '코인'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : !isBacktestSearching ? (
+                    <div className={`absolute z-20 w-full mt-1 rounded-xl shadow-xl px-3 py-3 text-xs ${isDark ? 'bg-[var(--wa-card-bg)] border border-white/[0.06] text-slate-500' : 'bg-white border border-gray-200 text-gray-400'}`}>
+                      검색 결과가 없습니다.
+                    </div>
+                  ) : null
+                ) : (
+                  // 카테고리 예시 모드 — 검색창이 비어있을 때
+                  <div className={`absolute z-20 w-full mt-1 rounded-xl shadow-xl max-h-72 overflow-y-auto ${isDark ? 'bg-[var(--wa-card-bg)] border border-white/[0.06]' : 'bg-white border border-gray-200'}`}>
+                    {BACKTEST_QUICK_PICKS.map((cat, ci) => (
+                      <div key={cat.market} className={ci > 0 ? (isDark ? 'border-t border-white/[0.04]' : 'border-t border-gray-100') : ''}>
+                        <div className={`flex items-center justify-between px-3 pt-2 pb-1 ${isDark ? 'bg-white/[0.02]' : 'bg-gray-50'}`}>
+                          <span className={`text-[10px] font-bold ${isDark ? 'text-slate-300' : 'text-whale-dark'}`}>{cat.label}</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${cat.market === 'STOCK' ? 'bg-indigo-100 text-indigo-600' : cat.market === 'US_STOCK' ? 'bg-blue-100 text-blue-600' : cat.market === 'ETF' ? 'bg-teal-100 text-teal-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                            {cat.market === 'STOCK' ? '국내' : cat.market === 'US_STOCK' ? '미국' : cat.market === 'ETF' ? 'ETF' : '코인'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-1 gap-y-0.5 px-2 py-1.5">
+                          {cat.items.map((it) => (
+                            <button key={`${cat.market}-${it.code}`} type="button"
+                              onMouseDown={(e) => { e.preventDefault(); handleBacktestStockSelect(it.code, it.name, cat.market); }}
+                              className={`text-left px-2 py-1.5 rounded-md text-[11px] truncate ${isDark ? 'hover:bg-white/[0.04] text-slate-300' : 'hover:bg-blue-50 text-gray-700'}`}>
+                              <span className="font-medium">{it.name}</span>{' '}
+                              <span className={isDark ? 'text-slate-500' : 'text-gray-400'}>({it.code})</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    <div className={`px-3 py-2 text-[10px] ${isDark ? 'text-slate-500 border-t border-white/[0.04]' : 'text-gray-400 border-t border-gray-100'}`}>
+                      또는 위 검색창에 종목명·코드 입력 (BTC, 삼성전자, AAPL...)
+                    </div>
+                  </div>
+                )
               )}
             </div>
 

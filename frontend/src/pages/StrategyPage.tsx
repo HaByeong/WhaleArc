@@ -860,6 +860,18 @@ const StrategyPage = () => {
   // 기본 제공 프리셋 전략 (전략 학습)
   const PRESET_STRATEGIES: Strategy[] = [
     {
+      id: 'preset-buy-hold', name: 'Buy & Hold (장기 보유)', description: '시작 시점에 매수 후 종료 시점까지 그대로 보유하는 가장 단순한 전략입니다. 매매 타이밍을 잡지 않고 시간의 힘에 맡기는 방식이며, 적립식 투자와 결합하면 직장인의 표준 투자법이 됩니다.',
+      beginnerTip: '쉽게 말하면: "사고 묻어두면 된다". 기술적 분석 없이 그냥 보유하는 가장 직관적인 전략이에요.',
+      whyUse: '장기 우상향 시장에선 매매 비용이 거의 없고, 잦은 매매로 인한 실수도 없어 어떤 트레이딩 전략보다 우수한 결과가 나오는 경우가 많아요. 적립식 투자와 결합하면 시장 타이밍 부담 없이 매월 자동 매수 → 장기 보유 패턴이 됩니다.',
+      difficulty: '초급',
+      strategyLogic: '시작일 매수 → 종료일까지 보유 (청산 없음)',
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
+      indicators: [],
+      entryConditions: [{ indicator: 'PRICE', operator: 'GT', value: 0, logic: 'AND' }],
+      exitConditions: [{ indicator: 'PRICE', operator: 'LT', value: 0, logic: 'AND' }],
+      applied: false, createdAt: '', updatedAt: '',
+    },
+    {
       id: 'preset-golden-cross', name: '골든크로스 추종 전략', description: '20일/60일 이동평균선 골든크로스 발생 시 매수, 데드크로스 시 매도하는 추세추종 전략입니다. 중장기 상승 추세에서 안정적인 수익을 추구합니다.',
       beginnerTip: '쉽게 말하면: 최근 흐름이 장기 흐름을 앞지르면 "오르는 중"이라 판단하고 사는 전략이에요.',
       whyUse: '가장 기본적인 전략으로, 큰 상승장을 놓치지 않으면서도 하락장에서 빠져나올 수 있어요. 초보자가 처음 배우기에 가장 좋은 전략입니다.',
@@ -943,18 +955,6 @@ const StrategyPage = () => {
       exitConditions: [{ indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'OPEN + (PREV_HIGH - PREV_LOW) * 0.3' }],
       applied: false, createdAt: '', updatedAt: '',
     },
-    {
-      id: 'preset-buy-hold', name: 'Buy & Hold (장기 보유)', description: '시작 시점에 매수 후 종료 시점까지 그대로 보유하는 가장 단순한 전략입니다. 매매 타이밍을 잡지 않고 시간의 힘에 맡기는 방식이며, 적립식 투자와 결합하면 직장인의 표준 투자법이 됩니다.',
-      beginnerTip: '쉽게 말하면: "사고 묻어두면 된다". 기술적 분석 없이 그냥 보유하는 가장 직관적인 전략이에요.',
-      whyUse: '장기 우상향 시장에선 매매 비용이 거의 없고, 잦은 매매로 인한 실수도 없어 어떤 트레이딩 전략보다 우수한 결과가 나오는 경우가 많아요. 적립식 투자와 결합하면 시장 타이밍 부담 없이 매월 자동 매수 → 장기 보유 패턴이 됩니다.',
-      difficulty: '초급',
-      strategyLogic: '시작일 매수 → 종료일까지 보유 (청산 없음)',
-      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
-      indicators: [],
-      entryConditions: [{ indicator: 'PRICE', operator: 'GT', value: 0, logic: 'AND' }],
-      exitConditions: [{ indicator: 'PRICE', operator: 'LT', value: 0, logic: 'AND' }],
-      applied: false, createdAt: '', updatedAt: '',
-    },
   ];
 
   // 프리셋 + 사용자 항로 합치기
@@ -993,19 +993,12 @@ const StrategyPage = () => {
         {/* ===== LEFT SIDEBAR: 전략 라이브러리 ===== */}
         <div data-tour="strategy-library" className={`lg:flex-[3] flex flex-col min-w-0 shadow-sm ${isDark ? 'bg-white/[0.02] border-r border-white/[0.06]' : 'bg-gray-50 border-r border-gray-200'}`}>
 
-          {/* ---- 헤더: 타이틀 + 새 항로 버튼 ---- */}
-          <div className={`relative px-5 py-4 border-b flex items-center justify-between shrink-0 h-[72px] ${isDark ? 'border-white/[0.06] bg-gradient-to-r from-whale-dark to-whale-light' : 'border-gray-200 bg-gradient-to-r from-whale-dark to-whale-light'}`}>
+          {/* ---- 헤더: 타이틀 ---- */}
+          <div className={`relative px-5 py-4 border-b flex items-center shrink-0 h-[72px] ${isDark ? 'border-white/[0.06] bg-gradient-to-r from-whale-dark to-whale-light' : 'border-gray-200 bg-gradient-to-r from-whale-dark to-whale-light'}`}>
             <div>
               <h2 className="text-sm font-bold text-white">전략 라이브러리</h2>
               <p className="text-xs text-white/60 mt-0.5">전략을 선택하고 백테스트로 검증하세요</p>
             </div>
-            <button onClick={openCreateModal}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white bg-white/10 border border-white/40 hover:bg-white/20 transition-all shrink-0">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              새 항로
-            </button>
             <div className="absolute bottom-0 left-0 right-0 overflow-hidden" style={{ height: '6px' }}>
               <svg viewBox="0 0 1200 20" preserveAspectRatio="none" className="w-full h-full">
                 <path d="M0,10 C150,20 350,0 500,10 C650,20 850,0 1000,10 C1100,15 1150,5 1200,10 L1200,20 L0,20 Z" fill={isDark ? 'var(--wa-page-bg)' : 'white'} />
@@ -1067,24 +1060,54 @@ const StrategyPage = () => {
                 return true;
               });
 
+              const newRouteCard = (
+                <div
+                  key="new-route-card"
+                  onClick={openCreateModal}
+                  className={`group relative rounded-xl cursor-pointer transition-all duration-200 overflow-hidden border border-dashed ${
+                    isDark
+                      ? 'bg-white/[0.02] border-white/15 hover:border-cyan-400/40 hover:bg-white/[0.04]'
+                      : 'bg-gray-50/60 border-gray-300 hover:border-whale-light hover:bg-white hover:shadow-md'
+                  }`}
+                >
+                  <div className="px-4 py-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                        isDark ? 'bg-cyan-400/10 text-cyan-400 group-hover:bg-cyan-400/20' : 'bg-whale-light/10 text-whale-light group-hover:bg-whale-light group-hover:text-white'
+                      } transition-colors`}>
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
+                      <span className={`font-bold text-sm ${isDark ? 'text-slate-200' : 'text-whale-dark'}`}>새 항로 만들기</span>
+                    </div>
+                    <p className={`text-sm line-clamp-1 mb-2 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                      나만의 매매 조건으로 직접 항로를 설계하고 백테스트로 검증하세요.
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[9px] ${isDark ? 'text-slate-600' : 'text-gray-300'}`}>지표·조건 직접 입력</span>
+                    </div>
+                  </div>
+                </div>
+              );
+
               if (filtered.length === 0) {
                 return (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ${isDark ? 'bg-white/[0.04]' : 'bg-gray-100'}`}>
-                      <svg className={`w-6 h-6 ${isDark ? 'text-slate-600' : 'text-gray-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
+                  <>
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ${isDark ? 'bg-white/[0.04]' : 'bg-gray-100'}`}>
+                        <svg className={`w-6 h-6 ${isDark ? 'text-slate-600' : 'text-gray-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                      </div>
+                      <p className={`text-sm font-medium ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>해당 전략이 없습니다</p>
                     </div>
-                    <p className={`text-sm font-medium ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>해당 전략이 없습니다</p>
-                    <button onClick={openCreateModal}
-                      className="mt-3 px-4 py-1.5 rounded-lg text-xs font-semibold text-whale-light bg-whale-light/10 border border-whale-light/30 hover:bg-whale-light hover:text-white transition-all">
-                      + 새 항로 만들기
-                    </button>
-                  </div>
+                    {newRouteCard}
+                  </>
                 );
               }
 
-              return filtered.map((strategy) => {
+              return [...filtered.map((strategy) => {
                 const isSelected = selectedStrategy?.id === strategy.id;
                 const isPreset = strategy.id.startsWith('preset-');
                 // Determine category color for left border
@@ -1179,7 +1202,7 @@ const StrategyPage = () => {
                     </div>
                   </div>
                 );
-              });
+              }), newRouteCard];
             })()}
           </div>
 

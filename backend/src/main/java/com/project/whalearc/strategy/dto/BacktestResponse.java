@@ -35,7 +35,8 @@ public class BacktestResponse {
     private List<EquityPointDto> buyHoldCurve;
 
     // 고급 지표
-    private double profitFactor;          // 총 이익 / 총 손실
+    // 비율형 지표는 분모가 0 이면 "정의 불가" 라 nullable 로 둔다 (프런트에서 "—" 표시).
+    private Double profitFactor;          // 총 이익 / 총 손실. 손실 거래 0 건이면 null
     private double sortinoRatio;          // 하방 리스크만 고려한 샤프 비율
     private double cagr;                  // 연평균 복합 성장률 (%)
     private double avgWin;                // 평균 이익 금액
@@ -46,8 +47,8 @@ public class BacktestResponse {
     private double maxConsecutiveLosses;  // 최대 연패
     private double avgHoldingDays;        // 평균 보유 기간 (일)
     private double maxDrawdownDuration;   // 최대 낙폭 지속 기간 (일)
-    private double recoveryFactor;        // 총 수익 / 최대 낙폭
-    private double payoffRatio;           // 평균 이익 / 평균 손실 (RR비율)
+    private Double recoveryFactor;        // 총 수익 / 최대 낙폭. maxDrawdown 0 이면 null
+    private Double payoffRatio;           // 평균 이익 / 평균 손실. avgLoss 0 이면 null
 
     // 드로다운 데이터
     private List<EquityPointDto> drawdownCurve;

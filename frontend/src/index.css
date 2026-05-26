@@ -134,10 +134,10 @@ body.whalearc-virt:not(.whalearc-dark) {
   --wa-down-color: #dc2626;
 }
 
-/* Virt Dark — 초보자용 '딥 오션 블루' (로고·배너·스플래시의 파란 계열과 통일 / 회색기 제거) */
+/* Virt Dark — 초보자용 깊은 네이비 (#0a1726, 튜너에서 직접 선택 / 배너·액센트는 시안 블루 유지) */
 body.whalearc-dark.whalearc-virt {
-  --wa-page-bg: #143042;
-  --wa-header-bg: #143042;
+  --wa-page-bg: #0a1726;
+  --wa-header-bg: #0a1726;
   --wa-header-border: rgba(255,255,255,0.10);
   --wa-card-bg: rgba(255,255,255,0.05);
   --wa-card-border: rgba(255,255,255,0.09);
@@ -151,7 +151,7 @@ body.whalearc-dark.whalearc-virt {
   --wa-input-border: rgba(255,255,255,0.11);
   --wa-banner-from: #0369a1;
   --wa-banner-to: #0891b2;
-  --wa-select-bg: #193a4e;
+  --wa-select-bg: #12243a;
   --wa-up-color: #4ade80;
   --wa-down-color: #f87171;
 }

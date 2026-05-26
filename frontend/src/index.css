@@ -357,6 +357,41 @@ body.whalearc-dark .text-gray-300 {
 body.whalearc-dark .text-gray-200 {
   color: #475569 !important;
 }
+/* 진한 컬러 텍스트(뱃지·알림·라벨) 다크 보정 — 파스텔 배경이 어두워지며 생기던 저대비 해결.
+   hue 는 유지해 의미(상승=빨강/하락=파랑 등) 보존 */
+body.whalearc-dark .text-blue-600,
+body.whalearc-dark .text-blue-700,
+body.whalearc-dark .text-blue-800 { color: #60a5fa !important; }
+body.whalearc-dark .text-sky-600,
+body.whalearc-dark .text-sky-700 { color: #38bdf8 !important; }
+body.whalearc-dark .text-cyan-600,
+body.whalearc-dark .text-cyan-700 { color: #22d3ee !important; }
+body.whalearc-dark .text-red-600,
+body.whalearc-dark .text-red-700,
+body.whalearc-dark .text-red-800 { color: #f87171 !important; }
+body.whalearc-dark .text-rose-600,
+body.whalearc-dark .text-rose-700 { color: #fb7185 !important; }
+body.whalearc-dark .text-green-600,
+body.whalearc-dark .text-green-700,
+body.whalearc-dark .text-green-800 { color: #4ade80 !important; }
+body.whalearc-dark .text-emerald-600,
+body.whalearc-dark .text-emerald-700 { color: #34d399 !important; }
+body.whalearc-dark .text-amber-600,
+body.whalearc-dark .text-amber-700,
+body.whalearc-dark .text-amber-800 { color: #fbbf24 !important; }
+body.whalearc-dark .text-yellow-600,
+body.whalearc-dark .text-yellow-700 { color: #facc15 !important; }
+body.whalearc-dark .text-purple-600,
+body.whalearc-dark .text-purple-700,
+body.whalearc-dark .text-purple-800 { color: #c084fc !important; }
+body.whalearc-dark .text-violet-600,
+body.whalearc-dark .text-violet-700 { color: #a78bfa !important; }
+body.whalearc-dark .text-indigo-600,
+body.whalearc-dark .text-indigo-700 { color: #818cf8 !important; }
+body.whalearc-dark .text-orange-600,
+body.whalearc-dark .text-orange-700 { color: #fb923c !important; }
+body.whalearc-dark .text-pink-600,
+body.whalearc-dark .text-pink-700 { color: #f472b6 !important; }
 body.whalearc-dark .bg-blue-50,
 body.whalearc-dark .bg-blue-50\/40 {
   background-color: rgba(56,189,248,0.06) !important;

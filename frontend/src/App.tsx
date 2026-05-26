@@ -47,10 +47,12 @@ const DarkModeController = () => {
   return null;
 };
 
-/** Suspense fallback — 현재 URL에 따라 virt/real 로딩 화면 분기 */
+/** Suspense fallback — 섹션(ThemeContext) 기준으로 virt/real 로딩 화면 분기.
+ *  window.location 대신 라우터 기반 section 을 써서, 네비게이션 중 직전 경로가 잡혀
+ *  로딩 화면이 반대로 뜨던 문제를 방지한다. (로고·테마와 동일한 기준) */
 const RouteSplashLoading = () => {
-  const isVirt = window.location.pathname.startsWith('/virt');
-  return isVirt ? <VirtSplashLoading /> : <SplashLoading />;
+  const { section } = useTheme();
+  return section === 'virt' ? <VirtSplashLoading /> : <SplashLoading />;
 };
 
 function App() {

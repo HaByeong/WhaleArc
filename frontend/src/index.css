@@ -306,6 +306,12 @@ body.whalearc-dark .bg-white {
 body.whalearc-dark .bg-gray-50 {
   background-color: rgba(255,255,255,0.03) !important;
 }
+body.whalearc-dark .bg-gray-50\/50,
+body.whalearc-dark .bg-gray-50\/40,
+body.whalearc-dark .bg-slate-50\/50,
+body.whalearc-dark .bg-gray-100\/50 {
+  background-color: rgba(255,255,255,0.03) !important;
+}
 body.whalearc-dark .bg-gray-100 {
   background-color: rgba(255,255,255,0.05) !important;
 }

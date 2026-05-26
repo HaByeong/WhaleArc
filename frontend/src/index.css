@@ -134,47 +134,47 @@ body.whalearc-virt:not(.whalearc-dark) {
   --wa-down-color: #dc2626;
 }
 
-/* Virt Dark — 얕은 바다, 부드러운 다크 */
+/* Virt Dark — 초보자용 밝은 라이트를 그대로 옮긴 '친근한 다크' (심해 아님, 한 톤 밝은 네이비) */
 body.whalearc-dark.whalearc-virt {
-  --wa-page-bg: #0f1b2d;
-  --wa-header-bg: #0f1b2d;
-  --wa-header-border: rgba(255,255,255,0.08);
-  --wa-card-bg: rgba(255,255,255,0.04);
-  --wa-card-border: rgba(255,255,255,0.08);
-  --wa-card-hover-border: rgba(103,232,249,0.35);
-  --wa-text-primary: #e2e8f0;
-  --wa-text-secondary: #7c9ab8;
-  --wa-text-muted: #5b7a95;
-  --wa-accent: #67e8f9;
-  --wa-accent-soft: rgba(103,232,249,0.1);
-  --wa-input-bg: rgba(255,255,255,0.04);
-  --wa-input-border: rgba(255,255,255,0.1);
-  --wa-banner-from: #164e6e;
-  --wa-banner-to: #0e7490;
-  --wa-select-bg: #162236;
+  --wa-page-bg: #14253f;
+  --wa-header-bg: #14253f;
+  --wa-header-border: rgba(255,255,255,0.10);
+  --wa-card-bg: rgba(255,255,255,0.055);
+  --wa-card-border: rgba(255,255,255,0.10);
+  --wa-card-hover-border: rgba(56,189,248,0.45);
+  --wa-text-primary: #eaf2fb;
+  --wa-text-secondary: #9db4cf;
+  --wa-text-muted: #6b87a6;
+  --wa-accent: #38bdf8;
+  --wa-accent-soft: rgba(56,189,248,0.12);
+  --wa-input-bg: rgba(255,255,255,0.055);
+  --wa-input-border: rgba(255,255,255,0.12);
+  --wa-banner-from: #0369a1;
+  --wa-banner-to: #0891b2;
+  --wa-select-bg: #1b3052;
   --wa-up-color: #4ade80;
   --wa-down-color: #f87171;
 }
 
-/* No Virt Light — 맑은 바다, 프로페셔널 */
+/* No Virt Light — 고수용 '심해'의 정체성을 라이트로 옮긴 버전 (차갑고 또렷한 수면, 딥오션 액센트) */
 body.whalearc-novirt:not(.whalearc-dark) {
-  --wa-page-bg: #f1f5f9;
+  --wa-page-bg: #e9f0f7;
   --wa-header-bg: #ffffff;
-  --wa-header-border: #cbd5e1;
+  --wa-header-border: #ccd9e6;
   --wa-card-bg: #ffffff;
-  --wa-card-border: #cbd5e1;
-  --wa-card-hover-border: rgba(30,58,95,0.4);
-  --wa-text-primary: #0f172a;
-  --wa-text-secondary: #475569;
-  --wa-text-muted: #64748b;
-  --wa-accent: #1e3a5f;
-  --wa-accent-soft: rgba(30,58,95,0.1);
+  --wa-card-border: #ccd9e6;
+  --wa-card-hover-border: rgba(7,89,133,0.45);
+  --wa-text-primary: #0b1f33;
+  --wa-text-secondary: #3e5871;
+  --wa-text-muted: #6b829a;
+  --wa-accent: #075985;
+  --wa-accent-soft: rgba(7,89,133,0.1);
   --wa-input-bg: #ffffff;
-  --wa-input-border: #cbd5e1;
-  --wa-banner-from: #0f172a;
-  --wa-banner-to: #1e3a5f;
+  --wa-input-border: #ccd9e6;
+  --wa-banner-from: #0b1f33;
+  --wa-banner-to: #075985;
   --wa-select-bg: #ffffff;
-  --wa-up-color: #16a34a;
+  --wa-up-color: #059669;
   --wa-down-color: #dc2626;
 }
 

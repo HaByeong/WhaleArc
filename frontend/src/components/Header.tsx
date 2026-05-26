@@ -65,9 +65,9 @@ const Header = ({ showNav = false }: HeaderProps) => {
             aria-label="홈으로 이동"
           >
             <div className="flex items-center gap-1.5">
-              {/* 로고: 섹션 기준(no-virt=프로 캔들차트 / virt·랜딩=친근한 고래).
-                  단 프로 캔들차트 로고는 다크 전용 이미지라, no-virt 라이트에선 친근 고래로 대체 */}
-              <WhaleTailLogo size={40} showNav={showNav} darkNav={showNav && section === 'novirt' && isDark} />
+              {/* 로고가 virt/no-virt 식별 장치: no-virt(고수)는 라이트·다크 모두 항상 캔들차트,
+                  virt·랜딩은 친근한 고래. 라이트 배경에선 캔들차트를 어둡게 렌더(lightBg) */}
+              <WhaleTailLogo size={40} showNav={showNav} darkNav={showNav && section === 'novirt'} lightBg={!isDark} />
               <span className={`text-xl ${isDarkNav ? 'whalearc-text' : showNav ? 'whalearc-text-nav' : 'whalearc-text'}`}>
                 WHALEARC{isVirt && <span className="text-cyan-400">-VIRT</span>}
               </span>

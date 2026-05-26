@@ -314,7 +314,7 @@ const DashboardPage = () => {
     }).format(value);
   };
 
-  const pageBg = isDark ? 'bg-[#060d18] text-white' : 'bg-gray-50';
+  const pageBg = isDark ? 'bg-[var(--wa-page-bg)] text-white' : 'bg-gray-50';
 
   if (loading) {
     if (!isVirt) return <SplashLoading message="실계좌 자산을 불러오는 중..." />;

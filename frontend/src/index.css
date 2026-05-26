@@ -134,24 +134,24 @@ body.whalearc-virt:not(.whalearc-dark) {
   --wa-down-color: #dc2626;
 }
 
-/* Virt Dark — 초보자용 밝은 라이트를 옮긴 '친근한 다크' / 밝은 슬레이트 (저녁 수면, 가볍고 환함) */
+/* Virt Dark — 초보자용 '뉴트럴 차콜' (무채색 베이스 + 시안 포인트, 깔끔하고 친근) */
 body.whalearc-dark.whalearc-virt {
-  --wa-page-bg: #1f3050;
-  --wa-header-bg: #1f3050;
-  --wa-header-border: rgba(255,255,255,0.12);
-  --wa-card-bg: rgba(255,255,255,0.06);
-  --wa-card-border: rgba(255,255,255,0.12);
-  --wa-card-hover-border: rgba(86,197,245,0.45);
-  --wa-text-primary: #f0f6fc;
-  --wa-text-secondary: #a8bdd6;
-  --wa-text-muted: #7e97b3;
-  --wa-accent: #56c5f5;
-  --wa-accent-soft: rgba(86,197,245,0.13);
-  --wa-input-bg: rgba(255,255,255,0.06);
-  --wa-input-border: rgba(255,255,255,0.13);
-  --wa-banner-from: #0284c7;
-  --wa-banner-to: #0ea5e9;
-  --wa-select-bg: #26395c;
+  --wa-page-bg: #1c2027;
+  --wa-header-bg: #1c2027;
+  --wa-header-border: rgba(255,255,255,0.10);
+  --wa-card-bg: rgba(255,255,255,0.05);
+  --wa-card-border: rgba(255,255,255,0.09);
+  --wa-card-hover-border: rgba(56,189,248,0.40);
+  --wa-text-primary: #e9ebef;
+  --wa-text-secondary: #a3a9b3;
+  --wa-text-muted: #6f7681;
+  --wa-accent: #38bdf8;
+  --wa-accent-soft: rgba(56,189,248,0.12);
+  --wa-input-bg: rgba(255,255,255,0.05);
+  --wa-input-border: rgba(255,255,255,0.11);
+  --wa-banner-from: #0369a1;
+  --wa-banner-to: #0891b2;
+  --wa-select-bg: #242932;
   --wa-up-color: #4ade80;
   --wa-down-color: #f87171;
 }

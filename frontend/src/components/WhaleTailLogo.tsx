@@ -37,7 +37,7 @@ const WhaleTailLogo = ({ size = 40, showNav = false, darkNav = false, lightBg = 
           className="absolute inset-0 w-full h-full object-contain"
           style={{
             filter: lightBg
-              ? 'brightness(0.5) contrast(1.4) saturate(1.8) drop-shadow(0 1px 1px rgba(15,23,42,0.25))'
+              ? 'brightness(0.4) contrast(1.45) saturate(1.9) drop-shadow(0 1px 1px rgba(15,23,42,0.3))'
               : 'brightness(1.5) contrast(1.3) saturate(1.4) drop-shadow(0 0 10px rgba(56,189,248,0.5))',
           }}
         />

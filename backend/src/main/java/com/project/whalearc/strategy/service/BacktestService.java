@@ -540,11 +540,14 @@ public class BacktestService {
             String date = curDate.format(DATE_FMT);
 
             // 매월 첫 거래일에 적립금 가산 (시작 캔들은 제외 — initialCapital 이 이미 시작점)
+            // contribToday: 오늘 유입된 외부 납입금. 일별수익률 분자에서 제외해야 함(현금 유입은 수익이 아님).
+            double contribToday = 0;
             java.time.YearMonth curYm = java.time.YearMonth.from(curDate);
             if (isMonthlyMode && prevYm != null && !curYm.equals(prevYm)) {
                 cash += monthlyNative;
                 cumContribNative += monthlyNative;
                 contribCount++;
+                contribToday = monthlyNative;
             }
             prevYm = curYm;
 
@@ -812,7 +815,8 @@ public class BacktestService {
             drawdownCurve.add(BacktestResponse.EquityPointDto.builder()
                     .date(date).value(Math.round(-drawdown * 100.0) / 100.0).build());
 
-            double dailyReturn = prevEquity > 0 ? (equity - prevEquity) / prevEquity * 100 : 0;
+            // 적립금 유입분(contribToday)은 수익이 아니므로 분자에서 제외
+            double dailyReturn = prevEquity > 0 ? (equity - contribToday - prevEquity) / prevEquity * 100 : 0;
             double cumulativeReturn = cumContribNative > 0 ? (equity - cumContribNative) / cumContribNative * 100 : 0;
 
             equityCurve.add(BacktestResponse.EquityPointDto.builder()
@@ -1144,6 +1148,8 @@ public class BacktestService {
             java.time.LocalDate curDate = Instant.ofEpochSecond(cA.getTime()).atZone(KST).toLocalDate();
             String date = curDate.format(DATE_FMT);
             java.time.YearMonth curYm = java.time.YearMonth.from(curDate);
+            // 오늘 유입된 외부 납입금 (일별수익률 분자에서 제외)
+            double contribToday = 0;
 
             priceData.add(BacktestResponse.PricePointDto.builder()
                     .date(date).open(cA.getOpen()).high(cA.getHigh()).low(cA.getLow())
@@ -1175,6 +1181,7 @@ public class BacktestService {
                     cashB += monthlyNative * weightB;
                     cumContribNative += monthlyNative;
                     contribCount++;
+                    contribToday = monthlyNative;
                 }
                 // 리밸런싱 주기 판단
                 int curMonth = curYm.getMonthValue();
@@ -1347,7 +1354,8 @@ public class BacktestService {
             if (drawdown > maxDrawdown) maxDrawdown = drawdown;
             drawdownCurve.add(BacktestResponse.EquityPointDto.builder().date(date).value(Math.round(-drawdown * 100.0) / 100.0).build());
             equityCurve.add(BacktestResponse.EquityPointDto.builder().date(date).value(equity).build());
-            double dailyReturn = prevEquity > 0 ? (equity - prevEquity) / prevEquity * 100 : 0;
+            // 적립금 유입분(contribToday)은 수익이 아니므로 분자에서 제외
+            double dailyReturn = prevEquity > 0 ? (equity - contribToday - prevEquity) / prevEquity * 100 : 0;
             double cumReturn = cumContribNative > 0 ? (equity - cumContribNative) / cumContribNative * 100 : 0;
             dailyReturns.add(BacktestResponse.DailyReturnDto.builder()
                     .date(date).dailyReturn(dailyReturn).cumulativeReturn(cumReturn)

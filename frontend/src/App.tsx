@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
@@ -30,42 +30,36 @@ const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const DisclaimerPage = lazy(() => import('./pages/DisclaimerPage'));
 const GoldenCrossChart = lazy(() => import('./components/GoldenCrossChart'));
 
-// body에 테마 + virt/novirt 클래스 적용
+// body에 테마 + virt/novirt 클래스 적용 (섹션은 ThemeContext 가 라우트로 판별)
 const THEME_CLASSES = ['whalearc-dark', 'whalearc-virt', 'whalearc-novirt'] as const;
 const DarkModeController = () => {
-  const location = useLocation();
-  const { isDark } = useTheme();
+  const { isDark, section } = useTheme();
   useEffect(() => {
-    const isVirtRoute = location.pathname.startsWith('/virt');
-    const isAuthRoute = ['/', '/login', '/signup', '/auth/callback', '/forgot-password', '/reset-password', '/terms', '/privacy', '/disclaimer'].includes(location.pathname);
-
     // 기존 테마 클래스 제거
     document.body.classList.remove(...THEME_CLASSES);
 
-    // 다크 모드는 모든 페이지에 적용
     if (isDark) document.body.classList.add('whalearc-dark');
-
-    if (!isAuthRoute) {
-      if (isVirtRoute) document.body.classList.add('whalearc-virt');
-      else document.body.classList.add('whalearc-novirt');
-    }
+    if (section === 'virt') document.body.classList.add('whalearc-virt');
+    else if (section === 'novirt') document.body.classList.add('whalearc-novirt');
 
     return () => { document.body.classList.remove(...THEME_CLASSES); };
-  }, [location.pathname, isDark]);
+  }, [isDark, section]);
   return null;
 };
 
-/** Suspense fallback — 현재 URL에 따라 virt/real 로딩 화면 분기 */
+/** Suspense fallback — 섹션(ThemeContext) 기준으로 virt/real 로딩 화면 분기.
+ *  window.location 대신 라우터 기반 section 을 써서, 네비게이션 중 직전 경로가 잡혀
+ *  로딩 화면이 반대로 뜨던 문제를 방지한다. (로고·테마와 동일한 기준) */
 const RouteSplashLoading = () => {
-  const isVirt = window.location.pathname.startsWith('/virt');
-  return isVirt ? <VirtSplashLoading /> : <SplashLoading />;
+  const { section } = useTheme();
+  return section === 'virt' ? <VirtSplashLoading /> : <SplashLoading />;
 };
 
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
       <Router>
+        <ThemeProvider>
         <DarkModeController />
 
         <AuthProvider>
@@ -186,8 +180,8 @@ function App() {
         </Suspense>
         </AuthProvider>
 
+        </ThemeProvider>
       </Router>
-      </ThemeProvider>
     </ErrorBoundary>
   );
 }

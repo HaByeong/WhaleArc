@@ -121,6 +121,31 @@ public class VirtKisApiClient {
         return executeWithRetry(userId, appkey, appsecret, url, "TTTC8434R", "잔고조회");
     }
 
+    /* ───── 해외주식 체결기준현재잔고 (통합잔고조회) ───── */
+
+    /**
+     * 해외주식 체결기준현재잔고 조회.
+     * - output1: 종목별 보유내역 (List)
+     * - output2: 외화 예수금 정보 (List)
+     * - output3: 합계 (Object, 원화 환산 포함)
+     *
+     * @param natnCd 국가코드 (000:전체, 840:미국, 344:홍콩, 156:중국, 392:일본, 704:베트남)
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getOverseasPresentBalance(String userId, String appkey, String appsecret,
+                                                          String accountNo, String productCode,
+                                                          String natnCd) {
+        String url = REAL_BASE_URL + "/uapi/overseas-stock/v1/trading/inquire-present-balance"
+                + "?CANO=" + accountNo
+                + "&ACNT_PRDT_CD=" + productCode
+                + "&WCRC_FRCR_DVSN_CD=02"
+                + "&NATN_CD=" + natnCd
+                + "&TR_MKET_CD=00"
+                + "&INQR_DVSN_CD=00";
+
+        return executeWithRetry(userId, appkey, appsecret, url, "CTRP6504R", "해외잔고조회");
+    }
+
     /* ───── 체결내역 조회 ───── */
 
     @SuppressWarnings("unchecked")

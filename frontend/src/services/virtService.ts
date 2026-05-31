@@ -19,12 +19,20 @@ export interface VirtCredentialInfo {
 export interface VirtHolding {
   stockCode: string;
   stockName: string;
-  quantity: number;  // 주식: 정수, 코인: 소수점
-  averagePrice: number;
-  currentPrice: number;
-  marketValue: number;
-  profitLoss: number;
+  quantity: number;  // 주식: 정수, 코인·해외주식: 소수점
+  averagePrice: number;  // KRW 환산
+  currentPrice: number;  // KRW 환산
+  marketValue: number;   // KRW 환산
+  profitLoss: number;    // KRW 환산
   returnRate: number;
+
+  // 해외주식·외화 자산 표기용 (국내·코인은 미사용)
+  currency?: string;              // KRW, USD, HKD, JPY, CNY 등
+  exchange?: string;              // NASD, NYSE, AMEX 등
+  originalAveragePrice?: number;  // 외화 기준 평균매입가
+  originalCurrentPrice?: number;  // 외화 기준 현재가
+  originalMarketValue?: number;   // 외화 기준 평가금액
+  exchangeRate?: number;          // 적용 환율
 }
 
 export interface VirtPortfolio {

@@ -134,47 +134,47 @@ body.whalearc-virt:not(.whalearc-dark) {
   --wa-down-color: #dc2626;
 }
 
-/* Virt Dark — 얕은 바다, 부드러운 다크 */
+/* Virt Dark — 초보자용 깊은 네이비 (#0a1726, 튜너에서 직접 선택 / 배너·액센트는 시안 블루 유지) */
 body.whalearc-dark.whalearc-virt {
-  --wa-page-bg: #0f1b2d;
-  --wa-header-bg: #0f1b2d;
-  --wa-header-border: rgba(255,255,255,0.08);
-  --wa-card-bg: rgba(255,255,255,0.04);
-  --wa-card-border: rgba(255,255,255,0.08);
-  --wa-card-hover-border: rgba(103,232,249,0.35);
-  --wa-text-primary: #e2e8f0;
-  --wa-text-secondary: #7c9ab8;
-  --wa-text-muted: #5b7a95;
-  --wa-accent: #67e8f9;
-  --wa-accent-soft: rgba(103,232,249,0.1);
-  --wa-input-bg: rgba(255,255,255,0.04);
-  --wa-input-border: rgba(255,255,255,0.1);
-  --wa-banner-from: #164e6e;
-  --wa-banner-to: #0e7490;
-  --wa-select-bg: #162236;
+  --wa-page-bg: #0a1726;
+  --wa-header-bg: #0a1726;
+  --wa-header-border: rgba(255,255,255,0.10);
+  --wa-card-bg: rgba(255,255,255,0.05);
+  --wa-card-border: rgba(255,255,255,0.09);
+  --wa-card-hover-border: rgba(56,189,248,0.40);
+  --wa-text-primary: #e7eff6;
+  --wa-text-secondary: #9db3c5;
+  --wa-text-muted: #6a8298;
+  --wa-accent: #38bdf8;
+  --wa-accent-soft: rgba(56,189,248,0.12);
+  --wa-input-bg: rgba(255,255,255,0.05);
+  --wa-input-border: rgba(255,255,255,0.11);
+  --wa-banner-from: #0369a1;
+  --wa-banner-to: #0891b2;
+  --wa-select-bg: #12243a;
   --wa-up-color: #4ade80;
   --wa-down-color: #f87171;
 }
 
-/* No Virt Light — 맑은 바다, 프로페셔널 */
+/* No Virt Light — 고수용 '심해'의 정체성을 라이트로 옮긴 버전 (차갑고 또렷한 수면, 딥오션 액센트) */
 body.whalearc-novirt:not(.whalearc-dark) {
-  --wa-page-bg: #f1f5f9;
+  --wa-page-bg: #e9f0f7;
   --wa-header-bg: #ffffff;
-  --wa-header-border: #cbd5e1;
+  --wa-header-border: #ccd9e6;
   --wa-card-bg: #ffffff;
-  --wa-card-border: #cbd5e1;
-  --wa-card-hover-border: rgba(30,58,95,0.4);
-  --wa-text-primary: #0f172a;
-  --wa-text-secondary: #475569;
-  --wa-text-muted: #64748b;
-  --wa-accent: #1e3a5f;
-  --wa-accent-soft: rgba(30,58,95,0.1);
+  --wa-card-border: #ccd9e6;
+  --wa-card-hover-border: rgba(7,89,133,0.45);
+  --wa-text-primary: #0b1f33;
+  --wa-text-secondary: #3e5871;
+  --wa-text-muted: #6b829a;
+  --wa-accent: #075985;
+  --wa-accent-soft: rgba(7,89,133,0.1);
   --wa-input-bg: #ffffff;
-  --wa-input-border: #cbd5e1;
-  --wa-banner-from: #0f172a;
-  --wa-banner-to: #1e3a5f;
+  --wa-input-border: #ccd9e6;
+  --wa-banner-from: #0b1f33;
+  --wa-banner-to: #075985;
   --wa-select-bg: #ffffff;
-  --wa-up-color: #16a34a;
+  --wa-up-color: #059669;
   --wa-down-color: #dc2626;
 }
 
@@ -306,6 +306,12 @@ body.whalearc-dark .bg-white {
 body.whalearc-dark .bg-gray-50 {
   background-color: rgba(255,255,255,0.03) !important;
 }
+body.whalearc-dark .bg-gray-50\/50,
+body.whalearc-dark .bg-gray-50\/40,
+body.whalearc-dark .bg-slate-50\/50,
+body.whalearc-dark .bg-gray-100\/50 {
+  background-color: rgba(255,255,255,0.03) !important;
+}
 body.whalearc-dark .bg-gray-100 {
   background-color: rgba(255,255,255,0.05) !important;
 }
@@ -351,6 +357,41 @@ body.whalearc-dark .text-gray-300 {
 body.whalearc-dark .text-gray-200 {
   color: #475569 !important;
 }
+/* 진한 컬러 텍스트(뱃지·알림·라벨) 다크 보정 — 파스텔 배경이 어두워지며 생기던 저대비 해결.
+   hue 는 유지해 의미(상승=빨강/하락=파랑 등) 보존 */
+body.whalearc-dark .text-blue-600,
+body.whalearc-dark .text-blue-700,
+body.whalearc-dark .text-blue-800 { color: #60a5fa !important; }
+body.whalearc-dark .text-sky-600,
+body.whalearc-dark .text-sky-700 { color: #38bdf8 !important; }
+body.whalearc-dark .text-cyan-600,
+body.whalearc-dark .text-cyan-700 { color: #22d3ee !important; }
+body.whalearc-dark .text-red-600,
+body.whalearc-dark .text-red-700,
+body.whalearc-dark .text-red-800 { color: #f87171 !important; }
+body.whalearc-dark .text-rose-600,
+body.whalearc-dark .text-rose-700 { color: #fb7185 !important; }
+body.whalearc-dark .text-green-600,
+body.whalearc-dark .text-green-700,
+body.whalearc-dark .text-green-800 { color: #4ade80 !important; }
+body.whalearc-dark .text-emerald-600,
+body.whalearc-dark .text-emerald-700 { color: #34d399 !important; }
+body.whalearc-dark .text-amber-600,
+body.whalearc-dark .text-amber-700,
+body.whalearc-dark .text-amber-800 { color: #fbbf24 !important; }
+body.whalearc-dark .text-yellow-600,
+body.whalearc-dark .text-yellow-700 { color: #facc15 !important; }
+body.whalearc-dark .text-purple-600,
+body.whalearc-dark .text-purple-700,
+body.whalearc-dark .text-purple-800 { color: #c084fc !important; }
+body.whalearc-dark .text-violet-600,
+body.whalearc-dark .text-violet-700 { color: #a78bfa !important; }
+body.whalearc-dark .text-indigo-600,
+body.whalearc-dark .text-indigo-700 { color: #818cf8 !important; }
+body.whalearc-dark .text-orange-600,
+body.whalearc-dark .text-orange-700 { color: #fb923c !important; }
+body.whalearc-dark .text-pink-600,
+body.whalearc-dark .text-pink-700 { color: #f472b6 !important; }
 body.whalearc-dark .bg-blue-50,
 body.whalearc-dark .bg-blue-50\/40 {
   background-color: rgba(56,189,248,0.06) !important;
@@ -363,6 +404,108 @@ body.whalearc-dark .bg-green-50 {
 }
 body.whalearc-dark .hover\:bg-gray-50:hover {
   background-color: rgba(255,255,255,0.04) !important;
+}
+
+/* ───────────────────────────────────────
+   다크 모드 — 라이트 전용 파스텔/그라데이션 카드 보정
+   (다크에서 '은색 카드'처럼 떠 보이는 문제 / 9개 페이지 공통)
+   ─────────────────────────────────────── */
+/* 1) 옅은 그라데이션 시작색(-50): 그라데이션 제거 후 은은한 색조로 */
+body.whalearc-dark .from-blue-50,
+body.whalearc-dark .from-sky-50,
+body.whalearc-dark .from-cyan-50,
+body.whalearc-dark .from-indigo-50 {
+  background-image: none !important;
+  background-color: rgba(56,189,248,0.07) !important;
+}
+body.whalearc-dark .from-gray-50,
+body.whalearc-dark .from-slate-50,
+body.whalearc-dark .from-zinc-50,
+body.whalearc-dark .from-neutral-50 {
+  background-image: none !important;
+  background-color: rgba(255,255,255,0.04) !important;
+}
+body.whalearc-dark .from-red-50,
+body.whalearc-dark .from-rose-50 {
+  background-image: none !important;
+  background-color: rgba(239,68,68,0.08) !important;
+}
+body.whalearc-dark .from-amber-50,
+body.whalearc-dark .from-yellow-50,
+body.whalearc-dark .from-orange-50 {
+  background-image: none !important;
+  background-color: rgba(245,158,11,0.08) !important;
+}
+body.whalearc-dark .from-green-50,
+body.whalearc-dark .from-emerald-50,
+body.whalearc-dark .from-teal-50 {
+  background-image: none !important;
+  background-color: rgba(34,197,94,0.08) !important;
+}
+body.whalearc-dark .from-purple-50,
+body.whalearc-dark .from-violet-50,
+body.whalearc-dark .from-fuchsia-50,
+body.whalearc-dark .from-pink-50 {
+  background-image: none !important;
+  background-color: rgba(168,85,247,0.08) !important;
+}
+/* 2) 옅은 솔리드 배경(-50, /50 등) — 기존 규칙이 못 잡는 투명도·색 보완 */
+body.whalearc-dark .bg-blue-50\/50,
+body.whalearc-dark .bg-sky-50\/50,
+body.whalearc-dark .bg-cyan-50\/50,
+body.whalearc-dark .bg-indigo-50,
+body.whalearc-dark .bg-indigo-50\/50 {
+  background-color: rgba(56,189,248,0.07) !important;
+}
+body.whalearc-dark .bg-amber-50,
+body.whalearc-dark .bg-amber-50\/50,
+body.whalearc-dark .bg-yellow-50\/50,
+body.whalearc-dark .bg-orange-50\/50 {
+  background-color: rgba(245,158,11,0.08) !important;
+}
+body.whalearc-dark .bg-purple-50,
+body.whalearc-dark .bg-purple-50\/50,
+body.whalearc-dark .bg-violet-50\/50,
+body.whalearc-dark .bg-pink-50\/50 {
+  background-color: rgba(168,85,247,0.08) !important;
+}
+body.whalearc-dark .bg-red-50\/50,
+body.whalearc-dark .bg-rose-50\/50 {
+  background-color: rgba(239,68,68,0.08) !important;
+}
+body.whalearc-dark .bg-green-50\/50,
+body.whalearc-dark .bg-emerald-50\/50 {
+  background-color: rgba(34,197,94,0.08) !important;
+}
+/* 3) 옅은 아이콘 배경(-100) */
+body.whalearc-dark .bg-blue-100 { background-color: rgba(56,189,248,0.15) !important; }
+body.whalearc-dark .bg-amber-100 { background-color: rgba(245,158,11,0.15) !important; }
+body.whalearc-dark .bg-purple-100 { background-color: rgba(168,85,247,0.15) !important; }
+body.whalearc-dark .bg-indigo-100 { background-color: rgba(99,102,241,0.15) !important; }
+body.whalearc-dark .bg-green-100 { background-color: rgba(34,197,94,0.15) !important; }
+body.whalearc-dark .bg-red-100 { background-color: rgba(239,68,68,0.15) !important; }
+/* 4) hover 시 옅은 파스텔 → 살짝 밝게 */
+body.whalearc-dark .hover\:bg-blue-50:hover,
+body.whalearc-dark .hover\:bg-amber-50:hover,
+body.whalearc-dark .hover\:bg-purple-50:hover,
+body.whalearc-dark .hover\:bg-green-50:hover,
+body.whalearc-dark .hover\:bg-red-50:hover {
+  background-color: rgba(255,255,255,0.07) !important;
+}
+/* 5) 옅은 컬러 테두리 */
+body.whalearc-dark .border-blue-100,
+body.whalearc-dark .border-amber-100,
+body.whalearc-dark .border-purple-100,
+body.whalearc-dark .border-indigo-100,
+body.whalearc-dark .border-green-100,
+body.whalearc-dark .border-red-100,
+body.whalearc-dark .border-blue-200\/50,
+body.whalearc-dark .border-gray-200\/50,
+body.whalearc-dark .border-red-200\/50,
+body.whalearc-dark .border-amber-200\/50,
+body.whalearc-dark .border-purple-200\/50,
+body.whalearc-dark .border-green-200\/50 {
+  border-color: rgba(255,255,255,0.10) !important;
 }
 
 /* ═══════════════════════════════════════

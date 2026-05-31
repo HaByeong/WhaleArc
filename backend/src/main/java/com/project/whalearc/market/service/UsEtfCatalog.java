@@ -26,14 +26,36 @@ public class UsEtfCatalog {
         put("QQQ",  "Invesco QQQ (나스닥100)",          "NAS", "Index");
         put("SOXX", "iShares 반도체 ETF",               "NAS", "Sector");
         put("SMH",  "VanEck 반도체 ETF",                "NAS", "Sector");
+        put("NVDL", "GraniteShares 2x 엔비디아",        "NAS", "Leveraged");
+        put("TQQQ", "ProShares 3x 나스닥100",           "NAS", "Leveraged");
+        put("TSLL", "Direxion 2x 테슬라",               "NAS", "Leveraged");
+        put("SQQQ", "ProShares -3x 나스닥100",          "NAS", "Inverse");
+        put("TLT",  "iShares 20년+ 미국채",             "NAS", "Bond");
+        put("JEPQ", "JPMorgan 나스닥 인컴",             "NAS", "Income");
+        put("IBIT", "iShares 비트코인 신탁",            "NAS", "Crypto");
         // NYSE Arca 상장 → KIS 에서는 EXCD=AMS
+        put("SPY",  "SPDR S&P 500",                      "AMS", "Index");
+        put("VOO",  "Vanguard S&P 500",                  "AMS", "Index");
+        put("VTI",  "Vanguard 전체 미국시장",            "AMS", "Index");
+        put("DIA",  "SPDR 다우존스 산업평균",            "AMS", "Index");
+        put("IWM",  "iShares 러셀 2000",                 "AMS", "Index");
         put("SCHD", "Schwab 미국 배당주 ETF",           "AMS", "Dividend");
         put("GLD",  "SPDR 골드 쉐어",                   "AMS", "Commodity");
         put("SLV",  "iShares 실버 트러스트",            "AMS", "Commodity");
+        put("USO",  "United States 원유 펀드",          "AMS", "Commodity");
         put("XLK",  "Technology Select Sector",          "AMS", "Sector");
         put("XLF",  "Financial Select Sector",           "AMS", "Sector");
         put("XLE",  "Energy Select Sector",              "AMS", "Sector");
         put("XLV",  "Health Care Select Sector",         "AMS", "Sector");
+        put("QLD",  "ProShares 2x 나스닥100",            "AMS", "Leveraged");
+        put("SOXL", "Direxion 3x 반도체 불",             "AMS", "Leveraged");
+        put("SPXL", "Direxion 3x S&P 500",               "AMS", "Leveraged");
+        put("AGG",  "iShares 미국 종합채권",             "AMS", "Bond");
+        put("JEPI", "JPMorgan S&P 인컴",                 "AMS", "Income");
+        put("ARKK", "ARK 이노베이션",                    "AMS", "Innovation");
+        put("EEM",  "iShares 신흥국 MSCI",              "AMS", "International");
+        put("EWY",  "iShares 한국 MSCI",                 "AMS", "International");
+        put("VNQ",  "Vanguard 미국 부동산",              "AMS", "RealEstate");
     }
 
     private static void put(String symbol, String name, String exchange, String category) {

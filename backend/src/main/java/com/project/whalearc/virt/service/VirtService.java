@@ -161,43 +161,105 @@ public class VirtService {
         String appkey = CryptoUtil.decrypt(cred.getEncryptedAppkey(), encryptionKey);
         String appsecret = CryptoUtil.decrypt(cred.getEncryptedAppsecret(), encryptionKey);
 
-        Map<String, Object> result = kisClient.getAccountBalance(
-                userId, appkey, appsecret,
-                cred.getAccountNumber(), cred.getAccountProductCode()
-        );
-
-        // output1: 보유종목 리스트
-        List<Map<String, String>> output1 = (List<Map<String, String>>) result.get("output1");
-        // output2: 계좌 요약 (배열, 첫 번째 요소 사용)
-        List<Map<String, String>> output2 = (List<Map<String, String>>) result.get("output2");
-
         List<VirtPortfolioResponse.VirtHolding> holdings = new ArrayList<>();
-        if (output1 != null) {
-            for (Map<String, String> item : output1) {
-                int qty = safeInt(item.get("hldg_qty"));
-                if (qty <= 0) continue;
+        long cashBalance = 0;     // 원화 예수금 + 외화 예수금(KRW 환산)
+        long holdingsValue = 0;
+        long totalPnl = 0;
 
-                holdings.add(VirtPortfolioResponse.VirtHolding.builder()
-                        .stockCode(item.getOrDefault("pdno", ""))
-                        .stockName(item.getOrDefault("prdt_name", ""))
-                        .quantity(qty)
-                        .averagePrice(safeLong(item.get("pchs_avg_pric")))
-                        .currentPrice(safeLong(item.get("prpr")))
-                        .marketValue(safeLong(item.get("evlu_amt")))
-                        .profitLoss(safeLong(item.get("evlu_pfls_amt")))
-                        .returnRate(safeDouble(item.get("evlu_pfls_rt")))
-                        .build());
+        // ── 1) 국내주식 잔고 ──
+        try {
+            Map<String, Object> kr = kisClient.getAccountBalance(
+                    userId, appkey, appsecret,
+                    cred.getAccountNumber(), cred.getAccountProductCode()
+            );
+
+            List<Map<String, String>> krOutput1 = (List<Map<String, String>>) kr.get("output1");
+            List<Map<String, String>> krOutput2 = (List<Map<String, String>>) kr.get("output2");
+
+            if (krOutput1 != null) {
+                for (Map<String, String> item : krOutput1) {
+                    int qty = safeInt(item.get("hldg_qty"));
+                    if (qty <= 0) continue;
+
+                    holdings.add(VirtPortfolioResponse.VirtHolding.builder()
+                            .stockCode(item.getOrDefault("pdno", ""))
+                            .stockName(item.getOrDefault("prdt_name", ""))
+                            .quantity(qty)
+                            .averagePrice(safeLong(item.get("pchs_avg_pric")))
+                            .currentPrice(safeLong(item.get("prpr")))
+                            .marketValue(safeLong(item.get("evlu_amt")))
+                            .profitLoss(safeLong(item.get("evlu_pfls_amt")))
+                            .returnRate(safeDouble(item.get("evlu_pfls_rt")))
+                            .currency("KRW")
+                            .build());
+                }
             }
+            if (krOutput2 != null && !krOutput2.isEmpty()) {
+                cashBalance += safeLong(krOutput2.get(0).get("dnca_tot_amt"));
+            }
+        } catch (Exception e) {
+            log.warn("[Virt] 국내주식 잔고 조회 실패 (해외만 시도): {}", e.getMessage());
         }
 
-        long holdingsValue = holdings.stream().mapToLong(VirtPortfolioResponse.VirtHolding::getMarketValue).sum();
-        long totalPnl = holdings.stream().mapToLong(VirtPortfolioResponse.VirtHolding::getProfitLoss).sum();
+        // ── 2) 해외주식 통합잔고 (전 국가 조회) ──
+        try {
+            Map<String, Object> os = kisClient.getOverseasPresentBalance(
+                    userId, appkey, appsecret,
+                    cred.getAccountNumber(), cred.getAccountProductCode(),
+                    "000"
+            );
 
-        // 예수금: output2[0].dnca_tot_amt 또는 d2_deposit (D+2 예수금)
-        long cashBalance = 0;
-        if (output2 != null && !output2.isEmpty()) {
-            cashBalance = safeLong(output2.get(0).get("dnca_tot_amt"));
+            // output1: 종목별 보유내역
+            List<Map<String, String>> osOutput1 = (List<Map<String, String>>) os.get("output1");
+            if (osOutput1 != null) {
+                for (Map<String, String> item : osOutput1) {
+                    double qty = safeDouble(item.get("cblc_qty13"));
+                    if (qty <= 0) continue;
+
+                    double rate = safeDouble(item.get("bass_exrt"));
+                    if (rate <= 0) rate = 1.0;
+
+                    double origAvg = safeDouble(item.get("avg_unpr3"));
+                    double origCur = safeDouble(item.get("ovrs_now_pric1"));
+                    double origMv = safeDouble(item.get("frcr_evlu_amt2"));
+                    long krwMv = (long) (origMv * rate);
+                    long krwPnl = (long) (safeDouble(item.get("evlu_pfls_amt2")) * rate);
+
+                    holdings.add(VirtPortfolioResponse.VirtHolding.builder()
+                            .stockCode(item.getOrDefault("pdno", ""))
+                            .stockName(item.getOrDefault("pdno", ""))
+                            .quantity(qty)
+                            .averagePrice((long) (origAvg * rate))
+                            .currentPrice((long) (origCur * rate))
+                            .marketValue(krwMv)
+                            .profitLoss(krwPnl)
+                            .returnRate(safeDouble(item.get("evlu_pfls_rt1")))
+                            .currency(item.getOrDefault("buy_crcy_cd", item.getOrDefault("crcy_cd", "USD")))
+                            .exchange(item.getOrDefault("ovrs_excg_cd", ""))
+                            .originalAveragePrice(origAvg)
+                            .originalCurrentPrice(origCur)
+                            .originalMarketValue(origMv)
+                            .exchangeRate(rate)
+                            .build());
+                }
+            }
+
+            // output2: 외화 예수금 → KRW 환산하여 cashBalance에 합산
+            List<Map<String, String>> osOutput2 = (List<Map<String, String>>) os.get("output2");
+            if (osOutput2 != null) {
+                for (Map<String, String> item : osOutput2) {
+                    double frcrCash = safeDouble(item.get("frcr_dncl_amt_2"));
+                    double rate = safeDouble(item.get("frst_bltn_exrt"));
+                    if (rate <= 0) rate = 1.0;
+                    cashBalance += (long) (frcrCash * rate);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[Virt] 해외주식 잔고 조회 실패: userId={}, error={}", userId, e.getMessage());
         }
+
+        holdingsValue = holdings.stream().mapToLong(VirtPortfolioResponse.VirtHolding::getMarketValue).sum();
+        totalPnl = holdings.stream().mapToLong(VirtPortfolioResponse.VirtHolding::getProfitLoss).sum();
 
         long totalValue = cashBalance + holdingsValue;
         long investedAmount = totalValue - totalPnl;

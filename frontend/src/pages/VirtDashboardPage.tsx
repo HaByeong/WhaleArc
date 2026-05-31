@@ -323,22 +323,41 @@ const VirtDashboardPage = () => {
                           <div className="col-span-3 text-right">평가금액</div>
                           <div className="col-span-3 text-right">수익률</div>
                         </div>
-                        {activePortfolio.holdings.map((h) => (
-                          <div key={h.stockCode} className="grid grid-cols-12 gap-2 px-3 py-3 rounded-lg hover:bg-white/[0.03] transition-colors">
-                            <div className="col-span-4">
-                              <div className="font-semibold text-sm text-white">{h.stockName}</div>
-                              <div className="text-[11px] text-slate-600">{h.stockCode}</div>
+                        {activePortfolio.holdings.map((h) => {
+                          const isForeign = h.currency && h.currency !== 'KRW';
+                          return (
+                            <div key={`${h.stockCode}-${h.exchange ?? ''}`} className="grid grid-cols-12 gap-2 px-3 py-3 rounded-lg hover:bg-white/[0.03] transition-colors">
+                              <div className="col-span-4">
+                                <div className="font-semibold text-sm text-white flex items-center gap-1.5">
+                                  <span>{h.stockName}</span>
+                                  {isForeign && (
+                                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                                      {h.currency}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-slate-600">
+                                  {h.stockCode}{h.exchange ? ` · ${h.exchange}` : ''}
+                                </div>
+                              </div>
+                              <div className="col-span-2 text-right self-center text-sm text-slate-300">
+                                {serviceTab === 'stock' ? `${h.quantity.toLocaleString()}주` : h.quantity}
+                              </div>
+                              <div className="col-span-3 text-right self-center text-sm font-medium text-white">
+                                {fmtCompact(h.marketValue)}
+                                {isForeign && h.originalMarketValue != null && (
+                                  <div className="text-[10px] text-slate-600 font-normal">
+                                    {h.currency} {h.originalMarketValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="col-span-3 text-right self-center">
+                                <div className={`text-sm font-bold ${rc(h.returnRate)}`}>{sign(h.returnRate)}{h.returnRate.toFixed(2)}%</div>
+                                <div className={`text-[11px] ${rc(h.profitLoss)}`}>{sign(h.profitLoss)}{fmtCompact(h.profitLoss)}</div>
+                              </div>
                             </div>
-                            <div className="col-span-2 text-right self-center text-sm text-slate-300">
-                              {serviceTab === 'stock' ? `${h.quantity.toLocaleString()}주` : h.quantity}
-                            </div>
-                            <div className="col-span-3 text-right self-center text-sm font-medium text-white">{fmtCompact(h.marketValue)}</div>
-                            <div className="col-span-3 text-right self-center">
-                              <div className={`text-sm font-bold ${rc(h.returnRate)}`}>{sign(h.returnRate)}{h.returnRate.toFixed(2)}%</div>
-                              <div className={`text-[11px] ${rc(h.profitLoss)}`}>{sign(h.profitLoss)}{fmtCompact(h.profitLoss)}</div>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </>
                     )
                   ) : serviceTab !== 'stock' ? (

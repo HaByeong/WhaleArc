@@ -969,13 +969,14 @@ const StrategyPage = () => {
       );
     }
 
-    // 일반 임계값 조건: RSI < 30
+    // 일반 임계값 조건: RSI < 30 (수식 비교값이 있으면 우측에 수식을 표시)
     const opMap: Record<string, string> = { GT: '>', GTE: '≥', LT: '<', LTE: '≤', EQ: '=' };
+    const rhs = (c.valueExpression && c.valueExpression.trim()) ? c.valueExpression : c.value;
     return (
       <>
         <span className={`px-2 py-0.5 rounded text-xs font-semibold bg-${color}-100 text-${color}-600`}>{ind}</span>
         <span className={`font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>{opMap[c.operator || ''] || c.operator}</span>
-        <span className={`font-semibold ${isDark ? 'text-white' : 'text-whale-dark'}`}>{c.value}</span>
+        <span className={`font-semibold ${isDark ? 'text-white' : 'text-whale-dark'}`}>{rhs}</span>
       </>
     );
   };
@@ -1101,6 +1102,100 @@ const StrategyPage = () => {
       exitConditions: [{ indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'OPEN + (PREV_HIGH - PREV_LOW) * 0.3' }],
       applied: false, createdAt: '', updatedAt: '',
     },
+    {
+      id: 'preset-triple-ema', name: '트리플 EMA 추세 정렬', description: '단기·중기·장기 EMA(20·50·200)가 완전히 정렬된 상태에서만 골든크로스로 진입하는 다중 시간프레임 추세 정렬 전략입니다. 단일 골든크로스의 잦은 속임수 신호를 구조적으로 걸러냅니다.',
+      beginnerTip: '쉽게 말하면: 짧은 흐름·중간 흐름·긴 흐름이 "모두 같은 방향(위)"일 때만 올라타는 전략이에요. 셋이 줄을 맞춰야 출발합니다.',
+      whyUse: '단일 이동평균 교차는 횡보장에서 사고팔기를 반복하며 손실이 쌓여요. 세 EMA가 정렬(20>50>200)된 상태에서만 진입하면 거래 수가 절반 이하로 줄고 진짜 추세에만 올라타 거래당 기대값이 크게 올라갑니다. EMA200은 강세장/약세장을 가르는 업계 표준선이에요.',
+      difficulty: '고급',
+      strategyLogic: 'EMA50 > EMA200(상승 체제) + EMA20 ↑ EMA50 골든크로스 → 매수 / EMA20 ↓ EMA50 또는 종가 < EMA200 → 매도',
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
+      indicators: [{ type: 'EMA', parameters: { period: 20 } }, { type: 'EMA', parameters: { period: 50 } }, { type: 'EMA', parameters: { period: 200 } }],
+      entryConditions: [
+        { indicator: 'EMA_50', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'EMA_200' },
+        { indicator: 'EMA_20_CROSS_EMA_50', operator: 'GT', value: 0, logic: 'AND' },
+      ],
+      exitConditions: [
+        { indicator: 'EMA_20_CROSSUNDER_EMA_50', operator: 'GT', value: 0, logic: 'OR' },
+        { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'OR', valueExpression: 'EMA_200' },
+      ],
+      applied: false, createdAt: '', updatedAt: '',
+    },
+    {
+      id: 'preset-keltner-breakout', name: '켈트너 채널 변동성 돌파', description: 'EMA20 중심선에 ATR(실제 변동폭) 밴드를 두른 켈트너 채널의 상단을 종가가 돌파할 때 진입하고, 중심선으로 회귀하면 청산하는 변동성 정규화 추세 돌파 전략입니다.',
+      beginnerTip: '쉽게 말하면: 평소 출렁임(ATR)보다 두 배 이상 세게 위로 치고 나가면 "진짜 강한 상승"이라 보고 올라타는 전략이에요.',
+      whyUse: '볼린저 밴드는 표준편차를 쓰지만 켈트너는 ATR(실제 거래폭)을 써서 갑작스러운 갭이나 긴 꼬리에 덜 흔들려요. 변동성으로 정규화된 돌파라 비트코인이든 주식이든 같은 설정을 그대로 적용할 수 있는 게 강점입니다.',
+      difficulty: '고급',
+      strategyLogic: '종가 > EMA20 + 2×ATR(상단 돌파) + 종가 > EMA200 → 매수 / 종가 < EMA20(중심선 회귀) → 매도',
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
+      indicators: [{ type: 'EMA', parameters: { period: 20 } }, { type: 'EMA', parameters: { period: 200 } }, { type: 'ATR', parameters: { period: 10 } }],
+      entryConditions: [
+        { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'EMA_20 + 2.0 * ATR' },
+        { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'EMA_200' },
+      ],
+      exitConditions: [
+        { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'OR', valueExpression: 'EMA_20' },
+      ],
+      applied: false, createdAt: '', updatedAt: '',
+    },
+    {
+      id: 'preset-bollinger-reversion', name: '볼린저 %b 레짐 평균회귀', description: '200일선 위(상승 체제)에서만 볼린저 밴드 하단 이탈(%b < 0.05)을 과매도로 보고 매수, 중심선 회귀(%b ≥ 0.5) 시 청산하는 추세 필터형 평균회귀 전략입니다.',
+      beginnerTip: '쉽게 말하면: 장기적으로 잘 오르는 종목이 잠깐 확 빠졌을 때만 "할인 구간"이라 보고 사서, 제자리로 돌아오면 파는 전략이에요.',
+      whyUse: '단순 과매도 매수의 최대 약점은 하락장에서 "떨어지는 칼날"을 잡는 거예요. 200일선 위에서만 매수하도록 거르면 손실 거래의 꼬리가 잘려 승률과 손익비가 크게 개선됩니다. 월가에서 검증된 정통 평균회귀 조합이에요.',
+      difficulty: '고급',
+      strategyLogic: '종가 > 200일선 + %b < 0.05(밴드 하단 이탈) → 매수 / %b ≥ 0.5(중심 회귀) 또는 종가 < 200일선 → 매도',
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
+      indicators: [{ type: 'BOLLINGER_BANDS', parameters: { period: 20, stdDev: 2 } }, { type: 'MA', parameters: { period: 200 } }],
+      entryConditions: [
+        { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'MA_200' },
+        { indicator: 'BOLLINGER_PCT_B', operator: 'LT', value: 0.05, logic: 'AND' },
+      ],
+      exitConditions: [
+        { indicator: 'BOLLINGER_PCT_B', operator: 'GTE', value: 0.5, logic: 'OR' },
+        { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'OR', valueExpression: 'MA_200' },
+      ],
+      applied: false, createdAt: '', updatedAt: '',
+    },
+    {
+      id: 'preset-oscillator-confluence', name: '멀티 오실레이터 컨플루언스 반전', description: 'RSI·스토캐스틱·윌리엄스%R·CCI 네 개의 오실레이터가 모두 과매도이고 200일선 위일 때만 매수하는 고확신 평균회귀 전략입니다. 단일 지표의 거짓 신호를 만장일치로 걸러냅니다.',
+      beginnerTip: '쉽게 말하면: 네 명의 심판(지표)이 "지금 너무 많이 빠졌다"고 모두 동의할 때만 사는, 신중함을 극대화한 전략이에요.',
+      whyUse: '지표 하나는 자주 속이지만 네 개가 동시에 과매도를 가리키는 일은 드물고, 그만큼 진짜 바닥일 확률이 높아요. 거래 빈도는 낮지만 진입 한 번의 신뢰도가 높아 승률 중심으로 운용하기 좋습니다.',
+      difficulty: '고급',
+      strategyLogic: '종가 > 200일선 + RSI<35 + 스토캐스틱K<25 + 윌리엄스%R<-80 + CCI<-100 → 매수 / RSI>55 또는 스토캐스틱K>75 또는 종가<200일선 → 매도',
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
+      indicators: [{ type: 'RSI', parameters: { period: 14 } }, { type: 'STOCHASTIC', parameters: { kPeriod: 14, dPeriod: 3 } }, { type: 'WILLIAMS_R', parameters: { period: 14 } }, { type: 'CCI', parameters: { period: 20 } }, { type: 'MA', parameters: { period: 200 } }],
+      entryConditions: [
+        { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'MA_200' },
+        { indicator: 'RSI', operator: 'LT', value: 35, logic: 'AND' },
+        { indicator: 'STOCH_K', operator: 'LT', value: 25, logic: 'AND' },
+        { indicator: 'WILLIAMS_R', operator: 'LT', value: -80, logic: 'AND' },
+        { indicator: 'CCI', operator: 'LT', value: -100, logic: 'AND' },
+      ],
+      exitConditions: [
+        { indicator: 'RSI', operator: 'GT', value: 55, logic: 'OR' },
+        { indicator: 'STOCH_K', operator: 'GT', value: 75, logic: 'OR' },
+        { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'OR', valueExpression: 'MA_200' },
+      ],
+      applied: false, createdAt: '', updatedAt: '',
+    },
+    {
+      id: 'preset-macd-rsi-gate', name: 'MACD·RSI·EMA200 삼중 추세 게이트', description: '200일선 위(상승 체제)이고 RSI가 50을 넘은(모멘텀 확인) 상태에서 MACD 골든크로스가 나올 때만 진입하는 다중 지표 컨플루언스 추세 전략입니다. 세 신호가 동시에 같은 방향일 때만 매수합니다.',
+      beginnerTip: '쉽게 말하면: "추세도 위, 힘도 위, 교차도 위" 세 조건이 한꺼번에 맞을 때만 들어가서 가짜 신호를 거르는 전략이에요.',
+      whyUse: 'MACD 단독 교차는 횡보장에서 자주 속아요. 장기 추세(EMA200)와 모멘텀(RSI)을 함께 확인하면 거짓 전환 신호를 크게 줄이고 진짜 추세 초입에만 진입할 수 있습니다.',
+      difficulty: '고급',
+      strategyLogic: '종가 > EMA200 + RSI > 50 + MACD 골든크로스 → 매수 / MACD 데드크로스 또는 종가 < EMA200 → 매도',
+      assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
+      indicators: [{ type: 'MACD', parameters: { fast: 12, slow: 26, signal: 9 } }, { type: 'RSI', parameters: { period: 14 } }, { type: 'EMA', parameters: { period: 200 } }],
+      entryConditions: [
+        { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'EMA_200' },
+        { indicator: 'RSI', operator: 'GT', value: 50, logic: 'AND' },
+        { indicator: 'MACD_CROSS_MACD_SIGNAL', operator: 'GT', value: 0, logic: 'AND' },
+      ],
+      exitConditions: [
+        { indicator: 'MACD_CROSSUNDER_MACD_SIGNAL', operator: 'GT', value: 0, logic: 'OR' },
+        { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'OR', valueExpression: 'EMA_200' },
+      ],
+      applied: false, createdAt: '', updatedAt: '',
+    },
   ];
 
   // 프리셋 + 사용자 항로 합치기
@@ -1200,8 +1295,8 @@ const StrategyPage = () => {
                 }
                 if (strategyFilter === '변동성') {
                   return s.entryConditions?.some(c =>
-                    c.indicator?.includes('BOLLINGER') || c.indicator?.includes('ATR')
-                  );
+                    c.indicator?.includes('BOLLINGER') || c.indicator?.includes('ATR') || c.valueExpression?.includes('ATR')
+                  ) || s.indicators?.some(i => i.type === 'ATR' || i.type === 'BOLLINGER_BANDS');
                 }
                 return true;
               });
@@ -1264,8 +1359,8 @@ const StrategyPage = () => {
                   c.indicator === 'RSI' || c.indicator?.includes('STOCH') || c.indicator?.includes('CCI')
                 );
                 const isVolatility = strategy.entryConditions?.some(c =>
-                  c.indicator?.includes('BOLLINGER') || c.indicator?.includes('ATR')
-                );
+                  c.indicator?.includes('BOLLINGER') || c.indicator?.includes('ATR') || c.valueExpression?.includes('ATR')
+                ) || strategy.indicators?.some(i => i.type === 'ATR' || i.type === 'BOLLINGER_BANDS');
                 const categoryBorderColor = isVolatility ? 'border-l-orange-400' : isReverse ? 'border-l-purple-400' : isTrend ? 'border-l-blue-400' : 'border-l-gray-300';
                 return (
                   <div

@@ -162,7 +162,9 @@ public class VirtService {
         String appsecret = CryptoUtil.decrypt(cred.getEncryptedAppsecret(), encryptionKey);
 
         List<VirtPortfolioResponse.VirtHolding> holdings = new ArrayList<>();
-        long cashBalance = 0;     // 원화 예수금 + 외화 예수금(KRW 환산)
+        long krwCash = 0;          // 원화 예수금
+        long foreignCashKrw = 0;   // 외화 예수금(KRW 환산 합계)
+        double foreignCashUsd = 0; // 외화 예수금 중 USD 원금 합계
         long holdingsValue = 0;
         long totalPnl = 0;
 
@@ -195,7 +197,7 @@ public class VirtService {
                 }
             }
             if (krOutput2 != null && !krOutput2.isEmpty()) {
-                cashBalance += safeLong(krOutput2.get(0).get("dnca_tot_amt"));
+                krwCash += safeLong(krOutput2.get(0).get("dnca_tot_amt"));
             }
         } catch (Exception e) {
             log.warn("[Virt] 국내주식 잔고 조회 실패 (해외만 시도): {}", e.getMessage());
@@ -244,14 +246,20 @@ public class VirtService {
                 }
             }
 
-            // output2: 외화 예수금 → KRW 환산하여 cashBalance에 합산
+            // output2: 외화 예수금 → 통화별로 분리하여 추적 (KRW 환산 합계 + USD 원금)
             List<Map<String, String>> osOutput2 = (List<Map<String, String>>) os.get("output2");
             if (osOutput2 != null) {
                 for (Map<String, String> item : osOutput2) {
                     double frcrCash = safeDouble(item.get("frcr_dncl_amt_2"));
+                    if (frcrCash == 0) continue;
                     double rate = safeDouble(item.get("frst_bltn_exrt"));
                     if (rate <= 0) rate = 1.0;
-                    cashBalance += (long) (frcrCash * rate);
+                    foreignCashKrw += (long) (frcrCash * rate);
+                    // 통화코드 미제공 시 해외계좌 주력 통화인 USD 로 간주
+                    String ccy = item.getOrDefault("crcy_cd", "USD");
+                    if (ccy == null || ccy.isBlank() || "USD".equalsIgnoreCase(ccy)) {
+                        foreignCashUsd += frcrCash;
+                    }
                 }
             }
         } catch (Exception e) {
@@ -261,6 +269,7 @@ public class VirtService {
         holdingsValue = holdings.stream().mapToLong(VirtPortfolioResponse.VirtHolding::getMarketValue).sum();
         totalPnl = holdings.stream().mapToLong(VirtPortfolioResponse.VirtHolding::getProfitLoss).sum();
 
+        long cashBalance = krwCash + foreignCashKrw;
         long totalValue = cashBalance + holdingsValue;
         long investedAmount = totalValue - totalPnl;
         double returnRate = investedAmount != 0
@@ -273,6 +282,9 @@ public class VirtService {
                 .holdingsValue(holdingsValue)
                 .totalPnl(totalPnl)
                 .returnRate(Math.round(returnRate * 100.0) / 100.0)
+                .krwCash(krwCash)
+                .foreignCashKrw(foreignCashKrw)
+                .foreignCashUsd(foreignCashUsd)
                 .holdings(holdings)
                 .build();
     }
@@ -449,6 +461,9 @@ public class VirtService {
                 .holdingsValue(holdingsValue)
                 .totalPnl(totalPnl)
                 .returnRate(Math.round(returnRate * 100.0) / 100.0)
+                .krwCash(cashBalance)
+                .foreignCashKrw(0)
+                .foreignCashUsd(0.0)
                 .holdings(holdings)
                 .build();
     }
@@ -526,6 +541,7 @@ public class VirtService {
         double usdtKrw = fetchUsdtKrwRate();
 
         long cashBalance = 0;
+        double bitgetUsdt = 0; // USDT 예수금 원금
         List<VirtPortfolioResponse.VirtHolding> holdings = new ArrayList<>();
 
         for (Map<String, Object> asset : assets) {
@@ -538,6 +554,7 @@ public class VirtService {
 
             if ("USDT".equals(coin)) {
                 cashBalance = (long) (total * usdtKrw);
+                bitgetUsdt = total;
                 continue;
             }
 
@@ -569,6 +586,9 @@ public class VirtService {
                 .totalPnl(0)
                 .returnRate(0)
                 .usdtKrwRate(usdtKrw)
+                .krwCash(0)
+                .foreignCashKrw(cashBalance)
+                .foreignCashUsd(bitgetUsdt)
                 .holdings(holdings)
                 .build();
     }

@@ -458,10 +458,15 @@ const DashboardPage = () => {
             {(() => {
               const ap = apiTab === 'kis' ? kisPortfolio : apiTab === 'upbit' ? upbitPortfolio : bitgetPortfolio;
               const isConn = apiTab === 'kis' ? kisCredInfo?.connected : apiTab === 'upbit' ? upbitCredInfo?.connected : bitgetCredInfo?.connected;
-              // 외화(달러 등) 보유 여부·달러 합계 (통화 분리 표시용)
+              // 외화(달러 등) 종목·현금 분리 (통화 분리 표시용)
               const apNorm = (ap?.holdings || []).map(normalizeVirtHolding);
-              const apHasFx = apNorm.some((n) => n.isUsd);
-              const apFxUsd = apNorm.reduce((s, n) => s + (n.isUsd ? n.usdValue : 0), 0);
+              const apFxCashUsd = ap?.foreignCashUsd || 0;
+              const apKrwCash = ap?.krwCash ?? ap?.cashBalance ?? 0;
+              const apFxHoldingsUsd = apNorm.reduce((s, n) => s + (n.isUsd ? n.usdValue : 0), 0);
+              const apHasFx = apFxHoldingsUsd > 0 || apFxCashUsd > 0;
+              const apCashDisplay = (currencyMode === 'separate' && apFxCashUsd > 0)
+                ? (apKrwCash > 0 ? `${formatCurrency(apKrwCash)} · ${fmtUSD(apFxCashUsd)}` : fmtUSD(apFxCashUsd))
+                : formatCurrency(ap?.cashBalance || 0);
               const sign = (v: number) => (v > 0 ? '+' : '');
               const rc = (v: number) => (v > 0 ? 'text-red-500' : v < 0 ? 'text-blue-500' : 'text-gray-400');
 
@@ -509,7 +514,7 @@ const DashboardPage = () => {
                       </div>
                       <div className="p-4 text-center">
                         <div className="text-[11px] text-slate-500 mb-1">{apiTab === 'kis' ? '예수금' : apiTab === 'upbit' ? 'KRW 잔고' : 'USDT'}</div>
-                        <div className="text-base font-bold text-white">{formatCurrency(ap.cashBalance)}</div>
+                        <div className="text-base font-bold text-white">{apCashDisplay}</div>
                       </div>
                       <div className="p-4 text-center">
                         <div className="text-[11px] text-slate-500 mb-1">보유 종목</div>
@@ -531,8 +536,8 @@ const DashboardPage = () => {
                             <span className="flex items-center gap-2 text-sm text-slate-400">
                               {apHasFx && <CurrencyModeToggle mode={currencyMode} onChange={changeCurrencyMode} isDark />}
                               <span>평가금액 <span className="font-bold text-white">{formatCurrency(ap.totalValue - ap.cashBalance)}</span>
-                                {currencyMode === 'separate' && apHasFx && (
-                                  <span className="text-cyan-400 ml-1">· 달러 {fmtUSD(apFxUsd)}</span>
+                                {currencyMode === 'separate' && apFxHoldingsUsd > 0 && (
+                                  <span className="text-cyan-400 ml-1">· 달러 {fmtUSD(apFxHoldingsUsd)}</span>
                                 )}
                               </span>
                             </span>
@@ -614,7 +619,7 @@ const DashboardPage = () => {
                       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
                         <h3 className="text-sm font-bold text-white mb-3">투자 요약</h3>
                         <div className="space-y-2.5 text-sm">
-                          <div className="flex justify-between"><span className="text-slate-500">{apiTab === 'kis' ? '예수금' : apiTab === 'upbit' ? 'KRW' : 'USDT'}</span><span className="text-white">{formatCurrency(ap.cashBalance)}</span></div>
+                          <div className="flex justify-between"><span className="text-slate-500">{apiTab === 'kis' ? '예수금' : apiTab === 'upbit' ? 'KRW' : 'USDT'}</span><span className="text-white">{apCashDisplay}</span></div>
                           <div className="flex justify-between"><span className="text-slate-500">보유 평가</span><span className="text-white">{formatCurrency(ap.totalValue - ap.cashBalance)}</span></div>
                           <div className="border-t border-white/[0.06] pt-2.5">
                             <div className="flex justify-between"><span className="text-slate-400 font-medium">총 자산</span><span className="font-bold text-white">{formatCurrency(ap.totalValue)}</span></div>

@@ -109,10 +109,16 @@ const RealPortfolioPage = () => {
   const activePortfolio = serviceTab === 'kis' ? kisPortfolio : serviceTab === 'upbit' ? upbitPortfolio : bitgetPortfolio;
   const isConnected = serviceTab === 'kis' ? isKis : serviceTab === 'upbit' ? isUpbit : isBitget;
 
-  // 외화(달러 등) 보유 여부 및 달러 자산 합계 (통화 분리 표시용)
+  // 외화(달러 등) 종목·현금 분리 (통화 분리 표시용)
   const activeNorm = (activePortfolio?.holdings || []).map(normalizeVirtHolding);
-  const hasFxHolding = activeNorm.some((n) => n.isUsd);
-  const fxUsdSubtotal = activeNorm.reduce((s, n) => s + (n.isUsd ? n.usdValue : 0), 0);
+  const fxCashUsd = activePortfolio?.foreignCashUsd || 0;                       // 외화 예수금(USD 원금)
+  const krwCashOnly = activePortfolio?.krwCash ?? activePortfolio?.cashBalance ?? 0; // 원화 예수금
+  const fxHoldingsUsd = activeNorm.reduce((s, n) => s + (n.isUsd ? n.usdValue : 0), 0); // 미국주식 평가($)
+  const hasFxHolding = fxHoldingsUsd > 0 || fxCashUsd > 0; // 달러 자산(종목 or 현금) 존재
+  // 예수금 표시 문자열: 통화 분리 + 외화현금 있을 때 → 원화 · 달러 병기
+  const cashDisplay = (currencyMode === 'separate' && fxCashUsd > 0)
+    ? (krwCashOnly > 0 ? `${fmt(krwCashOnly)} · ${fmtUSD(fxCashUsd)}` : fmtUSD(fxCashUsd))
+    : fmt(activePortfolio?.cashBalance || 0);
 
   // 전체 합산
   const totalAll = (kisPortfolio?.totalValue || 0) + (upbitPortfolio?.totalValue || 0) + (bitgetPortfolio?.totalValue || 0);
@@ -259,7 +265,7 @@ const RealPortfolioPage = () => {
                   { label: '총 자산', value: fmt(activePortfolio.totalValue), color: 'text-white', border: 'border-cyan-500/20' },
                   { label: '총 손익', value: `${sign(activePortfolio.totalPnl)}${fmt(Math.round(activePortfolio.totalPnl))}`, color: rc(activePortfolio.totalPnl), border: activePortfolio.totalPnl >= 0 ? 'border-red-500/20' : 'border-blue-500/20' },
                   { label: '수익률', value: `${activePortfolio.returnRate >= 0 ? '▲ ' : '▼ '}${sign(activePortfolio.returnRate)}${activePortfolio.returnRate.toFixed(2)}%`, color: rc(activePortfolio.returnRate), border: activePortfolio.returnRate >= 0 ? 'border-red-500/20' : 'border-blue-500/20' },
-                  { label: serviceTab === 'kis' ? '예수금' : serviceTab === 'upbit' ? 'KRW 잔고' : 'USDT', value: fmt(activePortfolio.cashBalance), color: 'text-white', border: 'border-white/[0.06]' },
+                  { label: serviceTab === 'kis' ? '예수금' : serviceTab === 'upbit' ? 'KRW 잔고' : 'USDT', value: cashDisplay, color: 'text-white', border: 'border-white/[0.06]' },
                 ].map((m) => (
                   <div key={m.label} className={`bg-white/[0.02] rounded-xl p-4 border ${m.border}`}>
                     <div className="text-slate-500 text-[11px] mb-1.5">{m.label}</div>
@@ -305,8 +311,8 @@ const RealPortfolioPage = () => {
                       <>
                         <div className="flex items-center justify-between mb-4 text-sm">
                           <span className="text-slate-400">평가금액 <span className="font-bold text-white">{fmt(activePortfolio.holdingsValue)}</span>
-                            {currencyMode === 'separate' && hasFxHolding && (
-                              <span className="text-cyan-400 ml-1">· 달러 {fmtUSD(fxUsdSubtotal)}</span>
+                            {currencyMode === 'separate' && fxHoldingsUsd > 0 && (
+                              <span className="text-cyan-400 ml-1">· 달러 {fmtUSD(fxHoldingsUsd)}</span>
                             )}
                           </span>
                           <div className="flex items-center gap-2">
@@ -413,7 +419,7 @@ const RealPortfolioPage = () => {
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#475569' }} />
                         <span className="text-xs text-slate-400 flex-1">{serviceTab === 'kis' ? '예수금' : 'KRW'}</span>
-                        <span className="text-xs text-slate-300">{fmt(activePortfolio.cashBalance)}</span>
+                        <span className="text-xs text-slate-300">{cashDisplay}</span>
                       </div>
                     )}
                     {activePortfolio.holdings.map((h, i) => (
@@ -431,7 +437,7 @@ const RealPortfolioPage = () => {
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
                 <h3 className="text-sm font-bold text-white mb-3">투자 요약</h3>
                 <div className="space-y-2.5 text-sm">
-                  <div className="flex justify-between"><span className="text-slate-500">{serviceTab === 'kis' ? '예수금' : serviceTab === 'upbit' ? 'KRW' : 'USDT'}</span><span className="text-white">{fmt(activePortfolio.cashBalance)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">{serviceTab === 'kis' ? '예수금' : serviceTab === 'upbit' ? 'KRW' : 'USDT'}</span><span className="text-white">{cashDisplay}</span></div>
                   <div className="flex justify-between"><span className="text-slate-500">보유 평가</span><span className="text-white">{fmt(activePortfolio.holdingsValue)}</span></div>
                   <div className="border-t border-white/[0.06] pt-2.5">
                     <div className="flex justify-between"><span className="text-slate-400 font-medium">총 자산</span><span className="font-bold text-white">{fmt(activePortfolio.totalValue)}</span></div>

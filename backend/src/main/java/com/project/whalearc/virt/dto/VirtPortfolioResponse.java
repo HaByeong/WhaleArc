@@ -14,6 +14,12 @@ public class VirtPortfolioResponse {
     private long totalPnl;            // 총 손익
     private double returnRate;        // 수익률 %
     private Double usdtKrwRate;       // USDT/KRW 환율 (비트겟 전용, null이면 미사용)
+
+    // 예수금 통화 분리 (통화 분리 표시용). cashBalance = krwCash + foreignCashKrw.
+    private long krwCash;             // 원화 예수금
+    private long foreignCashKrw;      // 외화 예수금(KRW 환산 합계)
+    private Double foreignCashUsd;    // 외화 예수금 중 USD/USDT 원금 합계 (null/0 → 외화 현금 없음)
+
     private List<VirtHolding> holdings;
 
     @Getter

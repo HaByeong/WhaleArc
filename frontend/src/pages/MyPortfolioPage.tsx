@@ -18,6 +18,11 @@ import {
 } from '../services/quantStoreService';
 import { useAuth } from '../contexts/AuthContext';
 import { virtService, type VirtPortfolio, type VirtTrade, type VirtCredentialInfo } from '../services/virtService';
+import CurrencyModeToggle from '../components/CurrencyModeToggle';
+import {
+  type CurrencyMode, getCurrencyMode, storeCurrencyMode, fmtUSD, FALLBACK_USD_KRW,
+  normalizeSimHolding, normalizeVirtHolding, computeCurrencyTotals,
+} from '../utils/currency';
 
 const REFRESH_INTERVAL = 15_000; // 15초
 
@@ -39,6 +44,8 @@ const RealPortfolioPage = () => {
   const [trades, setTrades] = useState<VirtTrade[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currencyMode, setCurrencyMode] = useState<CurrencyMode>(getCurrencyMode());
+  const changeCurrencyMode = (m: CurrencyMode) => { setCurrencyMode(m); storeCurrencyMode(m); };
 
   // API 설정 모달
   const [showSetup, setShowSetup] = useState<false | 'kis' | 'upbit' | 'bitget'>(false);
@@ -101,6 +108,11 @@ const RealPortfolioPage = () => {
 
   const activePortfolio = serviceTab === 'kis' ? kisPortfolio : serviceTab === 'upbit' ? upbitPortfolio : bitgetPortfolio;
   const isConnected = serviceTab === 'kis' ? isKis : serviceTab === 'upbit' ? isUpbit : isBitget;
+
+  // 외화(달러 등) 보유 여부 및 달러 자산 합계 (통화 분리 표시용)
+  const activeNorm = (activePortfolio?.holdings || []).map(normalizeVirtHolding);
+  const hasFxHolding = activeNorm.some((n) => n.isUsd);
+  const fxUsdSubtotal = activeNorm.reduce((s, n) => s + (n.isUsd ? n.usdValue : 0), 0);
 
   // 전체 합산
   const totalAll = (kisPortfolio?.totalValue || 0) + (upbitPortfolio?.totalValue || 0) + (bitgetPortfolio?.totalValue || 0);
@@ -292,8 +304,15 @@ const RealPortfolioPage = () => {
                     ) : (
                       <>
                         <div className="flex items-center justify-between mb-4 text-sm">
-                          <span className="text-slate-400">평가금액 <span className="font-bold text-white">{fmt(activePortfolio.holdingsValue)}</span></span>
-                          <span className={`font-bold ${rc(activePortfolio.totalPnl)}`}>{sign(activePortfolio.totalPnl)}{fmt(Math.round(activePortfolio.totalPnl))}</span>
+                          <span className="text-slate-400">평가금액 <span className="font-bold text-white">{fmt(activePortfolio.holdingsValue)}</span>
+                            {currencyMode === 'separate' && hasFxHolding && (
+                              <span className="text-cyan-400 ml-1">· 달러 {fmtUSD(fxUsdSubtotal)}</span>
+                            )}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {hasFxHolding && <CurrencyModeToggle mode={currencyMode} onChange={changeCurrencyMode} isDark />}
+                            <span className={`font-bold ${rc(activePortfolio.totalPnl)}`}>{sign(activePortfolio.totalPnl)}{fmt(Math.round(activePortfolio.totalPnl))}</span>
+                          </div>
                         </div>
                         <div className="grid grid-cols-12 gap-2 px-3 py-2 text-[11px] font-medium text-slate-600 border-b border-white/[0.04] mb-1">
                           <div className="col-span-4">종목</div>
@@ -310,7 +329,11 @@ const RealPortfolioPage = () => {
                             <div className="col-span-2 text-right self-center text-sm text-slate-300">
                               {serviceTab === 'kis' ? `${h.quantity.toLocaleString()}주` : formatQuantity(h.quantity)}
                             </div>
-                            <div className="col-span-3 text-right self-center text-sm font-medium text-white">{fmt(h.marketValue)}</div>
+                            <div className="col-span-3 text-right self-center text-sm font-medium text-white">
+                              {currencyMode === 'separate' && h.originalMarketValue && h.currency && h.currency !== 'KRW'
+                                ? fmtUSD(h.originalMarketValue)
+                                : fmt(h.marketValue)}
+                            </div>
                             <div className="col-span-3 text-right self-center">
                               <div className={`text-sm font-bold ${rc(h.returnRate)}`}>{h.returnRate >= 0 ? '▲ ' : '▼ '}{sign(h.returnRate)}{h.returnRate.toFixed(2)}%</div>
                               <div className={`text-[11px] ${rc(h.profitLoss)}`}>{sign(h.profitLoss)}{fmt(Math.round(h.profitLoss))}</div>
@@ -610,6 +633,8 @@ const MyPortfolioPage = () => {
   const [settingRoute, setSettingRoute] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
   const [kospiHistory, setKospiHistory] = useState<{ date: string; close: number }[]>([]);
+  const [currencyMode, setCurrencyMode] = useState<CurrencyMode>(getCurrencyMode());
+  const changeCurrencyMode = (m: CurrencyMode) => { setCurrencyMode(m); storeCurrencyMode(m); };
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const showToast = (message: string, type: 'success' | 'error' = 'error') => {
     setToast({ message, type });
@@ -728,31 +753,39 @@ const MyPortfolioPage = () => {
     );
   }
 
-  /* ───── 계산 ───── */
+  /* ───── 계산 (통화 환산 반영) ───── */
+  const usdKrwRate = portfolio.usdKrwRate || FALLBACK_USD_KRW;
+  const normHoldings = portfolio.holdings.map((h) => normalizeSimHolding(h, usdKrwRate));
   const initialCash = portfolio.initialCash || 10_000_000;
-  const totalValue = portfolio.totalValue;
   const cashBalance = portfolio.cashBalance;
   const turtleAllocated = portfolio.turtleAllocated || 0;
-  const holdingsValue = portfolio.holdings.reduce((s, h) => s + h.marketValue, 0);
+  // 현금·터틀할당은 KRW. 보유종목은 normalize 로 USD→KRW 환산하여 합산.
+  const curTotals = computeCurrencyTotals(normHoldings, cashBalance + turtleAllocated);
+  const holdingsValue = normHoldings.reduce((s, n) => s + n.krwValue, 0); // 보유 평가(원화 환산)
+  const holdingsKrwOnly = normHoldings.reduce((s, n) => s + (n.isUsd ? 0 : n.krwValue), 0); // 보유 중 원화 자산만
+  const totalValue = curTotals.allKrw; // 환산 통합 총자산 (정확한 KRW)
   const totalPnl = totalValue - initialCash;
-  const returnRate = portfolio.returnRate;
+  const returnRate = initialCash > 0 ? (totalPnl / initialCash) * 100 : 0;
+  const hasUsdHolding = curTotals.hasUsd;
+  const krwAssetTotal = curTotals.krwOnly; // 원화 자산(현금+터틀+국내) 합계
+  const usdAssetTotal = curTotals.usdOnly; // 달러 자산 합계(USD)
 
   // 주식/가상화폐 구분 헬퍼
   const holdingName = (h: { stockCode: string; stockName: string; assetType?: string }) =>
     h.assetType === 'STOCK' ? h.stockName : (CRYPTO_NAMES[h.stockCode] || h.stockName || h.stockCode);
 
-  // 자산 배분 데이터
+  // 자산 배분 데이터 (원화 환산 기준 — 통화 혼합 방지)
   const allocationData = [
     ...(cashBalance > 0 ? [{ name: '현금', value: cashBalance, color: '#94a3b8' }] : []),
     ...portfolio.holdings.map((h, i) => ({
       name: holdingName(h),
-      value: h.marketValue,
+      value: normHoldings[i].krwValue,
       color: CHART_COLORS[i % CHART_COLORS.length],
     })),
     ...(turtleAllocated > 0 ? [{ name: '터틀 전략', value: turtleAllocated, color: '#f59e0b' }] : []),
   ].filter((d) => d.value > 0);
 
-  const totalHoldingsPnl = portfolio.holdings.reduce((s, h) => s + h.profitLoss, 0);
+  const totalHoldingsPnl = normHoldings.reduce((s, n) => s + n.krwPnl, 0);
 
   // 자산 → 항로 이름 매핑 (purchasePerformance에서 추출, 복수 항로 지원)
   const assetRouteMap: Record<string, string[]> = {};
@@ -805,11 +838,26 @@ const MyPortfolioPage = () => {
               </div>
             </div>
 
+            {/* 통화 표시 토글 (달러 자산이 있을 때만) */}
+            {hasUsdHolding && (
+              <div className="flex items-center justify-end gap-2 mb-2">
+                <span className="text-blue-200 text-[11px]">통화 표시</span>
+                <CurrencyModeToggle mode={currencyMode} onChange={changeCurrencyMode} isDark />
+              </div>
+            )}
+
             {/* 핵심 지표 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
                 <div className="text-blue-200 text-xs mb-1">총 자산</div>
-                <div className="text-xl md:text-2xl font-bold">{fmt(totalValue)}</div>
+                {currencyMode === 'separate' && hasUsdHolding ? (
+                  <div className="leading-tight">
+                    <div className="text-lg md:text-xl font-bold">{fmt(krwAssetTotal)}</div>
+                    <div className="text-sm md:text-base font-bold text-cyan-200">+ {fmtUSD(usdAssetTotal)}</div>
+                  </div>
+                ) : (
+                  <div className="text-xl md:text-2xl font-bold">{fmt(totalValue)}</div>
+                )}
               </div>
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
                 <div className="text-blue-200 text-xs mb-1">총 수익</div>
@@ -1204,10 +1252,20 @@ const MyPortfolioPage = () => {
                       {/* 요약 바 */}
                       <div className="flex items-center justify-between mb-4 px-1">
                         <div className="text-sm text-gray-500">
-                          총 평가금액 <span className="font-semibold text-whale-dark">{fmt(holdingsValue)}</span>
+                          총 평가금액{' '}
+                          {currencyMode === 'separate' && hasUsdHolding ? (
+                            <span className="font-semibold text-whale-dark">
+                              {fmt(holdingsKrwOnly)} <span className="text-blue-600">+ {fmtUSD(usdAssetTotal)}</span>
+                            </span>
+                          ) : (
+                            <span className="font-semibold text-whale-dark">{fmt(holdingsValue)}</span>
+                          )}
                         </div>
-                        <div className={`text-sm font-semibold ${returnColor(totalHoldingsPnl)}`}>
-                          {signPrefix(totalHoldingsPnl)}{fmt(Math.round(totalHoldingsPnl))}
+                        <div className="flex items-center gap-2">
+                          {hasUsdHolding && <CurrencyModeToggle mode={currencyMode} onChange={changeCurrencyMode} />}
+                          <div className={`text-sm font-semibold ${returnColor(totalHoldingsPnl)}`}>
+                            {signPrefix(totalHoldingsPnl)}{fmt(Math.round(totalHoldingsPnl))}
+                          </div>
                         </div>
                       </div>
 
@@ -1290,7 +1348,10 @@ const MyPortfolioPage = () => {
                                     <div className="text-xs text-gray-400">{h.stockCode} · {Math.floor(h.quantity)}주</div>
                                   </div>
                                   <div className="text-right">
-                                    <div className="font-semibold text-sm">${h.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                    <div className="font-semibold text-sm">{fmtUSD(h.marketValue)}</div>
+                                    {currencyMode === 'convert' && (
+                                      <div className="text-[11px] text-gray-400">≈ {fmt(h.marketValue * usdKrwRate)}</div>
+                                    )}
                                     <div className={`text-xs font-semibold ${returnColor(h.returnRate)}`}>
                                       {h.returnRate >= 0 ? '▲ ' : '▼ '}{signPrefix(h.returnRate)}{h.returnRate.toFixed(2)}%
                                     </div>

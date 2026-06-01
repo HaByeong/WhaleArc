@@ -83,6 +83,7 @@ export interface Portfolio {
   returnRate: number;
   holdings: Holding[];
   representativePurchaseId?: string | null;
+  usdKrwRate?: number; // USD→KRW 환율 (응답 전용, 통화 분리/환산 표시에 사용)
 }
 
 export interface PortfolioSnapshot {

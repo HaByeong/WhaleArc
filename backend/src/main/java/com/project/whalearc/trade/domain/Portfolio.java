@@ -36,6 +36,10 @@ public class Portfolio {
     /** 대표 항로 구매 ID (투자 현황에 공개) */
     private String representativePurchaseId;
 
+    /** 응답 전용: USD→KRW 환율 (DB 미저장). 프론트의 통화 분리/환산 표시에 사용. */
+    @org.springframework.data.annotation.Transient
+    private Double usdKrwRate;
+
     public Portfolio(String userId, BigDecimal cashBalance) {
         this.userId = userId;
         this.cashBalance = cashBalance;

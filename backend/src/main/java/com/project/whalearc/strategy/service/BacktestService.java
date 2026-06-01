@@ -815,8 +815,10 @@ public class BacktestService {
             drawdownCurve.add(BacktestResponse.EquityPointDto.builder()
                     .date(date).value(Math.round(-drawdown * 100.0) / 100.0).build());
 
-            // 적립금 유입분(contribToday)은 수익이 아니므로 분자에서 제외
-            double dailyReturn = prevEquity > 0 ? (equity - contribToday - prevEquity) / prevEquity * 100 : 0;
+            // 적립금 유입분(contribToday)은 수익이 아니므로 분자에서 제외하고,
+            // 분모에는 당일 기초 자본(직전 자산 + 당일 적립금)을 사용 (TWR). 적립금은 당일 시작에 투입되므로.
+            double returnBase = prevEquity + contribToday;
+            double dailyReturn = returnBase > 0 ? (equity - contribToday - prevEquity) / returnBase * 100 : 0;
             double cumulativeReturn = cumContribNative > 0 ? (equity - cumContribNative) / cumContribNative * 100 : 0;
 
             equityCurve.add(BacktestResponse.EquityPointDto.builder()
@@ -1354,8 +1356,10 @@ public class BacktestService {
             if (drawdown > maxDrawdown) maxDrawdown = drawdown;
             drawdownCurve.add(BacktestResponse.EquityPointDto.builder().date(date).value(Math.round(-drawdown * 100.0) / 100.0).build());
             equityCurve.add(BacktestResponse.EquityPointDto.builder().date(date).value(equity).build());
-            // 적립금 유입분(contribToday)은 수익이 아니므로 분자에서 제외
-            double dailyReturn = prevEquity > 0 ? (equity - contribToday - prevEquity) / prevEquity * 100 : 0;
+            // 적립금 유입분(contribToday)은 수익이 아니므로 분자에서 제외하고,
+            // 분모에는 당일 기초 자본(직전 자산 + 당일 적립금)을 사용 (TWR). 적립금은 당일 시작에 투입되므로.
+            double returnBase = prevEquity + contribToday;
+            double dailyReturn = returnBase > 0 ? (equity - contribToday - prevEquity) / returnBase * 100 : 0;
             double cumReturn = cumContribNative > 0 ? (equity - cumContribNative) / cumContribNative * 100 : 0;
             dailyReturns.add(BacktestResponse.DailyReturnDto.builder()
                     .date(date).dailyReturn(dailyReturn).cumulativeReturn(cumReturn)

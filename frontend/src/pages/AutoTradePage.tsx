@@ -6,6 +6,7 @@ import Toast, { type ToastItem } from '../components/Toast';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import { useTheme } from '../contexts/ThemeContext';
 import { strategyService, type Strategy } from '../services/strategyService';
+import { PRESET_STRATEGIES } from '../data/presetStrategies';
 import {
   liveTradeService,
   type Deployment,
@@ -107,8 +108,11 @@ const AutoTradePage = () => {
     }
   };
 
+  // 프리셋(기본 제공) + 내가 저장한 전략 모두 선택 가능
+  const allStrategies = [...PRESET_STRATEGIES, ...strategies];
+
   const onSelectStrategy = (strategyId: string) => {
-    const s = strategies.find(st => st.id === strategyId);
+    const s = allStrategies.find(st => st.id === strategyId);
     setForm(prev => ({
       ...prev,
       strategyId,
@@ -129,10 +133,21 @@ const AutoTradePage = () => {
     }
     const targetAssets = form.targetAssetsText.split(',').map(s => s.trim()).filter(Boolean);
 
+    const selected = allStrategies.find(s => s.id === form.strategyId);
+    const isPreset = form.strategyId.startsWith('preset-');
+
     setCreating(true);
     try {
       await liveTradeService.createDeployment({
-        strategyId: form.strategyId,
+        // 프리셋은 DB에 없으므로 조건을 직접 전송, 저장 전략은 strategyId로
+        ...(isPreset
+          ? {
+              strategyName: selected?.name,
+              indicators: selected?.indicators,
+              entryConditions: selected?.entryConditions,
+              exitConditions: selected?.exitConditions,
+            }
+          : { strategyId: form.strategyId }),
         allocatedCash,
         targetAssets: targetAssets.length ? targetAssets : undefined,
         assetType: form.assetType || undefined,
@@ -348,20 +363,26 @@ const AutoTradePage = () => {
               {/* 전략 선택 */}
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>전략 *</label>
-                {strategies.length === 0 ? (
-                  <p className={`text-xs ${subText}`}>저장된 전략이 없습니다. '전략' 페이지에서 먼저 전략을 만들어주세요.</p>
-                ) : (
-                  <select
-                    value={form.strategyId}
-                    onChange={e => onSelectStrategy(e.target.value)}
-                    className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`}
-                  >
-                    <option value="">전략을 선택하세요</option>
-                    {strategies.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
+                <select
+                  value={form.strategyId}
+                  onChange={e => onSelectStrategy(e.target.value)}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`}
+                >
+                  <option value="">전략을 선택하세요</option>
+                  <optgroup label="기본 제공 전략">
+                    {PRESET_STRATEGIES.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}{s.difficulty ? ` · ${s.difficulty}` : ''}</option>
                     ))}
-                  </select>
-                )}
+                  </optgroup>
+                  {strategies.length > 0 && (
+                    <optgroup label="내가 저장한 전략">
+                      {strategies.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+                <p className={`text-[11px] mt-1 ${subText}`}>기본 제공 전략은 바로 가동할 수 있고, '전략' 페이지에서 만든 내 전략도 선택할 수 있어요.</p>
               </div>
 
               {/* 대상 종목 */}

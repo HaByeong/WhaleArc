@@ -94,6 +94,12 @@ export const liveTradeService = {
     return response.data.data;
   },
 
+  // 수동 즉시 평가 (정시 cron 대기 없이 1회 평가)
+  evaluateNow: async (deploymentId: string): Promise<Deployment> => {
+    const response = await apiClient.post(`/api/live/deployments/${deploymentId}/evaluate`);
+    return response.data.data;
+  },
+
   // 전역 킬스위치
   getKillSwitch: async (): Promise<boolean> => {
     const response = await apiClient.get('/api/live/kill-switch');

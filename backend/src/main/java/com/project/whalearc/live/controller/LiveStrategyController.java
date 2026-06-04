@@ -59,6 +59,21 @@ public class LiveStrategyController {
         }
     }
 
+    @PostMapping("/deployments/{deploymentId}/evaluate")
+    public ResponseEntity<ApiResponse<DeploymentResponse>> evaluateNow(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable String deploymentId) {
+        String userId = jwt.getSubject();
+        try {
+            LiveStrategyDeployment d = liveStrategyService.evaluateNow(userId, deploymentId);
+            return ResponseEntity.ok(ApiResponse.ok(DeploymentResponse.from(d)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("라이브 즉시 평가 실패: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body(ApiResponse.error("평가 중 오류가 발생했습니다."));
+        }
+    }
+
     @PostMapping("/deployments/{deploymentId}/start")
     public ResponseEntity<ApiResponse<DeploymentResponse>> start(
             @AuthenticationPrincipal Jwt jwt, @PathVariable String deploymentId) {

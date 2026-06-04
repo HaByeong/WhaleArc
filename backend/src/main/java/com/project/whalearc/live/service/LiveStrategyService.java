@@ -252,6 +252,20 @@ public class LiveStrategyService {
 
     // ── 시그널 평가 + 주문 실행 (스케줄러 진입점) ──────────────────────
 
+    /** 수동 "지금 평가" — 본인 배포를 즉시 1회 평가(정시 cron 대기 없이 확인용). 소유권 검증. */
+    public LiveStrategyDeployment evaluateNow(String userId, String deploymentId) {
+        LiveStrategyDeployment d = deploymentRepository.findByIdAndUserId(deploymentId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+        if (killSwitch.get()) {
+            throw new IllegalArgumentException("전역 킬스위치가 켜져 있어 평가할 수 없습니다.");
+        }
+        if (d.getStatus() != LiveStrategyDeployment.Status.RUNNING) {
+            throw new IllegalArgumentException("가동 중(RUNNING)인 배포만 평가할 수 있습니다.");
+        }
+        evaluateDeployment(d);
+        return deploymentRepository.findById(deploymentId).orElse(d);
+    }
+
     /** RUNNING 배포 1건의 모든 심볼을 평가하고 필요 시 주문을 낸다. 포지션별 예외는 격리. */
     public void evaluateDeployment(LiveStrategyDeployment d) {
         if (d.getStatus() != LiveStrategyDeployment.Status.RUNNING) return;

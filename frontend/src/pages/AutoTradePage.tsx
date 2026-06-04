@@ -184,6 +184,19 @@ const AutoTradePage = () => {
     }
   };
 
+  const evaluateNow = async (d: Deployment) => {
+    setBusyId(d.id);
+    try {
+      const updated = await liveTradeService.evaluateNow(d.id);
+      setDeployments(prev => prev.map(x => (x.id === d.id ? updated : x)));
+      pushToast('success', '평가 완료', `'${d.strategyName}' 신호를 즉시 평가했습니다.`);
+    } catch (e) {
+      pushToast('error', '평가 실패', errMsg(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const toggleKillSwitch = async () => {
     const next = !killSwitch;
     if (next && !window.confirm('모든 자동매매를 즉시 중단합니다. 진행할까요?')) return;
@@ -324,6 +337,12 @@ const AutoTradePage = () => {
 
                   {/* 액션 */}
                   <div className="flex items-center gap-2">
+                    {d.status === 'RUNNING' && (
+                      <button disabled={busyId === d.id} onClick={() => evaluateNow(d)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>
+                        지금 평가
+                      </button>
+                    )}
                     {d.status === 'RUNNING' ? (
                       <button disabled={busyId === d.id} onClick={() => changeStatus(d, 'pause')}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>

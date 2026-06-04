@@ -2,7 +2,9 @@ package com.project.whalearc.live.service;
 
 import com.project.whalearc.live.domain.LiveStrategyDeployment;
 import com.project.whalearc.live.domain.LiveStrategyDeployment.LivePosition;
+import com.project.whalearc.live.domain.LiveOrderLog;
 import com.project.whalearc.live.dto.CreateDeploymentRequest;
+import com.project.whalearc.live.repository.LiveOrderLogRepository;
 import com.project.whalearc.live.repository.LiveStrategyDeploymentRepository;
 import com.project.whalearc.market.dto.CandlestickResponse;
 import com.project.whalearc.market.service.CandlestickService;
@@ -62,6 +64,7 @@ public class LiveStrategyService {
     private final UsEtfCatalog usEtfCatalog;
     private final UsStockPriceProvider usStockPriceProvider;
     private final List<OrderGateway> orderGateways;
+    private final LiveOrderLogRepository orderLogRepository;
 
     /** 전역 킬스위치 — 켜지면 스케줄러가 모든 평가를 건너뛴다. */
     private final AtomicBoolean killSwitch = new AtomicBoolean(false);
@@ -193,6 +196,13 @@ public class LiveStrategyService {
         return deploymentRepository.findByStatus(LiveStrategyDeployment.Status.RUNNING);
     }
 
+    /** 배포의 체결 주문 원장(최신순). 본인 소유 검증. */
+    public List<LiveOrderLog> getDeploymentOrders(String userId, String deploymentId) {
+        deploymentRepository.findByIdAndUserId(deploymentId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+        return orderLogRepository.findByDeploymentIdOrderByCreatedAtDesc(deploymentId);
+    }
+
     public LiveStrategyDeployment start(String userId, String deploymentId) {
         return transition(userId, deploymentId, LiveStrategyDeployment.Status.RUNNING);
     }
@@ -265,19 +275,24 @@ public class LiveStrategyService {
         Map<String, double[]> iv = indicatorContextBuilder.calculateIndicators(
                 candles, d.getIndicators(), d.getEntryConditions(), d.getExitConditions());
 
+        long barTime = candles.get(idx).getTime();   // 멱등키용 봉 타임스탬프
         if (pos.getDirection() == LivePosition.Direction.NONE) {
             boolean entrySignal = signalEvaluator.evaluateConditions(
                     d.getEntryConditions(), iv, idx, currentPrice, candles, 0, idx);
             if (!entrySignal) return;
-            openPosition(d, pos, gateway, currentPrice);
+            openPosition(d, pos, gateway, currentPrice, barTime);
         } else {
-            managePosition(d, pos, gateway, iv, candles, idx, currentPrice);
+            managePosition(d, pos, gateway, iv, candles, idx, currentPrice, barTime);
         }
     }
 
-    private void openPosition(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway, double currentPrice) {
+    private void openPosition(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway, double currentPrice, long barTime) {
         BigDecimal alloc = pos.getAllocatedCash();
         if (alloc == null || alloc.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        // 멱등성: 같은 봉의 동일 매수가 이미 처리됐으면 스킵(중복 발주 방지 + 1봉 중복평가 디듀프)
+        String clientOrderId = clientOrderId(d, pos, "BUY", barTime);
+        if (orderLogRepository.existsByClientOrderId(clientOrderId)) return;
 
         String assetType = pos.getAssetType();
         BigDecimal price = BigDecimal.valueOf(currentPrice);   // 네이티브 통화(미국주식/ETF는 USD, 그 외 KRW)
@@ -301,7 +316,7 @@ public class LiveStrategyService {
         Order order;
         try {
             order = gateway.placeMarketOrder(d.getUserId(), pos.getSymbol(), pos.getSymbol(),
-                    Order.OrderType.BUY, quantity, assetType);
+                    Order.OrderType.BUY, quantity, assetType, clientOrderId);
         } catch (Exception e) {
             log.warn("라이브 매수 주문 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
             return;
@@ -309,6 +324,7 @@ public class LiveStrategyService {
         if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return;
 
         BigDecimal fill = order.getFilledPrice() != null ? order.getFilledPrice() : price;
+        recordOrder(d, pos, "BUY", quantity, fill, clientOrderId, order.getId(), "ENTRY");
         pos.setDirection(LivePosition.Direction.LONG);
         pos.setAvgPrice(fill);
         pos.setQuantity(quantity);
@@ -321,7 +337,7 @@ public class LiveStrategyService {
     }
 
     private void managePosition(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
-                                Map<String, double[]> iv, List<CandlestickResponse> candles, int idx, double currentPrice) {
+                                Map<String, double[]> iv, List<CandlestickResponse> candles, int idx, double currentPrice, long barTime) {
         // 트레일링 스탑 갱신
         if (d.getTrailingStopPct() != null) {
             BigDecimal price = BigDecimal.valueOf(currentPrice);
@@ -344,21 +360,25 @@ public class LiveStrategyService {
         if (!(stopHit || takeProfitHit || exitSignal)) return;
 
         String reason = stopHit ? "STOP" : takeProfitHit ? "TAKE_PROFIT" : "EXIT_SIGNAL";
-        closePosition(d, pos, gateway, currentPrice, reason);
+        closePosition(d, pos, gateway, currentPrice, reason, barTime);
     }
 
     private void closePosition(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
-                               double currentPrice, String reason) {
+                               double currentPrice, String reason, long barTime) {
         BigDecimal quantity = pos.getQuantity();
         if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
             resetPosition(pos);
             return;
         }
 
+        // 멱등성: 같은 봉의 동일 매도가 이미 처리됐으면 스킵
+        String clientOrderId = clientOrderId(d, pos, "SELL", barTime);
+        if (orderLogRepository.existsByClientOrderId(clientOrderId)) return;
+
         Order order;
         try {
             order = gateway.placeMarketOrder(d.getUserId(), pos.getSymbol(), pos.getSymbol(),
-                    Order.OrderType.SELL, quantity, pos.getAssetType());
+                    Order.OrderType.SELL, quantity, pos.getAssetType(), clientOrderId);
         } catch (Exception e) {
             log.warn("라이브 매도 주문 실패: deploymentId={}, symbol={}, reason={}, error={}",
                     d.getId(), pos.getSymbol(), reason, e.getMessage());
@@ -367,6 +387,7 @@ public class LiveStrategyService {
         if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return;
 
         BigDecimal fill = order.getFilledPrice() != null ? order.getFilledPrice() : BigDecimal.valueOf(currentPrice);
+        recordOrder(d, pos, "SELL", quantity, fill, clientOrderId, order.getId(), reason);
         BigDecimal pnlNative = pos.getAvgPrice() != null
                 ? fill.subtract(pos.getAvgPrice()).multiply(quantity)
                 : BigDecimal.ZERO;
@@ -409,6 +430,22 @@ public class LiveStrategyService {
         }
         if (req.getTakeProfitPct() != null && req.getTakeProfitPct().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("익절률은 0%보다 커야 합니다.");
+        }
+    }
+
+    /** 멱등키: 배포+심볼+방향+봉타임스탬프. 같은 봉의 동일 주문이 1회만 나가게 한다. */
+    private String clientOrderId(LiveStrategyDeployment d, LivePosition pos, String side, long barTime) {
+        return d.getId() + ":" + pos.getSymbol() + ":" + side + ":" + barTime;
+    }
+
+    /** 체결 주문을 원장에 기록(감사 + 멱등성 키 영속). 기록 실패가 매매를 막지 않도록 흡수. */
+    private void recordOrder(LiveStrategyDeployment d, LivePosition pos, String side,
+                             BigDecimal quantity, BigDecimal fill, String clientOrderId, String brokerOrderId, String reason) {
+        try {
+            orderLogRepository.save(new LiveOrderLog(d.getId(), d.getUserId(), pos.getSymbol(), pos.getAssetType(),
+                    side, quantity, fill, clientOrderId, brokerOrderId, "FILLED", reason));
+        } catch (Exception e) {
+            log.warn("주문 원장 기록 실패: clientOrderId={}, error={}", clientOrderId, e.getMessage());
         }
     }
 

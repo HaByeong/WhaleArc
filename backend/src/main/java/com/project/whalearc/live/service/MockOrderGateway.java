@@ -30,9 +30,9 @@ public class MockOrderGateway implements OrderGateway {
 
     @Override
     public Order placeMarketOrder(String userId, String stockCode, String stockName,
-                                  Order.OrderType side, BigDecimal quantity, String assetType) {
-        // limitPrice=null(시장가), memo로 자동매매 출처 표기. 9-arg 오버로드로 assetType 명시.
+                                  Order.OrderType side, BigDecimal quantity, String assetType, String clientOrderId) {
+        // limitPrice=null(시장가), memo에 멱등키 기록. 9-arg 오버로드로 assetType 명시.
         return orderService.createOrder(userId, stockCode, stockName,
-                side, Order.OrderMethod.MARKET, quantity, null, assetType, "라이브 자동매매");
+                side, Order.OrderMethod.MARKET, quantity, null, assetType, "라이브 자동매매:" + clientOrderId);
     }
 }

@@ -3,6 +3,7 @@ package com.project.whalearc.live.service;
 import com.project.whalearc.live.domain.LiveStrategyDeployment;
 import com.project.whalearc.live.domain.LiveStrategyDeployment.LivePosition;
 import com.project.whalearc.live.dto.CreateDeploymentRequest;
+import com.project.whalearc.live.repository.LiveOrderLogRepository;
 import com.project.whalearc.live.repository.LiveStrategyDeploymentRepository;
 import com.project.whalearc.market.dto.CandlestickResponse;
 import com.project.whalearc.market.service.CandlestickService;
@@ -49,7 +50,7 @@ class LiveStrategyServiceTest {
             return b == LiveStrategyDeployment.BrokerType.MOCK;
         }
         @Override public Order placeMarketOrder(String userId, String code, String name,
-                                                Order.OrderType side, BigDecimal quantity, String assetType) {
+                                                Order.OrderType side, BigDecimal quantity, String assetType, String clientOrderId) {
             Order o = new Order();
             o.setUserId(userId);
             o.setStockCode(code);
@@ -74,6 +75,7 @@ class LiveStrategyServiceTest {
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
         UsEtfCatalog usEtfCatalog = mock(UsEtfCatalog.class);
         UsStockPriceProvider usStockPriceProvider = mock(UsStockPriceProvider.class);
+        LiveOrderLogRepository orderLogRepo = mock(LiveOrderLogRepository.class);
         gateway = new RecordingGateway();
 
         when(deploymentRepo.save(org.mockito.ArgumentMatchers.any()))
@@ -81,12 +83,20 @@ class LiveStrategyServiceTest {
         // 기본: 충분한 모의 가용 현금 + USD/KRW 환율 1300
         stubCashBalance(BigDecimal.valueOf(100_000_000));
         when(exchangeRateService.getUsdKrwRate()).thenReturn(1300.0);
+        // 주문 원장: clientOrderId 기반 멱등성 동작을 인메모리로 흉내
+        java.util.Set<String> logged = new java.util.HashSet<>();
+        when(orderLogRepo.existsByClientOrderId(anyString())).thenAnswer(inv -> logged.contains(inv.getArgument(0)));
+        when(orderLogRepo.save(org.mockito.ArgumentMatchers.any())).thenAnswer(inv -> {
+            com.project.whalearc.live.domain.LiveOrderLog l = inv.getArgument(0);
+            logged.add(l.getClientOrderId());
+            return l;
+        });
 
         svc = new LiveStrategyService(
                 deploymentRepo, strategyRepo, candlestickService,
                 new IndicatorContextBuilder(), new SignalEvaluator(),
                 notificationService, portfolioService,
-                exchangeRateService, usEtfCatalog, usStockPriceProvider, List.of(gateway));
+                exchangeRateService, usEtfCatalog, usStockPriceProvider, List.of(gateway), orderLogRepo);
     }
 
     private void stubCashBalance(BigDecimal cash) {
@@ -142,6 +152,24 @@ class LiveStrategyServiceTest {
         // 100만원 / 100원 = 10000 (코인 8자리 floor)
         assertEquals(0, p.getQuantity().compareTo(BigDecimal.valueOf(10000)), "수량 = 할당금/체결가");
         assertEquals(1, d.getTradeCount());
+    }
+
+    @Test
+    void duplicateBarDoesNotPlaceDuplicateOrder() {
+        when(candlestickService.getCandlesticks(anyString(), anyString(), anyString()))
+                .thenReturn(flatCandles(130, 100));   // 동일 캔들 → 동일 봉 타임스탬프
+
+        LiveStrategyDeployment d = baseDeployment();
+        svc.evaluateDeployment(d);
+        assertEquals(1, gateway.placed.size(), "첫 평가: 매수 1건");
+
+        // 같은 봉에서 포지션이 NONE으로 보이는 상태로 재평가(스케줄러 중복 발화/재시도 시뮬레이션)
+        LivePosition p = d.getPositions().get(0);
+        p.setDirection(LivePosition.Direction.NONE);
+        p.setQuantity(java.math.BigDecimal.ZERO);
+        svc.evaluateDeployment(d);
+
+        assertEquals(1, gateway.placed.size(), "같은 봉 재평가 시 멱등성으로 중복 발주 없음");
     }
 
     @Test

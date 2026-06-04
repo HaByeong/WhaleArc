@@ -1,6 +1,7 @@
 package com.project.whalearc.live.controller;
 
 import com.project.whalearc.common.dto.ApiResponse;
+import com.project.whalearc.live.domain.LiveOrderLog;
 import com.project.whalearc.live.domain.LiveStrategyDeployment;
 import com.project.whalearc.live.dto.CreateDeploymentRequest;
 import com.project.whalearc.live.dto.DeploymentResponse;
@@ -45,6 +46,17 @@ public class LiveStrategyController {
                 .map(DeploymentResponse::from)
                 .toList();
         return ResponseEntity.ok(ApiResponse.ok(deployments));
+    }
+
+    @GetMapping("/deployments/{deploymentId}/orders")
+    public ResponseEntity<ApiResponse<List<LiveOrderLog>>> getDeploymentOrders(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable String deploymentId) {
+        String userId = jwt.getSubject();
+        try {
+            return ResponseEntity.ok(ApiResponse.ok(liveStrategyService.getDeploymentOrders(userId, deploymentId)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
     }
 
     @PostMapping("/deployments/{deploymentId}/start")

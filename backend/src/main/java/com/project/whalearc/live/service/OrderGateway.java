@@ -19,8 +19,9 @@ public interface OrderGateway {
 
     /**
      * 시장가 주문 발주. 동기 체결 시 status=FILLED인 Order를 반환한다.
+     * @param clientOrderId 멱등키 — 실거래 게이트웨이는 거래소에 이 값을 전달해 중복 발주를 막는다.
      * @return 발주 결과 Order (체결 여부는 status로 판단). 실패 시 예외를 던질 수 있음.
      */
     Order placeMarketOrder(String userId, String stockCode, String stockName,
-                           Order.OrderType side, BigDecimal quantity, String assetType);
+                           Order.OrderType side, BigDecimal quantity, String assetType, String clientOrderId);
 }

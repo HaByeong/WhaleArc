@@ -3,7 +3,6 @@ package com.project.whalearc.strategy.service;
 import com.project.whalearc.market.dto.CandlestickResponse;
 import com.project.whalearc.market.service.BacktestDataProvider;
 import com.project.whalearc.market.service.CandlestickService;
-import com.project.whalearc.market.service.IndicatorCalculator;
 import com.project.whalearc.market.service.UsEtfCatalog;
 import com.project.whalearc.market.service.UsStockPriceProvider;
 import com.project.whalearc.strategy.domain.Condition;
@@ -34,6 +33,8 @@ public class BacktestService {
     private final ExchangeRateService exchangeRateService;
     private final UsEtfCatalog usEtfCatalog;
     private final UsStockPriceProvider usStockPriceProvider;
+    private final SignalEvaluator signalEvaluator;
+    private final IndicatorContextBuilder indicatorContextBuilder;
 
     private static final double DEFAULT_COMMISSION_RATE = 0.001; // 0.1%
     private static final ZoneOffset KST = ZoneOffset.of("+09:00");
@@ -133,7 +134,7 @@ public class BacktestService {
         }
 
         // 지표 계산
-        Map<String, double[]> indicatorValues = calculateIndicators(
+        Map<String, double[]> indicatorValues = indicatorContextBuilder.calculateIndicators(
                 allCandles, indicators, entryConditions, exitConditions);
 
         int globalOffset = 0;
@@ -170,7 +171,7 @@ public class BacktestService {
             if (candlesB.size() < 2) {
                 throw new IllegalArgumentException("두 번째 자산: 선택한 기간에 충분한 데이터가 없습니다.");
             }
-            Map<String, double[]> indicatorValuesB = calculateIndicators(
+            Map<String, double[]> indicatorValuesB = indicatorContextBuilder.calculateIndicators(
                     allCandlesB, indicators, entryConditions, exitConditions);
             int globalOffsetB = 0;
             for (int i = 0; i < allCandlesB.size(); i++) {
@@ -286,175 +287,6 @@ public class BacktestService {
             if (w <= 0 || w >= 100) {
                 throw new IllegalArgumentException("첫 자산 비중은 0%와 100% 사이여야 합니다.");
             }
-        }
-    }
-
-    // ── 지표 계산 ─────────────────────────────────────────────────────────
-
-    private Map<String, double[]> calculateIndicators(List<CandlestickResponse> candles,
-                                                       List<Indicator> indicators,
-                                                       List<Condition> entryConditions,
-                                                       List<Condition> exitConditions) {
-        int len = candles.size();
-        double[] closes = new double[len];
-        double[] highs = new double[len];
-        double[] lows = new double[len];
-        double[] volumes = new double[len];
-
-        for (int i = 0; i < len; i++) {
-            closes[i] = candles.get(i).getClose();
-            highs[i] = candles.get(i).getHigh();
-            lows[i] = candles.get(i).getLow();
-            volumes[i] = candles.get(i).getVolume();
-        }
-
-        Map<String, double[]> result = new HashMap<>();
-
-        if (indicators != null) {
-            for (Indicator ind : indicators) {
-                Map<String, Number> params = ind.getParameters() != null ? ind.getParameters() : Map.of();
-                calculateIndicator(ind.getType().name(), params, closes, highs, lows, volumes, result);
-            }
-        }
-
-        // 조건에서 참조하는 지표 자동 추가 (크로스오버 키 분해 포함)
-        Set<String> neededKeys = new HashSet<>();
-        if (entryConditions != null) entryConditions.forEach(c -> { if (c.getIndicator() != null) neededKeys.add(c.getIndicator().toUpperCase()); });
-        if (exitConditions != null) exitConditions.forEach(c -> { if (c.getIndicator() != null) neededKeys.add(c.getIndicator().toUpperCase()); });
-
-        // 크로스오버 키("A_CROSS_B", "A_CROSSUNDER_B")를 분해하여 각 구성 지표를 추가
-        Set<String> expandedKeys = new HashSet<>();
-        for (String key : neededKeys) {
-            if (key.contains("_CROSSUNDER_")) {
-                String[] parts = key.split("_CROSSUNDER_", 2);
-                expandedKeys.add(parts[0]);
-                expandedKeys.add(parts[1]);
-            } else if (key.contains("_CROSS_")) {
-                String[] parts = key.split("_CROSS_", 2);
-                expandedKeys.add(parts[0]);
-                expandedKeys.add(parts[1]);
-            } else {
-                expandedKeys.add(key);
-            }
-        }
-
-        for (String key : expandedKeys) {
-            if (result.containsKey(key) || "PRICE".equals(key) || "CLOSE".equals(key)) continue;
-
-            ensureIndicatorCalculated(key, closes, highs, lows, volumes, result);
-        }
-
-        result.put("PRICE", closes);
-        return result;
-    }
-
-    private void calculateIndicator(String type, Map<String, Number> params,
-                                     double[] closes, double[] highs, double[] lows, double[] volumes,
-                                     Map<String, double[]> result) {
-        switch (type) {
-            case "RSI" -> {
-                int period = getParam(params, "period", 14);
-                result.put("RSI", IndicatorCalculator.rsi(closes, period));
-            }
-            case "MACD" -> {
-                int fast = getParam(params, "fast", 12);
-                int slow = getParam(params, "slow", 26);
-                int signal = getParam(params, "signal", 9);
-                var macd = IndicatorCalculator.macd(closes, fast, slow, signal);
-                result.put("MACD", macd.getMacdLine());
-                result.put("MACD_SIGNAL", macd.getSignalLine());
-                result.put("MACD_HISTOGRAM", macd.getHistogram());
-            }
-            case "MA", "SMA" -> {
-                int period = getParam(params, "period", 20);
-                double[] sma = IndicatorCalculator.sma(closes, period);
-                result.put("MA", sma);            // 기본 키 (마지막 계산 값)
-                result.put("MA_" + period, sma);   // 기간별 키 (다중 기간 지원)
-            }
-            case "EMA" -> {
-                int period = getParam(params, "period", 20);
-                double[] ema = IndicatorCalculator.ema(closes, period);
-                result.put("EMA", ema);            // 기본 키
-                result.put("EMA_" + period, ema);  // 기간별 키
-            }
-            case "BOLLINGER_BANDS" -> {
-                int period = getParam(params, "period", 20);
-                double stdDev = params.getOrDefault("stdDev", 2.0).doubleValue();
-                var bb = IndicatorCalculator.bollingerBands(closes, period, stdDev);
-                result.put("BOLLINGER_UPPER", bb.getUpper());
-                result.put("BOLLINGER_MIDDLE", bb.getMiddle());
-                result.put("BOLLINGER_LOWER", bb.getLower());
-
-                double[] pctB = new double[closes.length];
-                Arrays.fill(pctB, Double.NaN);
-                for (int j = 0; j < closes.length; j++) {
-                    if (Double.isNaN(bb.getUpper()[j]) || Double.isNaN(bb.getLower()[j])) continue;
-                    double range = bb.getUpper()[j] - bb.getLower()[j];
-                    pctB[j] = range > 0 ? (closes[j] - bb.getLower()[j]) / range : 0.5;
-                }
-                result.put("BOLLINGER_PCT_B", pctB);
-            }
-            case "STOCHASTIC" -> {
-                int kPeriod = getParam(params, "kPeriod", 14);
-                int dPeriod = getParam(params, "dPeriod", 3);
-                var stoch = IndicatorCalculator.stochastic(highs, lows, closes, kPeriod, dPeriod);
-                result.put("STOCH_K", stoch.getK());
-                result.put("STOCH_D", stoch.getD());
-            }
-            case "ATR" -> {
-                int period = getParam(params, "period", 14);
-                result.put("ATR", IndicatorCalculator.atr(highs, lows, closes, period));
-            }
-            case "OBV" -> {
-                result.put("OBV", IndicatorCalculator.obv(closes, volumes));
-            }
-            case "WILLIAMS_R" -> {
-                int period = getParam(params, "period", 14);
-                result.put("WILLIAMS_R", IndicatorCalculator.williamsR(highs, lows, closes, period));
-            }
-            case "CCI" -> {
-                int period = getParam(params, "period", 20);
-                result.put("CCI", IndicatorCalculator.cci(highs, lows, closes, period));
-            }
-        }
-    }
-
-    /**
-     * 지표 키 하나를 받아, 아직 계산되지 않았으면 자동으로 계산
-     */
-    private void ensureIndicatorCalculated(String key, double[] closes, double[] highs,
-                                            double[] lows, double[] volumes, Map<String, double[]> result) {
-        // 이미 해당 키가 존재하면 스킵
-        if (result.containsKey(key)) return;
-
-        if ("RSI".equals(key) && !result.containsKey("RSI")) {
-            calculateIndicator("RSI", Map.of(), closes, highs, lows, volumes, result);
-        } else if (key.startsWith("MACD") && !result.containsKey("MACD")) {
-            calculateIndicator("MACD", Map.of(), closes, highs, lows, volumes, result);
-        } else if (("MA".equals(key) || "SMA".equals(key)) && !result.containsKey("MA")) {
-            calculateIndicator("MA", Map.of(), closes, highs, lows, volumes, result);
-        } else if (key.startsWith("MA_") && key.matches("MA_\\d+")) {
-            // MA_20, MA_50 등 기간별 키 → 해당 기간으로 계산
-            int period = Integer.parseInt(key.substring(3));
-            calculateIndicator("MA", Map.of("period", (Number) period), closes, highs, lows, volumes, result);
-        } else if ("EMA".equals(key) && !result.containsKey("EMA")) {
-            calculateIndicator("EMA", Map.of(), closes, highs, lows, volumes, result);
-        } else if (key.startsWith("EMA_") && key.matches("EMA_\\d+")) {
-            // EMA_12, EMA_26 등 기간별 키
-            int period = Integer.parseInt(key.substring(4));
-            calculateIndicator("EMA", Map.of("period", (Number) period), closes, highs, lows, volumes, result);
-        } else if ((key.startsWith("BOLLINGER") || "PCT_B".equals(key) || "BB_PCT_B".equals(key)) && !result.containsKey("BOLLINGER_UPPER")) {
-            calculateIndicator("BOLLINGER_BANDS", Map.of(), closes, highs, lows, volumes, result);
-        } else if ((key.startsWith("STOCH") || "STOCH_K".equals(key) || "STOCH_D".equals(key)) && !result.containsKey("STOCH_K")) {
-            calculateIndicator("STOCHASTIC", Map.of(), closes, highs, lows, volumes, result);
-        } else if ("ATR".equals(key) && !result.containsKey("ATR")) {
-            calculateIndicator("ATR", Map.of(), closes, highs, lows, volumes, result);
-        } else if ("OBV".equals(key) && !result.containsKey("OBV")) {
-            calculateIndicator("OBV", Map.of(), closes, highs, lows, volumes, result);
-        } else if ("WILLIAMS_R".equals(key) && !result.containsKey("WILLIAMS_R")) {
-            calculateIndicator("WILLIAMS_R", Map.of(), closes, highs, lows, volumes, result);
-        } else if ("CCI".equals(key) && !result.containsKey("CCI")) {
-            calculateIndicator("CCI", Map.of(), closes, highs, lows, volumes, result);
         }
     }
 
@@ -639,9 +471,9 @@ public class BacktestService {
             boolean canAddPosition = !hasPosition || posEntries.size() < maxPos
                     || ("LONG_SHORT".equals(tradeDir) && hasPosition);
             boolean entrySignal = !riskExit && canAddPosition
-                    && evaluateConditions(entryConditions, indicatorValues, gi, price, candles, globalOffset, i);
+                    && signalEvaluator.evaluateConditions(entryConditions, indicatorValues, gi, price, candles, globalOffset, i);
             boolean exitSignal = hasPosition && !riskExit
-                    && evaluateConditions(exitConditions, indicatorValues, gi, price, candles, globalOffset, i);
+                    && signalEvaluator.evaluateConditions(exitConditions, indicatorValues, gi, price, candles, globalOffset, i);
 
             // ── 매매 실행 ──
 
@@ -1252,7 +1084,7 @@ public class BacktestService {
 
             // ── 자산A: 자기 신호로 매매 ──
             if (qtyA == 0 && cashA > 0
-                    && evaluateConditions(entryConditions, indicatorsA, gA, priceA, candlesA, globalOffsetA, aIdx)) {
+                    && signalEvaluator.evaluateConditions(entryConditions, indicatorsA, gA, priceA, candlesA, globalOffsetA, aIdx)) {
                 double execPrice = priceA * (1 + slippage);
                 double commAmt = cashA * commissionRate;
                 double buyQty = (cashA - commAmt) / execPrice;
@@ -1267,7 +1099,7 @@ public class BacktestService {
                         .build());
                 aTrades++;
             } else if (qtyA > 0
-                    && evaluateConditions(exitConditions, indicatorsA, gA, priceA, candlesA, globalOffsetA, aIdx)) {
+                    && signalEvaluator.evaluateConditions(exitConditions, indicatorsA, gA, priceA, candlesA, globalOffsetA, aIdx)) {
                 double execPrice = priceA * (1 - slippage);
                 double sellProceeds = qtyA * execPrice * (1 - commissionRate);
                 double pnl = sellProceeds - qtyA * entryPriceA;
@@ -1297,7 +1129,7 @@ public class BacktestService {
 
             // ── 자산B: 자기 신호로 매매 ──
             if (qtyB == 0 && cashB > 0
-                    && evaluateConditions(entryConditions, indicatorsB, gB, priceB, candlesB, globalOffsetB, bIdx)) {
+                    && signalEvaluator.evaluateConditions(entryConditions, indicatorsB, gB, priceB, candlesB, globalOffsetB, bIdx)) {
                 double execPrice = priceB * (1 + slippage);
                 double commAmt = cashB * commissionRate;
                 double buyQty = (cashB - commAmt) / execPrice;
@@ -1312,7 +1144,7 @@ public class BacktestService {
                         .build());
                 bTrades++;
             } else if (qtyB > 0
-                    && evaluateConditions(exitConditions, indicatorsB, gB, priceB, candlesB, globalOffsetB, bIdx)) {
+                    && signalEvaluator.evaluateConditions(exitConditions, indicatorsB, gB, priceB, candlesB, globalOffsetB, bIdx)) {
                 double execPrice = priceB * (1 - slippage);
                 double sellProceeds = qtyB * execPrice * (1 - commissionRate);
                 double pnl = sellProceeds - qtyB * entryPriceB;
@@ -1657,238 +1489,6 @@ public class BacktestService {
         };
     }
 
-    // ── 조건 평가 ──
-    private boolean evaluateConditions(List<Condition> conditions,
-                                        Map<String, double[]> indicatorValues,
-                                        int index, double currentPrice,
-                                        List<CandlestickResponse> candles, int globalOffset, int localIndex) {
-        if (conditions == null || conditions.isEmpty()) return false;
-
-        Boolean accumulated = null;
-        for (Condition cond : conditions) {
-            String indicatorName = cond.getIndicator();
-            if (indicatorName == null) continue;
-
-            // CROSSOVER / CROSSUNDER 지원: "MACD_CROSS_SIGNAL" → MACD가 SIGNAL을 상향돌파
-            if (indicatorName.contains("_CROSS_") || indicatorName.contains("_CROSSUNDER_")) {
-                boolean crossResult = evaluateCrossover(indicatorName, indicatorValues, index);
-                if (accumulated == null) accumulated = crossResult;
-                else accumulated = cond.getLogic() == Condition.Logic.AND ? accumulated && crossResult : accumulated || crossResult;
-                continue;
-            }
-
-            double indicatorValue = getIndicatorValue(indicatorName, indicatorValues, index, currentPrice, candles, localIndex);
-            if (Double.isNaN(indicatorValue)) {
-                boolean nanResult = false;
-                if (accumulated == null) accumulated = nanResult;
-                else accumulated = cond.getLogic() == Condition.Logic.AND ? false : accumulated;
-                continue;
-            }
-
-            // valueExpression이 있으면 수식으로 비교값 계산, 없으면 고정 value 사용
-            double targetValue;
-            if (cond.getValueExpression() != null && !cond.getValueExpression().isBlank()) {
-                targetValue = evaluateExpression(cond.getValueExpression(), indicatorValues, index, currentPrice, candles, localIndex);
-                if (Double.isNaN(targetValue)) {
-                    boolean nanResult = false;
-                    if (accumulated == null) accumulated = nanResult;
-                    else accumulated = cond.getLogic() == Condition.Logic.AND ? false : accumulated;
-                    continue;
-                }
-            } else if (cond.getValue() != null && cond.getOperator() != null) {
-                targetValue = cond.getValue().doubleValue();
-            } else {
-                boolean nullResult = false;
-                if (accumulated == null) accumulated = nullResult;
-                else accumulated = cond.getLogic() == Condition.Logic.AND ? false : accumulated;
-                continue;
-            }
-
-            if (cond.getOperator() == null) {
-                if (accumulated == null) accumulated = false;
-                continue;
-            }
-
-            boolean matches = switch (cond.getOperator()) {
-                case GT -> indicatorValue > targetValue;
-                case LT -> indicatorValue < targetValue;
-                case GTE -> indicatorValue >= targetValue;
-                case LTE -> indicatorValue <= targetValue;
-                case EQ -> Math.abs(indicatorValue - targetValue) < 0.0001;
-            };
-
-            if (accumulated == null) accumulated = matches;
-            else accumulated = cond.getLogic() == Condition.Logic.AND ? accumulated && matches : accumulated || matches;
-        }
-
-        return accumulated != null && accumulated;
-    }
-
-    /**
-     * CROSSOVER 평가: "A_CROSS_B" → 전봉에서 A<B 이고 현재봉에서 A>B (골든크로스)
-     * "A_CROSSUNDER_B" → 전봉에서 A>B 이고 현재봉에서 A<B (데드크로스)
-     */
-    private boolean evaluateCrossover(String crossKey, Map<String, double[]> indicatorValues, int index) {
-        if (index < 1) return false;
-
-        boolean isUnder = crossKey.contains("_CROSSUNDER_");
-        String[] parts = isUnder
-                ? crossKey.split("_CROSSUNDER_", 2)
-                : crossKey.split("_CROSS_", 2);
-        if (parts.length != 2) return false;
-
-        double[] valuesA = indicatorValues.get(parts[0]);
-        double[] valuesB = indicatorValues.get(parts[1]);
-        if (valuesA == null || valuesB == null) return false;
-        if (index >= valuesA.length || index >= valuesB.length) return false;
-
-        double prevA = valuesA[index - 1], prevB = valuesB[index - 1];
-        double currA = valuesA[index], currB = valuesB[index];
-        if (Double.isNaN(prevA) || Double.isNaN(prevB) || Double.isNaN(currA) || Double.isNaN(currB)) return false;
-
-        if (isUnder) return prevA >= prevB && currA < currB;
-        else return prevA <= prevB && currA > currB;
-    }
-
-    // ── 지표값 조회 (OHLC + 전일 OHLC 참조 지원) ──
-    private double getIndicatorValue(String indicator, Map<String, double[]> indicatorValues,
-                                      int index, double currentPrice,
-                                      List<CandlestickResponse> candles, int localIndex) {
-        if (indicator == null) return Double.NaN;
-        String key = indicator.toUpperCase().trim();
-
-        // 현재 봉 OHLC
-        if ("PRICE".equals(key) || "CLOSE".equals(key)) return currentPrice;
-        if ("OPEN".equals(key) && localIndex >= 0 && localIndex < candles.size()) return candles.get(localIndex).getOpen();
-        if ("HIGH".equals(key) && localIndex >= 0 && localIndex < candles.size()) return candles.get(localIndex).getHigh();
-        if ("LOW".equals(key) && localIndex >= 0 && localIndex < candles.size()) return candles.get(localIndex).getLow();
-        if ("VOLUME".equals(key) && localIndex >= 0 && localIndex < candles.size()) return candles.get(localIndex).getVolume();
-
-        // 전일 봉 OHLC
-        if ("PREV_CLOSE".equals(key) && localIndex >= 1) return candles.get(localIndex - 1).getClose();
-        if ("PREV_OPEN".equals(key) && localIndex >= 1) return candles.get(localIndex - 1).getOpen();
-        if ("PREV_HIGH".equals(key) && localIndex >= 1) return candles.get(localIndex - 1).getHigh();
-        if ("PREV_LOW".equals(key) && localIndex >= 1) return candles.get(localIndex - 1).getLow();
-        if ("PREV_VOLUME".equals(key) && localIndex >= 1) return candles.get(localIndex - 1).getVolume();
-
-        // 전일 변동폭 (변동성 돌파 전략용)
-        if ("PREV_RANGE".equals(key) && localIndex >= 1) {
-            return candles.get(localIndex - 1).getHigh() - candles.get(localIndex - 1).getLow();
-        }
-
-        String mappedKey = switch (key) {
-            case "RSI" -> "RSI";
-            case "MACD" -> "MACD";
-            case "MACD_SIGNAL", "SIGNAL" -> "MACD_SIGNAL";
-            case "MACD_HISTOGRAM", "HISTOGRAM" -> "MACD_HISTOGRAM";
-            case "MA", "SMA" -> "MA";
-            case "EMA" -> "EMA";
-            case "BOLLINGER_UPPER", "BB_UPPER" -> "BOLLINGER_UPPER";
-            case "BOLLINGER_MIDDLE", "BB_MIDDLE" -> "BOLLINGER_MIDDLE";
-            case "BOLLINGER_LOWER", "BB_LOWER" -> "BOLLINGER_LOWER";
-            case "BOLLINGER_PCT_B", "BB_PCT_B", "PCT_B" -> "BOLLINGER_PCT_B";
-            case "STOCH_K", "STOCHASTIC_K" -> "STOCH_K";
-            case "STOCH_D", "STOCHASTIC_D" -> "STOCH_D";
-            case "ATR" -> "ATR";
-            case "OBV" -> "OBV";
-            case "WILLIAMS_R" -> "WILLIAMS_R";
-            case "CCI" -> "CCI";
-            default -> key;
-        };
-
-        double[] values = indicatorValues.get(mappedKey);
-        if (values == null || index < 0 || index >= values.length) return Double.NaN;
-        return values[index];
-    }
-
-    // ── 수식 평가 엔진 (valueExpression) ──
-    // 지원: 변수(OPEN, HIGH, LOW, CLOSE, PREV_HIGH, PREV_LOW, PREV_OPEN, PREV_CLOSE, PREV_RANGE, ATR 등)
-    //       연산자(+, -, *, /), 괄호, 숫자 리터럴
-    private double evaluateExpression(String expression, Map<String, double[]> indicatorValues,
-                                       int index, double currentPrice,
-                                       List<CandlestickResponse> candles, int localIndex) {
-        if (expression == null || expression.isBlank()) return Double.NaN;
-        try {
-            String expr = expression.toUpperCase().trim();
-            return parseExpression(expr, new int[]{0}, indicatorValues, index, currentPrice, candles, localIndex);
-        } catch (Exception e) {
-            return Double.NaN;
-        }
-    }
-
-    // 재귀 하향 파서: expr = term ((+|-) term)*
-    private double parseExpression(String expr, int[] pos, Map<String, double[]> iv,
-                                    int index, double price, List<CandlestickResponse> candles, int li) {
-        double result = parseTerm(expr, pos, iv, index, price, candles, li);
-        while (pos[0] < expr.length()) {
-            char c = expr.charAt(pos[0]);
-            if (c == '+' || c == '-') {
-                pos[0]++;
-                double term = parseTerm(expr, pos, iv, index, price, candles, li);
-                result = c == '+' ? result + term : result - term;
-            } else break;
-        }
-        return result;
-    }
-
-    // term = factor ((*|/) factor)*
-    private double parseTerm(String expr, int[] pos, Map<String, double[]> iv,
-                              int index, double price, List<CandlestickResponse> candles, int li) {
-        double result = parseFactor(expr, pos, iv, index, price, candles, li);
-        while (pos[0] < expr.length()) {
-            char c = expr.charAt(pos[0]);
-            if (c == '*' || c == '/') {
-                pos[0]++;
-                double factor = parseFactor(expr, pos, iv, index, price, candles, li);
-                result = c == '*' ? result * factor : (factor != 0 ? result / factor : Double.NaN);
-            } else break;
-        }
-        return result;
-    }
-
-    // factor = '-' factor | '(' expr ')' | number | variable
-    private double parseFactor(String expr, int[] pos, Map<String, double[]> iv,
-                                int index, double price, List<CandlestickResponse> candles, int li) {
-        while (pos[0] < expr.length() && expr.charAt(pos[0]) == ' ') pos[0]++;
-        if (pos[0] >= expr.length()) return Double.NaN;
-
-        // 음수 부호 처리: -factor → factor의 음수값
-        if (expr.charAt(pos[0]) == '-') {
-            pos[0]++;
-            return -parseFactor(expr, pos, iv, index, price, candles, li);
-        }
-
-        // 괄호
-        if (expr.charAt(pos[0]) == '(') {
-            pos[0]++;
-            double result = parseExpression(expr, pos, iv, index, price, candles, li);
-            if (pos[0] < expr.length() && expr.charAt(pos[0]) == ')') {
-                pos[0]++;
-            } else {
-                return Double.NaN; // 괄호 불일치 → 수식 오류
-            }
-            return result;
-        }
-
-        // 숫자 (정수, 소수)
-        if (Character.isDigit(expr.charAt(pos[0])) || expr.charAt(pos[0]) == '.') {
-            int start = pos[0];
-            while (pos[0] < expr.length() && (Character.isDigit(expr.charAt(pos[0])) || expr.charAt(pos[0]) == '.')) pos[0]++;
-            return Double.parseDouble(expr.substring(start, pos[0]));
-        }
-
-        // 변수 (알파벳+언더스코어)
-        if (Character.isLetter(expr.charAt(pos[0])) || expr.charAt(pos[0]) == '_') {
-            int start = pos[0];
-            while (pos[0] < expr.length() && (Character.isLetterOrDigit(expr.charAt(pos[0])) || expr.charAt(pos[0]) == '_')) pos[0]++;
-            String varName = expr.substring(start, pos[0]);
-            while (pos[0] < expr.length() && expr.charAt(pos[0]) == ' ') pos[0]++;
-            return getIndicatorValue(varName, iv, index, price, candles, li);
-        }
-
-        return Double.NaN;
-    }
-
     // ── 샤프 비율 ──
     private double calculateSharpeRatio(List<BacktestResponse.DailyReturnDto> dailyReturns, String assetType) {
         if (dailyReturns.size() < 2) return 0;
@@ -1918,11 +1518,6 @@ public class BacktestService {
 
         double factor = ("STOCK".equalsIgnoreCase(assetType) || "US_STOCK".equalsIgnoreCase(assetType)) ? Math.sqrt(252) : Math.sqrt(365);
         return (mean / downDev) * factor;
-    }
-
-    private int getParam(Map<String, Number> params, String key, int defaultValue) {
-        Number val = params.get(key);
-        return val != null ? val.intValue() : defaultValue;
     }
 
     private double round2(double v) {

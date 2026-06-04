@@ -17,6 +17,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const MarketPage = lazy(() => import('./pages/MarketPage'));
 const TradePage = lazy(() => import('./pages/TradePage'));
 const StrategyPage = lazy(() => import('./pages/StrategyPage'));
+const AutoTradePage = lazy(() => import('./pages/AutoTradePage'));
 const QuantStorePage = lazy(() => import('./pages/QuantStorePage'));
 const RankingPage = lazy(() => import('./pages/RankingPage'));
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
@@ -107,6 +108,14 @@ function App() {
             }
           />
           <Route
+            path="/auto-trade"
+            element={
+              <ProtectedRoute>
+                <AutoTradePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/store"
             element={
               <ProtectedRoute>
@@ -168,6 +177,7 @@ function App() {
           <Route path="/virt/market" element={<ProtectedRoute><MarketPage /></ProtectedRoute>} />
           <Route path="/virt/trade" element={<ProtectedRoute><TradePage /></ProtectedRoute>} />
           <Route path="/virt/strategy" element={<ProtectedRoute><StrategyPage /></ProtectedRoute>} />
+          <Route path="/virt/auto-trade" element={<ProtectedRoute><AutoTradePage /></ProtectedRoute>} />
           <Route path="/virt/store" element={<ProtectedRoute><QuantStorePage /></ProtectedRoute>} />
           <Route path="/virt/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
           <Route path="/virt/feedback" element={<ProtectedRoute><FeedbackPage /></ProtectedRoute>} />

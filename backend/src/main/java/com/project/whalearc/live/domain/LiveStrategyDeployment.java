@@ -62,6 +62,11 @@ public class LiveStrategyDeployment {
     private BigDecimal takeProfitPct;
     private BigDecimal trailingStopPct;
 
+    // ── 일일 손실한도 (KRW 절대금액, 양수). 오늘 실현손실이 이 값에 도달하면 자동 일시정지 ──
+    private BigDecimal dailyLossLimit;
+    private String dayKey;                          // 오늘 날짜(yyyy-MM-dd, KST) — 일별 손익 리셋 기준
+    private BigDecimal todayRealizedPnl = BigDecimal.ZERO;
+
     // ── 심볼별 라이브 포지션 상태 (임베드) ──
     private List<LivePosition> positions = new ArrayList<>();
 

@@ -63,6 +63,7 @@ const AutoTradePage = () => {
     stopLossPct: '',
     takeProfitPct: '',
     trailingStopPct: '',
+    dailyLossLimit: '',
   });
 
   // 토스트
@@ -157,10 +158,11 @@ const AutoTradePage = () => {
         stopLossPct: form.stopLossPct ? Number(form.stopLossPct) : undefined,
         takeProfitPct: form.takeProfitPct ? Number(form.takeProfitPct) : undefined,
         trailingStopPct: form.trailingStopPct ? Number(form.trailingStopPct) : undefined,
+        dailyLossLimit: form.dailyLossLimit ? Number(form.dailyLossLimit) : undefined,
       });
       pushToast('success', '자동매매 시작', '모의 자동매매가 가동되었습니다.');
       setShowCreate(false);
-      setForm(prev => ({ ...prev, strategyId: '', targetAssetsText: '', stopLossPct: '', takeProfitPct: '', trailingStopPct: '' }));
+      setForm(prev => ({ ...prev, strategyId: '', targetAssetsText: '', stopLossPct: '', takeProfitPct: '', trailingStopPct: '', dailyLossLimit: '' }));
       await loadData();
     } catch (e) {
       pushToast('error', '시작 실패', errMsg(e));
@@ -436,6 +438,15 @@ const AutoTradePage = () => {
                     className={`w-full rounded-lg border px-2 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`} />
                 </div>
                 <p className={`text-[11px] mt-1 ${subText}`}>손절·트레일링은 0~100% 사이로 입력하세요.</p>
+              </div>
+
+              {/* 일일 손실한도 (선택) */}
+              <div>
+                <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>일일 손실한도 (원, 선택)</label>
+                <input type="number" placeholder="예: 100000" value={form.dailyLossLimit}
+                  onChange={e => setForm(prev => ({ ...prev, dailyLossLimit: e.target.value }))}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`} />
+                <p className={`text-[11px] mt-1 ${subText}`}>오늘 실현손실이 이 금액에 도달하면 자동으로 일시정지됩니다.</p>
               </div>
             </div>
 

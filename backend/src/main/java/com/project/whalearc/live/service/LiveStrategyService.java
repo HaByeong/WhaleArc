@@ -29,6 +29,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.Objects;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -70,6 +73,7 @@ public class LiveStrategyService {
     private final AtomicBoolean killSwitch = new AtomicBoolean(false);
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     // ── 배포 라이프사이클 ─────────────────────────────────────────────
 
@@ -120,11 +124,21 @@ public class LiveStrategyService {
         }
         validateRiskParams(req);
 
-        // 모의(PAPER) 잔고 검증: 할당 금액이 현재 모의 가용 현금을 넘지 않게 (기본 over-allocation 가드).
-        // 주의: 여러 배포가 같은 모의 Portfolio를 공유하므로 배포별 자금 예약은 아직 없다(이후 단계 보강).
+        // 자금 예약 가드(over-allocation 방지): 활성(RUNNING/PAUSED) 배포들의 할당금 합 + 신규 할당이
+        // 가용 현금을 넘지 않게 한다. 현금을 별도 버킷으로 옮기지 않고 cashBalance를 단일 출처로 유지
+        // (터틀 turtleAllocated의 이중트랙 정합성 문제를 피함). 정지(STOPPED)된 배포는 자동으로 예약 해제됨.
         Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
-        if (portfolio.getCashBalance() == null || portfolio.getCashBalance().compareTo(allocatedCash) < 0) {
-            throw new IllegalArgumentException("할당 금액이 모의 투자 가용 현금을 초과합니다.");
+        BigDecimal cash = portfolio.getCashBalance() != null ? portfolio.getCashBalance() : BigDecimal.ZERO;
+        BigDecimal reserved = deploymentRepository
+                .findByUserIdAndStatusIn(userId, List.of(
+                        LiveStrategyDeployment.Status.RUNNING, LiveStrategyDeployment.Status.PAUSED))
+                .stream()
+                .map(LiveStrategyDeployment::getAllocatedCash)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (reserved.add(allocatedCash).compareTo(cash) > 0) {
+            throw new IllegalArgumentException(
+                    "할당 금액이 가용 현금을 초과합니다(이미 자동매매에 예약된 금액 포함). 가용=" + cash + ", 기예약=" + reserved);
         }
 
         LiveStrategyDeployment.AccountMode accountMode =
@@ -160,6 +174,8 @@ public class LiveStrategyService {
         d.setStopLossPct(req.getStopLossPct());
         d.setTakeProfitPct(req.getTakeProfitPct());
         d.setTrailingStopPct(req.getTrailingStopPct());
+        d.setDailyLossLimit(req.getDailyLossLimit());
+        d.setDayKey(LocalDate.now(KST).toString());
 
         // 투자금을 심볼 수로 균등 분배해 심볼별 포지션을 NONE으로 초기화(터틀 패턴, 실매수는 스케줄러가 시그널 따라).
         // 자산군은 심볼별로 판별(MIXED 전략 지원). 단 요청/전략이 단일 자산군을 명시하면 그 값을 그대로 사용.
@@ -241,6 +257,13 @@ public class LiveStrategyService {
         if (d.getStatus() != LiveStrategyDeployment.Status.RUNNING) return;
         OrderGateway gateway = resolveGateway(d.getBrokerType());
 
+        // 일별 손익 리셋(KST 자정 경계)
+        String today = LocalDate.now(KST).toString();
+        if (!today.equals(d.getDayKey())) {
+            d.setDayKey(today);
+            d.setTodayRealizedPnl(BigDecimal.ZERO);
+        }
+
         for (LivePosition pos : d.getPositions()) {
             try {
                 evaluatePosition(d, pos, gateway);
@@ -249,10 +272,23 @@ public class LiveStrategyService {
                         d.getId(), pos.getSymbol(), e.getMessage());
             }
         }
-        // 평가 도중 사용자가 pause/stop 했을 수 있다. 최신 status를 다시 읽어 보존함으로써
-        // 스케줄러의 save가 사용자의 상태 변경을 RUNNING으로 되돌리지 않게 한다(체결된 포지션 변경은 그대로 영속).
+
+        // 일일 손실한도 도달 시 자동 일시정지(엔진 결정). 단, 평가 도중 사용자가 stop/pause 했다면 그 상태가 우선.
+        // 최신 status를 DB에서 다시 읽어, 스케줄러 save가 사용자의 상태 변경을 RUNNING으로 되돌리지 않게 한다.
         // (완전한 동시성 보호 — 분산 락/@Version — 는 이후 단계)
-        deploymentRepository.findById(d.getId()).ifPresent(fresh -> d.setStatus(fresh.getStatus()));
+        boolean lossLimitHit = d.getDailyLossLimit() != null
+                && d.getDailyLossLimit().compareTo(BigDecimal.ZERO) > 0
+                && nz(d.getTodayRealizedPnl()).compareTo(d.getDailyLossLimit().negate()) <= 0;
+        LiveStrategyDeployment.Status freshStatus = deploymentRepository.findById(d.getId())
+                .map(LiveStrategyDeployment::getStatus).orElse(d.getStatus());
+        if (lossLimitHit && freshStatus == LiveStrategyDeployment.Status.RUNNING) {
+            d.setStatus(LiveStrategyDeployment.Status.PAUSED);
+            log.warn("일일 손실한도 도달 → 자동 일시정지: deploymentId={}, todayPnl={}, limit={}",
+                    d.getId(), d.getTodayRealizedPnl(), d.getDailyLossLimit());
+            notifyAutoPause(d);
+        } else {
+            d.setStatus(freshStatus);
+        }
         d.setLastEvaluatedAt(Instant.now());
         d.setUpdatedAt(Instant.now());
         deploymentRepository.save(d);
@@ -401,6 +437,7 @@ public class LiveStrategyService {
         if (pnl.compareTo(BigDecimal.ZERO) > 0) pos.setWinCount(pos.getWinCount() + 1);
 
         d.setRealizedPnl(nz(d.getRealizedPnl()).add(pnl));
+        d.setTodayRealizedPnl(nz(d.getTodayRealizedPnl()).add(pnl));   // 일일 손실한도 판정용
         d.setTradeCount(d.getTradeCount() + 1);
         if (pnl.compareTo(BigDecimal.ZERO) > 0) d.setWinCount(d.getWinCount() + 1);
 
@@ -430,6 +467,9 @@ public class LiveStrategyService {
         }
         if (req.getTakeProfitPct() != null && req.getTakeProfitPct().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("익절률은 0%보다 커야 합니다.");
+        }
+        if (req.getDailyLossLimit() != null && req.getDailyLossLimit().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("일일 손실한도는 0보다 커야 합니다.");
         }
     }
 
@@ -470,6 +510,20 @@ public class LiveStrategyService {
                     d.getUserId(), Notification.NotificationType.STRATEGY_EXECUTED, title, message, meta);
         } catch (Exception e) {
             log.warn("라이브 매매 알림 발송 실패: {}", e.getMessage());
+        }
+    }
+
+    private void notifyAutoPause(LiveStrategyDeployment d) {
+        try {
+            notificationService.createNotificationWithMeta(
+                    d.getUserId(), Notification.NotificationType.STRATEGY_EXECUTED,
+                    "자동매매 일시정지 (일일 손실한도)",
+                    d.getStrategyName() + " 오늘 실현손실이 한도(" + String.format("%,.0f", d.getDailyLossLimit().doubleValue())
+                            + "원)에 도달해 자동 일시정지되었습니다.",
+                    Map.of("deploymentId", d.getId(), "action", "AUTO_PAUSE",
+                            "todayPnl", String.valueOf(d.getTodayRealizedPnl())));
+        } catch (Exception e) {
+            log.warn("자동 일시정지 알림 발송 실패: {}", e.getMessage());
         }
     }
 

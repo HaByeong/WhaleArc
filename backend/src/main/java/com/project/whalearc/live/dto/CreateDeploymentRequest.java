@@ -41,4 +41,7 @@ public class CreateDeploymentRequest {
     private BigDecimal stopLossPct;
     private BigDecimal takeProfitPct;
     private BigDecimal trailingStopPct;
+
+    // 일일 손실한도 (KRW 절대금액, 선택). 오늘 실현손실이 도달하면 자동 일시정지
+    private BigDecimal dailyLossLimit;
 }

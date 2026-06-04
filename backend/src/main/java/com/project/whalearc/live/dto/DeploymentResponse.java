@@ -27,6 +27,8 @@ public class DeploymentResponse {
     private final BigDecimal stopLossPct;
     private final BigDecimal takeProfitPct;
     private final BigDecimal trailingStopPct;
+    private final BigDecimal dailyLossLimit;
+    private final BigDecimal todayRealizedPnl;
     private final BigDecimal realizedPnl;
     private final int tradeCount;
     private final int winCount;
@@ -48,6 +50,8 @@ public class DeploymentResponse {
         this.stopLossPct = d.getStopLossPct();
         this.takeProfitPct = d.getTakeProfitPct();
         this.trailingStopPct = d.getTrailingStopPct();
+        this.dailyLossLimit = d.getDailyLossLimit();
+        this.todayRealizedPnl = d.getTodayRealizedPnl();
         this.realizedPnl = d.getRealizedPnl();
         this.tradeCount = d.getTradeCount();
         this.winCount = d.getWinCount();

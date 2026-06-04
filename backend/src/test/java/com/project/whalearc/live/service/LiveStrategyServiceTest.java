@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -259,6 +260,43 @@ class LiveStrategyServiceTest {
         req.setEntryConditions(List.of(cond("PRICE", Condition.Operator.GT, 0)));
         req.setTargetAssets(List.of("BTC"));
         req.setAllocatedCash(BigDecimal.valueOf(1_000_000));   // 100만원 할당 → 잔고 초과
+
+        assertThrows(IllegalArgumentException.class, () -> svc.createDeployment("u1", req));
+    }
+
+    @Test
+    void dailyLossLimitAutoPauses() {
+        when(candlestickService.getCandlesticks(anyString(), anyString(), anyString()))
+                .thenReturn(flatCandles(130, 100));   // 체결가 100
+
+        LiveStrategyDeployment d = baseDeployment();
+        d.setDailyLossLimit(BigDecimal.valueOf(100_000));   // 10만원 한도
+        d.setExitConditions(List.of(cond("PRICE", Condition.Operator.GT, 0)));   // 항상 청산
+        LivePosition p = d.getPositions().get(0);
+        p.setDirection(LivePosition.Direction.LONG);
+        p.setAvgPrice(BigDecimal.valueOf(200));   // 평단 200 > 체결가 100 → 손실
+        p.setQuantity(BigDecimal.valueOf(10000));
+        p.setTrailRef(BigDecimal.valueOf(200));
+
+        svc.evaluateDeployment(d);
+
+        // 손익 = (100-200)×10000 = -1,000,000 → 한도 -100,000 초과 → 자동 일시정지
+        assertEquals(LiveStrategyDeployment.Status.PAUSED, d.getStatus(), "일일 손실한도 도달 시 자동 PAUSED");
+        assertEquals(1, gateway.placed.size(), "청산 매도 1건 발주");
+    }
+
+    @Test
+    void overReservedAllocationIsRejected() {
+        stubCashBalance(BigDecimal.valueOf(1_000_000));   // 가용 현금 100만
+        LiveStrategyDeployment existing = new LiveStrategyDeployment();
+        existing.setAllocatedCash(BigDecimal.valueOf(800_000));   // 이미 80만 예약
+        existing.setStatus(LiveStrategyDeployment.Status.RUNNING);
+        when(deploymentRepo.findByUserIdAndStatusIn(anyString(), any())).thenReturn(List.of(existing));
+
+        CreateDeploymentRequest req = new CreateDeploymentRequest();
+        req.setEntryConditions(List.of(cond("PRICE", Condition.Operator.GT, 0)));
+        req.setTargetAssets(List.of("BTC"));
+        req.setAllocatedCash(BigDecimal.valueOf(300_000));   // 80만 + 30만 = 110만 > 100만
 
         assertThrows(IllegalArgumentException.class, () -> svc.createDeployment("u1", req));
     }

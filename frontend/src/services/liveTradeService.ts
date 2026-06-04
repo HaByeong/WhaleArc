@@ -35,6 +35,8 @@ export interface Deployment {
   stopLossPct?: number;
   takeProfitPct?: number;
   trailingStopPct?: number;
+  dailyLossLimit?: number;
+  todayRealizedPnl?: number;
   realizedPnl: number;
   tradeCount: number;
   winCount: number;
@@ -59,6 +61,7 @@ export interface CreateDeploymentRequest {
   stopLossPct?: number;
   takeProfitPct?: number;
   trailingStopPct?: number;
+  dailyLossLimit?: number;
 }
 
 // ── API 서비스 ──

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { Provider } from '@supabase/supabase-js';
+import { invalidateTokenCache } from '../utils/api';
 
 // Supabase 에러 메시지 한글화
 const translateAuthError = (message: string): string => {
@@ -60,6 +61,7 @@ export const authService = {
   },
 
   logout: async () => {
+    invalidateTokenCache(); // apiClient 인메모리 토큰 캐시 즉시 무효화 (로그아웃 후 옛 토큰 사용 방지)
     try {
       await supabase.auth.signOut({ scope: 'local' });
     } catch {

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
@@ -13,23 +13,23 @@ const SignUpPage = lazy(() => import('./pages/SignUpPage'));
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const MarketPage = lazy(() => import('./pages/MarketPage'));
-const TradePage = lazy(() => import('./pages/TradePage'));
-const StrategyPage = lazy(() => import('./pages/StrategyPage'));
-const AutoTradePage = lazy(() => import('./pages/AutoTradePage'));
-const QuantStorePage = lazy(() => import('./pages/QuantStorePage'));
-const RankingPage = lazy(() => import('./pages/RankingPage'));
-const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 const PortfolioDetailPage = lazy(() => import('./pages/PortfolioDetailPage'));
-const MyPortfolioPage = lazy(() => import('./pages/MyPortfolioPage'));
 const UserPage = lazy(() => import('./pages/UserPage'));
-const VirtDashboardPage = lazy(() => import('./pages/VirtDashboardPage'));
+const ConsoleExchangePage = lazy(() => import('./pages/ConsoleExchangePage'));
+const ConsoleDashboardPage = lazy(() => import('./pages/ConsoleDashboardPage'));
+const ConsolePortfolioPage = lazy(() => import('./pages/ConsolePortfolioPage'));
+const ConsoleMarketsPage = lazy(() => import('./pages/ConsoleMarketsPage'));
+const ConsoleTradePage = lazy(() => import('./pages/ConsoleTradePage'));
+const ConsoleStrategyPage = lazy(() => import('./pages/ConsoleStrategyPage'));
+const AutoTradePage = lazy(() => import('./pages/AutoTradePage'));
+const ConsoleLearnPage = lazy(() => import('./pages/ConsoleLearnPage'));
+const ConsoleCommunityPage = lazy(() => import('./pages/ConsoleCommunityPage'));
+const ConsoleStatusPage = lazy(() => import('./pages/ConsoleStatusPage'));
+const ConsoleBillingPage = lazy(() => import('./pages/ConsoleBillingPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const DisclaimerPage = lazy(() => import('./pages/DisclaimerPage'));
-const GoldenCrossChart = lazy(() => import('./components/GoldenCrossChart'));
 
 // body에 테마 + virt/novirt 클래스 적용 (섹션은 ThemeContext 가 라우트로 판별)
 const THEME_CLASSES = ['whalearc-dark', 'whalearc-virt', 'whalearc-novirt'] as const;
@@ -56,6 +56,13 @@ const RouteSplashLoading = () => {
   return section === 'virt' ? <VirtSplashLoading /> : <SplashLoading />;
 };
 
+// 라우트별 에러 바운더리 — 경로가 바뀌면 에러 상태를 리셋해 한 페이지 장애가
+// 셸·다른 메뉴까지 마비시키지 않도록 한다(다른 메뉴로 이동하면 자동 복구).
+function RouteErrorBoundary({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  return <ErrorBoundary resetKeys={[location.pathname]}>{children}</ErrorBoundary>;
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -65,6 +72,7 @@ function App() {
 
         <AuthProvider>
         <Suspense fallback={<RouteSplashLoading />}>
+        <RouteErrorBoundary>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -79,7 +87,7 @@ function App() {
             path="/dashboard"
             element={
               <ProtectedRoute>
-                <DashboardPage />
+                <ConsoleDashboardPage />
               </ProtectedRoute>
             }
           />
@@ -87,7 +95,7 @@ function App() {
             path="/market"
             element={
               <ProtectedRoute>
-                <MarketPage />
+                <ConsoleMarketsPage />
               </ProtectedRoute>
             }
           />
@@ -95,7 +103,7 @@ function App() {
             path="/trade"
             element={
               <ProtectedRoute>
-                <TradePage />
+                <ConsoleTradePage />
               </ProtectedRoute>
             }
           />
@@ -103,7 +111,7 @@ function App() {
             path="/strategy"
             element={
               <ProtectedRoute>
-                <StrategyPage />
+                <ConsoleStrategyPage />
               </ProtectedRoute>
             }
           />
@@ -119,7 +127,7 @@ function App() {
             path="/store"
             element={
               <ProtectedRoute>
-                <QuantStorePage />
+                <ConsoleLearnPage />
               </ProtectedRoute>
             }
           />
@@ -127,7 +135,7 @@ function App() {
             path="/ranking"
             element={
               <ProtectedRoute>
-                <RankingPage />
+                <ConsoleStatusPage />
               </ProtectedRoute>
             }
           />
@@ -135,7 +143,7 @@ function App() {
             path="/feedback"
             element={
               <ProtectedRoute>
-                <FeedbackPage />
+                <ConsoleCommunityPage />
               </ProtectedRoute>
             }
           />
@@ -143,7 +151,7 @@ function App() {
             path="/my-portfolio"
             element={
               <ProtectedRoute>
-                <MyPortfolioPage />
+                <ConsolePortfolioPage />
               </ProtectedRoute>
             }
           />
@@ -167,26 +175,40 @@ function App() {
             path="/api-setting"
             element={
               <ProtectedRoute>
-                <VirtDashboardPage />
+                <ConsoleExchangePage />
               </ProtectedRoute>
             }
           />
-          {/* Virt 모드 라우트 - 동일한 페이지 컴포넌트 재사용 */}
-          <Route path="/virt/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-          <Route path="/virt/my-portfolio" element={<ProtectedRoute><MyPortfolioPage /></ProtectedRoute>} />
-          <Route path="/virt/market" element={<ProtectedRoute><MarketPage /></ProtectedRoute>} />
-          <Route path="/virt/trade" element={<ProtectedRoute><TradePage /></ProtectedRoute>} />
-          <Route path="/virt/strategy" element={<ProtectedRoute><StrategyPage /></ProtectedRoute>} />
+          <Route path="/billing" element={<ProtectedRoute><ConsoleBillingPage /></ProtectedRoute>} />
+          {/* Virt 모드 라우트 — 개편 콘솔 페이지를 virt 모드(고래꼬리 로고)로 재사용 */}
+          <Route path="/virt/dashboard" element={<ProtectedRoute><ConsoleDashboardPage /></ProtectedRoute>} />
+          <Route path="/virt/my-portfolio" element={<ProtectedRoute><ConsolePortfolioPage /></ProtectedRoute>} />
+          <Route path="/virt/market" element={<ProtectedRoute><ConsoleMarketsPage /></ProtectedRoute>} />
+          <Route path="/virt/trade" element={<ProtectedRoute><ConsoleTradePage /></ProtectedRoute>} />
+          <Route path="/virt/strategy" element={<ProtectedRoute><ConsoleStrategyPage /></ProtectedRoute>} />
           <Route path="/virt/auto-trade" element={<ProtectedRoute><AutoTradePage /></ProtectedRoute>} />
-          <Route path="/virt/store" element={<ProtectedRoute><QuantStorePage /></ProtectedRoute>} />
-          <Route path="/virt/ranking" element={<ProtectedRoute><RankingPage /></ProtectedRoute>} />
-          <Route path="/virt/feedback" element={<ProtectedRoute><FeedbackPage /></ProtectedRoute>} />
+          <Route path="/virt/store" element={<ProtectedRoute><ConsoleLearnPage /></ProtectedRoute>} />
+          <Route path="/virt/ranking" element={<ProtectedRoute><ConsoleStatusPage /></ProtectedRoute>} />
+          <Route path="/virt/feedback" element={<ProtectedRoute><ConsoleCommunityPage /></ProtectedRoute>} />
+          <Route path="/virt/billing" element={<ProtectedRoute><ConsoleBillingPage /></ProtectedRoute>} />
           <Route path="/virt/user" element={<ProtectedRoute><UserPage /></ProtectedRoute>} />
           <Route path="/virt/portfolio/:portfolioId" element={<ProtectedRoute><PortfolioDetailPage /></ProtectedRoute>} />
-          <Route path="/golden-cross" element={<GoldenCrossChart />} />
 
+          {/* dev 전용: 인증 없이 개편 디자인 미리보기 (프로덕션 빌드 제외) */}
+          {import.meta.env.DEV && <Route path="/preview/console" element={<ConsoleDashboardPage />} />}
+          {import.meta.env.DEV && <Route path="/preview/portfolio" element={<ConsolePortfolioPage />} />}
+          {import.meta.env.DEV && <Route path="/preview/markets" element={<ConsoleMarketsPage />} />}
+          {import.meta.env.DEV && <Route path="/preview/trade" element={<ConsoleTradePage />} />}
+          {import.meta.env.DEV && <Route path="/preview/strategy" element={<ConsoleStrategyPage />} />}
+          {import.meta.env.DEV && <Route path="/preview/auto-trade" element={<AutoTradePage />} />}
+          {import.meta.env.DEV && <Route path="/preview/learn" element={<ConsoleLearnPage />} />}
+          {import.meta.env.DEV && <Route path="/preview/community" element={<ConsoleCommunityPage />} />}
+          {import.meta.env.DEV && <Route path="/preview/status" element={<ConsoleStatusPage />} />}
+          {import.meta.env.DEV && <Route path="/preview/billing" element={<ConsoleBillingPage />} />}
+          {import.meta.env.DEV && <Route path="/preview/exchange" element={<ConsoleExchangePage />} />}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </RouteErrorBoundary>
         </Suspense>
         </AuthProvider>
 

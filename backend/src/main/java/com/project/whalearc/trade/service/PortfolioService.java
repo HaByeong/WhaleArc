@@ -21,7 +21,6 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
@@ -31,26 +30,24 @@ import java.util.stream.Collectors;
 public class PortfolioService {
 
     private static final BigDecimal INITIAL_CASH = BigDecimal.valueOf(10_000_000); // 1000만원
-    private static final int MAX_LOCKS = 10_000;
-    private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, Long> lockLastUsed = new ConcurrentHashMap<>();
 
+    // 포트폴리오 변경 락은 OrderService·QuantStoreService 등과 공유(UserLockRegistry)하여 서로 직렬화한다.
+    private final UserLockRegistry userLockRegistry;
     private ReentrantLock getUserLock(String userId) {
-        lockLastUsed.put(userId, System.currentTimeMillis());
-        if (userLocks.size() > MAX_LOCKS) {
-            long expiry = System.currentTimeMillis() - 600_000;
-            lockLastUsed.entrySet().removeIf(e -> {
-                if (e.getValue() < expiry) {
-                    ReentrantLock lock = userLocks.get(e.getKey());
-                    if (lock != null && !lock.isLocked()) {
-                        userLocks.remove(e.getKey());
-                        return true;
-                    }
-                }
-                return false;
-            });
-        }
-        return userLocks.computeIfAbsent(userId, k -> new ReentrantLock());
+        return userLockRegistry.getUserLock(userId);
+    }
+
+    /**
+     * 포트폴리오를 공유 락 안에서 "최신 상태로 다시 읽어" 변경하고 저장한다 (원자적 read-modify-write).
+     * 현금/터틀 할당/대표 항로 등 부분 변경을, 무거운 시세 갱신 없이 안전하게 적용한다.
+     */
+    public Portfolio mutate(String userId, java.util.function.Consumer<Portfolio> mutation) {
+        return userLockRegistry.withLock(userId, () -> {
+            Portfolio p = portfolioRepository.findByUserId(userId)
+                    .orElseGet(() -> new Portfolio(userId, INITIAL_CASH));
+            mutation.accept(p);
+            return portfolioRepository.save(p);
+        });
     }
 
     private final PortfolioRepository portfolioRepository;
@@ -82,6 +79,16 @@ public class PortfolioService {
         } finally {
             lock.unlock();
         }
+    }
+
+    /** 특정 종목의 보유 수량만 가볍게 조회 (외부 시세 갱신 없이 DB 저장본 기준). 없으면 0. */
+    public BigDecimal getHoldingQuantity(String userId, String stockCode) {
+        return portfolioRepository.findByUserId(userId)
+                .map(p -> p.getHoldings().stream()
+                        .filter(h -> stockCode.equals(h.getStockCode()))
+                        .map(Holding::getQuantity)
+                        .findFirst().orElse(BigDecimal.ZERO))
+                .orElse(BigDecimal.ZERO);
     }
 
     /**

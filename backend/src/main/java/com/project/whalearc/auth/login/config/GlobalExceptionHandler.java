@@ -4,9 +4,12 @@ import com.project.whalearc.common.dto.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Slf4j
 @RestControllerAdvice
@@ -28,12 +31,25 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
     }
 
+    // 인가 실패 (권한 없음) → 403. (컨트롤러에서 던진 AccessDeniedException 전용 —
+    // 일반 Exception 핸들러가 500으로 잡지 않도록 명시 매핑. 필터 레벨 403은 Spring Security가 처리)
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(e.getMessage()));
+    }
+
     // 시스템 상태 예외 (시세 조회 실패, 잔고 음수 등)
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException e) {
         log.error("시스템 상태 오류: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ApiResponse.error(e.getMessage()));
+    }
+
+    // 필수 요청 파라미터 누락 / 타입 불일치 (클라이언트 요청 오류 → 400, 500 안전망으로 새지 않도록)
+    @ExceptionHandler({MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ApiResponse<Void>> handleBadRequestParam(Exception e) {
+        return ResponseEntity.badRequest().body(ApiResponse.error("요청 파라미터가 올바르지 않습니다: " + e.getMessage()));
     }
 
     // 예상하지 못한 모든 예외 (안전망)

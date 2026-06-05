@@ -28,6 +28,7 @@ public class PortfolioSnapshotScheduler {
 
     private final PortfolioRepository portfolioRepository;
     private final PortfolioSnapshotRepository snapshotRepository;
+    private final UserLockRegistry userLockRegistry;
     private final CryptoPriceProvider cryptoPriceProvider;
     private final StockPriceProvider stockPriceProvider;
     private final UsStockPriceProvider usStockPriceProvider;
@@ -78,29 +79,32 @@ public class PortfolioSnapshotScheduler {
             log.warn("스냅샷용 미국주식 시세 조회 실패: {}", e.getMessage());
         }
 
+        // 람다 캡처용 final 사본 (위 3개 맵은 try 안에서 재할당되므로 effectively-final 아님)
+        final Map<String, Double> cryptoMap = cryptoPriceMap;
+        final Map<String, Double> stockMap = stockPriceMap;
+        final Map<String, Double> usMap = usStockPriceMap;
+
         int saved = 0;
         for (Portfolio portfolio : all) {
             try {
-                if (snapshotRepository.findByUserIdAndDate(portfolio.getUserId(), today).isPresent()) {
-                    continue;
-                }
-                // 보유 종목 현재가 갱신
-                for (Holding holding : portfolio.getHoldings()) {
-                    Map<String, Double> priceMap;
-                    if (holding.isUsStock()) {
-                        priceMap = usStockPriceMap;
-                    } else if (holding.isStock()) {
-                        priceMap = stockPriceMap;
-                    } else {
-                        priceMap = cryptoPriceMap;
+                // 요청 경로(ensureTodaySnapshot, getOrCreatePortfolio 락 안)와 같은 유저 락으로 직렬화해
+                // "조회→없으면 저장" 경합으로 인한 중복 스냅샷을 방지(먼저 저장한 쪽만 1건 생성).
+                boolean didSave = userLockRegistry.withLock(portfolio.getUserId(), () -> {
+                    if (snapshotRepository.findByUserIdAndDate(portfolio.getUserId(), today).isPresent()) {
+                        return false;
                     }
-                    Double price = priceMap.get(holding.getStockCode());
-                    if (price != null) {
-                        holding.setCurrentPrice(BigDecimal.valueOf(price));
+                    for (Holding holding : portfolio.getHoldings()) {
+                        Map<String, Double> priceMap = holding.isUsStock() ? usMap
+                                : holding.isStock() ? stockMap : cryptoMap;
+                        Double price = priceMap.get(holding.getStockCode());
+                        if (price != null) {
+                            holding.setCurrentPrice(BigDecimal.valueOf(price));
+                        }
                     }
-                }
-                snapshotRepository.save(new PortfolioSnapshot(portfolio.getUserId(), today, portfolio, usdKrwRate));
-                saved++;
+                    snapshotRepository.save(new PortfolioSnapshot(portfolio.getUserId(), today, portfolio, usdKrwRate));
+                    return true;
+                });
+                if (didSave) saved++;
             } catch (Exception e) {
                 log.debug("스냅샷 저장 스킵 [{}]: {}", portfolio.getUserId(), e.getMessage());
             }

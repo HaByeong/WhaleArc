@@ -271,7 +271,10 @@ public class VirtService {
 
         long cashBalance = krwCash + foreignCashKrw;
         long totalValue = cashBalance + holdingsValue;
-        long investedAmount = totalValue - totalPnl;
+        // 수익률 분모는 '보유 원가'(현금 제외). 현금을 포함하면 수익률이 희석돼 종목별 수익률과 불일치.
+        long investedAmount = holdings.stream()
+                .mapToLong(h -> h.getMarketValue() - h.getProfitLoss())
+                .sum();
         double returnRate = investedAmount != 0
                 ? (double) totalPnl / investedAmount * 100
                 : 0;
@@ -315,7 +318,7 @@ public class VirtService {
                         .orderId(item.getOrDefault("odno", ""))
                         .stockCode(item.getOrDefault("pdno", ""))
                         .stockName(item.getOrDefault("prdt_name", ""))
-                        .orderType("02".equals(item.get("sll_buy_dvsn_cd")) ? "BUY" : "SELL")
+                        .orderType(mapOrderType(item.get("sll_buy_dvsn_cd")))
                         .quantity(safeInt(item.get("tot_ccld_qty")))
                         .price(safeLong(item.get("avg_prvs")))
                         .totalAmount(safeLong(item.get("tot_ccld_amt")))
@@ -329,6 +332,7 @@ public class VirtService {
 
     /** 업비트 API 키 저장 */
     public void saveUpbitCredential(String userId, String accessKey, String secretKey) {
+        requireEncryptionKey();
         VirtCredential cred = credentialRepo.findByUserId(userId)
                 .orElse(new VirtCredential(userId));
 
@@ -452,7 +456,10 @@ public class VirtService {
         long holdingsValue = holdings.stream().mapToLong(VirtPortfolioResponse.VirtHolding::getMarketValue).sum();
         long totalPnl = holdings.stream().mapToLong(VirtPortfolioResponse.VirtHolding::getProfitLoss).sum();
         long totalValue = cashBalance + holdingsValue;
-        long investedAmount = totalValue - totalPnl;
+        // 수익률 분모는 '보유 원가'(현금 제외). 현금을 포함하면 수익률이 희석돼 종목별 수익률과 불일치.
+        long investedAmount = holdings.stream()
+                .mapToLong(h -> h.getMarketValue() - h.getProfitLoss())
+                .sum();
         double returnRate = investedAmount != 0 ? (double) totalPnl / investedAmount * 100 : 0;
 
         return VirtPortfolioResponse.builder()
@@ -471,6 +478,7 @@ public class VirtService {
     /* ═══════ 비트겟 (코인) ═══════ */
 
     public void saveBitgetCredential(String userId, String apiKey, String secretKey, String passphrase) {
+        requireEncryptionKey();
         VirtCredential cred = credentialRepo.findByUserId(userId)
                 .orElse(new VirtCredential(userId));
         cred.setEncryptedBitgetApiKey(CryptoUtil.encrypt(apiKey, encryptionKey));
@@ -598,6 +606,13 @@ public class VirtService {
     private VirtCredential getCredentialOrThrow(String userId) {
         return credentialRepo.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("API 키가 등록되지 않았습니다. Virt 설정에서 KIS API 키를 등록해주세요."));
+    }
+
+    /** KIS 매도매수구분코드 → 주문유형. "02"=매수, "01"=매도, 그 외/null=UNKNOWN. */
+    private static String mapOrderType(String sllBuyDvsnCd) {
+        if ("02".equals(sllBuyDvsnCd)) return "BUY";
+        if ("01".equals(sllBuyDvsnCd)) return "SELL";
+        return "UNKNOWN";
     }
 
     private static long safeLong(String value) {

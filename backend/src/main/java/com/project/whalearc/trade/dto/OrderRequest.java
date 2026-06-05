@@ -36,4 +36,8 @@ public class OrderRequest {
 
     @Size(max = 500, message = "메모는 500자 이하로 입력해주세요.")
     private String memo;
+
+    // 멱등성 키 — 클라이언트가 제출 1회당 UUID 1개 생성. 동일 키 재요청은 이중 체결되지 않고 기존 주문 반환.
+    @Size(max = 64, message = "주문 키가 올바르지 않습니다.")
+    private String clientOrderId;
 }

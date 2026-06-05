@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { userService } from '../services/userService';
-import { useTheme } from '../contexts/ThemeContext';
 
 const AuthCallbackPage = () => {
-  const { isDark } = useTheme();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -96,22 +94,23 @@ const AuthCallbackPage = () => {
   }, []);
 
   return (
-    <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#060d18] text-white' : 'bg-gray-50'}`}>
-      <div className="text-center">
+    <div className="wa-force-dark min-h-screen flex items-center justify-center bg-[#060d18] text-white relative overflow-hidden">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-cyan-500/[0.05] rounded-full blur-[120px]" />
+      <div className="relative text-center">
         {error ? (
           <>
-            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
-              <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+              <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <p className="text-red-600 font-medium mb-1">{error}</p>
-            <p className={`${isDark ? 'text-gray-500' : 'text-gray-400'} text-sm`}>잠시 후 로그인 페이지로 이동합니다...</p>
+            <p className="text-red-400 font-medium mb-1">{error}</p>
+            <p className="text-slate-500 text-sm">잠시 후 로그인 페이지로 이동합니다...</p>
           </>
         ) : (
           <>
-            <div className="w-12 h-12 border-4 border-whale-light border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className={`${isDark ? 'text-gray-400' : 'text-gray-600'}`}>바다로 입수 중...</p>
+            <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-slate-400">바다로 입수 중...</p>
           </>
         )}
       </div>

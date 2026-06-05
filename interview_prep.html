@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>WhaleArc 면접 준비 자료 - 김병하</title>
+<style>
+  @page { margin: 18mm 14mm; size: A4; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; font-size: 10.5px; line-height: 1.65; color: #1a1a1a; max-width: 210mm; margin: 0 auto; padding: 8mm; }
+  h1 { font-size: 22px; color: #1a2b4d; border-bottom: 3px solid #4a90e2; padding-bottom: 6px; margin-top: 28px; page-break-after: avoid; }
+  h1:first-of-type { margin-top: 0; }
+  h2 { font-size: 15px; color: #2c3e50; border-left: 4px solid #4a90e2; padding-left: 10px; margin-top: 20px; page-break-after: avoid; }
+  h3 { font-size: 12.5px; color: #34495e; margin-top: 14px; page-break-after: avoid; }
+  h4 { font-size: 11.5px; color: #4a90e2; margin-top: 10px; margin-bottom: 4px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 10px; page-break-inside: avoid; }
+  th, td { border: 1px solid #ddd; padding: 5px 7px; text-align: left; vertical-align: top; }
+  th { background: #f0f4f8; font-weight: 600; color: #1a2b4d; }
+  tr:nth-child(even) { background: #fafbfc; }
+  code { font-family: 'SF Mono', 'Menlo', monospace; font-size: 9.5px; background: #f5f7fa; padding: 1px 3px; border-radius: 2px; }
+  pre { font-family: 'SF Mono', 'Menlo', monospace; font-size: 8.5px; background: #f8f9fa; border: 1px solid #e1e4e8; border-radius: 4px; padding: 8px 10px; overflow-x: auto; line-height: 1.45; page-break-inside: avoid; margin: 6px 0; }
+  .code-title { background: #1a2b4d; color: #e6e6e6; padding: 4px 10px; font-size: 9px; font-family: 'SF Mono', monospace; border-radius: 4px 4px 0 0; margin-bottom: 0; }
+  .code-title + pre { border-radius: 0 0 4px 4px; margin-top: 0; }
+  blockquote { background: #f0f7ff; border-left: 4px solid #4a90e2; margin: 8px 0; padding: 8px 12px; font-size: 10px; }
+  .cover { text-align: center; padding: 50px 0 30px; page-break-after: always; }
+  .cover h1 { font-size: 30px; border: none; color: #1a2b4d; margin-bottom: 8px; }
+  .cover .subtitle { font-size: 16px; color: #4a90e2; margin-bottom: 24px; }
+  .cover .info { font-size: 13px; color: #666; line-height: 2; }
+  .toc { page-break-after: always; }
+  .toc ul { list-style: none; padding: 0; }
+  .toc li { padding: 5px 0; border-bottom: 1px dotted #ddd; font-size: 12px; }
+  .toc li span { color: #4a90e2; font-weight: 600; margin-right: 6px; }
+  .section { page-break-before: always; }
+  .highlight { background: #fff3cd; padding: 1px 4px; border-radius: 2px; font-weight: 600; }
+  .tag { display: inline-block; background: #4a90e2; color: white; padding: 1px 7px; border-radius: 10px; font-size: 8.5px; font-weight: 600; margin-right: 3px; }
+  .tag.green { background: #27ae60; }
+  .tag.orange { background: #e67e22; }
+  .tag.red { background: #e74c3c; }
+  .flow { background: #f8f9fa; border: 1px solid #e1e4e8; border-radius: 5px; padding: 10px 12px; margin: 8px 0; font-family: monospace; font-size: 9.5px; white-space: pre; line-height: 1.5; page-break-inside: avoid; }
+  .qa { margin: 12px 0; page-break-inside: avoid; }
+  .qa .q { font-weight: 700; color: #1a2b4d; font-size: 11.5px; margin-bottom: 3px; padding: 4px 8px; background: #f0f4f8; border-radius: 4px; }
+  .qa .a { background: #f0f7ff; border-left: 4px solid #4a90e2; padding: 8px 12px; font-size: 10px; line-height: 1.7; margin-top: 2px; }
+  .qa .follow { background: #fff8f0; border-left: 4px solid #e67e22; padding: 6px 12px; font-size: 9.5px; line-height: 1.6; margin-top: 4px; }
+  .qa .follow::before { content: "꼬리 질문 "; font-weight: 700; color: #e67e22; }
+  hr { border: none; border-top: 1px solid #e1e4e8; margin: 16px 0; }
+  .keyword-box { display: inline-block; border: 2px solid #4a90e2; border-radius: 8px; padding: 6px 14px; margin: 3px; text-align: center; font-weight: 700; color: #1a2b4d; font-size: 11px; }
+  .tip { background: #e8f5e9; border-left: 4px solid #27ae60; padding: 6px 10px; margin: 6px 0; font-size: 9.5px; page-break-inside: avoid; }
+  .tip::before { content: "TIP "; font-weight: 700; color: #27ae60; }
+  .warn { background: #fff3e0; border-left: 4px solid #e67e22; padding: 6px 10px; margin: 6px 0; font-size: 9.5px; }
+  .warn::before { content: "주의 "; font-weight: 700; color: #e67e22; }
+  .compare { display: flex; gap: 8px; margin: 8px 0; }
+  .compare > div { flex: 1; background: #f8f9fa; border: 1px solid #e1e4e8; border-radius: 4px; padding: 8px; font-size: 9.5px; }
+  .compare > div h4 { margin-top: 0; font-size: 11px; }
+  p { margin: 4px 0 8px; }
+  ul, ol { margin: 4px 0 8px; padding-left: 18px; }
+  li { margin-bottom: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ==================== 표지 ==================== -->
+<div class="cover">
+  <div style="font-size:60px; margin-bottom:16px;">&#x1F433;</div>
+  <h1>WhaleArc 면접 준비 종합 가이드</h1>
+  <div class="subtitle">증권사 IT 신입 채용 대비 | 프로젝트 + CS + 도메인 + 면접</div>
+  <div class="info">
+    김병하 | 단국대학교 모바일시스템공학과 (2026.08 졸업예정)<br>
+    미래에셋자산운용 OMS 개발 / NH투자증권 IT 지원<br><br>
+    <span style="font-size:11px;">자격증: 금융투자분석사 | SQLD | 투자자산운용사 | 정보처리기능사</span><br>
+    <span style="font-size:11px;">인턴: TTA 한국정보통신기술협회 SW 품질시험 (2026.01~06)</span><br><br>
+    <span style="color:#999; font-size:10px;">whale-arc.com | 2026년 상반기 채용 대비</span>
+  </div>
+</div>
+
+<!-- ==================== 목차 ==================== -->
+<div class="toc">
+<h1>목차</h1>
+<ul>
+  <li><span>1</span> <strong>WhaleArc 프로젝트 아키텍처 총정리</strong></li>
+  <li><span>&nbsp;&nbsp;1.1</span> 전체 아키텍처 &amp; 기술 스택</li>
+  <li><span>&nbsp;&nbsp;1.2</span> 백엔드 패키지 구조 &amp; 설계 원칙</li>
+  <li><span>&nbsp;&nbsp;1.3</span> API 엔드포인트 전체 목록 (12개)</li>
+  <li><span>&nbsp;&nbsp;1.4</span> JWT 인증 흐름 (코드 + 시퀀스)</li>
+  <li><span>&nbsp;&nbsp;1.5</span> 거래소 API 연동 구조 (Strategy 패턴)</li>
+  <li><span>&nbsp;&nbsp;1.6</span> API 키 암호화 (AES-GCM) 상세</li>
+  <li><span>&nbsp;&nbsp;1.7</span> Spring Security 설정 상세</li>
+  <li><span>&nbsp;&nbsp;1.8</span> MongoDB 컬렉션 &amp; 엔티티 설계</li>
+  <li><span>&nbsp;&nbsp;1.9</span> 프론트엔드 구조 (React + Axios Interceptor)</li>
+  <li><span>2</span> <strong>면접 예상 질문 + 모범 답변 (20개)</strong></li>
+  <li><span>&nbsp;&nbsp;2.A</span> WhaleArc 프로젝트 심층 질문 (8개)</li>
+  <li><span>&nbsp;&nbsp;2.B</span> 보안/TTA 인턴 관련 (2개)</li>
+  <li><span>&nbsp;&nbsp;2.C</span> CS 기술 기초 질문 (10개)</li>
+  <li><span>3</span> <strong>CS 기초 상세 정리</strong></li>
+  <li><span>&nbsp;&nbsp;3.1</span> 자료구조 (증권 시스템 활용 예시 포함)</li>
+  <li><span>&nbsp;&nbsp;3.2</span> 알고리즘 기초</li>
+  <li><span>&nbsp;&nbsp;3.3</span> DB 핵심 (트랜잭션, 인덱스, Lock 상세)</li>
+  <li><span>&nbsp;&nbsp;3.4</span> Java 핵심 (JVM, GC, Collection, Spring)</li>
+  <li><span>&nbsp;&nbsp;3.5</span> 네트워크 기초 (HTTP, TCP, WebSocket)</li>
+  <li><span>4</span> <strong>증권 시스템 도메인 지식</strong></li>
+  <li><span>&nbsp;&nbsp;4.1</span> OMS 주문 라이프사이클 상세</li>
+  <li><span>&nbsp;&nbsp;4.2</span> FIX 프로토콜 상세</li>
+  <li><span>&nbsp;&nbsp;4.3</span> 동시성/정합성 — 실제 사례로 설명</li>
+  <li><span>&nbsp;&nbsp;4.4</span> 다자산(주식/채권/파생/디지털) 주문 처리</li>
+  <li><span>&nbsp;&nbsp;4.5</span> 핵심 금융 용어 사전 (20개)</li>
+  <li><span>5</span> <strong>미래에셋 자소서 포인트 &amp; JD 매칭</strong></li>
+</ul>
+</div>
+
+<!-- ====================================================================== -->
+<!-- 1. 아키텍처 -->
+<!-- ====================================================================== -->
+<div class="section">
+<h1>1. WhaleArc 프로젝트 아키텍처 총정리</h1>
+
+<h2>1.1 전체 아키텍처 &amp; 기술 스택</h2>
+<div class="flow">[React 18 + TypeScript 5.5]  &lt;--- Axios (JWT Bearer) ---&gt;  [Spring Boot 3.4.5 + Java 17]
+         Vite :5173                                                     Tomcat :8080
+         Tailwind CSS                                                   Spring Security
+         React Router v6                                                JWT (JJWT 0.11.5)
+         Recharts (차트)                                                BCrypt (비밀번호)
+                                                                        AES-GCM (API키 암호화)
+                                                                              |
+                                                              +---------------+---------------+
+                                                              |               |               |
+                                                          [MongoDB]    [KIS API]    [Upbit/Bitget API]
+                                                          :27017       OAuth2        JWT/HMAC</div>
+
+<table>
+  <tr><th>구분</th><th>기술</th><th>버전</th><th>선택 이유</th></tr>
+  <tr><td>Backend</td><td>Spring Boot</td><td>3.4.5</td><td>Java 생태계 최대, 보안/DI/AOP 기본 제공</td></tr>
+  <tr><td>Frontend</td><td>React + Vite</td><td>18.3 / 5.4</td><td>컴포넌트 기반, HMR 빠른 빌드</td></tr>
+  <tr><td>Language</td><td>Java 17 / TypeScript 5.5</td><td>-</td><td>정적 타입 → 버그 조기 발견</td></tr>
+  <tr><td>Database</td><td>MongoDB</td><td>-</td><td>스키마 유연성 (거래소별 필드 상이)</td></tr>
+  <tr><td>인증</td><td>JWT + BCrypt</td><td>JJWT 0.11.5</td><td>Stateless 인증, 확장성 확보</td></tr>
+  <tr><td>암호화</td><td>AES-256-GCM</td><td>-</td><td>인증된 암호화 (기밀성+무결성)</td></tr>
+  <tr><td>스타일링</td><td>Tailwind CSS</td><td>3.4.9</td><td>유틸리티 기반, 빠른 UI 개발</td></tr>
+</table>
+
+<h2>1.2 백엔드 패키지 구조 &amp; 설계 원칙</h2>
+<pre>com.project.whalearc/
+├── auth/login/                          # 인증 도메인
+│   ├── config/
+│   │   ├── SecurityConfig.java          # Spring Security + CORS + JWT 필터 등록
+│   │   └── GlobalExceptionHandler.java  # @RestControllerAdvice (400/500 처리)
+│   ├── security/
+│   │   ├── JwtTokenProvider.java        # 토큰 생성/검증/파싱
+│   │   └── JwtAuthenticationFilter.java # OncePerRequestFilter (Bearer 토큰 추출)
+│   ├── controller/
+│   │   ├── auth/UserAuthController.java        # POST /auth/login, logout, reissue
+│   │   ├── signup/UserSignUpController.java    # POST /users
+│   │   ├── user/UserUpdateController.java      # PUT /users
+│   │   └── userinfo/UserProfileController.java # POST/PUT /users/info
+│   ├── service/                         # 인터페이스 + 구현체 분리
+│   │   ├── auth/UserLoginService.java   # 로그인 (BCrypt 검증 → JWT 발급 → 쿠키 설정)
+│   │   ├── auth/UserLogOutService.java  # 로그아웃 (DB RefreshToken null 처리)
+│   │   ├── auth/AccessTokenReissueService.java # 토큰 재발급 (DB 비교 후 재발급)
+│   │   ├── signup/UserSignUpService.java       # 회원가입 (중복 체크 → BCrypt 해싱)
+│   │   ├── user/UserUpdateService.java         # 프로필 수정
+│   │   └── userinfo/UserInfoService.java       # 추가정보 CRUD
+│   ├── domain/
+│   │   ├── user/User.java               # @Document("users") — password AccessLevel.NONE
+│   │   └── userinfo/UserInfo.java       # @Document("user_info")
+│   ├── repository/                      # MongoRepository 확장
+│   ├── dto/                             # Request/Response DTO
+│   └── constant/Constant.java           # ACCESS_TOKEN_TIME=3600000, REFRESH=604800000
+│
+├── exchange/                            # 거래소 연동 도메인
+│   ├── controller/ExchangeAccountController.java  # 5개 엔드포인트
+│   ├── service/
+│   │   ├── ExchangeAccountService.java            # 계정 CRUD + 포트폴리오 조회 위임
+│   │   └── client/
+│   │       ├── KisApiClient.java        # 한국투자증권 (OAuth2 + REST)
+│   │       ├── UpbitApiClient.java      # 업비트 (JWT + REST)
+│   │       └── BitgetApiClient.java     # 비트겟 (HMAC-SHA256 + REST)
+│   ├── domain/ExchangeAccount.java      # @Document("exchange_accounts")
+│   ├── repository/ExchangeAccountRepository.java
+│   ├── dto/                             # ExchangePortfolioDto, ExchangeHoldingDto 등
+│   └── util/AESCryptoUtil.java          # AES-GCM 암호화/복호화
+│
+├── trade/    # (예정) 주문 처리
+├── strategy/ # (예정) 백테스팅
+└── common/   # (예정) 공통 유틸</pre>
+
+<h3>적용된 설계 원칙</h3>
+<table>
+  <tr><th>원칙</th><th>적용 위치</th><th>설명</th></tr>
+  <tr><td><strong>계층 분리</strong></td><td>Controller → Service → Repository</td><td>각 계층 역할 명확, 테스트 용이</td></tr>
+  <tr><td><strong>인터페이스 기반</strong></td><td>Service Interface + Impl</td><td>컨트롤러가 구현체에 의존 안 함 → Mock 테스트 가능</td></tr>
+  <tr><td><strong>Strategy 패턴</strong></td><td>Exchange API Clients</td><td>거래소별 독립 클라이언트, 새 거래소 추가 시 기존 코드 수정 없음</td></tr>
+  <tr><td><strong>OCP (개방-폐쇄)</strong></td><td>ExchangeAccountService</td><td>확장에 열려있고 수정에 닫혀있음</td></tr>
+  <tr><td><strong>단일 책임 (SRP)</strong></td><td>각 Service 클래스</td><td>Login, Logout, Reissue, SignUp 각각 별도 서비스</td></tr>
+  <tr><td><strong>DI (의존성 주입)</strong></td><td>@RequiredArgsConstructor</td><td>생성자 주입으로 결합도 낮춤</td></tr>
+</table>
+
+<h2>1.3 API 엔드포인트 전체 목록</h2>
+<table>
+  <tr><th>메서드</th><th>URL</th><th>설명</th><th>인증</th><th>요청/응답 핵심</th></tr>
+  <tr><td>POST</td><td><code>/auth/login</code></td><td>로그인</td><td>X</td><td>Body: {userId, password} → Body: {accessToken}, Cookie: refreshToken</td></tr>
+  <tr><td>POST</td><td><code>/auth/logout</code></td><td>로그아웃</td><td>O</td><td>SecurityContext에서 userId 추출 → DB refreshToken null</td></tr>
+  <tr><td>POST</td><td><code>/auth/reissue</code></td><td>토큰 재발급</td><td>X</td><td>Cookie: refreshToken → Body: {accessToken}</td></tr>
+  <tr><td>POST</td><td><code>/users</code></td><td>회원가입</td><td>X</td><td>Body: {userId, password, name} → 중복체크 → BCrypt 해싱</td></tr>
+  <tr><td>PUT</td><td><code>/users</code></td><td>프로필 수정</td><td>O</td><td>Body: {name, age, email, ...}</td></tr>
+  <tr><td>POST</td><td><code>/users/info</code></td><td>추가정보 등록</td><td>O</td><td>UserInfo 별도 컬렉션</td></tr>
+  <tr><td>PUT</td><td><code>/users/info</code></td><td>추가정보 수정</td><td>O</td><td>-</td></tr>
+  <tr><td>POST</td><td><code>/api/exchange/accounts</code></td><td>거래소 계정 등록/수정</td><td>O</td><td>API키 AES-GCM 암호화 → Upsert</td></tr>
+  <tr><td>GET</td><td><code>/api/exchange/accounts</code></td><td>전체 계정 조회</td><td>O</td><td>키 마스킹 ("****")</td></tr>
+  <tr><td>GET</td><td><code>/api/exchange/accounts/{type}</code></td><td>특정 계정 조회</td><td>O</td><td>-</td></tr>
+  <tr><td>DELETE</td><td><code>/api/exchange/accounts/{type}</code></td><td>계정 삭제</td><td>O</td><td>-</td></tr>
+  <tr><td>GET</td><td><code>/api/exchange/portfolio/{type}</code></td><td>포트폴리오 조회</td><td>O</td><td>복호화 → 거래소 API 호출 → 보유자산+수익률</td></tr>
+</table>
+
+<h2>1.4 JWT 인증 흐름 상세</h2>
+
+<h3>시퀀스 다이어그램</h3>
+<div class="flow">1. [로그인]
+   Client → POST /auth/login {userId, password}
+   Server → BCrypt 비밀번호 검증
+          → Access Token 생성 (HS256, 1시간)
+          → Refresh Token 생성 (HS256, 7일) → DB에 저장
+          → Response Body: {userId, accessToken}
+          → Set-Cookie: refreshToken (HttpOnly, Secure, SameSite=Strict)
+
+2. [API 요청]
+   Client → Authorization: Bearer {accessToken}
+   Server → JwtAuthenticationFilter.doFilterInternal()
+          → validateToken() : 서명 + 만료 검증
+          → (유효) getUserIdFromToken() → SecurityContext에 인증정보 설정
+          → (무효) SecurityContext 비어있음 → Spring Security가 401 반환
+
+3. [토큰 만료 시 자동 갱신]
+   Client → API 요청 → 401 응답
+   Client → Axios Response Interceptor 동작
+          → POST /auth/reissue (Cookie에 refreshToken 자동 전송)
+   Server → 쿠키에서 refreshToken 추출 → 서명/만료 검증
+          → DB 저장된 refreshToken과 비교 (Replay Attack 방지)
+          → 새 accessToken 발급
+   Client → localStorage에 새 토큰 저장 → 원래 요청 재시도
+
+4. [로그아웃]
+   Client → POST /auth/logout
+   Server → SecurityContext에서 userId 추출 (Request Body가 아님 → 스푸핑 방지)
+          → DB의 refreshToken = null (서버사이드 무효화)</div>
+
+<h3>핵심 코드: JwtTokenProvider.java</h3>
+<div class="code-title">JwtTokenProvider.java — 토큰 생성/검증</div>
+<pre>@RequiredArgsConstructor
+public class JwtTokenProvider {
+    private final SecretKey secretKey;  // SecurityConfig에서 Bean 주입
+
+    // Access Token 생성 (1시간)
+    public String generateAccessToken(String userId) {
+        return Jwts.builder()
+                .setSubject(userId)           // payload에 userId 저장
+                .claim("role", "user")        // 역할 정보
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_TIME))
+                .signWith(secretKey, SignatureAlgorithm.HS256)  // HMAC-SHA256 서명
+                .compact();
+    }
+
+    // Refresh Token 생성 (7일)
+    public String generateRefreshToken(String userId) {
+        return Jwts.builder()
+                .setSubject(userId)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + REFRESH_TOKEN_TIME))
+                .signWith(secretKey, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    // 토큰 유효성 검증
+    public boolean validateToken(String token) {
+        try {
+            Jwts.parserBuilder().setSigningKey(secretKey).build().parseClaimsJws(token);
+            return true;
+        } catch (SecurityException | MalformedJwtException e) {
+            // 서명 불일치 또는 형식 오류
+        } catch (ExpiredJwtException e) {
+            // 만료된 토큰
+        } catch (UnsupportedJwtException | IllegalArgumentException e) {
+            // 지원하지 않는 토큰 또는 잘못된 인자
+        }
+        return false;
+    }
+}</pre>
+
+<h3>핵심 코드: JwtAuthenticationFilter.java</h3>
+<div class="code-title">JwtAuthenticationFilter.java — 요청마다 토큰 검증</div>
+<pre>@RequiredArgsConstructor
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    private final JwtTokenProvider jwtTokenProvider;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+            HttpServletResponse response, FilterChain filterChain) {
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            String token = header.replace("Bearer ", "");
+
+            // [보안 개선] 토큰 검증을 먼저 수행
+            // 기존: 바로 getUserIdFromToken() → 만료 토큰 시 500 에러 + 스택트레이스 노출
+            // 수정: validateToken()이 false → SecurityContext 비어있음 → 401 자동 반환
+            if (jwtTokenProvider.validateToken(token)) {
+                String userId = jwtTokenProvider.getUserIdFromToken(token);
+                UsernamePasswordAuthenticationToken auth =
+                    new UsernamePasswordAuthenticationToken(userId, null, List.of());
+                SecurityContextHolder.getContext().setAuthentication(auth);
+            }
+        }
+        filterChain.doFilter(request, response);
+    }
+}</pre>
+
+<h3>보안 위협별 대응 매트릭스</h3>
+<table>
+  <tr><th>보안 위협</th><th>대응 방법</th><th>코드 위치</th></tr>
+  <tr><td>XSS (토큰 탈취)</td><td>RefreshToken → HttpOnly 쿠키 (JS 접근 불가)</td><td>UserLoginService.makeRefreshCookie()</td></tr>
+  <tr><td>CSRF</td><td>SameSite=Strict (크로스사이트 요청 시 쿠키 미전송)</td><td>UserLoginService.makeRefreshCookie()</td></tr>
+  <tr><td>Replay Attack</td><td>RefreshToken DB 저장 → 재발급 시 비교</td><td>AccessTokenReissueService</td></tr>
+  <tr><td>토큰 위변조</td><td>HMAC-SHA256 서명 검증</td><td>JwtTokenProvider.validateToken()</td></tr>
+  <tr><td>로그아웃 후 사용</td><td>DB refreshToken = null (서버사이드 무효화)</td><td>UserLogOutService</td></tr>
+  <tr><td>비밀번호 노출</td><td>BCrypt 해싱 + password 필드 getter 차단</td><td>User.java (AccessLevel.NONE)</td></tr>
+  <tr><td>ID 스푸핑</td><td>userId를 SecurityContext에서 추출 (Request Body 아님)</td><td>UserLogOutService, UserUpdateService</td></tr>
+  <tr><td>에러 정보 노출</td><td>500 에러 → 제네릭 메시지만 반환</td><td>GlobalExceptionHandler</td></tr>
+</table>
+
+<h3>핵심 코드: UserLoginService.java — 로그인 + 쿠키 생성</h3>
+<div class="code-title">UserLoginService.java</div>
+<pre>@Service
+@RequiredArgsConstructor
+public class UserLoginService implements UserLoginServiceInterface {
+    private final UserRepository userRepository;
+    private final BCryptPasswordEncoder bcryptPasswordEncoder;
+    private final JwtTokenProvider jwtTokenProvider;
+
+    @Override
+    public ResponseEntity login(UserLoginRequestDto dto) {
+        String requestId = dto.getUserId();
+        // DB에서 암호화된 비밀번호만 조회 (전용 DTO 사용)
+        RepositoryPasswordReturnDto pwDto = userRepository.findOnlyPasswordById(requestId);
+
+        if (pwDto.getPassword() == null ||
+            !bcryptPasswordEncoder.matches(dto.getPassword(), pwDto.getPassword())) {
+            throw new IllegalArgumentException("아이디 혹은 비밀번호가 일치하지 않습니다");
+        }
+
+        // Refresh Token 생성 → DB에 저장 (로그아웃/재발급 시 비교용)
+        String refreshToken = jwtTokenProvider.generateRefreshToken(requestId);
+        User user = userRepository.findByUserId(requestId);
+        user.setJwtRefreshToken(refreshToken);
+        userRepository.save(user);
+
+        // HttpOnly 쿠키에 Refresh Token 담기
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+                .httpOnly(true)       // JavaScript 접근 차단 (XSS 방어)
+                .secure(true)         // HTTPS에서만 전송
+                .path("/")            // 모든 경로에서 쿠키 전송
+                .maxAge(7*24*60*60)   // 7일
+                .sameSite("Strict")   // 같은 사이트에서만 전송 (CSRF 방어)
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(new UserLoginResponseDto(requestId,
+                    jwtTokenProvider.generateAccessToken(requestId)));
+    }
+}</pre>
+
+<h2>1.5 거래소 API 연동 구조</h2>
+
+<h3>Strategy 패턴 적용 구조</h3>
+<div class="flow">ExchangeAccountService.getPortfolio(userId, exchangeType)
+    │
+    ├── DB에서 ExchangeAccount 조회 → AES-GCM 복호화
+    │
+    ├── switch (exchangeType)
+    │   ├── "KIS"    → kisApiClient.getPortfolio(appKey, appSecret, secretKey, accountNumber)
+    │   │              1) POST /oauth2/tokenP → access_token 획득
+    │   │              2) GET  /uapi/.../inquire-balance → 보유종목 + 예수금
+    │   │              3) 계좌번호 파싱: "50123456-01" → CANO + ACNT_PRDT_CD
+    │   │
+    │   ├── "UPBIT"  → upbitApiClient.getPortfolio(accessKey, secretKey)
+    │   │              1) JWT 토큰 생성 (HMAC-SHA256)
+    │   │              2) GET /accounts → 보유 코인 목록
+    │   │              3) GET /ticker?markets=KRW-BTC,... → 현재가
+    │   │              4) 수익률 계산: (현재가-매입가)/매입가 * 100
+    │   │
+    │   └── "BITGET" → bitgetApiClient.getPortfolio(apiKey, secretKey)
+    │                  1) HMAC-SHA256 서명 생성 (timestamp + method + path)
+    │                  2) GET /api/v2/spot/account/assets
+    │                  3) USDT→KRW 환율 변환 (업비트 시세 활용)
+    │
+    └── 결과: ExchangePortfolioDto (totalValue, cashBalance, holdings[], returnRate)</div>
+
+<h3>각 거래소별 인증 방식 비교</h3>
+<table>
+  <tr><th></th><th>KIS (한국투자증권)</th><th>Upbit (업비트)</th><th>Bitget (비트겟)</th></tr>
+  <tr><td><strong>인증 방식</strong></td><td>OAuth2 (client_credentials)</td><td>JWT (자체 생성)</td><td>HMAC-SHA256 서명</td></tr>
+  <tr><td><strong>토큰 획득</strong></td><td>POST /oauth2/tokenP</td><td>직접 JWT 조립</td><td>매 요청마다 서명 생성</td></tr>
+  <tr><td><strong>인증 헤더</strong></td><td>authorization + appkey + appsecret</td><td>Authorization: Bearer {jwt}</td><td>ACCESS-KEY + ACCESS-SIGN + ACCESS-TIMESTAMP</td></tr>
+  <tr><td><strong>자산 유형</strong></td><td>국내 주식</td><td>암호화폐 (KRW 마켓)</td><td>암호화폐 (USDT 마켓)</td></tr>
+  <tr><td><strong>통화 기준</strong></td><td>KRW</td><td>KRW</td><td>USDT → KRW 환산 필요</td></tr>
+</table>
+
+<h3>핵심 코드: ExchangeAccountService.java — 키 암호화 저장 + 포트폴리오 조회</h3>
+<div class="code-title">ExchangeAccountService.java (핵심 부분)</div>
+<pre>@Service
+@RequiredArgsConstructor
+public class ExchangeAccountService {
+    private final ExchangeAccountRepository repository;
+    private final AESCryptoUtil aesCryptoUtil;
+    private final KisApiClient kisApiClient;
+    private final UpbitApiClient upbitApiClient;
+    private final BitgetApiClient bitgetApiClient;
+
+    // API 키 저장 (AES-GCM 암호화)
+    public ExchangeAccount saveAccount(String userId, ExchangeAccountRequestDto request) {
+        Optional&lt;ExchangeAccount&gt; existing = repository
+                .findByUserIdAndExchangeType(userId, request.getExchangeType());
+
+        ExchangeAccount account = existing.orElseGet(() -> {
+            ExchangeAccount a = new ExchangeAccount();
+            a.setUserId(userId);
+            a.setExchangeType(request.getExchangeType());
+            a.setCreatedAt(LocalDateTime.now().toString());
+            return a;
+        });
+
+        // 핵심: 평문 API 키를 AES-GCM으로 암호화 후 저장
+        account.setApiKey(aesCryptoUtil.encrypt(request.getApiKey()));
+        account.setSecretKey(aesCryptoUtil.encrypt(request.getSecretKey()));
+        // KIS 전용 필드
+        if (request.getAppSecret() != null)
+            account.setAppSecret(aesCryptoUtil.encrypt(request.getAppSecret()));
+        if (request.getAccountNumber() != null)
+            account.setAccountNumber(request.getAccountNumber()); // 계좌번호는 비암호화 (URL 구성용)
+
+        account.setConnected(true);
+        account.setUpdatedAt(LocalDateTime.now().toString());
+        return repository.save(account);
+    }
+
+    // 포트폴리오 조회 (복호화 → 거래소 API 호출)
+    public ExchangePortfolioDto getPortfolio(String userId, String exchangeType) {
+        ExchangeAccount account = repository
+                .findByUserIdAndExchangeType(userId, exchangeType)
+                .orElse(null);
+        if (account == null || !account.isConnected()) return emptyPortfolio(exchangeType);
+
+        // 복호화된 키로 실제 API 호출
+        String apiKey = aesCryptoUtil.decrypt(account.getApiKey());
+        String secretKey = aesCryptoUtil.decrypt(account.getSecretKey());
+
+        switch (exchangeType) {
+            case "KIS":
+                String appSecret = aesCryptoUtil.decrypt(account.getAppSecret());
+                return kisApiClient.getPortfolio(apiKey, secretKey, appSecret,
+                        account.getAccountNumber());
+            case "UPBIT":
+                return upbitApiClient.getPortfolio(apiKey, secretKey);
+            case "BITGET":
+                return bitgetApiClient.getPortfolio(apiKey, secretKey);
+            default:
+                return emptyPortfolio(exchangeType);
+        }
+    }
+}</pre>
+
+<h2>1.6 API 키 암호화 (AES-GCM) 상세</h2>
+
+<div class="code-title">AESCryptoUtil.java — AES-256-GCM 암호화/복호화</div>
+<pre>@Component
+public class AESCryptoUtil {
+    private static final String ALGORITHM = "AES/GCM/NoPadding";
+    private static final int GCM_TAG_LENGTH = 128;  // 인증 태그 128bit
+    private static final int IV_LENGTH = 12;         // GCM 권장 IV 12bytes
+
+    private final SecretKeySpec keySpec;
+
+    public AESCryptoUtil(@Value("${exchange.encryption-key}") String key) {
+        byte[] keyBytes = Arrays.copyOf(key.getBytes(StandardCharsets.UTF_8), 16);
+        this.keySpec = new SecretKeySpec(keyBytes, "AES");
+    }
+
+    public String encrypt(String plainText) {
+        byte[] iv = new byte[IV_LENGTH];
+        new SecureRandom().nextBytes(iv);  // 매번 랜덤 IV 생성 → 같은 평문도 다른 암호문
+
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
+        byte[] encrypted = cipher.doFinal(plainText.getBytes(UTF_8));
+
+        // IV(12bytes) + 암호문을 결합 → Base64 인코딩
+        byte[] combined = new byte[IV_LENGTH + encrypted.length];
+        System.arraycopy(iv, 0, combined, 0, IV_LENGTH);
+        System.arraycopy(encrypted, 0, combined, IV_LENGTH, encrypted.length);
+        return Base64.getEncoder().encodeToString(combined);
+    }
+
+    public String decrypt(String encryptedText) {
+        byte[] combined = Base64.getDecoder().decode(encryptedText);
+        byte[] iv = Arrays.copyOfRange(combined, 0, IV_LENGTH);          // 앞 12바이트 = IV
+        byte[] encrypted = Arrays.copyOfRange(combined, IV_LENGTH, combined.length); // 나머지 = 암호문
+
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
+        return new String(cipher.doFinal(encrypted), UTF_8);
+    }
+}</pre>
+
+<div class="tip">GCM vs CBC: GCM은 암호화와 동시에 인증 태그를 생성해 데이터 위변조를 감지합니다. CBC는 별도의 HMAC이 필요합니다. 금융 데이터처럼 무결성이 중요한 경우 GCM이 적합합니다.</div>
+
+<h2>1.7 Spring Security 설정 상세</h2>
+
+<div class="code-title">SecurityConfig.java</div>
+<pre>@Configuration
+public class SecurityConfig {
+    @Value("${jwt.secret}") private String jwtSecret;
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http, JwtTokenProvider provider) {
+        http
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .csrf(csrf -> csrf.disable())  // JWT 사용 시 CSRF 토큰 불필요
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.POST, "/users").permitAll()       // 회원가입
+                .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()  // 로그인
+                .requestMatchers(HttpMethod.POST, "/auth/reissue").permitAll()// 토큰 재발급
+                .anyRequest().authenticated()  // 나머지는 인증 필요
+            )
+            .addFilterBefore(  // UsernamePasswordAuth 필터 앞에 JWT 필터 삽입
+                new JwtAuthenticationFilter(provider),
+                UsernamePasswordAuthenticationFilter.class
+            );
+        return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:3000"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);  // 쿠키 전송 허용 (RefreshToken용)
+        config.setMaxAge(3600L);           // preflight 캐시 1시간
+        // ...
+    }
+
+    @Bean
+    public SecretKey secretKey() {
+        // JWT 서명용 HMAC-SHA256 키 생성
+        return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+    }
+}</pre>
+
+<h2>1.8 MongoDB 컬렉션 &amp; 엔티티</h2>
+<pre>// users 컬렉션
+{
+  _id: "kimbyeongha",          // userId가 PK (String)
+  password: "$2a$10$xK...",    // BCrypt 해시
+  name: "김병하",
+  jwtRefreshToken: "eyJhbG..." // 로그아웃 시 null로 설정
+}
+
+// exchange_accounts 컬렉션
+{
+  _id: ObjectId("..."),
+  userId: "kimbyeongha",
+  exchangeType: "KIS",                    // "KIS" | "UPBIT" | "BITGET"
+  apiKey: "base64(IV+AES_GCM(평문키))",   // AES-GCM 암호화
+  secretKey: "base64(IV+AES_GCM(...))",
+  appSecret: "base64(...)",               // KIS 전용
+  accountNumber: "50123456-01",           // KIS 전용, 비암호화 (URL 구성용)
+  connected: true,
+  createdAt: "2026-03-27T09:19:00",
+  updatedAt: "2026-03-27T09:19:00"
+}
+
+// user_info 컬렉션
+{ _id: "kimbyeongha", /* 추가 정보 필드 확장 가능 */ }</pre>
+
+<h2>1.9 프론트엔드 구조 &amp; Axios Interceptor</h2>
+
+<h3>페이지 구성 (10개)</h3>
+<table>
+  <tr><th>페이지</th><th>경로</th><th>인증</th><th>핵심 기능</th></tr>
+  <tr><td>LandingPage</td><td>/</td><td>X</td><td>서비스 소개, 고래 애니메이션</td></tr>
+  <tr><td>LoginPage</td><td>/login</td><td>X</td><td>로그인 + 데모계정(demo/demo123) + KOSPI/KOSDAQ 차트</td></tr>
+  <tr><td>SignUpPage</td><td>/signup</td><td>X</td><td>회원가입 (비밀번호 6자 이상, 일치 확인)</td></tr>
+  <tr><td>DashboardPage</td><td>/dashboard</td><td>O</td><td>포트폴리오 요약 + 실계좌 연동 + 기능 네비게이션</td></tr>
+  <tr><td>MarketPage</td><td>/market</td><td>O</td><td>실시간 시세 목록 + 종목 상세 차트 (10초 갱신)</td></tr>
+  <tr><td>TradePage</td><td>/trade</td><td>O</td><td>매수/매도, 시장가/지정가, 주문/체결 내역 (5초 갱신)</td></tr>
+  <tr><td>StrategyPage</td><td>/strategy</td><td>O</td><td>전략 생성 (RSI/MACD/MA/볼린저) + 백테스팅 실행/결과</td></tr>
+  <tr><td>RankingPage</td><td>/ranking</td><td>O</td><td>수익률 랭킹 (전체/일간/주간/월간) + 페이지네이션</td></tr>
+  <tr><td>MyPortfolioPage</td><td>/my-portfolio</td><td>O</td><td>내 포트폴리오 상세</td></tr>
+  <tr><td>PortfolioDetailPage</td><td>/portfolio/:id</td><td>O</td><td>다른 사용자 포트폴리오 조회</td></tr>
+</table>
+
+<h3>핵심 코드: Axios Interceptor — 자동 토큰 갱신</h3>
+<div class="code-title">frontend/src/utils/api.ts</div>
+<pre>const apiClient = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,  // 쿠키 자동 전송 (RefreshToken)
+});
+
+// Request Interceptor: 모든 요청에 JWT 토큰 자동 첨부
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('accessToken');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+// Response Interceptor: 401 → 자동 토큰 갱신 → 원래 요청 재시도
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      try {
+        // RefreshToken은 쿠키에서 자동 전송 (withCredentials: true)
+        const res = await axios.post(`${API_BASE_URL}/auth/reissue`, {},
+            { withCredentials: true });
+        const { accessToken } = res.data;
+        localStorage.setItem('accessToken', accessToken);
+        error.config.headers.Authorization = `Bearer ${accessToken}`;
+        return apiClient.request(error.config);  // 원래 요청 재시도
+      } catch {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('userId');
+        window.location.href = '/login';  // 재발급도 실패 → 로그인 페이지
+      }
+    }
+    return Promise.reject(error);
+  }
+);</pre>
+
+<div class="tip">이 패턴의 장점: 사용자는 토큰 만료를 인식하지 못한 채 자연스럽게 서비스를 이용합니다. Access Token이 만료되면 백그라운드에서 자동으로 갱신하고 원래 요청을 재시도합니다.</div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- 2. 면접 질문 -->
+<!-- ====================================================================== -->
+<div class="section">
+<h1>2. 면접 예상 질문 + 모범 답변</h1>
+
+<h2>2.A WhaleArc 프로젝트 심층 질문</h2>
+
+<div class="qa">
+  <div class="q">Q1. "프로젝트 전체 아키텍처를 설명해주세요"</div>
+  <div class="a">
+    WhaleArc는 React+TypeScript 프론트엔드와 Spring Boot 백엔드, MongoDB로 구성된 모의투자 플랫폼입니다.<br><br>
+    <strong>프론트엔드</strong>는 Vite로 빌드하고, 10개 페이지를 React Router로 라우팅합니다. Axios Interceptor를 통해 JWT 토큰 자동 첨부와 만료 시 자동 갱신을 처리합니다.<br><br>
+    <strong>백엔드</strong>는 크게 인증 모듈과 거래소 연동 모듈로 나뉩니다. 인증은 JWT 기반으로 Access Token(1시간)과 Refresh Token(7일)을 분리 운영하고, 거래소 연동은 Strategy 패턴을 적용해 KIS/업비트/비트겟 3개 거래소를 독립적으로 처리합니다. API 키는 AES-GCM으로 암호화해서 MongoDB에 저장합니다.<br><br>
+    <strong>설계 원칙</strong>으로는 계층 분리(Controller→Service→Repository), 인터페이스 기반 서비스, 생성자 주입(DI)을 적용했습니다.
+  </div>
+  <div class="follow">"왜 세션이 아니라 JWT를 선택했나요?" → Stateless 특성 덕분에 서버 확장 시 세션 공유 문제가 없고, 프론트엔드가 별도 도메인(:5173)에서 돌아가므로 쿠키 기반 세션보다 JWT가 적합했습니다.</div>
+</div>
+
+<div class="qa">
+  <div class="q">Q2. "JWT 인증 보안을 어떻게 강화했나요?"</div>
+  <div class="a">
+    6가지 보안 포인트를 적용했습니다:<br>
+    1) <strong>토큰 분리</strong>: Access Token(짧은 수명)은 Body로, Refresh Token(긴 수명)은 HttpOnly 쿠키로 전달<br>
+    2) <strong>XSS 방어</strong>: HttpOnly 플래그로 JavaScript에서 Refresh Token 접근 차단<br>
+    3) <strong>CSRF 방어</strong>: SameSite=Strict로 크로스사이트 요청 시 쿠키 미전송<br>
+    4) <strong>Replay Attack 방지</strong>: Refresh Token을 DB에 저장하고, 재발급 시 DB 값과 비교<br>
+    5) <strong>서버사이드 로그아웃</strong>: 로그아웃 시 DB의 Refresh Token을 null로 설정<br>
+    6) <strong>ID 스푸핑 방지</strong>: userId를 Request Body가 아닌 SecurityContext에서 추출
+  </div>
+  <div class="follow">"Access Token이 탈취되면 어떻게 되나요?" → 1시간 후 자동 만료됩니다. 더 강화하려면 토큰 블랙리스트(Redis)를 도입하거나, Refresh Token Rotation을 적용할 수 있습니다.</div>
+</div>
+
+<div class="qa">
+  <div class="q">Q3. "AES-GCM 암호화를 선택한 이유와 동작 원리를 설명해주세요"</div>
+  <div class="a">
+    API 키는 외부 거래소와 통신할 때 평문으로 필요하므로 단방향 해싱(BCrypt)이 아닌 양방향 암호화가 필요합니다.<br><br>
+    <strong>GCM 모드를 선택한 이유:</strong><br>
+    - CBC+HMAC 조합 대비 하나의 연산으로 <strong>기밀성(암호화) + 무결성(인증 태그)</strong>을 동시 보장<br>
+    - 128bit 인증 태그로 암호문이 변조되면 복호화 시 자동 감지 → 금융 데이터 무결성에 적합<br><br>
+    <strong>동작 원리:</strong><br>
+    1) 12바이트 랜덤 IV를 SecureRandom으로 생성 (매번 다른 IV → 같은 키도 다른 암호문)<br>
+    2) AES-GCM으로 평문 암호화 + 128bit 인증 태그 생성<br>
+    3) IV(12B) + 암호문을 결합해 Base64 인코딩 후 MongoDB에 저장<br>
+    4) 복호화 시 앞 12바이트를 IV로 분리, 나머지를 암호문으로 복호화
+  </div>
+  <div class="follow">"IV를 왜 암호문과 같이 저장하나요?" → IV는 비밀이 아닙니다. 복호화에 필요한 파라미터일 뿐이고, 공개되어도 보안에 영향 없습니다. 중요한 건 같은 IV를 재사용하지 않는 것입니다.</div>
+</div>
+
+<div class="qa">
+  <div class="q">Q4. "3개 거래소 연동에 Strategy 패턴을 적용했다고 했는데, 구체적으로 설명해주세요"</div>
+  <div class="a">
+    <strong>문제 상황:</strong> KIS는 OAuth2, Upbit은 JWT, Bitget은 HMAC 서명으로 인증 방식이 모두 다릅니다. 하나의 메서드에 if-else로 처리하면 코드가 복잡해지고, 새 거래소 추가 시 기존 코드를 수정해야 합니다.<br><br>
+    <strong>해결:</strong> ExchangeAccountService가 exchangeType을 기준으로 해당 클라이언트에 위임합니다. 각 클라이언트(KisApiClient, UpbitApiClient, BitgetApiClient)는 독립적으로 인증 로직과 API 호출을 구현합니다.<br><br>
+    <strong>장점:</strong><br>
+    - 새 거래소 추가 시 Client만 추가 → <strong>기존 코드 수정 없음 (OCP)</strong><br>
+    - 각 클라이언트가 독립적 → 업비트 API 변경이 KIS에 영향 없음<br>
+    - 클라이언트별 독립 테스트 가능
+  </div>
+  <div class="follow">"현재 switch 문으로 분기하는데, 더 개선할 수 있는 방법은?" → Map&lt;String, ExchangeApiClient&gt; 같은 Registry 패턴을 적용하면 switch 없이 exchangeType으로 클라이언트를 자동 매핑할 수 있습니다. 인터페이스를 정의하고 @Qualifier나 Map 주입을 활용하면 됩니다.</div>
+</div>
+
+<div class="qa">
+  <div class="q">Q5. "동시 주문 시 잔고 정합성 문제를 어떻게 해결했나요?"</div>
+  <div class="a">
+    <strong>문제:</strong> 동시에 여러 주문이 들어오면 잔고 검증이 병렬로 실행되어, 잔고 7000만원인데 7000만원짜리 주문 2건이 모두 통과하는 상황이 발생했습니다.<br><br>
+    <strong>원인:</strong> 두 스레드가 동시에 잔고를 읽으면 둘 다 "7000만원 충분"으로 판단합니다.<br><br>
+    <strong>해결:</strong> 사용자별 Lock을 적용했습니다. 같은 사용자의 주문은 순차적으로 처리되되, 다른 사용자의 주문에는 영향을 주지 않습니다.<br>
+    - 잔고 조회 → 검증 → 차감 → 주문 생성을 하나의 임계 영역으로 묶음<br>
+    - 잔고 검증 후에만 다음 주문이 처리되므로 정합성 보장<br><br>
+    <strong>의미:</strong> 실제 증권사 OMS에서도 주문 체결 시 잔고/증거금 정합성이 핵심입니다. 규모는 다르지만, 동시성 제어의 본질적인 문제를 직접 경험하고 해결한 것이 의미 있었습니다.
+  </div>
+  <div class="follow">"synchronized와 ReentrantLock 중 뭘 썼나요?" → 사용자별로 Lock을 분리해야 하므로 ConcurrentHashMap&lt;String, ReentrantLock&gt;을 사용했습니다. synchronized는 객체/메서드 단위라 사용자별 분리가 어렵습니다. "DB Lock은 고려 안 했나요?" → 규모가 커지면 SELECT ... FOR UPDATE 같은 비관적 Lock이나 낙관적 Lock(버전 필드)을 적용할 수 있습니다.</div>
+</div>
+
+<div class="qa">
+  <div class="q">Q6. "왜 MongoDB를 선택했나요?"</div>
+  <div class="a">
+    <strong>선택 이유:</strong><br>
+    1) <strong>스키마 유연성:</strong> 거래소별 필요한 필드가 다릅니다. KIS는 appSecret/accountNumber가 필요하지만 Upbit/Bitget은 불필요합니다. MongoDB는 이런 차이를 자연스럽게 수용합니다.<br>
+    2) <strong>도큐먼트 단위 독립성:</strong> 사용자별 포트폴리오, 거래소 계정이 독립적인 단위로 존재하므로 도큐먼트 모델에 적합합니다.<br>
+    3) <strong>빠른 프로토타이핑:</strong> 스키마 마이그레이션 없이 필드를 추가/변경할 수 있어 개발 속도가 빠릅니다.<br><br>
+    <strong>한계 인식:</strong> 실제 증권 시스템에서는 트랜잭션 정합성이 핵심이므로 RDB(Oracle, PostgreSQL)가 더 적합합니다. MongoDB 4.0부터 Multi-Document Transaction을 지원하지만, 금융 시스템의 복잡한 조인과 ACID 요구사항에는 RDB가 유리합니다.
+  </div>
+</div>
+
+<div class="qa">
+  <div class="q">Q7. "백테스팅 엔진에서 일목균형표 오류를 어떻게 발견했나요?"</div>
+  <div class="a">
+    후행스팬(Lagging Span)은 현재 종가를 26일 전에 표시하는 지표입니다. 구현 시 수식 방향이 반대로 설정되어 26일 후에 표시되고 있었습니다. 이는 코드상 에러가 아니라(양수/음수 부호 차이) 금융 지식이 없으면 발견하기 어려운 논리적 오류였습니다.<br><br>
+    <strong>발견 과정:</strong> 차트에 표시된 후행스팬이 미래 시점에 그려지는 것을 보고 "이건 선행스팬처럼 동작하고 있다"고 판단, 수식의 오프셋 부호를 수정했습니다.<br><br>
+    <strong>추가 개선:</strong> 단순 수익률만 보여주던 백테스팅 결과에 MDD(최대 낙폭)와 샤프 비율을 추가하여 리스크 관리가 가능한 시스템으로 고도화했습니다.
+  </div>
+  <div class="follow">"MDD와 샤프비율을 어떻게 계산했나요?" → MDD = (전고점 - 최저점) / 전고점. 일별 포트폴리오 가치의 고점 대비 최대 하락폭입니다. 샤프비율 = (포트폴리오 수익률 - 무위험수익률) / 수익률의 표준편차. 같은 수익률이라도 변동성이 낮을수록 샤프비율이 높아 우수한 전략입니다.</div>
+</div>
+
+<div class="qa">
+  <div class="q">Q8. "프론트엔드에서 토큰 자동 갱신은 어떻게 구현했나요?"</div>
+  <div class="a">
+    Axios의 Response Interceptor를 활용했습니다.<br><br>
+    1) API 요청이 401을 반환하면 Interceptor가 감지<br>
+    2) <code>/auth/reissue</code>를 호출 (withCredentials:true → HttpOnly 쿠키의 RefreshToken 자동 전송)<br>
+    3) 새 AccessToken을 받아 localStorage에 저장<br>
+    4) 실패했던 원래 요청을 새 토큰으로 자동 재시도<br>
+    5) 재발급도 실패하면 → 토큰 삭제 + 로그인 페이지 리다이렉트<br><br>
+    사용자는 토큰 만료를 인식하지 못한 채 자연스럽게 서비스를 이용할 수 있습니다.
+  </div>
+  <div class="follow">"동시에 여러 요청이 401을 받으면?" → 현재는 각각 reissue를 호출합니다. 개선 방법으로는 첫 번째 401에서만 reissue를 호출하고 나머지 요청은 Promise Queue에 대기시켜, 토큰 갱신 후 일괄 재시도하는 방식이 있습니다.</div>
+</div>
+
+<h2>2.B 보안/TTA 인턴 관련</h2>
+
+<div class="qa">
+  <div class="q">Q9. "Chakra Max 보안 취약점을 어떻게 발견했나요?"</div>
+  <div class="a">
+    Chakra Max는 데이터베이스 접근 제어 솔루션으로, SQL 쿼리를 모니터링하고 비인가 접근을 차단합니다.<br><br>
+    <strong>가설:</strong> "일반적인 쿼리 패턴은 차단하지만, 비정형 패턴은 어떨까?"<br><br>
+    <strong>테스트 시나리오:</strong><br>
+    1) 쿼리 내 주석 삽입: <code>SELECT/*comment*/password FROM users</code><br>
+    2) 인코딩 변형: URL 인코딩, 유니코드 변형<br>
+    3) 대소문자 혼용: <code>SeLeCt password FROM users</code><br><br>
+    <strong>발견:</strong> 특정 조건에서 <strong>접근 제어 우회 + 감사 로그 누락</strong>이라는 이중 결함 발견. 비인가자가 고객 정보에 접근하고 흔적조차 남기지 않을 수 있는 치명적 결함이었습니다.<br><br>
+    <strong>조치:</strong> 우회 시나리오 기반 결함 리포트 작성 → 벤더사 공식 패치 → 해당 업체 GS 인증 1등급 획득에 기여.
+  </div>
+</div>
+
+<div class="qa">
+  <div class="q">Q10. "TTA 인턴 경험이 개발에 어떤 영향을 미쳤나요?"</div>
+  <div class="a">
+    "공격자 관점"에서 시스템을 바라보는 습관이 생겼습니다.<br><br>
+    WhaleArc 개발 시에도:<br>
+    - JWT 필터에서 validateToken() 없이 getUserIdFromToken()을 호출하면 만료된 토큰으로 500 에러 + 스택트레이스가 노출될 수 있다는 점을 발견하고 수정<br>
+    - API 키를 DB에 평문 저장하면 DB 탈취 시 모든 사용자의 거래소 계정이 노출된다는 점을 인지하고 AES-GCM 암호화 적용<br>
+    - API 응답에서 키 값을 마스킹하여 네트워크 스니핑 방어<br><br>
+    보안은 사후 대응이 아니라 설계 단계에서 고려해야 한다는 것을 TTA에서 배웠습니다.
+  </div>
+</div>
+
+<h2>2.C 기술 기초 질문</h2>
+
+<div class="qa">
+  <div class="q">Q11. "OOP의 4가지 특성을 설명하고, 프로젝트에서 적용한 예시를 들어주세요"</div>
+  <div class="a">
+    <strong>캡슐화:</strong> 데이터와 메서드를 하나로 묶고 접근을 제한합니다. User 엔티티에서 password 필드를 <code>@Getter(AccessLevel.NONE)</code>으로 설정해 외부에서 평문 비밀번호에 직접 접근할 수 없게 했습니다.<br><br>
+    <strong>상속:</strong> 공통 기능을 부모 클래스에서 정의합니다. JwtAuthenticationFilter가 <code>OncePerRequestFilter</code>를 상속받아 요청당 한 번만 실행되는 것을 보장받습니다.<br><br>
+    <strong>다형성:</strong> 같은 인터페이스, 다른 구현. 서비스 계층이 인터페이스로 정의되어 있어 컨트롤러는 구현체를 몰라도 됩니다. 테스트 시 Mock 구현체로 교체 가능합니다.<br><br>
+    <strong>추상화:</strong> 복잡한 내부 구현을 숨기고 필요한 인터페이스만 노출합니다. <code>AESCryptoUtil.encrypt("평문")</code>만 호출하면 IV 생성, GCM 암호화, Base64 인코딩이 내부에서 자동 처리됩니다.
+  </div>
+</div>
+
+<div class="qa">
+  <div class="q">Q12. "트랜잭션의 ACID를 설명하고, OMS에서 왜 중요한지 말해주세요"</div>
+  <div class="a">
+    <strong>Atomicity(원자성):</strong> 전부 성공하거나 전부 실패. OMS에서 "잔고 차감 + 주문 생성"이 하나의 단위. 잔고는 차감했는데 주문이 실패하면 돈만 사라집니다.<br><br>
+    <strong>Consistency(일관성):</strong> 트랜잭션 전후 데이터 무결성 유지. 잔고가 마이너스가 되면 안 되고, 매수 수량과 보유 수량이 일치해야 합니다.<br><br>
+    <strong>Isolation(격리성):</strong> 동시 실행 트랜잭션이 서로 간섭 없음. 펀드A와 펀드B가 동시에 주문해도 각자의 잔고 검증이 독립적으로 이루어져야 합니다. WhaleArc에서 사용자별 Lock으로 이를 보장했습니다.<br><br>
+    <strong>Durability(지속성):</strong> 커밋된 트랜잭션은 영구 보존. 체결된 주문 정보가 서버 장애로 사라지면 안 됩니다.<br><br>
+    <strong>OMS에서의 중요성:</strong> 주문 1건의 오류가 수십억원의 손실로 이어질 수 있습니다. ACID는 금융 시스템의 신뢰성의 기반입니다.
+  </div>
+</div>
+
+<div class="qa">
+  <div class="q">Q13. "인덱스의 동작 원리와 장단점을 설명해주세요"</div>
+  <div class="a">
+    <strong>동작 원리:</strong> B-Tree(또는 B+Tree) 구조로 데이터를 정렬된 형태로 유지합니다. 루트 노드에서 리프 노드까지 탐색하면 O(log n)에 원하는 데이터를 찾을 수 있습니다.<br><br>
+    <strong>예시:</strong> MongoDB에서 userId로 exchange_accounts를 조회할 때:<br>
+    - 인덱스 없음: 모든 문서를 순차 스캔 (Collection Scan) → O(n)<br>
+    - userId 인덱스: B-Tree 탐색 → O(log n)<br>
+    - 100만 건 기준: 1,000,000번 vs ~20번 비교<br><br>
+    <strong>장점:</strong> 조회 성능 대폭 향상<br>
+    <strong>단점:</strong> 1) 쓰기 시 인덱스도 업데이트 → 쓰기 성능 저하 2) 추가 저장 공간 필요 3) 너무 많은 인덱스는 오히려 성능 저하<br><br>
+    <strong>증권 시스템 적용:</strong> 주문번호, 종목코드, 사용자ID 등 조회가 빈번한 필드에 인덱스를 설정합니다.
+  </div>
+</div>
+
+<div class="qa">
+  <div class="q">Q14. "REST API의 특징과 설계 시 주의점을 말해주세요"</div>
+  <div class="a">
+    <strong>핵심 특징:</strong><br>
+    - URL로 자원을 식별: <code>/api/exchange/accounts</code><br>
+    - HTTP 메서드로 행위 구분: GET(조회), POST(생성), PUT(수정), DELETE(삭제)<br>
+    - Stateless: 각 요청이 독립적, 서버가 클라이언트 상태를 저장하지 않음<br>
+    - 일관된 인터페이스: 예측 가능한 URL 구조<br><br>
+    <strong>WhaleArc 적용 예시:</strong><br>
+    - <code>GET /api/exchange/accounts</code> → 전체 계정 목록 조회<br>
+    - <code>GET /api/exchange/accounts/KIS</code> → 특정 거래소 계정 조회<br>
+    - <code>POST /api/exchange/accounts</code> → 계정 등록<br>
+    - <code>DELETE /api/exchange/accounts/KIS</code> → 계정 삭제<br><br>
+    <strong>설계 시 주의:</strong> URL에 동사를 넣지 않기 (X: /getAccounts, O: GET /accounts), 복수형 사용, 적절한 HTTP 상태 코드 반환 (200, 201, 400, 401, 404, 500)
+  </div>
+</div>
+
+<div class="qa">
+  <div class="q">Q15. "HashMap과 TreeMap의 차이를 설명하고, 각각 언제 사용하나요?"</div>
+  <div class="a">
+    <strong>HashMap:</strong> 해시 테이블 기반. 순서 없음. 평균 O(1) 조회/삽입. 해시 충돌 시 최악 O(n).<br>
+    <strong>TreeMap:</strong> Red-Black Tree 기반. 키 기준 정렬. O(log n) 조회/삽입.<br><br>
+    <strong>증권 시스템 활용:</strong><br>
+    - HashMap: 종목코드 → 시세 매핑 (빠른 조회가 핵심)<br>
+    - TreeMap: 호가창 구현 (매수 호가는 높은 가격순, 매도 호가는 낮은 가격순 정렬 필요)<br><br>
+    WhaleArc의 UpbitApiClient에서 <code>Map&lt;String, Double&gt; prices</code>에 HashMap을 사용한 이유는 코인별 현재가를 빠르게 조회하기 위해서입니다. 정렬이 필요 없는 단순 매핑이므로 O(1)인 HashMap이 적합합니다.
+  </div>
+</div>
+
+<div class="qa">
+  <div class="q">Q16. "JVM 메모리 구조를 설명해주세요"</div>
+  <div class="a">
+    <strong>Heap:</strong> 객체 인스턴스가 저장되는 영역. GC의 대상. Young Generation(Eden+Survivor)과 Old Generation으로 나뉨.<br>
+    <strong>Stack:</strong> 스레드마다 별도. 지역 변수, 메서드 호출 정보(프레임) 저장. LIFO 구조.<br>
+    <strong>Method Area:</strong> 클래스 메타데이터, static 변수, 상수 풀 저장.<br>
+    <strong>PC Register:</strong> 현재 실행 중인 명령어 주소.<br><br>
+    <strong>GC 과정:</strong><br>
+    1) 새 객체 → Eden 영역에 생성<br>
+    2) Eden이 차면 Minor GC → 살아있는 객체는 Survivor로 이동<br>
+    3) 오래 살아남은 객체 → Old Generation으로 이동 (Promotion)<br>
+    4) Old가 차면 Major GC (Full GC) → Stop-the-World 발생<br><br>
+    <strong>증권 시스템 연관:</strong> 실시간 주문 처리에서 Full GC로 인한 Stop-the-World는 치명적입니다. 따라서 GC 튜닝(G1GC, ZGC 등)이 중요합니다.
+  </div>
+</div>
+
+<div class="qa">
+  <div class="q">Q17. "synchronized와 ReentrantLock의 차이를 설명해주세요"</div>
+  <div class="a">
+    <strong>synchronized:</strong><br>
+    - Java 키워드 (메서드/블록 단위)<br>
+    - 자동으로 Lock 획득/해제<br>
+    - 공정성(fairness) 설정 불가<br>
+    - tryLock, timeout 불가<br><br>
+    <strong>ReentrantLock:</strong><br>
+    - java.util.concurrent 클래스<br>
+    - 명시적 lock()/unlock() 호출 (try-finally 필수)<br>
+    - 공정성 설정 가능 (new ReentrantLock(true))<br>
+    - tryLock(timeout) 가능 → 데드락 방지<br>
+    - Condition으로 세밀한 스레드 제어<br><br>
+    <strong>WhaleArc에서:</strong> 사용자별 Lock 분리가 필요하므로 <code>ConcurrentHashMap&lt;String, ReentrantLock&gt;</code>을 사용. synchronized는 객체 단위라 사용자별 분리가 어렵습니다.
+  </div>
+</div>
+
+<div class="qa">
+  <div class="q">Q18. "Spring의 의존성 주입(DI)이란 무엇이고, 왜 사용하나요?"</div>
+  <div class="a">
+    <strong>정의:</strong> 객체가 필요한 의존성을 직접 생성하지 않고, 외부(Spring Container)에서 주입받는 것.<br><br>
+    <strong>WhaleArc 예시:</strong><br>
+    ExchangeAccountService는 AESCryptoUtil, KisApiClient 등이 필요합니다.<br>
+    - DI 없이: <code>new AESCryptoUtil(key)</code>를 직접 생성 → 결합도 높음, 테스트 시 Mock 교체 불가<br>
+    - DI 적용: <code>@RequiredArgsConstructor</code>로 생성자 주입 → Spring이 Bean을 자동 주입<br><br>
+    <strong>주입 방식:</strong><br>
+    - 생성자 주입 (권장): 불변성 보장, 순환 의존성 컴파일 타임 감지<br>
+    - 필드 주입 (@Autowired): 간결하지만 테스트 어려움<br>
+    - Setter 주입: 선택적 의존성에 사용<br><br>
+    <strong>장점:</strong> 결합도 낮춤, 테스트 용이, 코드 재사용성 향상
+  </div>
+</div>
+
+<div class="qa">
+  <div class="q">Q19. "HTTP와 WebSocket의 차이를 설명해주세요"</div>
+  <div class="a">
+    <strong>HTTP:</strong> 요청-응답 모델. 클라이언트가 요청하면 서버가 응답. 단방향. 매 요청마다 연결 수립/해제 (혹은 Keep-Alive).<br><br>
+    <strong>WebSocket:</strong> 양방향 실시간 통신. 한번 연결(Handshake) 후 지속적인 데이터 교환. 서버가 클라이언트에 능동적으로 데이터 전송 가능.<br><br>
+    <strong>WhaleArc 적용:</strong><br>
+    - 현재: HTTP Polling (5~10초마다 시세 조회) → 불필요한 요청 다수 발생<br>
+    - 향후: WebSocket으로 전환 → 시세 변경 시에만 서버가 Push → 트래픽 절감 + 실시간성 향상<br><br>
+    <strong>증권 시스템:</strong> 실시간 시세 피드, 체결 통보에는 WebSocket(또는 FIX/TCP 스트림)이 필수입니다.
+  </div>
+</div>
+
+<div class="qa">
+  <div class="q">Q20. "SQL Injection이란 무엇이고 어떻게 방어하나요?"</div>
+  <div class="a">
+    <strong>정의:</strong> 사용자 입력에 SQL 구문을 삽입하여 DB를 비정상적으로 조작하는 공격.<br>
+    예: <code>' OR 1=1 --</code>를 로그인 폼에 입력하면 모든 사용자로 로그인 가능.<br><br>
+    <strong>방어 방법:</strong><br>
+    1) <strong>Prepared Statement (파라미터 바인딩):</strong> 가장 기본적이고 효과적. 입력값이 SQL 구문으로 해석되지 않음<br>
+    2) <strong>ORM 사용:</strong> Spring Data MongoDB/JPA가 쿼리를 자동 생성 → SQL Injection 원천 차단<br>
+    3) <strong>입력 검증:</strong> 화이트리스트 기반으로 허용된 문자만 통과<br>
+    4) <strong>최소 권한 원칙:</strong> DB 계정에 필요한 최소한의 권한만 부여<br><br>
+    <strong>TTA 경험:</strong> Chakra Max 보안 검사에서 주석/인코딩 변형으로 SQL 차단을 우회한 경험이 있어, 단순 패턴 매칭이 아닌 구조적 방어(Prepared Statement)가 필수라는 것을 체감했습니다.
+  </div>
+</div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- 3. CS 기초 -->
+<!-- ====================================================================== -->
+<div class="section">
+<h1>3. CS 기초 상세 정리</h1>
+
+<h2>3.1 자료구조</h2>
+<table>
+  <tr><th>자료구조</th><th>특징</th><th>시간복잡도</th><th>Java 클래스</th><th>증권 시스템 활용</th></tr>
+  <tr><td><strong>Array</strong></td><td>연속 메모리, 인덱스 접근</td><td>조회 O(1), 삽입/삭제 O(n)</td><td>int[], ArrayList</td><td>시세 데이터 시계열</td></tr>
+  <tr><td><strong>LinkedList</strong></td><td>포인터 연결, 삽입/삭제 빠름</td><td>조회 O(n), 삽입/삭제 O(1)</td><td>LinkedList</td><td>주문 큐의 중간 삭제(취소)</td></tr>
+  <tr><td><strong>Stack</strong></td><td>LIFO (후입선출)</td><td>push/pop O(1)</td><td>Deque(ArrayDeque)</td><td>Undo 기능, 수식 파싱</td></tr>
+  <tr><td><strong>Queue</strong></td><td>FIFO (선입선출)</td><td>enqueue/dequeue O(1)</td><td>LinkedList, ArrayDeque</td><td><span class="highlight">주문 대기열 (OMS 핵심)</span></td></tr>
+  <tr><td><strong>HashMap</strong></td><td>Key-Value, 해시 기반</td><td>평균 O(1), 최악 O(n)</td><td>HashMap</td><td>종목코드→시세 매핑</td></tr>
+  <tr><td><strong>TreeMap</strong></td><td>Key 정렬, Red-Black Tree</td><td>O(log n)</td><td>TreeMap</td><td>호가창 (가격순 정렬)</td></tr>
+  <tr><td><strong>PriorityQueue</strong></td><td>우선순위 힙</td><td>삽입/삭제 O(log n)</td><td>PriorityQueue</td><td><span class="highlight">주문 체결 우선순위</span></td></tr>
+  <tr><td><strong>HashSet</strong></td><td>중복 없는 집합</td><td>평균 O(1)</td><td>HashSet</td><td>관심 종목 목록</td></tr>
+  <tr><td><strong>ConcurrentHashMap</strong></td><td>Thread-safe Map</td><td>평균 O(1)</td><td>ConcurrentHashMap</td><td>사용자별 Lock 관리</td></tr>
+</table>
+
+<h2>3.2 알고리즘 기초</h2>
+<table>
+  <tr><th>알고리즘</th><th>핵심 개념</th><th>시간복잡도</th><th>활용 예시</th></tr>
+  <tr><td><strong>이진탐색</strong></td><td>정렬된 배열에서 반씩 줄여 탐색</td><td>O(log n)</td><td>정렬된 호가에서 특정 가격대 찾기</td></tr>
+  <tr><td><strong>DFS</strong></td><td>깊이 우선 그래프 탐색 (Stack/재귀)</td><td>O(V+E)</td><td>의존관계 탐색</td></tr>
+  <tr><td><strong>BFS</strong></td><td>너비 우선 그래프 탐색 (Queue)</td><td>O(V+E)</td><td>최단 경로, 레벨별 탐색</td></tr>
+  <tr><td><strong>QuickSort</strong></td><td>피봇 기준 분할 정복</td><td>평균 O(n log n)</td><td>종목 정렬 (시가총액순 등)</td></tr>
+  <tr><td><strong>MergeSort</strong></td><td>분할 후 병합 (안정 정렬)</td><td>O(n log n)</td><td>동일 가격 주문의 시간순 보장</td></tr>
+  <tr><td><strong>DP</strong></td><td>부분 문제 결과 저장 (메모이제이션)</td><td>문제별 상이</td><td>포트폴리오 최적화</td></tr>
+</table>
+
+<h2>3.3 DB 핵심</h2>
+
+<h3>트랜잭션 격리 수준</h3>
+<table>
+  <tr><th>격리 수준</th><th>Dirty Read</th><th>Non-Repeatable Read</th><th>Phantom Read</th><th>특징</th></tr>
+  <tr><td>READ UNCOMMITTED</td><td>O</td><td>O</td><td>O</td><td>가장 낮은 격리, 성능 최고</td></tr>
+  <tr><td>READ COMMITTED</td><td>X</td><td>O</td><td>O</td><td>Oracle 기본값</td></tr>
+  <tr><td>REPEATABLE READ</td><td>X</td><td>X</td><td>O</td><td>MySQL InnoDB 기본값</td></tr>
+  <tr><td>SERIALIZABLE</td><td>X</td><td>X</td><td>X</td><td>완전 격리, 성능 최저</td></tr>
+</table>
+<div class="tip">증권 시스템에서는 REPEATABLE READ 이상을 주로 사용합니다. 잔고 조회 후 주문 처리 중에 다른 트랜잭션이 잔고를 변경하면 안 되기 때문입니다.</div>
+
+<h3>Lock 종류</h3>
+<table>
+  <tr><th>Lock</th><th>설명</th><th>활용</th></tr>
+  <tr><td><strong>Shared Lock (S)</strong></td><td>읽기 Lock. 여러 트랜잭션 동시 읽기 가능</td><td>잔고 조회</td></tr>
+  <tr><td><strong>Exclusive Lock (X)</strong></td><td>쓰기 Lock. 한 트랜잭션만 접근</td><td>잔고 차감</td></tr>
+  <tr><td><strong>비관적 Lock</strong></td><td>SELECT ... FOR UPDATE. 충돌을 가정하고 미리 Lock</td><td>주문 체결 시 잔고</td></tr>
+  <tr><td><strong>낙관적 Lock</strong></td><td>version 컬럼. 수정 시 version 비교</td><td>충돌 드문 경우</td></tr>
+</table>
+
+<h3>SQL 핵심 (SQLD 복습)</h3>
+<table>
+  <tr><th>주제</th><th>핵심 내용</th></tr>
+  <tr><td><strong>JOIN</strong></td><td>INNER (교집합), LEFT (왼쪽 기준), RIGHT (오른쪽 기준), FULL OUTER (합집합), CROSS (카르테시안곱)</td></tr>
+  <tr><td><strong>서브쿼리</strong></td><td>스칼라(SELECT절), 인라인뷰(FROM절), 중첩(WHERE절). EXISTS vs IN 차이</td></tr>
+  <tr><td><strong>정규화</strong></td><td>1NF(원자값), 2NF(부분 함수 종속 제거), 3NF(이행적 함수 종속 제거)</td></tr>
+  <tr><td><strong>인덱스</strong></td><td>B-Tree(범위검색), Hash(동등검색), 복합인덱스(컬럼 순서 중요)</td></tr>
+  <tr><td><strong>실행계획</strong></td><td>EXPLAIN으로 확인. Full Table Scan vs Index Scan. 옵티마이저 판단</td></tr>
+  <tr><td><strong>윈도우 함수</strong></td><td>ROW_NUMBER(), RANK(), LAG(), LEAD(), SUM() OVER()</td></tr>
+</table>
+
+<h2>3.4 Java 핵심</h2>
+<table>
+  <tr><th>주제</th><th>설명</th><th>면접 포인트</th></tr>
+  <tr><td><strong>JVM 메모리</strong></td><td>Heap(객체) / Stack(지역변수) / Method Area(클래스)</td><td>각 영역의 역할과 GC 관계</td></tr>
+  <tr><td><strong>GC</strong></td><td>Young(Eden+Survivor) → Old. Minor GC / Major GC</td><td>Stop-the-World 최소화가 핵심</td></tr>
+  <tr><td><strong>Collection</strong></td><td>List(순서O), Set(중복X), Map(K-V), Queue(FIFO)</td><td>구현체별 시간복잡도 차이</td></tr>
+  <tr><td><strong>Stream API</strong></td><td>filter, map, collect로 함수형 처리</td><td>for문 대비 가독성, 병렬 처리(parallelStream)</td></tr>
+  <tr><td><strong>Optional</strong></td><td>null 안전 처리. orElse, orElseThrow, map</td><td>NPE 방지의 Java 표준 방법</td></tr>
+  <tr><td><strong>제네릭</strong></td><td>타입 파라미터로 컴파일 타임 안전성</td><td>MongoRepository&lt;User, String&gt;</td></tr>
+  <tr><td><strong>예외 처리</strong></td><td>Checked(컴파일) vs Unchecked(런타임)</td><td>@RestControllerAdvice 활용</td></tr>
+  <tr><td><strong>Spring DI</strong></td><td>생성자 주입(권장), 필드 주입, Setter 주입</td><td>@RequiredArgsConstructor</td></tr>
+  <tr><td><strong>Spring AOP</strong></td><td>횡단 관심사 분리 (로깅, 트랜잭션)</td><td>@Transactional의 프록시 동작</td></tr>
+  <tr><td><strong>Spring Bean 스코프</strong></td><td>singleton(기본), prototype, request, session</td><td>대부분 singleton, 상태 없는 설계</td></tr>
+</table>
+
+<h2>3.5 네트워크 기초</h2>
+<table>
+  <tr><th>주제</th><th>설명</th><th>증권 시스템 연관</th></tr>
+  <tr><td><strong>HTTP/1.1 vs 2.0</strong></td><td>1.1: 순차 요청. 2.0: 멀티플렉싱, 헤더 압축</td><td>API 서버 성능</td></tr>
+  <tr><td><strong>HTTPS</strong></td><td>TLS 암호화. 공개키로 대칭키 교환</td><td>API 키 전송 보안</td></tr>
+  <tr><td><strong>WebSocket</strong></td><td>양방향, 지속 연결. 실시간 통신</td><td>실시간 시세, 체결 통보</td></tr>
+  <tr><td><strong>TCP vs UDP</strong></td><td>TCP: 신뢰성, 순서 보장. UDP: 빠름, 비순서</td><td>FIX는 TCP 기반 (신뢰성 필수)</td></tr>
+  <tr><td><strong>CORS</strong></td><td>브라우저의 동일 출처 정책. 다른 도메인 요청 제한</td><td>프론트(:5173)→백엔드(:8080)</td></tr>
+  <tr><td><strong>쿠키 vs 세션 vs JWT</strong></td><td>쿠키: 클라이언트 저장. 세션: 서버 저장. JWT: 토큰에 정보 포함</td><td>WhaleArc: JWT 선택 이유</td></tr>
+</table>
+</div>
+
+<!-- ====================================================================== -->
+<!-- 4. 증권 시스템 도메인 -->
+<!-- ====================================================================== -->
+<div class="section">
+<h1>4. 증권 시스템 도메인 지식</h1>
+
+<h2>4.1 OMS 주문 라이프사이클</h2>
+<div class="flow">운용지시 → 주문생성 → 사전컴플라이언스 → 주문전송 → 체결 → 사후컴플라이언스 → 정산/결제
+  |           |            |                   |          |           |                   |
+  펀드매니저   OMS가         한도/비중/규정       FIX/API로   거래소에서    규정 위반          T+2일
+  지시 입력   주문 변환      위반 여부 체크       브로커 전송  매칭 통보    재확인             실제 이동</div>
+
+<table>
+  <tr><th>단계</th><th>설명</th><th>WhaleArc 대응</th><th>미래에셋 OMS 실제</th></tr>
+  <tr><td><strong>운용지시</strong></td><td>펀드매니저가 매수/매도 지시</td><td>사용자 주문 입력</td><td>운용역 화면에서 지시 생성</td></tr>
+  <tr><td><strong>주문생성</strong></td><td>지시를 실행 가능한 주문으로 변환</td><td>createOrder API</td><td>분할 주문, 바스켓 주문 등</td></tr>
+  <tr><td><strong>사전 컴플라이언스</strong></td><td>투자 한도, 비중 규정 체크</td><td>잔고 검증</td><td>투자비중/한도/금지종목 체크</td></tr>
+  <tr><td><strong>주문전송</strong></td><td>거래소/브로커에 전송</td><td>KIS/Upbit API 호출</td><td>FIX 프로토콜 전송</td></tr>
+  <tr><td><strong>체결</strong></td><td>거래소에서 주문 매칭</td><td>체결 결과 저장</td><td>체결 통보 수신, 부분 체결 처리</td></tr>
+  <tr><td><strong>사후 컴플라이언스</strong></td><td>체결 후 규정 재확인</td><td>-</td><td>사후 비중 검증</td></tr>
+  <tr><td><strong>정산/결제</strong></td><td>T+2일 자금/증권 이동</td><td>-</td><td>예탁결제원(CCF) 연동</td></tr>
+</table>
+
+<h2>4.2 FIX 프로토콜 상세</h2>
+
+<table>
+  <tr><th>항목</th><th>설명</th></tr>
+  <tr><td>정의</td><td>Financial Information eXchange. 증권업계 국제 표준 전자거래 프로토콜</td></tr>
+  <tr><td>형식</td><td>태그=값 | 구분자. 예: <code>8=FIX.4.4|35=D|49=SENDER|56=TARGET|55=005930|54=1|38=1000|</code></td></tr>
+  <tr><td>전송</td><td>TCP 기반 양방향 스트림 (HTTP 요청-응답과 다름)</td></tr>
+  <tr><td>세션 관리</td><td>Logon → Heartbeat(주기적) → Logout</td></tr>
+</table>
+
+<h3>주요 FIX 메시지 타입 (Tag 35)</h3>
+<table>
+  <tr><th>Tag 35 값</th><th>메시지 타입</th><th>용도</th></tr>
+  <tr><td>A</td><td>Logon</td><td>세션 연결</td></tr>
+  <tr><td>D</td><td>New Order - Single</td><td>신규 주문</td></tr>
+  <tr><td>F</td><td>Order Cancel Request</td><td>주문 취소 요청</td></tr>
+  <tr><td>G</td><td>Order Cancel/Replace</td><td>주문 정정 요청</td></tr>
+  <tr><td>8</td><td>Execution Report</td><td>체결 보고 (가장 중요)</td></tr>
+  <tr><td>0</td><td>Heartbeat</td><td>연결 유지 확인</td></tr>
+  <tr><td>5</td><td>Logout</td><td>세션 종료</td></tr>
+</table>
+
+<div class="tip"><strong>WhaleArc vs 실제 OMS:</strong> WhaleArc는 HTTP REST로 거래소 API를 호출하지만, 미래에셋 OMS는 FIX(TCP 기반)로 국내외 브로커와 통신합니다. REST는 요청-응답 모델이고, FIX는 양방향 스트림이라 실시간 체결 통보 수신에 적합합니다.</div>
+
+<h2>4.3 동시성/정합성 — WhaleArc 실제 사례</h2>
+
+<div class="flow">[문제 상황]
+  Thread A: 잔고 조회 → 7000만원 → "충분" → 매수 주문 실행
+  Thread B: 잔고 조회 → 7000만원 → "충분" → 매수 주문 실행  (동시!)
+  결과: 잔고 -7000만원 (정합성 깨짐)
+
+[해결: 사용자별 Lock]
+  Thread A: Lock 획득 → 잔고 조회(7000만원) → 검증 → 차감(0원) → 주문 생성 → Lock 해제
+  Thread B: Lock 대기 →                     Lock 획득 → 잔고 조회(0원) → "부족" → 거부
+
+[설계 포인트]
+  - ConcurrentHashMap&lt;userId, ReentrantLock&gt; 으로 사용자별 Lock 분리
+  - 다른 사용자의 주문에는 영향 없음 (Lock이 독립적)
+  - 잔고 조회 → 검증 → 차감 → 주문 생성을 하나의 임계 영역으로 묶음</div>
+
+<h3>실제 증권 OMS에서의 동시성 처리</h3>
+<table>
+  <tr><th>레벨</th><th>방법</th><th>설명</th></tr>
+  <tr><td>Application</td><td>ConcurrentHashMap + Lock</td><td>WhaleArc 방식. 인메모리, 단일 서버</td></tr>
+  <tr><td>Database</td><td>SELECT ... FOR UPDATE</td><td>비관적 Lock. 행 단위 잠금</td></tr>
+  <tr><td>Database</td><td>Optimistic Lock (version)</td><td>낙관적 Lock. 충돌 시 재시도</td></tr>
+  <tr><td>Distributed</td><td>Redis 분산 Lock</td><td>다중 서버 환경. Redisson 등</td></tr>
+  <tr><td>Message Queue</td><td>Kafka 파티션 순서 보장</td><td>주문을 Queue에 넣고 순차 처리</td></tr>
+</table>
+
+<h2>4.4 다자산 주문 처리</h2>
+<table>
+  <tr><th>자산</th><th>거래소/시장</th><th>결제</th><th>거래 시간</th><th>특징</th><th>WhaleArc 연동</th></tr>
+  <tr><td><strong>국내주식</strong></td><td>KRX</td><td>T+2</td><td>09:00~15:30</td><td>호가 단위, 가격제한폭</td><td>KIS API</td></tr>
+  <tr><td><strong>해외주식</strong></td><td>NYSE, NASDAQ</td><td>T+1~T+2</td><td>시차 고려</td><td>환율 리스크</td><td>-</td></tr>
+  <tr><td><strong>채권</strong></td><td>장외(OTC)</td><td>T+1~T+2</td><td>장외 협의</td><td>수익률 기반 가격</td><td>-</td></tr>
+  <tr><td><strong>파생상품</strong></td><td>KRX, CME</td><td>당일~T+1</td><td>정규+야간</td><td>증거금 관리 필수</td><td>-</td></tr>
+  <tr><td><strong>디지털자산</strong></td><td>업비트, 비트겟</td><td>즉시</td><td>24/7/365</td><td>변동성 극심</td><td>Upbit/Bitget API</td></tr>
+</table>
+
+<h2>4.5 핵심 금융 용어 사전</h2>
+<table>
+  <tr><th>용어</th><th>설명</th><th>연관 맥락</th></tr>
+  <tr><td><strong>호가(Order Book)</strong></td><td>매수/매도 주문이 가격별로 쌓인 것</td><td>매수 호가: 높은 가격 우선, 매도 호가: 낮은 가격 우선</td></tr>
+  <tr><td><strong>시장가/지정가</strong></td><td>시장가: 현재 가격에 즉시 체결. 지정가: 원하는 가격에 대기</td><td>WhaleArc TradePage에서 선택 가능</td></tr>
+  <tr><td><strong>증거금</strong></td><td>파생상품 거래 시 담보금</td><td>미래에셋 OMS 핵심 관리 대상</td></tr>
+  <tr><td><strong>MDD</strong></td><td>Maximum Drawdown. (전고점-최저점)/전고점</td><td>WhaleArc 백테스팅 결과에 포함</td></tr>
+  <tr><td><strong>샤프비율</strong></td><td>(수익률-무위험수익률)/변동성. 위험 대비 수익</td><td>WhaleArc 백테스팅 결과에 포함</td></tr>
+  <tr><td><strong>백테스팅</strong></td><td>과거 데이터로 전략 성과 검증</td><td>WhaleArc StrategyPage 핵심 기능</td></tr>
+  <tr><td><strong>리밸런싱</strong></td><td>포트폴리오 비중 재조정</td><td>운용역 업무</td></tr>
+  <tr><td><strong>T+N 결제</strong></td><td>거래일 + N 영업일 후 실제 결제</td><td>국내주식 T+2</td></tr>
+  <tr><td><strong>CCF</strong></td><td>한국예탁결제원 결제시스템</td><td>미래에셋 JD에 명시된 연동 대상</td></tr>
+  <tr><td><strong>FIX</strong></td><td>Financial Information eXchange 프로토콜</td><td>미래에셋 JD 핵심 기술</td></tr>
+  <tr><td><strong>NAV</strong></td><td>Net Asset Value. 펀드 순자산가치</td><td>펀드 운용 성과 측정</td></tr>
+  <tr><td><strong>AUM</strong></td><td>Assets Under Management. 운용 자산 규모</td><td>미래에셋 글로벌 AUM</td></tr>
+  <tr><td><strong>알파/베타</strong></td><td>알파: 시장 대비 초과 수익. 베타: 시장 민감도</td><td>퀀트 전략 평가</td></tr>
+  <tr><td><strong>RSI</strong></td><td>Relative Strength Index. 과매수/과매도 판단 (0~100)</td><td>WhaleArc 기술지표</td></tr>
+  <tr><td><strong>MACD</strong></td><td>이동평균 수렴/확산. 추세 전환 신호</td><td>WhaleArc 기술지표</td></tr>
+  <tr><td><strong>볼린저밴드</strong></td><td>이동평균 ± 2표준편차. 변동성 시각화</td><td>WhaleArc 기술지표</td></tr>
+  <tr><td><strong>일목균형표</strong></td><td>전환선/기준선/선행스팬/후행스팬. 일본 발 종합 지표</td><td>WhaleArc 후행스팬 버그 수정 경험</td></tr>
+  <tr><td><strong>슬리피지</strong></td><td>주문 가격과 실제 체결 가격의 차이</td><td>시장가 주문 시 발생</td></tr>
+  <tr><td><strong>레이턴시</strong></td><td>주문 전송~체결 사이 지연 시간</td><td>HFT에서 마이크로초 단위 경쟁</td></tr>
+</table>
+</div>
+
+<!-- ====================================================================== -->
+<!-- 5. 자소서 포인트 -->
+<!-- ====================================================================== -->
+<div class="section">
+<h1>5. 미래에셋자산운용 자소서 포인트</h1>
+
+<h2>JD &harr; 내 경험 매칭표</h2>
+<table>
+  <tr><th style="width:28%">미래에셋 JD</th><th style="width:30%">내 경험</th><th>어필 포인트</th></tr>
+  <tr><td>펀드 운용 및 주문관리시스템 설계/개발</td><td>WhaleArc 모의투자 주문 시스템</td><td>주문생성→체결→잔고반영 전 과정 직접 구현. 동시 주문 정합성 문제 해결 경험</td></tr>
+  <tr><td>운용 시뮬레이션, 포트폴리오 관리</td><td>백테스팅 엔진 (RSI/MACD/볼린저/일목균형표)</td><td>MDD, 샤프비율 도입. 일목균형표 후행스팬 논리 오류를 금융 지식으로 발견</td></tr>
+  <tr><td>다자산 주문/체결 처리</td><td>주식(KIS) + 암호화폐(업비트/비트겟)</td><td>3개 거래소, 3가지 인증 방식(OAuth2/JWT/HMAC)을 Strategy 패턴으로 구현</td></tr>
+  <tr><td>대외 시스템 연동 (FIX, 거래소, 예탁기관)</td><td>KIS REST, 업비트 REST/JWT, 비트겟 HMAC</td><td>WhaleArc는 REST 연동이지만, FIX의 TCP 양방향 스트림 개념도 학습</td></tr>
+  <tr><td>동시성 제어, 데이터 정합성</td><td>사용자별 ReentrantLock, 잔고 마이너스 방지</td><td>실제 OMS와 동일한 본질의 문제를 직접 경험하고 해결</td></tr>
+  <tr><td>운용 컴플라이언스 로직</td><td>잔고 검증 (사전 컴플라이언스의 축소판)</td><td>규정 체크의 자동화 경험. 한도 검증 로직 이해</td></tr>
+  <tr><td>보안/안정성</td><td>TTA 인턴 (Chakra Max 이중 결함 발견)</td><td>공격자 관점 보안 검증 + AES-GCM 암호화 + JWT 보안 설계</td></tr>
+  <tr><td>금융 도메인 이해</td><td>투자자산운용사 + 금융투자분석사 + SQLD</td><td>개발 + 금융 양쪽 언어를 번역할 수 있는 인재</td></tr>
+  <tr><td>생성형 AI 활용 (우대)</td><td>Claude Code로 WhaleArc 개발</td><td>AI를 개발 도구로 활용해 생산성 극대화</td></tr>
+  <tr><td>영어 커뮤니케이션 (우대)</td><td>OPIc IM1</td><td>글로벌 시장 확장 대응 가능</td></tr>
+</table>
+
+<h2>자소서 핵심 키워드 3가지</h2>
+<div style="text-align:center; margin: 16px 0;">
+  <div class="keyword-box">1. 금융을 아는 개발자<br><span style="font-size:9px; font-weight:normal; color:#666;">금융투자분석사/운용사 + 일목균형표 오류 발견 + OMS 도메인 이해</span></div>
+  <div class="keyword-box">2. 보안에 집착하는 개발자<br><span style="font-size:9px; font-weight:normal; color:#666;">TTA 이중 결함 발견 + AES-GCM + JWT 6중 보안 + 에러 노출 방지</span></div>
+  <div class="keyword-box">3. 만들고 운영까지 하는 개발자<br><span style="font-size:9px; font-weight:normal; color:#666;">WhaleArc 기획→개발→배포→운영 + API 에러/병목 해결 + 사용자별 Lock</span></div>
+</div>
+
+<h2>면접에서 반드시 어필할 차별화 포인트</h2>
+
+<h3>1. "금융 지식으로 코드 버그를 잡았다"</h3>
+<p>일목균형표 후행스팬 방향 오류 → 코드상 에러가 아닌 논리적 오류 → 금융 지식이 없으면 발견 불가능. 미래에셋에서도 "현업의 요구사항을 수동적으로 구현하는 것이 아니라, 비즈니스 결함을 선제적으로 발견"할 수 있습니다.</p>
+
+<h3>2. "실제 증권 시스템과 같은 성격의 문제를 경험했다"</h3>
+<p>동시 주문 잔고 정합성 문제 → Lock으로 해결. 규모는 다르지만 본질은 동일합니다. 실제 OMS에서 DB Lock, 분산 Lock으로 확장하는 방법도 이해하고 있습니다.</p>
+
+<h3>3. "보안을 설계 단계에서 고려한다"</h3>
+<p>TTA에서 "뚫는 경험" → WhaleArc에서 "막는 설계". JWT 6중 보안 (XSS/CSRF/Replay/로그아웃/스푸핑/에러노출 방어), AES-GCM 암호화, API 키 마스킹까지 적용.</p>
+
+<hr>
+<p style="text-align:center; color:#999; font-size:9px; margin-top:24px;">
+  WhaleArc Interview Preparation Guide | 김병하 | 단국대학교 모바일시스템공학과<br>
+  whale-arc.com | 2026년 상반기 증권사 IT 채용 대비<br><br>
+  이 자료는 WhaleArc 프로젝트 코드 분석을 기반으로 작성되었습니다.
+</p>
+</div>
+
+</body>
+</html>

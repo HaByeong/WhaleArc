@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import Header from '../components/Header';
-import SplashLoading from '../components/SplashLoading';
-import VirtSplashLoading from '../components/VirtSplashLoading';
+import HelmShell from '../components/HelmShell';
 import Toast, { type ToastItem } from '../components/Toast';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { strategyService, type Strategy } from '../services/strategyService';
 import { PRESET_STRATEGIES } from '../data/presetStrategies';
 import {
@@ -44,6 +43,8 @@ const STATUS_META: Record<DeploymentStatus, { label: string; dark: string; light
 const AutoTradePage = () => {
   const { isVirt } = useRoutePrefix();
   const { isDark } = useTheme();
+  const { session } = useAuth();
+  const userName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
 
   const [pageLoading, setPageLoading] = useState(true);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
@@ -209,22 +210,24 @@ const AutoTradePage = () => {
     }
   };
 
-  if (pageLoading && isDark) return <SplashLoading message="자동매매 정보를 불러오는 중..." />;
-  if (pageLoading && isVirt) return <VirtSplashLoading message="자동매매 정보를 불러오는 중..." />;
-  if (pageLoading) return <SplashLoading message="자동매매 정보를 불러오는 중..." />;
-
   const card = isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-white border-gray-200';
   const subText = isDark ? 'text-slate-400' : 'text-gray-500';
   const primaryBtn = isDark
     ? 'bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/30'
     : 'bg-whale-light text-white hover:bg-blue-600';
 
-  return (
-    <div className={`min-h-screen ${isDark ? 'bg-[var(--wa-page-bg)] text-white' : 'bg-gray-50'}`}>
-      <Toast toasts={toasts} onDismiss={dismissToast} />
-      <Header showNav={true} />
+  if (pageLoading) {
+    return (
+      <HelmShell active="autotrade" virt={isVirt} userName={userName} session="모의 자동매매">
+        <div className={`py-24 text-center text-sm ${subText}`}>자동매매 정보를 불러오는 중...</div>
+      </HelmShell>
+    );
+  }
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  return (
+    <HelmShell active="autotrade" virt={isVirt} userName={userName} session="모의 자동매매">
+      <Toast toasts={toasts} onDismiss={dismissToast} />
+      <div className="mx-auto max-w-6xl">
         {/* 헤더 */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
@@ -482,7 +485,7 @@ const AutoTradePage = () => {
           </div>
         </div>
       )}
-    </div>
+    </HelmShell>
   );
 };
 

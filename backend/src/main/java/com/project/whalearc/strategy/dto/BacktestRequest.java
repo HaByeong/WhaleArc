@@ -13,6 +13,7 @@ import java.util.List;
 @NoArgsConstructor
 public class BacktestRequest {
     private String strategyId;          // 항로 백테스트 모드: 기존 전략 ID
+    private String strategyName;        // 표시용 전략명(프리셋/직접조건 실행 시 — 저장 히스토리에 올바른 이름 보관)
     private String stockCode;
     private String stockName;           // 종목명 (프론트에서 전달, 결과 표시용)
     private String startDate;           // yyyy-MM-dd

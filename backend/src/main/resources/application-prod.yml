@@ -39,3 +39,7 @@ jwt:
 # 실계좌 연동 암호화 키 (필수)
 virt:
   encryption-key: ${VIRT_ENCRYPTION_KEY}
+
+# 거래소 실계좌 자격증명 암호화 키 (필수)
+exchange:
+  encryption-key: ${EXCHANGE_ENCRYPTION_KEY}

@@ -2,6 +2,9 @@ package com.project.whalearc.notification.service;
 
 import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.CryptoPriceProvider;
+import com.project.whalearc.market.service.StockPriceProvider;
+import com.project.whalearc.market.service.UsStockPriceProvider;
+import com.project.whalearc.market.service.UsEtfPriceProvider;
 import com.project.whalearc.market.websocket.RealtimePriceHolder;
 import com.project.whalearc.notification.domain.Notification;
 import com.project.whalearc.notification.domain.PriceAlert;
@@ -26,6 +29,9 @@ public class PriceAlertService {
     private final NotificationService notificationService;
     private final RealtimePriceHolder realtimePriceHolder;
     private final CryptoPriceProvider cryptoPriceProvider;
+    private final StockPriceProvider stockPriceProvider;
+    private final UsStockPriceProvider usStockPriceProvider;
+    private final UsEtfPriceProvider usEtfPriceProvider;
 
     private static final int MAX_ALERTS_PER_USER = 20;
 
@@ -75,9 +81,17 @@ public class PriceAlertService {
                     changeRateMap.put(p.getSymbol(), p.getChangeRate());
                 }
             }
-            List<MarketPriceResponse> rest = cryptoPriceProvider.getAllKrwTickers();
-            if (rest != null) {
-                for (MarketPriceResponse p : rest) {
+            // 크립토 + 국내주식 + 미국주식 + ETF 시세 모두 수집 (provider는 캐시 반환이라 저렴).
+            // 예전엔 크립토만 수집해 STOCK/US_STOCK/ETF 알림이 영영 트리거되지 않던 버그 수정.
+            List<List<MarketPriceResponse>> sources = List.of(
+                    cryptoPriceProvider.getAllKrwTickers(),
+                    stockPriceProvider.getAllStockPrices(),
+                    usStockPriceProvider.getAllUsStockPrices(),
+                    usEtfPriceProvider.getAllEtfPrices()
+            );
+            for (List<MarketPriceResponse> src : sources) {
+                if (src == null) continue;
+                for (MarketPriceResponse p : src) {
                     priceMap.putIfAbsent(p.getSymbol(), p.getPrice());
                     changeRateMap.putIfAbsent(p.getSymbol(), p.getChangeRate());
                 }
@@ -90,6 +104,7 @@ public class PriceAlertService {
 
         int triggered = 0;
         for (PriceAlert alert : activeAlerts) {
+          try {
             Double currentPrice = priceMap.get(alert.getStockCode());
             if (currentPrice == null) continue;
 
@@ -148,6 +163,10 @@ public class PriceAlertService {
                 );
                 triggered++;
             }
+          } catch (Exception e) {
+            // 한 알림 처리 실패가 전체 배치를 중단시키지 않도록 격리
+            log.warn("가격 알림 처리 실패 [{}]: {}", alert.getStockCode(), e.getMessage());
+          }
         }
 
         if (triggered > 0) {

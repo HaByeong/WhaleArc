@@ -15,6 +15,7 @@ import com.project.whalearc.trade.domain.Order;
 import com.project.whalearc.trade.domain.Portfolio;
 import com.project.whalearc.trade.service.OrderService;
 import com.project.whalearc.trade.service.PortfolioService;
+import com.project.whalearc.trade.service.UserLockRegistry;
 import com.project.whalearc.strategy.service.TurtleStrategyService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,7 @@ public class QuantStoreService {
     private final PortfolioService portfolioService;
     private final TurtleStrategyService turtleStrategyService;
     private final TurtlePositionRepository turtlePositionRepository;
+    private final UserLockRegistry userLockRegistry; // 동일 유저 구매 직렬화 (중복 ACTIVE 구매 방지)
 
     /**
      * 최초 실행 시 샘플 퀀트 상품 시드
@@ -329,22 +331,43 @@ public class QuantStoreService {
     }
 
     public List<QuantProduct> getAllProducts() {
-        return productRepository.findByActiveTrueOrderBySubscribersDesc();
+        return productRepository.findByActiveTrueOrderBySubscribersDesc().stream().map(this::sanitizeMetrics).toList();
     }
 
     public List<QuantProduct> getProductsByCategory(QuantProduct.Category category) {
-        return productRepository.findByCategoryAndActiveTrueOrderBySubscribersDesc(category);
+        return productRepository.findByCategoryAndActiveTrueOrderBySubscribersDesc(category).stream().map(this::sanitizeMetrics).toList();
     }
 
     public QuantProduct getProduct(String productId) {
-        return productRepository.findById(productId)
-                .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다."));
+        return sanitizeMetrics(productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다.")));
+    }
+
+    /**
+     * 성과 지표(기대수익률·MDD·샤프·승률·총거래수)는 과거 시드 단계의 예시값이라 신뢰할 수 없으므로
+     * 응답에서 0으로 정리한다. (실제 성과는 사용자가 직접 백테스트로 확인) — subscribers는 실데이터라 유지.
+     * 응답용으로만 0 처리하며 DB에는 저장하지 않는다.
+     */
+    private QuantProduct sanitizeMetrics(QuantProduct p) {
+        p.setExpectedReturn(java.math.BigDecimal.ZERO);
+        p.setMaxDrawdown(java.math.BigDecimal.ZERO);
+        p.setSharpeRatio(java.math.BigDecimal.ZERO);
+        p.setWinRate(java.math.BigDecimal.ZERO);
+        p.setTotalTrades(0);
+        return p;
     }
 
     /**
      * 항로 구매 + 투자 금액을 타겟 자산에 균등 분배하여 시장가 매수
      */
     public ProductPurchase purchaseProduct(String userId, String productId, BigDecimal investmentAmount) {
+        // 중복 체크 ~ 매수 ~ save 전체를 유저 단위 락으로 직렬화.
+        // (동시 클릭/탭 시 exists 체크를 둘 다 통과해 ACTIVE 구매가 이중 생성·이중 차감되던 race 방지)
+        return userLockRegistry.withLock(userId,
+                () -> purchaseProductLocked(userId, productId, investmentAmount));
+    }
+
+    private ProductPurchase purchaseProductLocked(String userId, String productId, BigDecimal investmentAmount) {
         QuantProduct product = getProduct(productId);
 
         if (purchaseRepository.existsByUserIdAndProductIdAndStatus(
@@ -374,10 +397,14 @@ public class QuantStoreService {
 
         // ── 터틀 전략: 즉시 매수하지 않고 포지션 초기화 (스케줄러가 시그널에 따라 자동매매) ──
         if (product.getStrategyType() == QuantProduct.StrategyType.TURTLE) {
-            // 현금을 포트폴리오에서 차감하고, 터틀 할당금으로 이동 (totalValue 유지)
-            portfolio.setCashBalance(portfolio.getCashBalance().subtract(investBd));
-            portfolio.setTurtleAllocated(portfolio.getTurtleAllocated().add(investBd));
-            portfolioService.save(portfolio);
+            // 현금을 포트폴리오에서 차감하고, 터틀 할당금으로 이동 (totalValue 유지) — 공유 락 안에서 원자적으로
+            portfolioService.mutate(userId, p -> {
+                if (p.getCashBalance().compareTo(investBd) < 0) {
+                    throw new IllegalArgumentException("잔고가 부족합니다.");
+                }
+                p.setCashBalance(p.getCashBalance().subtract(investBd));
+                p.setTurtleAllocated(p.getTurtleAllocated().add(investBd));
+            });
 
             purchase.setPurchasedAssets(new ArrayList<>());
             purchase = purchaseRepository.save(purchase);
@@ -447,8 +474,8 @@ public class QuantStoreService {
             purchase = purchaseRepository.save(purchase);
         }
 
-        product.setSubscribers(product.getSubscribers() + 1);
-        productRepository.save(product);
+        // 구독자 수 원자적 증가($inc) — 동시 구매 시 lost-update 방지 + 다른 필드(샘플 지표) 덮어쓰지 않음
+        productRepository.incrementSubscribers(productId);
 
         log.info("항로 구매 완료: userId={}, product={}, investment={}, assets={}",
                 userId, product.getName(), investmentAmount, purchase.getPurchasedAssets());
@@ -479,13 +506,13 @@ public class QuantStoreService {
         boolean isTurtle = product != null && product.getStrategyType() == QuantProduct.StrategyType.TURTLE;
 
         if (isTurtle) {
-            // 터틀: 포지션 청산 + 할당 현금 반환
+            // 터틀: 포지션 청산 + 할당 현금 반환 — 공유 락 안에서 원자적으로
             turtleStrategyService.closeAllPositions(purchase.getId());
-            Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
-            BigDecimal allocated = purchase.getInvestmentAmount();
-            portfolio.setTurtleAllocated(portfolio.getTurtleAllocated().subtract(allocated).max(BigDecimal.ZERO));
-            portfolio.setCashBalance(portfolio.getCashBalance().add(allocated));
-            portfolioService.save(portfolio);
+            final BigDecimal allocated = purchase.getInvestmentAmount();
+            portfolioService.mutate(userId, p -> {
+                p.setTurtleAllocated(p.getTurtleAllocated().subtract(allocated).max(BigDecimal.ZERO));
+                p.setCashBalance(p.getCashBalance().add(allocated));
+            });
         } else {
             // 일반: 매수한 자산들을 항로 매수 수량만큼만 매도
             boolean isStockProduct = product != null && product.isStock();
@@ -516,12 +543,12 @@ public class QuantStoreService {
             }
         }
 
-        // 대표 항로가 취소된 항로였으면 해제
-        Portfolio repPortfolio = portfolioService.getOrCreatePortfolio(userId);
-        if (purchaseId.equals(repPortfolio.getRepresentativePurchaseId())) {
-            repPortfolio.setRepresentativePurchaseId(null);
-            portfolioService.save(repPortfolio);
-        }
+        // 대표 항로가 취소된 항로였으면 해제 — 공유 락 안에서 원자적으로(다른 현금 변경을 덮어쓰지 않도록)
+        portfolioService.mutate(userId, p -> {
+            if (purchaseId.equals(p.getRepresentativePurchaseId())) {
+                p.setRepresentativePurchaseId(null);
+            }
+        });
 
         purchase.setStatus(ProductPurchase.Status.REFUNDED);
         purchase = purchaseRepository.save(purchase);

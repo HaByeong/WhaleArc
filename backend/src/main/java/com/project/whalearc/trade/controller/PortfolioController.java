@@ -52,9 +52,9 @@ public class PortfolioController {
             }
         }
 
-        Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
-        portfolio.setRepresentativePurchaseId(purchaseId);
-        portfolioService.save(portfolio);
+        // 공유 락 안에서 원자적으로 — 동시 주문의 현금 변경을 stale 저장으로 덮어쓰지 않도록
+        final String repId = purchaseId;
+        portfolioService.mutate(userId, p -> p.setRepresentativePurchaseId(repId));
         return ApiResponse.ok(null);
     }
 

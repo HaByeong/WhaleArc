@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -42,6 +43,23 @@ public class KisApiClient {
 
     @Value("${kis.api.cache-ttl-ms:15000}")
     private long cacheTtlMs;
+
+    // 호출 간 최소 간격(ms) — KIS 초당 거래건수 한도(EGW00201) 초과를 방지하는 전역 스로틀. 기본 70ms(≈14 req/s, 20/s 한도 여유).
+    @Value("${kis.api.min-interval-ms:70}")
+    private long minIntervalMs;
+    private final Object rateLock = new Object();
+    private long lastCallAt = 0;
+
+    /** 모든 KIS HTTP 호출 직전에 호출 — 스레드 전역으로 최소 간격을 보장해 레이트리밋 초과를 줄인다. */
+    private void throttle() {
+        synchronized (rateLock) {
+            long wait = lastCallAt + minIntervalMs - System.currentTimeMillis();
+            if (wait > 0) {
+                try { Thread.sleep(wait); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            }
+            lastCallAt = System.currentTimeMillis();
+        }
+    }
 
     private RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -91,6 +109,7 @@ public class KisApiClient {
                 headers.setContentType(MediaType.APPLICATION_JSON);
                 HttpEntity<Map<String, String>> request = new HttpEntity<>(body, headers);
 
+                throttle();
                 ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
                 Map<String, Object> result = objectMapper.readValue(response.getBody(),
                         new TypeReference<Map<String, Object>>() {});
@@ -135,6 +154,7 @@ public class KisApiClient {
                 HttpHeaders headers = buildHeaders("FHKST01010100");
                 HttpEntity<Void> request = new HttpEntity<>(headers);
 
+                throttle();
                 ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
                 Map<String, Object> result = objectMapper.readValue(response.getBody(),
                         new TypeReference<Map<String, Object>>() {});
@@ -187,6 +207,7 @@ public class KisApiClient {
                 HttpHeaders headers = buildHeaders("FHKST03010100");
                 HttpEntity<Void> request = new HttpEntity<>(headers);
 
+                throttle();
                 ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
                 Map<String, Object> result = objectMapper.readValue(response.getBody(),
                         new TypeReference<Map<String, Object>>() {});
@@ -239,6 +260,7 @@ public class KisApiClient {
                 HttpHeaders headers = buildHeaders("FHKUP03500100");
                 HttpEntity<Void> request = new HttpEntity<>(headers);
 
+                throttle();
                 ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
                 Map<String, Object> result = objectMapper.readValue(response.getBody(),
                         new TypeReference<Map<String, Object>>() {});
@@ -284,6 +306,7 @@ public class KisApiClient {
                 HttpHeaders headers = buildHeaders("FHPUP02100000");
                 HttpEntity<Void> request = new HttpEntity<>(headers);
 
+                throttle();
                 ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
                 Map<String, Object> result = objectMapper.readValue(response.getBody(),
                         new TypeReference<Map<String, Object>>() {});
@@ -332,6 +355,7 @@ public class KisApiClient {
                 HttpHeaders headers = buildHeaders("HHDFS00000300");
                 HttpEntity<Void> request = new HttpEntity<>(headers);
 
+                throttle();
                 ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
                 Map<String, Object> result = objectMapper.readValue(response.getBody(),
                         new TypeReference<Map<String, Object>>() {});
@@ -387,6 +411,7 @@ public class KisApiClient {
                 HttpHeaders headers = buildHeaders("HHDFS76240000");
                 HttpEntity<Void> request = new HttpEntity<>(headers);
 
+                throttle();
                 ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
                 Map<String, Object> result = objectMapper.readValue(response.getBody(),
                         new TypeReference<Map<String, Object>>() {});
@@ -427,19 +452,25 @@ public class KisApiClient {
         responseCache.put(key, new CacheEntry<>(data, System.currentTimeMillis() + cacheTtlMs));
     }
 
+    /** 에러 폴백으로 허용하는 캐시 최대 staleness — 이 시간을 넘은 캐시는 '임의로 오래된 데이터'이므로 폴백을 거부(null 반환)하여
+     *  사용자가 며칠 전 시세를 현재가로 오인하지 않도록 한다. */
+    private static final long STALE_FALLBACK_MS = 15 * 60 * 1000L; // 15분
+
     @SuppressWarnings("unchecked")
     private <T> T getCachedOrNull(String key) {
         CacheEntry<?> entry = responseCache.get(key);
-        // 캐시가 있으면 만료와 관계없이 폴백으로 반환 (stale cache 허용)
-        if (entry != null) {
-            return (T) entry.data;
-        }
-        return null;
+        if (entry == null) return null;
+        // 만료된 캐시라도 폴백 허용하되, put 이후 경과가 max(TTL, 15분) 이내인 경우만 (무한 stale 방지)
+        long age = System.currentTimeMillis() - (entry.expireAt - cacheTtlMs);
+        if (age > Math.max(cacheTtlMs, STALE_FALLBACK_MS)) return null;
+        return (T) entry.data;
     }
 
-    /** 주기적 캐시 정리 (TTL의 10배 초과 항목 제거) */
+    /** 주기적 캐시 정리 — 10분마다 실행해 무한 메모리 증가 방지(@EnableScheduling은 이미 적용됨).
+     *  단, 에러 폴백 창(STALE_FALLBACK_MS)보다 먼저 제거하면 폴백 커버리지가 줄어드므로 둘 중 큰 창을 사용. */
+    @Scheduled(fixedDelay = 600_000L)
     public void evictStaleCache() {
-        long threshold = System.currentTimeMillis() - (cacheTtlMs * 10);
+        long threshold = System.currentTimeMillis() - Math.max(cacheTtlMs * 10, STALE_FALLBACK_MS);
         responseCache.entrySet().removeIf(e -> e.getValue().expireAt < threshold);
     }
 

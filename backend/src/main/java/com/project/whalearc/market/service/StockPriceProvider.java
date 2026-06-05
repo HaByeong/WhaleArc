@@ -103,15 +103,13 @@ public class StockPriceProvider {
 
     /** 캐시된 시세만 즉시 반환 (블로킹 없음) — 캐시 없으면 빈 리스트 */
     public List<MarketPriceResponse> getCachedStockPrices() {
-        return cachedPrices.isEmpty() ? getMockKrxTickers() : cachedPrices;
+        return cachedPrices;
     }
 
-    /** 시세 조회 — 항상 캐시에서 즉시 반환 (백그라운드에서 자동 갱신) */
+    /** 시세 조회 — 항상 캐시에서 즉시 반환 (백그라운드에서 자동 갱신).
+     *  KIS 미설정/캐시없음이면 가짜 가격이 아닌 빈 리스트를 반환(지어낸 값으로 주문·평가가 일어나지 않도록). indices 엔드포인트와 동일 정책. */
     public List<MarketPriceResponse> getAllStockPrices() {
-        if (!kisApiClient.isConfigured()) {
-            return getMockKrxTickers();
-        }
-        return cachedPrices.isEmpty() ? getMockKrxTickers() : cachedPrices;
+        return cachedPrices;
     }
 
     private List<MarketPriceResponse> fetchAllStockPrices() {
@@ -181,34 +179,6 @@ public class StockPriceProvider {
         }
     }
 
-    /** KIS API 미설정 시 폴백 mock 데이터 */
-    public List<MarketPriceResponse> getMockKrxTickers() {
-        List<MarketPriceResponse> list = new ArrayList<>();
-
-        MarketPriceResponse samsung = new MarketPriceResponse();
-        samsung.setAssetType(AssetType.STOCK);
-        samsung.setSymbol("005930");
-        samsung.setName("삼성전자");
-        samsung.setPrice(75_000);
-        samsung.setChange(1_500);
-        samsung.setChangeRate(2.04);
-        samsung.setVolume(12_500_000L);
-        samsung.setMarket("KRX");
-        list.add(samsung);
-
-        MarketPriceResponse hynix = new MarketPriceResponse();
-        hynix.setAssetType(AssetType.STOCK);
-        hynix.setSymbol("000660");
-        hynix.setName("SK하이닉스");
-        hynix.setPrice(145_000);
-        hynix.setChange(-2_000);
-        hynix.setChangeRate(-1.36);
-        hynix.setVolume(3_500_000L);
-        hynix.setMarket("KRX");
-        list.add(hynix);
-
-        return list;
-    }
 
     private long parseLong(String value) {
         try {

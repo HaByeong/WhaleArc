@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import Header from '../components/Header';
+import HelmShell from '../components/HelmShell';
 import VirtSplashLoading from '../components/VirtSplashLoading';
 import SplashLoading from '../components/SplashLoading';
-import ErrorMessage from '../components/ErrorMessage';
-import UnstableCurrent from '../components/UnstableCurrent';
 import {
   userService,
   type UserProfile,
@@ -14,12 +12,22 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { validateNickname } from '../utils/nicknameFilter';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
-import { useTheme } from '../contexts/ThemeContext';
 
-const INVESTMENT_STYLES: { value: InvestmentStyle; label: string; whale: string; desc: string; color: string; selectedBg: string; img: string }[] = [
-  { value: 'AGGRESSIVE', label: '범고래', whale: 'Orca', desc: '바다의 최상위 포식자처럼, 과감한 공격으로 높은 수익을 노립니다', color: 'border-red-400', selectedBg: 'bg-gradient-to-r from-red-50 to-orange-50', img: '/whales/orca.png' },
-  { value: 'BALANCED', label: '혹등고래', whale: 'Humpback', desc: '버블넷 사냥처럼, 다양한 전략으로 균형 잡힌 수익을 추구합니다', color: 'border-whale-light', selectedBg: 'bg-gradient-to-r from-blue-50 to-cyan-50', img: '/whales/humpback.png' },
-  { value: 'CONSERVATIVE', label: '대왕고래', whale: 'Blue Whale', desc: '바다에서 가장 거대한 존재처럼, 느리지만 꾸준하고 안정적입니다', color: 'border-indigo-400', selectedBg: 'bg-gradient-to-r from-indigo-50 to-blue-50', img: '/whales/blue-whale.png' },
+/* ────────────────────────────────────────────────────────────
+   UserPage — 「디자인 개편」 톤. 프로필/설정 + 온보딩. HelmShell + 목업 다크 패널.
+   상태·핸들러·온보딩 로직 전부 보존.
+   ──────────────────────────────────────────────────────────── */
+
+const SONAR = '#5b9dff';
+const INK1 = 'rgba(255,255,255,.72)', INK2 = 'rgba(255,255,255,.48)', INK3 = 'rgba(255,255,255,.28)';
+const HAIR = 'rgba(255,255,255,.10)';
+const panel: React.CSSProperties = { background: 'linear-gradient(180deg,rgba(20,34,62,.6),rgba(9,17,38,.55))', border: `1px solid ${HAIR}`, borderRadius: 16, boxShadow: '0 1px 0 rgba(255,255,255,.05) inset, 0 10px 28px -18px rgba(0,0,0,.6)' };
+const DARK_INPUT = 'w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40';
+
+const INVESTMENT_STYLES: { value: InvestmentStyle; label: string; whale: string; desc: string; img: string }[] = [
+  { value: 'AGGRESSIVE', label: '범고래', whale: 'Orca', desc: '바다의 최상위 포식자처럼, 과감한 공격으로 높은 수익을 노립니다', img: '/whales/orca.png' },
+  { value: 'BALANCED', label: '혹등고래', whale: 'Humpback', desc: '버블넷 사냥처럼, 다양한 전략으로 균형 잡힌 수익을 추구합니다', img: '/whales/humpback.png' },
+  { value: 'CONSERVATIVE', label: '대왕고래', whale: 'Blue Whale', desc: '바다에서 가장 거대한 존재처럼, 느리지만 꾸준하고 안정적입니다', img: '/whales/blue-whale.png' },
 ];
 
 const EXPERIENCE_LEVELS: { value: ExperienceLevel; label: string; whale: string; desc: string; img: string }[] = [
@@ -32,13 +40,30 @@ const POPULAR_CRYPTO = ['BTC', 'ETH', 'XRP', 'SOL', 'DOGE', 'ADA', 'DOT', 'AVAX'
 const POPULAR_KR_STOCKS = ['삼성전자', 'SK하이닉스', 'LG에너지솔루션', 'NAVER', '카카오', '삼성바이오로직스', '현대차', 'POSCO홀딩스', '셀트리온', 'KB금융'];
 const POPULAR_US_STOCKS = ['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'AVGO', 'TSM', 'AMD'];
 
+const SelectCard = ({ selected, img, label, whale, desc, onClick }: { selected: boolean; img: string; label: string; whale: string; desc: string; onClick: () => void }) => (
+  <button type="button" onClick={onClick} className="w-full text-left p-4 rounded-xl transition-all duration-200"
+    style={selected
+      ? { border: `1px solid rgba(91,157,255,.5)`, background: 'rgba(91,157,255,.10)', boxShadow: '0 0 0 1px rgba(91,157,255,.2)' }
+      : { border: `1px solid ${HAIR}`, background: 'rgba(255,255,255,.02)' }}>
+    <div className="flex items-center gap-3">
+      <img src={img} alt={label} className="w-10 h-10 object-contain flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between">
+          <span className="font-bold text-sm" style={{ color: selected ? '#cfe1ff' : INK1 }}>{label}</span>
+          <span className="text-[11px] italic" style={{ color: INK3 }}>{whale}</span>
+        </div>
+        <div className="text-xs mt-1" style={{ color: INK2 }}>{desc}</div>
+      </div>
+    </div>
+  </button>
+);
+
 const UserPage = () => {
   const { isVirt } = useRoutePrefix();
-  const { isDark } = useTheme();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isOnboarding = searchParams.get('onboarding') === 'true';
-  const { refreshProfile, markOnboardingDone } = useAuth();
+  const { session, refreshProfile, markOnboardingDone } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -168,6 +193,8 @@ const UserPage = () => {
     saveFavorites(favoriteAssets.filter((a) => a !== asset));
   };
 
+  const userName = profile?.name || (session?.user?.email ? session.user.email.split('@')[0] : '항해사');
+
   if (loading) {
     if (!isVirt) return <SplashLoading message="프로필을 불러오는 중..." />;
     return <VirtSplashLoading message="프로필을 불러오는 중..." />;
@@ -175,56 +202,45 @@ const UserPage = () => {
 
   if (error) {
     return (
-      <div className={`min-h-screen ${isDark ? 'bg-[var(--wa-page-bg)] text-white' : 'bg-gray-50'}`}>
-        <Header showNav />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {isDark ? (
-            <div>
-              <UnstableCurrent message="해류가 불안정합니다" sub={error || '데이터를 다시 불러오고 있어요...'} />
-              <div className="flex justify-center mt-4">
-                <button
-                  onClick={() => window.location.reload()}
-                  className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-cyan-500 hover:bg-cyan-400 text-white transition-colors"
-                >
-                  다시 시도
-                </button>
-              </div>
-            </div>
-          ) : (
-            <ErrorMessage message={error} onRetry={() => window.location.reload()} variant="offline" />
-          )}
+      <HelmShell active="" virt={isVirt} userName={userName}>
+        <div className="mx-auto max-w-[760px] text-center" style={{ ...panel, padding: '48px 24px' }}>
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full" style={{ background: 'rgba(239,77,77,.12)', border: '1px solid rgba(239,77,77,.28)' }}>
+            <svg className="w-7 h-7" style={{ color: '#ef4d4d' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </div>
+          <h2 className="text-[18px] font-bold">해류가 불안정합니다</h2>
+          <p className="mt-2 text-[13px]" style={{ color: INK2 }}>{error}</p>
+          <button onClick={() => window.location.reload()} className="mt-5 rounded-lg px-5 py-2.5 text-[13px] font-semibold" style={{ background: 'rgba(91,157,255,.12)', border: '1px solid rgba(91,157,255,.32)', color: SONAR }}>다시 시도</button>
         </div>
-      </div>
+      </HelmShell>
     );
   }
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-[var(--wa-page-bg)] text-white' : 'bg-gray-50'}`}>
-      <Header showNav />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <HelmShell active="" virt={isVirt} userName={userName} session={isOnboarding ? '프로필을 설정해 항해를 시작하세요' : '내 프로필'}>
+      <div className="mx-auto max-w-[1100px]">
         {/* 온보딩 환영 배너 */}
         {isOnboarding && (
-          <div className="mb-6 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl shadow-lg p-5 text-white">
+          <div className="mb-6 rounded-2xl p-5" style={{ background: 'linear-gradient(135deg, rgba(34,197,142,.16), rgba(14,40,56,.4))', border: '1px solid rgba(34,197,142,.3)' }}>
             <div className="flex items-center gap-3">
               <img src="/whales/risso-dolphin.png" alt="환영" className="w-12 h-12 object-contain" />
               <div>
                 <h2 className="text-lg font-bold">바다에 오신 것을 환영합니다!</h2>
-                <p className="text-emerald-100 text-sm mt-0.5">투자 프로필을 설정하면 맞춤형 경험을 제공해드려요</p>
+                <p className="text-sm mt-0.5" style={{ color: 'rgba(167,243,208,.9)' }}>투자 프로필을 설정하면 맞춤형 경험을 제공해드려요</p>
               </div>
             </div>
           </div>
         )}
 
         {/* 상단 헤더 */}
-        <div className="mb-8 bg-gradient-to-r from-whale-dark to-whale-light rounded-2xl shadow-xl p-6 md:p-8 text-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl" />
+        <div className="mb-8 rounded-2xl p-6 md:p-8 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, rgba(91,157,255,.16), rgba(14,40,56,.42))', border: '1px solid rgba(91,157,255,.28)' }}>
+          <div className="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl" style={{ background: 'rgba(91,157,255,.08)' }} />
           <div className="relative z-10 flex items-center gap-4">
-            <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-2xl font-bold backdrop-blur-sm">
+            <span className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold" style={{ background: 'linear-gradient(135deg,#5b9dff,#2c6fe6)', color: '#04121d' }}>
               {(profile?.name ?? 'U').charAt(0).toUpperCase()}
-            </div>
+            </span>
             <div>
               <h1 className="text-2xl md:text-3xl font-bold">{isOnboarding ? '프로필 설정' : '내 프로필'}</h1>
-              <p className="text-blue-100 text-sm md:text-base mt-1">
+              <p className="text-sm md:text-base mt-1" style={{ color: INK1 }}>
                 {isOnboarding ? '나만의 투자 프로필을 만들어보세요' : '나만의 투자 프로필을 완성해보세요'}
               </p>
             </div>
@@ -233,282 +249,166 @@ const UserPage = () => {
 
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* 좌측: 계정 정보 + 자기소개 */}
+            {/* 좌측: 계정 정보 + 자기소개 + 관심종목 */}
             <div className="lg:col-span-2 space-y-6">
               {/* 계정 정보 */}
-              <div className={`card ${!isDark ? '' : 'border border-white/[0.06] bg-white/[0.02] !shadow-none'}`}>
-                <h2 className={`text-lg font-bold mb-5 ${isDark ? 'text-white' : 'text-whale-dark'}`}>계정 정보</h2>
+              <div style={{ ...panel, padding: '22px' }}>
+                <h2 className="text-lg font-bold mb-5">계정 정보</h2>
 
                 {saveMessage && (
-                  <div
-                    className={`mb-4 p-3 rounded-lg text-sm ${
-                      saveMessage.type === 'success'
-                        ? 'bg-green-50 border border-green-200 text-green-800'
-                        : 'bg-red-50 border border-red-200 text-red-800'
-                    }`}
-                    role="alert"
-                  >
+                  <div className="mb-4 p-3 rounded-lg text-sm" role="alert"
+                    style={saveMessage.type === 'success'
+                      ? { background: 'rgba(34,197,142,.1)', border: '1px solid rgba(34,197,142,.25)', color: '#5fd0a8' }
+                      : { background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>
                     {saveMessage.text}
                   </div>
                 )}
 
                 <div className="space-y-5">
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-slate-400' : 'text-gray-700'}`}>아이디</label>
-                    <input
-                      type="text"
-                      value={profile?.userId ?? ''}
-                      readOnly
-                      className={`input-field cursor-not-allowed ${!isDark ? 'bg-gray-100' : 'bg-white/[0.04] border-white/10 text-white'}`}
-                    />
-                    <p className={`mt-1 text-xs ${isDark ? 'text-slate-600' : 'text-gray-500'}`}>로그인 아이디는 변경할 수 없습니다</p>
+                    <label className="block text-sm font-medium mb-2" style={{ color: INK2 }}>아이디</label>
+                    <input type="text" value={profile?.userId ?? ''} readOnly className={`${DARK_INPUT} cursor-not-allowed opacity-70`} />
+                    <p className="mt-1 text-xs" style={{ color: INK3 }}>로그인 아이디는 변경할 수 없습니다</p>
                   </div>
 
                   <div>
-                    <label htmlFor="edit-name" className={`block text-sm font-medium mb-2 ${isDark ? 'text-slate-400' : 'text-gray-700'}`}>
-                      닉네임
-                    </label>
-                    <input
-                      id="edit-name"
-                      type="text"
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      className={`input-field ${!isDark ? '' : 'bg-white/[0.04] border-white/10 text-white placeholder-slate-600'}`}
-                      placeholder="닉네임을 입력하세요"
-                      maxLength={50}
-                    />
-                    <p className={`mt-1 text-xs ${isDark ? 'text-slate-600' : 'text-gray-500'}`}>랭킹 등에 표시되는 이름입니다</p>
+                    <label htmlFor="edit-name" className="block text-sm font-medium mb-2" style={{ color: INK2 }}>닉네임</label>
+                    <input id="edit-name" type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className={DARK_INPUT} placeholder="닉네임을 입력하세요" maxLength={50} />
+                    <p className="mt-1 text-xs" style={{ color: INK3 }}>랭킹 등에 표시되는 이름입니다</p>
                   </div>
 
                   {profile?.authProvider && (
                     <div>
-                      <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-slate-400' : 'text-gray-700'}`}>로그인 방식</label>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${
-                          profile.authProvider === 'google'
-                            ? 'bg-blue-50 text-blue-700'
-                            : profile.authProvider === 'kakao'
-                            ? 'bg-yellow-50 text-yellow-700'
-                            : 'bg-gray-100 text-gray-700'
-                        }`}>
-                          {profile.authProvider === 'google' ? 'Google' :
-                           profile.authProvider === 'kakao' ? 'Kakao' : '이메일'}
-                        </span>
-                      </div>
+                      <label className="block text-sm font-medium mb-2" style={{ color: INK2 }}>로그인 방식</label>
+                      <span className="inline-block px-3 py-1.5 rounded-full text-sm font-medium" style={{ background: 'rgba(91,157,255,.12)', color: '#cfe1ff', border: '1px solid rgba(91,157,255,.24)' }}>
+                        {profile.authProvider === 'google' ? 'Google' : profile.authProvider === 'kakao' ? 'Kakao' : '이메일'}
+                      </span>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* 자기소개 */}
-              <div className={`card ${!isDark ? '' : 'border border-white/[0.06] bg-white/[0.02] !shadow-none'}`}>
-                <h2 className={`text-lg font-bold mb-5 ${isDark ? 'text-white' : 'text-whale-dark'}`}>자기소개</h2>
-                <textarea
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  className={`input-field resize-none ${!isDark ? '' : 'bg-white/[0.04] border-white/10 text-white placeholder-slate-600'}`}
-                  rows={4}
-                  placeholder="자신의 투자 스타일이나 목표를 소개해보세요"
-                  maxLength={200}
-                />
-                <p className={`mt-1 text-xs text-right ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{bio.length}/200</p>
+              <div style={{ ...panel, padding: '22px' }}>
+                <h2 className="text-lg font-bold mb-5">자기소개</h2>
+                <textarea value={bio} onChange={(e) => setBio(e.target.value)} className={`${DARK_INPUT} resize-none`} rows={4} placeholder="자신의 투자 스타일이나 목표를 소개해보세요" maxLength={200} />
+                <p className="mt-1 text-xs text-right" style={{ color: INK3 }}>{bio.length}/200</p>
               </div>
 
               {/* 관심 종목 */}
-              <div ref={favoritesRef} className={`card ${!isDark ? '' : 'border border-white/[0.06] bg-white/[0.02] !shadow-none'}`}>
-                <h2 className={`text-lg font-bold mb-3 ${isDark ? 'text-white' : 'text-whale-dark'}`}>관심 종목</h2>
-                <p className={`text-sm mb-4 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>관심 있는 종목을 선택하거나 직접 입력하세요 (최대 20개)</p>
+              <div ref={favoritesRef} style={{ ...panel, padding: '22px' }}>
+                <h2 className="text-lg font-bold mb-3">관심 종목</h2>
+                <p className="text-sm mb-4" style={{ color: INK2 }}>관심 있는 종목을 선택하거나 직접 입력하세요 (최대 20개)</p>
 
-                {/* 인기 종목 빠른 선택 — 카테고리별 */}
                 {[
                   { label: '암호화폐', items: POPULAR_CRYPTO },
                   { label: '국내 주식', items: POPULAR_KR_STOCKS },
                   { label: '미국 주식', items: POPULAR_US_STOCKS },
                 ].map((group) => (
                   <div key={group.label} className="mb-4">
-                    <p className={`text-xs font-semibold mb-2 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{group.label}</p>
+                    <p className="text-xs font-semibold mb-2" style={{ color: INK3 }}>{group.label}</p>
                     <div className="flex flex-wrap gap-2">
-                      {group.items.map((asset) => (
-                        <button
-                          key={asset}
-                          type="button"
-                          onClick={() =>
-                            favoriteAssets.includes(asset) ? removeAsset(asset) : addAsset(asset)
-                          }
-                          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                            favoriteAssets.includes(asset)
-                              ? 'bg-whale-light text-white shadow-sm'
-                              : isDark ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.06] border border-white/[0.06]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          }`}
-                        >
-                          {asset}
-                        </button>
-                      ))}
+                      {group.items.map((asset) => {
+                        const on = favoriteAssets.includes(asset);
+                        return (
+                          <button key={asset} type="button" onClick={() => (on ? removeAsset(asset) : addAsset(asset))}
+                            className="px-3 py-1.5 rounded-full text-sm font-medium transition-all"
+                            style={on
+                              ? { background: SONAR, color: '#04121d' }
+                              : { background: 'rgba(255,255,255,.04)', color: INK1, border: `1px solid ${HAIR}` }}>
+                            {asset}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
 
                 {/* 직접 입력 */}
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={customAsset}
-                    onChange={(e) => setCustomAsset(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addAsset(customAsset);
-                      }
-                    }}
-                    className={`input-field flex-1 ${!isDark ? '' : 'bg-white/[0.04] border-white/10 text-white placeholder-slate-600'}`}
-                    placeholder="종목 코드 입력 (예: SHIB, 삼성SDI, PLTR)"
-                    maxLength={20}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => addAsset(customAsset)}
-                    disabled={!customAsset.trim()}
-                    className="btn-secondary disabled:opacity-50 !px-4"
-                  >
-                    추가
-                  </button>
+                  <input type="text" value={customAsset} onChange={(e) => setCustomAsset(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAsset(customAsset); } }}
+                    className={`${DARK_INPUT} flex-1`} placeholder="종목 코드 입력 (예: SHIB, 삼성SDI, PLTR)" maxLength={20} />
+                  <button type="button" onClick={() => addAsset(customAsset)} disabled={!customAsset.trim()}
+                    className="px-5 rounded-lg text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ background: 'rgba(91,157,255,.12)', border: '1px solid rgba(91,157,255,.32)', color: SONAR }}>추가</button>
                 </div>
 
                 {/* 선택된 종목 태그 */}
                 {favoriteAssets.length > 0 && (
                   <div className="mt-4 flex flex-wrap gap-2">
                     {favoriteAssets.map((asset) => (
-                      <span
-                        key={asset}
-                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium ${isDark ? 'bg-cyan-500/20 text-cyan-300' : 'bg-whale-light text-white'}`}
-                      >
+                      <span key={asset} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium" style={{ background: 'rgba(91,157,255,.18)', color: '#cfe1ff' }}>
                         {asset}
-                        <button
-                          type="button"
-                          onClick={() => removeAsset(asset)}
-                          className={`ml-0.5 transition-colors !min-h-0 !min-w-0 ${isDark ? 'text-cyan-400/60 hover:text-red-400' : 'text-white/60 hover:text-red-300'}`}
-                          aria-label={`${asset} 제거`}
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
+                        <button type="button" onClick={() => removeAsset(asset)} className="ml-0.5 text-white/50 hover:text-red-400 transition-colors" aria-label={`${asset} 제거`}>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                       </span>
                     ))}
                   </div>
                 )}
-                {favoriteAssets.length > 0 && (
-                  <p className={`mt-2 text-[11px] ${!isVirt ? 'text-slate-600' : 'text-gray-400'}`}>
-                    * 관심 종목은 선택 즉시 자동 저장됩니다
-                  </p>
-                )}
+                {favoriteAssets.length > 0 && <p className="mt-2 text-[11px]" style={{ color: INK3 }}>* 관심 종목은 선택 즉시 자동 저장됩니다</p>}
               </div>
             </div>
 
             {/* 우측 사이드바 */}
             <div className="space-y-6">
               {/* 투자 성향 */}
-              <div className={`card ${!isDark ? '' : 'border border-white/[0.06] bg-white/[0.02] !shadow-none'}`}>
-                <h2 className={`text-lg font-bold mb-2 ${isDark ? 'text-white' : 'text-whale-dark'}`}>나는 어떤 고래?</h2>
-                <p className={`text-sm mb-4 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>투자 성향에 맞는 고래를 선택하세요</p>
+              <div style={{ ...panel, padding: '22px' }}>
+                <h2 className="text-lg font-bold mb-2">나는 어떤 고래?</h2>
+                <p className="text-sm mb-4" style={{ color: INK2 }}>투자 성향에 맞는 고래를 선택하세요</p>
                 <div className="space-y-3">
-                  {INVESTMENT_STYLES.map((style) => {
-                    const isSelected = investmentStyle === style.value;
-                    return (
-                      <button
-                        key={style.value}
-                        type="button"
-                        onClick={() => setInvestmentStyle(style.value)}
-                        className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
-                          isSelected
-                            ? `${style.color} ${isDark ? 'bg-white/[0.04]' : style.selectedBg} shadow-md scale-[1.02]`
-                            : isDark ? 'border-white/[0.06] hover:border-white/10 hover:bg-white/[0.03]' : 'border-gray-100 hover:border-gray-200 hover:shadow-sm'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <img src={style.img} alt={style.label} className="w-10 h-10 object-contain flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <span className={`font-bold text-sm ${isSelected ? (isDark ? 'text-cyan-400' : 'text-whale-dark') : (isDark ? 'text-slate-300' : 'text-gray-700')}`}>{style.label}</span>
-                              <span className={`text-[11px] italic ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{style.whale}</span>
-                            </div>
-                            <div className={`text-xs mt-1 ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>{style.desc}</div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                  {INVESTMENT_STYLES.map((style) => (
+                    <SelectCard key={style.value} selected={investmentStyle === style.value} img={style.img} label={style.label} whale={style.whale} desc={style.desc} onClick={() => setInvestmentStyle(style.value)} />
+                  ))}
                 </div>
               </div>
 
               {/* 투자 경험 */}
-              <div className={`card ${!isDark ? '' : 'border border-white/[0.06] bg-white/[0.02] !shadow-none'}`}>
-                <h2 className={`text-lg font-bold mb-2 ${isDark ? 'text-white' : 'text-whale-dark'}`}>항해 경험</h2>
-                <p className={`text-sm mb-4 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>바다에서 얼마나 헤엄쳤나요?</p>
+              <div style={{ ...panel, padding: '22px' }}>
+                <h2 className="text-lg font-bold mb-2">항해 경험</h2>
+                <p className="text-sm mb-4" style={{ color: INK2 }}>바다에서 얼마나 헤엄쳤나요?</p>
                 <div className="space-y-3">
-                  {EXPERIENCE_LEVELS.map((level) => {
-                    const isSelected = experienceLevel === level.value;
-                    return (
-                      <button
-                        key={level.value}
-                        type="button"
-                        onClick={() => setExperienceLevel(level.value)}
-                        className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
-                          isSelected
-                            ? isDark ? 'border-cyan-400 bg-white/[0.04] shadow-md scale-[1.02]' : 'border-whale-light bg-gradient-to-r from-sky-50 to-blue-50 shadow-md scale-[1.02]'
-                            : isDark ? 'border-white/[0.06] hover:border-white/10 hover:bg-white/[0.03]' : 'border-gray-100 hover:border-gray-200 hover:shadow-sm'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <img src={level.img} alt={level.label} className="w-10 h-10 object-contain flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <span className={`font-bold text-sm ${isSelected ? (isDark ? 'text-cyan-400' : 'text-whale-dark') : (isDark ? 'text-slate-300' : 'text-gray-700')}`}>{level.label}</span>
-                              <span className={`text-[11px] italic ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{level.whale}</span>
-                            </div>
-                            <div className={`text-xs mt-1 ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>{level.desc}</div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                  {EXPERIENCE_LEVELS.map((level) => (
+                    <SelectCard key={level.value} selected={experienceLevel === level.value} img={level.img} label={level.label} whale={level.whale} desc={level.desc} onClick={() => setExperienceLevel(level.value)} />
+                  ))}
                 </div>
               </div>
 
               {/* 저장 버튼 */}
-              <div className={`card !p-5 ${!isDark ? '' : 'border border-white/[0.06] bg-white/[0.02] !shadow-none'}`}>
-                <button
-                  type="submit"
-                  className={`w-full disabled:opacity-50 disabled:cursor-not-allowed ${isDark ? 'py-2.5 px-4 rounded-lg font-semibold text-sm bg-cyan-500 hover:bg-cyan-400 text-white transition-colors' : 'btn-primary'}`}
-                  disabled={saving || !editName.trim()}
-                >
+              <div style={{ ...panel, padding: '18px' }}>
+                <button type="submit" disabled={saving || !editName.trim()}
+                  className="w-full py-2.5 px-4 rounded-lg font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: SONAR, color: '#04121d' }}>
                   {saving ? '저장 중...' : '프로필 저장'}
                 </button>
-                <button
-                  type="button"
-                  className={`w-full mt-3 ${isDark ? 'py-2.5 px-4 rounded-lg font-semibold text-sm border border-white/[0.06] text-slate-400 hover:bg-white/[0.03] transition-colors' : 'btn-secondary'}`}
-                  onClick={() => navigate('/dashboard')}
-                >
+                <button type="button" onClick={() => {
+                  if (isOnboarding) {
+                    // 건너뛰기: 온보딩 완료로 표시(세션 + localStorage)해 ProtectedRoute가 다시 막아 무한 리다이렉트되지 않도록.
+                    try { localStorage.setItem('whalearc_onboarding_skipped', '1'); } catch { /* ignore */ }
+                    markOnboardingDone();
+                  }
+                  navigate('/dashboard');
+                }}
+                  className="w-full mt-3 py-2.5 px-4 rounded-lg font-semibold text-sm transition-colors"
+                  style={{ border: `1px solid ${HAIR}`, color: INK1 }}>
                   {isOnboarding ? '건너뛰기' : '대시보드로 이동'}
                 </button>
               </div>
 
               {/* 문의하기 */}
               {!isOnboarding && (
-                <div className={`card !p-5 ${!isDark ? '' : 'border border-white/[0.06] bg-white/[0.02] !shadow-none'}`}>
-                  <h3 className={`text-sm font-bold mb-3 ${isDark ? 'text-white' : 'text-whale-dark'}`}>문의 · 피드백</h3>
-                  <p className={`text-xs mb-3 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                    버그 신고, 기능 제안, 또는 궁금한 점이 있으시면 편하게 연락해주세요.
-                  </p>
+                <div style={{ ...panel, padding: '18px' }}>
+                  <h3 className="text-sm font-bold mb-3">문의 · 피드백</h3>
+                  <p className="text-xs mb-3" style={{ color: INK2 }}>버그 신고, 기능 제안, 또는 궁금한 점이 있으시면 편하게 연락해주세요.</p>
                   <div className="space-y-2">
-                    <a href="mailto:khyun1109@gmail.com" className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${isDark ? 'bg-white/[0.03] border border-white/[0.06] text-slate-300 hover:bg-white/[0.06]' : 'bg-gray-50 border border-gray-200 text-whale-dark hover:bg-gray-100'}`}>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                      khyun1109@gmail.com
-                    </a>
-                    <a href="mailto:jhschris8080@naver.com" className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${isDark ? 'bg-white/[0.03] border border-white/[0.06] text-slate-300 hover:bg-white/[0.06]' : 'bg-gray-50 border border-gray-200 text-whale-dark hover:bg-gray-100'}`}>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                      jhschris8080@naver.com
-                    </a>
+                    {['khyun1109@gmail.com', 'jhschris8080@naver.com'].map((mail) => (
+                      <a key={mail} href={`mailto:${mail}`} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-white/[0.06]"
+                        style={{ background: 'rgba(255,255,255,.03)', border: `1px solid ${HAIR}`, color: INK1 }}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                        {mail}
+                      </a>
+                    ))}
                   </div>
                 </div>
               )}
@@ -516,7 +416,7 @@ const UserPage = () => {
           </div>
         </form>
       </div>
-    </div>
+    </HelmShell>
   );
 };
 

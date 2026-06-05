@@ -1,0 +1,72 @@
+import { useState } from 'react';
+import { exchangeService, type ExchangeType, type ExchangeAccount } from '../services/exchangeService';
+
+/* 거래소 실계좌 연결/수정 모달 — 대시보드·포트폴리오 공용 (exchangeService) */
+const SONAR = 'var(--ci-sonar)';
+const UP = '#ef4d4d';
+const EX_LABEL: Record<ExchangeType, string> = { KIS: 'KIS', UPBIT: '업비트', BITGET: '비트겟' };
+
+const Field = ({ label, value, onChange, type = 'password', placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder: string }) => (
+  <label className="flex flex-col gap-1.5">
+    <span className="text-[12px] font-semibold" style={{ color: 'var(--ci-ink2)' }}>{label}</span>
+    <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className="rounded-lg px-3 py-2.5 text-[13px] outline-none" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink0)' }} />
+  </label>
+);
+
+const ExchangeConnectModal = ({ exchangeType, account, onClose, onSaved }: {
+  exchangeType: ExchangeType;
+  account?: ExchangeAccount;
+  onClose: () => void;
+  onSaved: (msg: string, type?: 'success' | 'error') => void;
+}) => {
+  // 키 필드는 절대 프리필 금지 — 서버가 마스킹(****)해서 내려주므로 그대로 저장하면 실키가 깨짐. 계좌번호(평문)만 프리필.
+  const [form, setForm] = useState({ apiKey: '', secretKey: '', appSecret: '', accountNumber: account?.accountNumber || '' });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const connected = !!account?.connected;
+  const isKis = exchangeType === 'KIS';
+  const isBitget = exchangeType === 'BITGET'; // Bitget은 Passphrase 필수 (appSecret 필드로 전달)
+
+  const save = async () => {
+    setSaving(true); setErr(null);
+    try {
+      await exchangeService.saveAccount({ exchangeType, apiKey: form.apiKey, secretKey: form.secretKey, ...(isKis ? { appSecret: form.appSecret, accountNumber: form.accountNumber } : isBitget ? { appSecret: form.appSecret } : {}) });
+      onSaved('실계좌가 연결되었습니다.'); onClose();
+    } catch (e: any) { setErr(e?.response?.data?.message || '연결에 실패했습니다. API 키를 확인해주세요.'); }
+    finally { setSaving(false); }
+  };
+  const disconnect = async () => {
+    if (!window.confirm(`${EX_LABEL[exchangeType]} 연결을 해제하시겠습니까?`)) return;
+    try { await exchangeService.deleteAccount(exchangeType); onSaved('연결이 해제되었습니다.'); onClose(); }
+    catch { onSaved('연결 해제에 실패했습니다.', 'error'); }
+  };
+
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto px-6 py-12" style={{ background: 'rgba(6,11,31,.72)', backdropFilter: 'blur(6px)', animation: 'backdrop-in .2s ease' }}>
+      <div onClick={e => e.stopPropagation()} className="relative w-full max-w-[460px] rounded-[18px]" style={{ background: 'var(--ci-overlay)', border: '1px solid var(--ci-line-strong)', boxShadow: 'var(--ci-panel-shadow)', animation: 'modal-in .25s cubic-bezier(.2,.8,.2,1)' }}>
+        <div className="wa-force-dark flex items-center justify-between rounded-t-[18px] px-6 py-4 text-white" style={{ background: 'linear-gradient(105deg,#142647 0%,#1d3c7a 52%,#2c6fe6 100%)' }}>
+          <h3 className="text-[15px] font-bold">{EX_LABEL[exchangeType]} API 연결</h3>
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-[15px]" style={{ border: '1px solid rgba(255,255,255,.2)', background: 'rgba(255,255,255,.08)' }}>✕</button>
+        </div>
+        <div className="flex flex-col gap-3 p-6">
+          <Field label="API Key" value={form.apiKey} onChange={v => setForm(f => ({ ...f, apiKey: v }))} placeholder="API Key 입력" />
+          <Field label="Secret Key" value={form.secretKey} onChange={v => setForm(f => ({ ...f, secretKey: v }))} placeholder="Secret Key 입력" />
+          {isKis && <>
+            <Field label="App Secret" value={form.appSecret} onChange={v => setForm(f => ({ ...f, appSecret: v }))} placeholder="App Secret 입력" />
+            <Field label="계좌번호" value={form.accountNumber} onChange={v => setForm(f => ({ ...f, accountNumber: v }))} type="text" placeholder="예: 50123456-01" />
+          </>}
+          {isBitget && <Field label="Passphrase" value={form.appSecret} onChange={v => setForm(f => ({ ...f, appSecret: v }))} placeholder="API 생성 시 설정한 Passphrase" />}
+          {connected && <div className="rounded-lg px-3 py-2 text-[11.5px]" style={{ background: 'rgba(255,205,120,.08)', border: '1px solid rgba(255,205,120,.18)', color: '#ffcd78' }}>보안상 기존 키는 표시되지 않습니다. 변경하려면 키를 다시 입력하세요.</div>}
+          {err && <div className="rounded-lg px-3 py-2 text-[12.5px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{err}</div>}
+          <p className="text-[11px]" style={{ color: 'var(--ci-ink3)' }}>🔒 API 키는 AES 암호화로 저장되며 읽기 전용 권한만 사용합니다.</p>
+        </div>
+        <div className="flex gap-2 px-6 py-4" style={{ borderTop: '1px solid var(--ci-line)' }}>
+          {connected && <button onClick={disconnect} className="rounded-lg px-4 py-2.5 text-[13px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.3)', color: UP }}>연결 해제</button>}
+          <button onClick={save} disabled={saving || !form.apiKey || !form.secretKey} className="flex-1 rounded-lg py-2.5 text-[14px] font-bold text-white disabled:opacity-50" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>{saving ? '연결 중…' : connected ? '수정하기' : '연결하기'}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ExchangeConnectModal;

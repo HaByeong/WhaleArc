@@ -16,8 +16,7 @@ interface GuideTourProps {
 const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [spotlight, setSpotlight] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
-  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
-  const [arrowDir, setArrowDir] = useState<'top' | 'bottom' | 'left' | 'right'>('bottom');
+  const [placement, setPlacement] = useState<'top' | 'bottom'>('bottom');
   const [animating, setAnimating] = useState(false);
 
   const step = steps[currentStep];
@@ -29,40 +28,16 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
 
     const rect = el.getBoundingClientRect();
     const pad = 8;
-    const s = {
+    setSpotlight({
       top: rect.top - pad,
       left: rect.left - pad,
       width: rect.width + pad * 2,
       height: rect.height + pad * 2,
-    };
-    setSpotlight(s);
+    });
 
-    // 툴팁 위치 계산
-    const tooltipW = 340;
-    const tooltipH = 260;
-    const pos = step.position || 'bottom';
-    let tt: React.CSSProperties = {};
-    let arrow: 'top' | 'bottom' | 'left' | 'right' = 'top';
-
-    const clampTop = (v: number) => Math.max(12, Math.min(v, window.innerHeight - tooltipH - 12));
-    const clampLeft = (v: number) => Math.max(12, Math.min(v, window.innerWidth - tooltipW - 12));
-
-    if (pos === 'bottom' || (!step.position && s.top + s.height + tooltipH + 20 < window.innerHeight)) {
-      tt = { top: s.top + s.height + 12, left: clampLeft(s.left + s.width / 2 - tooltipW / 2) };
-      arrow = 'top';
-    } else if (pos === 'top' || (!step.position && s.top - tooltipH - 20 > 0)) {
-      tt = { top: s.top - tooltipH - 12, left: clampLeft(s.left + s.width / 2 - tooltipW / 2) };
-      arrow = 'bottom';
-    } else if (pos === 'right') {
-      tt = { top: clampTop(s.top + s.height / 2 - tooltipH / 2), left: clampLeft(s.left + s.width + 12) };
-      arrow = 'left';
-    } else {
-      tt = { top: clampTop(s.top + s.height / 2 - tooltipH / 2), left: Math.max(12, s.left - tooltipW - 12) };
-      arrow = 'right';
-    }
-
-    setTooltipStyle({ ...tt, width: tooltipW, position: 'fixed' });
-    setArrowDir(arrow);
+    // 툴팁은 강조 영역을 가리지 않게 화면 상/하단 중앙에 크게 고정 (항상 잘 보이게)
+    const spotCenterY = rect.top + rect.height / 2;
+    setPlacement(spotCenterY < window.innerHeight * 0.52 ? 'bottom' : 'top');
   }, [step, currentStep]);
 
   useEffect(() => {
@@ -111,7 +86,7 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
         </defs>
         <rect
           x="0" y="0" width="100%" height="100%"
-          fill="rgba(0,0,0,0.6)"
+          fill="rgba(0,0,0,0.82)"
           mask="url(#tour-mask)"
           style={{ pointerEvents: 'auto' }}
         />
@@ -128,56 +103,56 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
         }}
       />
 
-      {/* 툴팁 */}
+      {/* 툴팁 — 강조 영역을 가리지 않게 화면 상/하단 중앙에 크게 고정 */}
       <div
-        style={tooltipStyle}
+        style={{
+          position: 'fixed',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          ...(placement === 'bottom' ? { bottom: 40 } : { top: 40 }),
+          width: 'min(560px, calc(100vw - 32px))',
+          background: '#ffffff',
+          boxShadow: '0 30px 80px -16px rgba(0,0,0,.8), 0 0 0 1px rgba(0,0,0,.08)',
+        }}
         onClick={(e) => e.stopPropagation()}
-        className={`z-[9999] bg-white rounded-2xl shadow-2xl border border-gray-200 p-5 transition-all duration-300 ${animating ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+        className={`z-[9999] rounded-2xl border border-gray-200 p-7 transition-all duration-300 ${animating ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}
       >
-        {/* 화살표 */}
-        <div className={`absolute w-3 h-3 bg-white border-gray-200 rotate-45 ${
-          arrowDir === 'top' ? '-top-1.5 left-1/2 -translate-x-1/2 border-l border-t' :
-          arrowDir === 'bottom' ? '-bottom-1.5 left-1/2 -translate-x-1/2 border-r border-b' :
-          arrowDir === 'left' ? 'top-1/2 -left-1.5 -translate-y-1/2 border-l border-b' :
-          'top-1/2 -right-1.5 -translate-y-1/2 border-r border-t'
-        }`} />
-
         {/* 스텝 카운터 */}
-        <div className="flex items-center gap-1.5 mb-3">
+        <div className="flex items-center gap-1.5 mb-4">
           {steps.map((_, i) => (
-            <div key={i} className={`h-1 rounded-full transition-all duration-300 ${
-              i === currentStep ? 'w-5 bg-whale-light' : i < currentStep ? 'w-2 bg-whale-light/40' : 'w-2 bg-gray-200'
+            <div key={i} className={`h-2 rounded-full transition-all duration-300 ${
+              i === currentStep ? 'w-7 bg-whale-light' : i < currentStep ? 'w-3 bg-whale-light/40' : 'w-3 bg-gray-200'
             }`} />
           ))}
-          <span className="ml-auto text-[10px] text-gray-400">{currentStep + 1}/{steps.length}</span>
+          <span className="ml-auto rounded-full bg-gray-100 px-2.5 py-1 text-[12.5px] font-bold text-gray-500">{currentStep + 1} / {steps.length}</span>
         </div>
 
         {/* 내용 */}
-        <h4 className="text-sm font-bold text-whale-dark mb-1.5">{step.title}</h4>
-        <div className="text-xs text-gray-500 leading-relaxed mb-4 whitespace-pre-line">{step.description}</div>
+        <h4 className="mb-2.5 text-[23px] font-extrabold leading-tight" style={{ color: '#0f172a' }}>{step.title}</h4>
+        <div className="mb-6 whitespace-pre-line text-[16px] font-medium leading-relaxed" style={{ color: '#334155' }}>{step.description}</div>
 
         {/* 버튼 */}
         <div className="flex items-center justify-between">
           <button
             onClick={(e) => { e.stopPropagation(); onFinish(); }}
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-[14px] font-semibold text-gray-400 hover:text-gray-600 transition-colors"
           >
             건너뛰기
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {currentStep > 0 && (
               <button
                 onClick={(e) => { e.stopPropagation(); handlePrev(); }}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors"
+                className="rounded-xl px-5 py-2.5 text-[15px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
               >
                 이전
               </button>
             )}
             <button
               onClick={(e) => { e.stopPropagation(); handleNext(); }}
-              className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-whale-light hover:bg-whale-dark transition-colors shadow-sm"
+              className="rounded-xl px-6 py-2.5 text-[15px] font-bold text-white bg-whale-light hover:bg-whale-dark transition-colors shadow-md"
             >
-              {isLast ? '시작하기' : '다음'}
+              {isLast ? '시작하기 →' : '다음 →'}
             </button>
           </div>
         </div>

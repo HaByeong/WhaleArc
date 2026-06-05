@@ -16,7 +16,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Slf4j
@@ -36,27 +36,11 @@ public class OrderService {
     private final ExchangeRateService exchangeRateService;
     private final NotificationService notificationService;
 
-    // 유저별 동시 주문 방지 락 (최대 10,000개, 10분 미사용 시 자동 제거)
-    private static final int MAX_LOCKS = 10_000;
-    private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, Long> lockLastUsed = new ConcurrentHashMap<>();
-
+    // 주문 체결 락은 PortfolioService·QuantStoreService 등과 공유(UserLockRegistry)하여
+    // 주문 ↔ 스토어 구매/취소 ↔ 리셋이 같은 유저 락으로 직렬화되도록 한다(별도 락맵 lost-update 방지).
+    private final UserLockRegistry userLockRegistry;
     private ReentrantLock getUserLock(String userId) {
-        lockLastUsed.put(userId, System.currentTimeMillis());
-        if (userLocks.size() > MAX_LOCKS) {
-            long expiry = System.currentTimeMillis() - 600_000; // 10분
-            lockLastUsed.entrySet().removeIf(e -> {
-                if (e.getValue() < expiry) {
-                    ReentrantLock lock = userLocks.get(e.getKey());
-                    if (lock != null && !lock.isLocked()) {
-                        userLocks.remove(e.getKey());
-                        return true;
-                    }
-                }
-                return false;
-            });
-        }
-        return userLocks.computeIfAbsent(userId, k -> new ReentrantLock());
+        return userLockRegistry.getUserLock(userId);
     }
 
     /**
@@ -79,6 +63,18 @@ public class OrderService {
                              Order.OrderType orderType, Order.OrderMethod orderMethod,
                              BigDecimal quantity, BigDecimal limitPrice, String assetType,
                              String memo) {
+        return createOrder(userId, stockCode, stockName, orderType, orderMethod, quantity, limitPrice, assetType, memo, null);
+    }
+
+    /**
+     * 멱등성 키(clientOrderId) 지원 주문 생성 — 동일 (userId, clientOrderId) 재요청은
+     * 새로 체결하지 않고 기존 주문을 반환한다(더블클릭·네트워크 재전송으로 인한 이중 체결 방지).
+     * clientOrderId 가 null/blank 이면 기존 동작(매번 신규 주문).
+     */
+    public Order createOrder(String userId, String stockCode, String stockName,
+                             Order.OrderType orderType, Order.OrderMethod orderMethod,
+                             BigDecimal quantity, BigDecimal limitPrice, String assetType,
+                             String memo, String clientOrderId) {
 
         if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("수량은 0보다 커야 합니다.");
@@ -95,6 +91,15 @@ public class OrderService {
         ReentrantLock lock = getUserLock(userId);
         lock.lock();
         try {
+            // 멱등성: 같은 clientOrderId로 이미 생성된 주문이 있으면 재체결하지 않고 그대로 반환
+            if (clientOrderId != null && !clientOrderId.isBlank()) {
+                Optional<Order> existing = orderRepository.findByUserIdAndClientOrderId(userId, clientOrderId);
+                if (existing.isPresent()) {
+                    log.info("멱등 주문 재요청 무시 — 기존 주문 반환: userId={}, clientOrderId={}", userId, clientOrderId);
+                    return existing.get();
+                }
+            }
+
             BigDecimal executionPrice = getExecutionPrice(stockCode, orderMethod, limitPrice, assetType);
 
             if (executionPrice.compareTo(BigDecimal.ZERO) <= 0) {
@@ -107,7 +112,21 @@ public class OrderService {
 
             Order order = new Order(userId, stockCode, stockName, orderType, orderMethod, quantity, executionPrice, assetType);
             order.setMemo(memo);
-            order = orderRepository.save(order);
+            order.setClientOrderId((clientOrderId != null && !clientOrderId.isBlank()) ? clientOrderId : null);
+            try {
+                order = orderRepository.save(order);
+            } catch (org.springframework.dao.DuplicateKeyException dup) {
+                // 멀티 인스턴스 race: 같은 clientOrderId가 먼저 저장됨 → 기존 주문 반환(이중 체결 방지).
+                // (unique 인덱스가 활성일 때만 발생. 단일 인스턴스는 UserLock으로 이미 직렬화됨)
+                if (clientOrderId != null && !clientOrderId.isBlank()) {
+                    Optional<Order> existing = orderRepository.findByUserIdAndClientOrderId(userId, clientOrderId);
+                    if (existing.isPresent()) {
+                        log.info("멱등 주문 race — 기존 주문 반환: userId={}, clientOrderId={}", userId, clientOrderId);
+                        return existing.get();
+                    }
+                }
+                throw dup;
+            }
 
             // 시장가 주문은 즉시 체결
             if (orderMethod == Order.OrderMethod.MARKET) {
@@ -245,7 +264,8 @@ public class OrderService {
 
         if (holding != null) {
             BigDecimal remaining = holding.getQuantity().subtract(quantity);
-            if (remaining.compareTo(new BigDecimal("0.0000001")) <= 0) {
+            // 잔량이 0 이하일 때만 보유 제거 — 양(+)의 잔량은 작더라도 원가/가치를 버리지 않고 유지
+            if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
                 portfolio.getHoldings().removeIf(h -> h.getStockCode().equals(stockCode));
             } else {
                 holding.setQuantity(remaining);

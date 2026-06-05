@@ -64,10 +64,8 @@ public class UsEtfPriceProvider {
     }
 
     public List<MarketPriceResponse> getAllEtfPrices() {
-        if (!kisApiClient.isConfigured()) {
-            return getMockEtfTickers();
-        }
-        return cachedPrices.isEmpty() ? getMockEtfTickers() : cachedPrices;
+        // KIS 미설정/캐시없음 → 가짜 가격이 아닌 빈 리스트(지어낸 값으로 주문·평가가 일어나지 않도록).
+        return cachedPrices;
     }
 
     /** 개별 종목 조회 (캐시 우선, 없으면 API 호출) */
@@ -169,36 +167,6 @@ public class UsEtfPriceProvider {
             case "AMS" -> "NYSE Arca";
             default -> excd;
         };
-    }
-
-    private List<MarketPriceResponse> getMockEtfTickers() {
-        List<MarketPriceResponse> list = new ArrayList<>();
-
-        MarketPriceResponse qqq = new MarketPriceResponse();
-        qqq.setAssetType(AssetType.ETF);
-        qqq.setSymbol("QQQ");
-        qqq.setName("Invesco QQQ (나스닥100)");
-        qqq.setPrice(495.20);
-        qqq.setChange(3.40);
-        qqq.setChangeRate(0.69);
-        qqq.setVolume(38_000_000L);
-        qqq.setMarket("NASDAQ");
-        qqq.setCurrency("USD");
-        list.add(qqq);
-
-        MarketPriceResponse schd = new MarketPriceResponse();
-        schd.setAssetType(AssetType.ETF);
-        schd.setSymbol("SCHD");
-        schd.setName("Schwab 미국 배당주 ETF");
-        schd.setPrice(28.15);
-        schd.setChange(0.12);
-        schd.setChangeRate(0.43);
-        schd.setVolume(12_500_000L);
-        schd.setMarket("NASDAQ");
-        schd.setCurrency("USD");
-        list.add(schd);
-
-        return list;
     }
 
     private long parseLong(String value) {

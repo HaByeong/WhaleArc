@@ -46,7 +46,8 @@ public class OrderController {
                 request.getQuantity(),
                 request.getPrice(),
                 assetType,
-                request.getMemo()
+                request.getMemo(),
+                request.getClientOrderId()
         );
         log.info("주문 생성: userId={}, stock={}, type={}, qty={}",
                 userId, request.getStockCode(), request.getOrderType(), request.getQuantity());

@@ -69,7 +69,7 @@ public class TurtleStrategyService {
      */
     public void checkAndExecute(TurtlePosition pos) {
         List<CandlestickResponse> candles = candlestickService.getCandlesticks(pos.getSymbol(), "1h");
-        if (candles.size() < ENTRY_PERIOD + ADX_PERIOD + 10) {
+        if (candles.size() < ENTRY_PERIOD + ADX_PERIOD + 11) {
             log.debug("터틀: 캔들 데이터 부족 symbol={}, size={}", pos.getSymbol(), candles.size());
             return;
         }
@@ -82,7 +82,7 @@ public class TurtleStrategyService {
         double[] atr = calculateATR(highs, lows, closes, ADX_PERIOD);
         double[] adx = calculateADX(highs, lows, closes, ADX_PERIOD);
 
-        int last = candles.size() - 1;
+        int last = candles.size() - 2; // 마지막 '종가 확정' 캔들 — 진행 중(미확정) 캔들로 신호를 평가하지 않음(백테스트·자동매매와 동일)
         int prev = last - 1;
 
         double currPrice = closes[last];
@@ -96,6 +96,27 @@ public class TurtleStrategyService {
         double exitLow = rollingMin(lows, last, EXIT_PERIOD);
 
         if (currATR <= 0 || Double.isNaN(currATR) || Double.isNaN(prevADX)) return;
+
+        // ── self-heal: 포지션 상태를 실제 보유 수량과 화해 (주문↔포지션 부분 실패로 인한 발산 방지) ──
+        BigDecimal heldQty;
+        try {
+            heldQty = portfolioService.getHoldingQuantity(pos.getUserId(), pos.getSymbol());
+        } catch (Exception e) {
+            log.warn("터틀 보유 조회 실패, 이번 틱 스킵: symbol={}, {}", pos.getSymbol(), e.getMessage());
+            return; // 보유 상태 불확실 → 아무 행동도 하지 않음
+        }
+        boolean hasHolding = heldQty.compareTo(new BigDecimal("0.0000001")) > 0;
+        if (pos.getDirection() == TurtlePosition.Direction.LONG && !hasHolding) {
+            // LONG인데 실제 보유가 없음 → 이미 청산됐으나 포지션 미반영. NONE 복구 후 이번 틱 관리 스킵.
+            log.warn("터틀 self-heal: LONG인데 보유 없음 → NONE 복구. userId={}, symbol={}", pos.getUserId(), pos.getSymbol());
+            flatten(pos);
+            return;
+        }
+        if (pos.getDirection() == TurtlePosition.Direction.NONE && hasHolding) {
+            // NONE인데 보유가 있음 → 진입은 됐으나 포지션 미반영(또는 청산 실패 잔여). 중복 매수 방지로 이번 틱 진입 스킵.
+            log.warn("터틀 self-heal: NONE인데 보유 있음 → 중복 매수 방지로 이번 틱 스킵. userId={}, symbol={}", pos.getUserId(), pos.getSymbol());
+            return;
+        }
 
         if (pos.getDirection() == TurtlePosition.Direction.NONE) {
             // ── 신규 진입 ──
@@ -204,6 +225,20 @@ public class TurtleStrategyService {
         }
     }
 
+    /** 포지션을 보유 없음(NONE) 상태로 초기화 — 실제 보유가 없는데 LONG으로 남은 경우의 self-heal. */
+    private void flatten(TurtlePosition pos) {
+        pos.setDirection(TurtlePosition.Direction.NONE);
+        pos.setUnits(0);
+        pos.setEntryPrice(BigDecimal.ZERO);
+        pos.setLastEntryPrice(BigDecimal.ZERO);
+        pos.setAvgPrice(BigDecimal.ZERO);
+        pos.setStopLoss(BigDecimal.ZERO);
+        pos.setTrailRef(null);
+        pos.setUnitWeight(BigDecimal.ZERO);
+        pos.setUpdatedAt(Instant.now());
+        positionRepository.save(pos);
+    }
+
     /**
      * 포지션 전량 청산
      */
@@ -270,14 +305,13 @@ public class TurtleStrategyService {
      */
     public void closeAllPositions(String purchaseId) {
         List<TurtlePosition> positions = positionRepository.findByPurchaseId(purchaseId);
+        // 시세는 루프 밖에서 1회만 조회해 symbol→price 맵 구성(N+1 외부 호출 제거)
+        Map<String, Double> priceMap = cryptoPriceProvider.getAllKrwTickers().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        MarketPriceResponse::getSymbol, MarketPriceResponse::getPrice, (a, b) -> a));
         for (TurtlePosition pos : positions) {
             if (pos.getDirection() == TurtlePosition.Direction.LONG) {
-                List<MarketPriceResponse> prices = cryptoPriceProvider.getAllKrwTickers();
-                double currentPrice = prices.stream()
-                        .filter(p -> p.getSymbol().equals(pos.getSymbol()))
-                        .findFirst()
-                        .map(MarketPriceResponse::getPrice)
-                        .orElse(0.0);
+                double currentPrice = priceMap.getOrDefault(pos.getSymbol(), 0.0);
                 if (currentPrice > 0) {
                     sellAll(pos, currentPrice, "CANCEL");
                 }

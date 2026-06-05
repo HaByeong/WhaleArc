@@ -19,12 +19,12 @@ const WhaleTailLogo = ({ size = 40, showNav = false, darkNav = false, lightBg = 
             <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" style={{ overflow: 'visible', pointerEvents: 'none' }}>
               <path
                 d="M50,68 C46,58 35,48 22,38 C17,34 16,28 20,24 C24,20 28,22 33,27 C38,32 43,38 47,42 C49,44 50,42 50,40"
-                fill="none" stroke="rgba(56,189,248,0.6)" strokeWidth="1.2" strokeLinecap="round"
+                fill="none" stroke="rgba(91,157,255,0.6)" strokeWidth="1.2" strokeLinecap="round"
                 className="wt-trace-left"
               />
               <path
                 d="M50,68 C54,58 65,48 78,38 C83,34 84,28 80,24 C76,20 72,22 67,27 C62,32 57,38 53,42 C51,44 50,42 50,40"
-                fill="none" stroke="rgba(56,189,248,0.6)" strokeWidth="1.2" strokeLinecap="round"
+                fill="none" stroke="rgba(91,157,255,0.6)" strokeWidth="1.2" strokeLinecap="round"
                 className="wt-trace-right"
               />
             </svg>
@@ -38,7 +38,7 @@ const WhaleTailLogo = ({ size = 40, showNav = false, darkNav = false, lightBg = 
           style={{
             filter: lightBg
               ? 'brightness(0.4) contrast(1.45) saturate(1.9) drop-shadow(0 1px 1px rgba(15,23,42,0.3))'
-              : 'brightness(1.5) contrast(1.3) saturate(1.4) drop-shadow(0 0 10px rgba(56,189,248,0.5))',
+              : 'brightness(1.5) contrast(1.3) saturate(1.4) drop-shadow(0 0 10px rgba(91,157,255,0.5))',
           }}
         />
       </div>

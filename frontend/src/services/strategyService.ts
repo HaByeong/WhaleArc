@@ -15,6 +15,8 @@ export interface Strategy {
   applied: boolean;
   appliedSuccessCount?: number;
   appliedTotalCount?: number;
+  autoTradingEnabled?: boolean;
+  autoTradeAmount?: number;
   beginnerTip?: string;
   whyUse?: string;
   difficulty?: '초급' | '중급' | '고급';
@@ -37,6 +39,7 @@ export interface Condition {
 
 export interface BacktestRequest {
   strategyId?: string;
+  strategyName?: string; // 표시용 전략명(프리셋/직접조건 실행 시 서버 저장 히스토리에 보관)
   stockCode: string;
   stockName?: string;
   startDate: string;
@@ -223,16 +226,33 @@ export const strategyService = {
     return response.data.data;
   },
 
-  // 백테스팅 실행
+  // VIRT 자동매매 ON/OFF (종목당 매수 금액)
+  setAutoTrade: async (strategyId: string, enabled: boolean, amount?: number): Promise<Strategy> => {
+    const response = await apiClient.post(`/api/strategies/${strategyId}/auto-trade`, { enabled, amount });
+    return response.data.data;
+  },
+
+  // 백테스팅 실행 (서버가 결과를 자동 보관)
   runBacktest: async (request: BacktestRequest): Promise<BacktestResult> => {
     const response = await apiClient.post('/api/strategies/backtest', request);
     return response.data.data;
   },
 
-  // 백테스팅 결과 조회
-  getBacktestResult: async (resultId: string): Promise<BacktestResult> => {
-    const response = await apiClient.get(`/api/strategies/backtest/${resultId}`);
+  // 저장된 백테스트 히스토리 목록 (요약, 서버)
+  getBacktestHistory: async (): Promise<BacktestHistoryItem[]> => {
+    const response = await apiClient.get('/api/strategies/backtest/history');
+    return response.data.data || [];
+  },
+
+  // 저장된 백테스트 전체 결과 (상세 재표시)
+  getSavedBacktest: async (id: string): Promise<BacktestResult> => {
+    const response = await apiClient.get(`/api/strategies/backtest/history/${id}`);
     return response.data.data;
+  },
+
+  // 저장된 백테스트 삭제
+  deleteSavedBacktest: async (id: string): Promise<void> => {
+    await apiClient.delete(`/api/strategies/backtest/history/${id}`);
   },
 
   // 기술적 지표 데이터 조회 (캔들스틱 + 지표 API 병렬 호출)
@@ -346,6 +366,21 @@ export interface BacktestHistoryEntry {
   date: string;
   totalReturnRate: number;
   result: BacktestResult;
+}
+
+// 서버 저장 백테스트 요약 (목록용 — 무거운 곡선/거래내역 제외)
+export interface BacktestHistoryItem {
+  id: string;
+  strategyName: string;
+  stockCode: string;
+  stockName: string;
+  startDate: string;
+  endDate: string;
+  totalReturnRate: number;
+  sharpeRatio: number;
+  maxDrawdown: number;
+  totalTrades: number;
+  createdAt: number;
 }
 
 export function loadBacktestHistory(): BacktestHistoryEntry[] {

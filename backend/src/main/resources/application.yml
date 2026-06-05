@@ -2,6 +2,11 @@ server:
   port: 8080
 
 spring:
+  # @Scheduled 잡들이 단일 스레드로 직렬화돼 빠른 잡(5s/10s)이 느린 잡(시세갱신·스냅샷)에 굶지 않도록 풀 사용
+  task:
+    scheduling:
+      pool:
+        size: 5
   servlet:
     multipart:
       max-file-size: 5MB
@@ -40,6 +45,9 @@ feedback:
 # USD/KRW 환율 기본값 (Upbit USDT/KRW 실시간 조회 실패 시 사용)
 exchange:
   default-usd-krw: 1400.0
+  # 실계좌 연동 API 키 AES 암호화 키. 로컬 기본값은 기존 저장분 복호화를 위해 값 고정(변경 시 저장된 자격증명 복호화 깨짐).
+  # 프로덕션은 EXCHANGE_ENCRYPTION_KEY 환경변수로 주입.
+  encryption-key: ${EXCHANGE_ENCRYPTION_KEY:dev-local-exchange-encryption-key-32}
 
 # 실계좌 연동 암호화 키 (로컬 개발용 기본값; 프로덕션은 VIRT_ENCRYPTION_KEY 환경변수 사용)
 virt:

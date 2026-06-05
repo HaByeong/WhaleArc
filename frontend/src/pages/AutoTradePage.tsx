@@ -467,12 +467,13 @@ const AutoTradePage = () => {
                   className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`}
                 >
                   <option value="PAPER">모의투자 (가상자금)</option>
-                  <option value="KIS">KIS 모의투자 (실계좌 연동 · 돈 0원)</option>
+                  <option value="KIS">KIS 실거래 (실제 자금 ⚠️)</option>
                 </select>
                 {form.accountKind === 'KIS' && (
-                  <p className={`text-[11px] mt-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
-                    한국투자증권 <b>모의투자 API</b>로 실제 주문을 보냅니다(실제 돈 X). 거래소 연동에서 <b>KIS 모의투자 키</b>를 먼저 등록하고,
-                    대상 종목은 <b>국내주식 코드(예: 005930)</b>로 지정하세요. 한국 장중에만 체결됩니다.
+                  <p className={`text-[11px] mt-1 font-semibold ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+                    ⚠️ <b>실제 돈으로</b> 한국투자증권에 주문합니다. 거래소 연동에서 <b>KIS 실전 키</b>를 먼저 등록하고,
+                    대상 종목은 <b>국내주식 코드(예: 005930)</b>, 할당 금액은 <b>소액(1주 값)</b>부터.
+                    1건당 한도 10만원 · 한국 장중에만 체결 · 비상 시 상단 킬스위치로 전체 정지.
                   </p>
                 )}
               </div>

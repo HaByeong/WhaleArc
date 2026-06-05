@@ -18,6 +18,7 @@ import com.project.whalearc.strategy.service.SignalEvaluator;
 import com.project.whalearc.trade.domain.Order;
 import com.project.whalearc.trade.domain.Portfolio;
 import com.project.whalearc.trade.service.PortfolioService;
+import com.project.whalearc.trade.service.UserLockRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -43,6 +44,9 @@ class LiveStrategyServiceTest {
     private PortfolioService portfolioService;
     private RecordingGateway gateway;
     private LiveStrategyService svc;
+    // 배포 저장소 인메모리 모사 — evaluateDeployment 가 락 안에서 findById 로 최신본을 다시 읽으므로
+    // save/findById 가 같은 인스턴스를 주고받아야 테스트가 그 인스턴스의 상태 전이를 검증할 수 있다.
+    private java.util.Map<String, LiveStrategyDeployment> store;
 
     /** 발주 내역을 기록하고 항상 FILLED를 반환하는 가짜 MOCK 게이트웨이. */
     static class RecordingGateway implements OrderGateway {
@@ -78,9 +82,16 @@ class LiveStrategyServiceTest {
         UsStockPriceProvider usStockPriceProvider = mock(UsStockPriceProvider.class);
         LiveOrderLogRepository orderLogRepo = mock(LiveOrderLogRepository.class);
         gateway = new RecordingGateway();
+        store = new java.util.HashMap<>();
 
         when(deploymentRepo.save(org.mockito.ArgumentMatchers.any()))
-                .thenAnswer(inv -> inv.getArgument(0));
+                .thenAnswer(inv -> {
+                    LiveStrategyDeployment d = inv.getArgument(0);
+                    if (d.getId() != null) store.put(d.getId(), d);
+                    return d;
+                });
+        when(deploymentRepo.findById(anyString()))
+                .thenAnswer(inv -> java.util.Optional.ofNullable(store.get(inv.getArgument(0))));
         // 기본: 충분한 모의 가용 현금 + USD/KRW 환율 1300
         stubCashBalance(BigDecimal.valueOf(100_000_000));
         when(exchangeRateService.getUsdKrwRate()).thenReturn(1300.0);
@@ -97,7 +108,8 @@ class LiveStrategyServiceTest {
                 deploymentRepo, strategyRepo, candlestickService,
                 new IndicatorContextBuilder(), new SignalEvaluator(),
                 notificationService, portfolioService,
-                exchangeRateService, usEtfCatalog, usStockPriceProvider, List.of(gateway), orderLogRepo);
+                exchangeRateService, usEtfCatalog, usStockPriceProvider, List.of(gateway), orderLogRepo,
+                new UserLockRegistry());
     }
 
     private void stubCashBalance(BigDecimal cash) {
@@ -135,6 +147,7 @@ class LiveStrategyServiceTest {
         LivePosition p = new LivePosition("BTC", BigDecimal.valueOf(1_000_000));
         p.setAssetType("CRYPTO");
         d.setPositions(new ArrayList<>(List.of(p)));
+        store.put(d.getId(), d);   // evaluateDeployment 의 락 안 findById 가 이 인스턴스를 돌려주도록 등록
         return d;
     }
 

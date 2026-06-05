@@ -63,6 +63,9 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/ws/**").permitAll()
+                        // 헬스체크는 무인증 프로브 허용(로드밸런서/모니터링). show-details=when-authorized 이므로
+                        // 익명에는 status(UP/DOWN)만 노출되고 상세는 가려진다. /actuator/metrics 등은 인증 필요.
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/market/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/store/products/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/store/products").permitAll()

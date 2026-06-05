@@ -466,7 +466,7 @@ const ConsoleMarketsPage = () => {
         </div>
         {error && <div className="rounded-xl px-4 py-3 text-[13px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{error}</div>}
         {/* 본문 */}
-        <div className="grid items-start gap-6" style={{ gridTemplateColumns: 'minmax(320px, 380px) 1fr' }}>
+        <div className="grid items-start gap-6 grid-cols-1 lg:grid-cols-[minmax(320px,380px)_1fr]">
           <StockList assets={displayList} activeSym={activeSym} onPick={sym => { setActiveSym(sym); const a = displayList.find(x => x.symbol === sym); if (a) recordRecent(a); }} isFav={isFav} onToggleFav={toggleFav}
             filter={listFilter} setFilter={setListFilter} query={query} setQuery={setQuery} searchResults={searchResults} onSearchPick={onSearchPick} loading={loading} canSearch={canSearch} usdKrw={usdKrw} />
           {selected ? <StockDetail stock={selected} isFav={isFav(selected)} onToggleFav={() => toggleFav(selected)} usdKrw={usdKrw} isCrypto={assetType === 'CRYPTO'} live={rtPrice != null && wsConnected} />

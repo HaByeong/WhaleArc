@@ -267,7 +267,7 @@ const UserPage = () => {
                 <div className="space-y-5">
                   <div>
                     <label className="block text-sm font-medium mb-2" style={{ color: INK2 }}>아이디</label>
-                    <input type="text" value={profile?.userId ?? ''} readOnly className={`${DARK_INPUT} cursor-not-allowed opacity-70`} />
+                    <input type="text" aria-label="로그인 아이디" value={profile?.userId ?? ''} readOnly className={`${DARK_INPUT} cursor-not-allowed opacity-70`} />
                     <p className="mt-1 text-xs" style={{ color: INK3 }}>로그인 아이디는 변경할 수 없습니다</p>
                   </div>
 
@@ -291,7 +291,7 @@ const UserPage = () => {
               {/* 자기소개 */}
               <div style={{ ...panel, padding: '22px' }}>
                 <h2 className="text-lg font-bold mb-5">자기소개</h2>
-                <textarea value={bio} onChange={(e) => setBio(e.target.value)} className={`${DARK_INPUT} resize-none`} rows={4} placeholder="자신의 투자 스타일이나 목표를 소개해보세요" maxLength={200} />
+                <textarea aria-label="자기소개" value={bio} onChange={(e) => setBio(e.target.value)} className={`${DARK_INPUT} resize-none`} rows={4} placeholder="자신의 투자 스타일이나 목표를 소개해보세요" maxLength={200} />
                 <p className="mt-1 text-xs text-right" style={{ color: INK3 }}>{bio.length}/200</p>
               </div>
 
@@ -326,7 +326,7 @@ const UserPage = () => {
 
                 {/* 직접 입력 */}
                 <div className="flex gap-2">
-                  <input type="text" value={customAsset} onChange={(e) => setCustomAsset(e.target.value)}
+                  <input type="text" aria-label="관심종목 직접 입력" value={customAsset} onChange={(e) => setCustomAsset(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAsset(customAsset); } }}
                     className={`${DARK_INPUT} flex-1`} placeholder="종목 코드 입력 (예: SHIB, 삼성SDI, PLTR)" maxLength={20} />
                   <button type="button" onClick={() => addAsset(customAsset)} disabled={!customAsset.trim()}

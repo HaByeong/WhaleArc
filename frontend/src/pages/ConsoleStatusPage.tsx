@@ -69,12 +69,12 @@ const Podium = ({ top, onRoute }: { top: Row[]; onRoute: (id: string) => void })
       {order.map(t => {
         const tier = TIERS[t.tier], first = t.rank === 1, up = t.ret >= 0;
         return (
-          <button key={t.rank} onClick={() => onRoute(t.portfolioId)} className="text-center" style={{ ...panel, padding: '18px 16px', border: first ? '1px solid rgba(91,157,255,.4)' : `1px solid ${HAIR}`, background: first ? 'linear-gradient(180deg, rgba(91,157,255,.12), rgba(14,40,56,.4))' : undefined }}>
+          <button key={t.rank} onClick={() => onRoute(t.portfolioId)} className="min-w-0 overflow-hidden text-center" style={{ ...panel, padding: '18px 10px', border: first ? '1px solid rgba(91,157,255,.4)' : `1px solid ${HAIR}`, background: first ? 'linear-gradient(180deg, rgba(91,157,255,.12), rgba(14,40,56,.4))' : undefined }}>
             <div className="mb-2" style={{ fontSize: first ? 22 : 18 }}>{first ? '🐋' : t.rank === 2 ? '🥈' : '🥉'}</div>
             <div className="mb-2.5 flex justify-center"><Avatar name={t.name} c={tier.c} size={first ? 52 : 42} /></div>
             <div className="truncate text-[14px] font-bold">{t.name}</div>
             <div className="mt-0.5 text-[11px] font-semibold" style={{ color: tier.c }}>{tier.label}</div>
-            <div className="mt-2.5 font-mono font-bold" style={{ fontSize: first ? 34 : 23, color: up ? UP : DOWN }}>{up ? '+' : ''}{t.ret.toFixed(1)}%</div>
+            <div className="mt-2.5 truncate font-mono font-bold" style={{ fontSize: first ? 'clamp(20px,5.5vw,34px)' : 'clamp(16px,4.5vw,23px)', color: up ? UP : DOWN }}>{up ? '+' : ''}{t.ret.toFixed(1)}%</div>
             <div className="mt-3 flex items-start justify-center pt-2" style={{ height: htMap[t.rank] - 70, borderRadius: '8px 8px 0 0', background: first ? 'linear-gradient(180deg, rgba(91,157,255,.3), transparent)' : 'linear-gradient(180deg, rgba(255,255,255,.06), transparent)' }}>
               <span className="font-mono text-[18px] font-bold" style={{ color: first ? SONAR : INK2 }}>{t.rank}</span>
             </div>
@@ -197,10 +197,15 @@ const ConsoleStatusPage = () => {
                 <div><div className="mb-1 text-[10.5px] font-semibold tracking-[.2em]" style={{ color: SONAR }}>LEADERBOARD</div><h3 className="text-[15.5px] font-bold">전체 랭킹 <span className="font-mono text-[12px] font-medium" style={{ color: INK3 }}>{totalCount}명</span></h3></div>
                 <span className="font-mono text-[11.5px]" style={{ color: INK3 }}>{period} 수익률 기준</span>
               </div>
-              <div className="grid gap-3.5 px-5 py-2.5 text-[10.5px] font-semibold uppercase tracking-[.1em]" style={{ gridTemplateColumns: COLS, color: INK3 }}>
-                <span className="text-center">순위</span><span /><span>항해사 · 대표 항로</span><span className="text-right">변동</span><span className="text-right">수익률 · 총자산</span><span />
+              {/* 좁은 화면에서는 고정 6열 테이블을 가로 스크롤로(페이지 가로 넘침 방지) */}
+              <div className="overflow-x-auto">
+                <div className="min-w-[560px]">
+                  <div className="grid gap-3.5 px-5 py-2.5 text-[10.5px] font-semibold uppercase tracking-[.1em]" style={{ gridTemplateColumns: COLS, color: INK3 }}>
+                    <span className="text-center">순위</span><span /><span>항해사 · 대표 항로</span><span className="text-right">변동</span><span className="text-right">수익률 · 총자산</span><span />
+                  </div>
+                  {rows.map(t => <Rrow key={t.portfolioId} t={t} onRoute={onRoute} />)}
+                </div>
               </div>
-              {rows.map(t => <Rrow key={t.portfolioId} t={t} onRoute={onRoute} />)}
               {totalPages > 1 && (
                 <div className="flex flex-wrap items-center justify-center gap-1.5 px-5 py-4" style={{ borderTop: `1px solid ${HAIR}` }}>
                   <button disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))} className="rounded-lg px-3 py-1.5 text-[12.5px] font-semibold disabled:opacity-35" style={{ border: `1px solid ${HAIR_S}`, background: 'transparent', color: INK1 }}>← 이전</button>

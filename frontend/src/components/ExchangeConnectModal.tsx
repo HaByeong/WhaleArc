@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { exchangeService, type ExchangeType, type ExchangeAccount } from '../services/exchangeService';
 
 /* 거래소 실계좌 연결/수정 모달 — 대시보드·포트폴리오 공용 (exchangeService) */
@@ -35,6 +35,13 @@ const ExchangeConnectModal = ({ exchangeType, account, onClose, onSaved }: {
     } catch (e: any) { setErr(e?.response?.data?.message || '연결에 실패했습니다. API 키를 확인해주세요.'); }
     finally { setSaving(false); }
   };
+  // Esc 키로 닫기(접근성)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const disconnect = async () => {
     if (!window.confirm(`${EX_LABEL[exchangeType]} 연결을 해제하시겠습니까?`)) return;
     try { await exchangeService.deleteAccount(exchangeType); onSaved('연결이 해제되었습니다.'); onClose(); }
@@ -43,10 +50,10 @@ const ExchangeConnectModal = ({ exchangeType, account, onClose, onSaved }: {
 
   return (
     <div onClick={onClose} className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto px-6 py-12" style={{ background: 'rgba(6,11,31,.72)', backdropFilter: 'blur(6px)', animation: 'backdrop-in .2s ease' }}>
-      <div onClick={e => e.stopPropagation()} className="relative w-full max-w-[460px] rounded-[18px]" style={{ background: 'var(--ci-overlay)', border: '1px solid var(--ci-line-strong)', boxShadow: 'var(--ci-panel-shadow)', animation: 'modal-in .25s cubic-bezier(.2,.8,.2,1)' }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="exchange-modal-title" onClick={e => e.stopPropagation()} className="relative w-full max-w-[460px] rounded-[18px]" style={{ background: 'var(--ci-overlay)', border: '1px solid var(--ci-line-strong)', boxShadow: 'var(--ci-panel-shadow)', animation: 'modal-in .25s cubic-bezier(.2,.8,.2,1)' }}>
         <div className="wa-force-dark flex items-center justify-between rounded-t-[18px] px-6 py-4 text-white" style={{ background: 'linear-gradient(105deg,#142647 0%,#1d3c7a 52%,#2c6fe6 100%)' }}>
-          <h3 className="text-[15px] font-bold">{EX_LABEL[exchangeType]} API 연결</h3>
-          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-[15px]" style={{ border: '1px solid rgba(255,255,255,.2)', background: 'rgba(255,255,255,.08)' }}>✕</button>
+          <h3 id="exchange-modal-title" className="text-[15px] font-bold">{EX_LABEL[exchangeType]} API 연결</h3>
+          <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-lg text-[15px]" style={{ border: '1px solid rgba(255,255,255,.2)', background: 'rgba(255,255,255,.08)' }}><span aria-hidden="true">✕</span></button>
         </div>
         <div className="flex flex-col gap-3 p-6">
           <Field label="API Key" value={form.apiKey} onChange={v => setForm(f => ({ ...f, apiKey: v }))} placeholder="API Key 입력" />
@@ -61,8 +68,8 @@ const ExchangeConnectModal = ({ exchangeType, account, onClose, onSaved }: {
           <p className="text-[11px]" style={{ color: 'var(--ci-ink3)' }}>🔒 API 키는 AES 암호화로 저장되며 읽기 전용 권한만 사용합니다.</p>
         </div>
         <div className="flex gap-2 px-6 py-4" style={{ borderTop: '1px solid var(--ci-line)' }}>
-          {connected && <button onClick={disconnect} className="rounded-lg px-4 py-2.5 text-[13px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.3)', color: UP }}>연결 해제</button>}
-          <button onClick={save} disabled={saving || !form.apiKey || !form.secretKey} className="flex-1 rounded-lg py-2.5 text-[14px] font-bold text-white disabled:opacity-50" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>{saving ? '연결 중…' : connected ? '수정하기' : '연결하기'}</button>
+          {connected && <button type="button" onClick={disconnect} className="rounded-lg px-4 py-2.5 text-[13px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.3)', color: UP }}>연결 해제</button>}
+          <button type="button" onClick={save} disabled={saving || !form.apiKey || !form.secretKey} className="flex-1 rounded-lg py-2.5 text-[14px] font-bold text-white disabled:opacity-50" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>{saving ? '연결 중…' : connected ? '수정하기' : '연결하기'}</button>
         </div>
       </div>
     </div>

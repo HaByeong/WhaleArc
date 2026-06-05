@@ -131,7 +131,7 @@ const OnboardingCard = ({ ex, onSetup }: { ex: typeof EXCHANGES[number]; onSetup
     </div>
     <h3 className="my-2 text-[22px] font-bold">{ex.name} 키를 등록해주세요</h3>
     <p className="m-0 max-w-[540px] text-[14.5px] leading-relaxed text-white/70">API 키를 등록하면 보유 종목과 잔고가 실시간으로 갱신됩니다. 키는 AES로 암호화되어 안전하게 보관돼요.</p>
-    <div className="mt-7 grid items-stretch gap-0" style={{ gridTemplateColumns: '1fr 22px 1fr 22px 1fr' }}>
+    <div className="mt-7 grid items-stretch gap-2 sm:gap-0 grid-cols-1 sm:grid-cols-[1fr_22px_1fr_22px_1fr]">
       <Step n="01" t="API 키 발급" s={`${ex.devel}에서 발급`} />
       <ArrowMini /><Step n="02" t="WhaleArc에 등록" s="2분 안에 완료 · 암호화 저장" />
       <ArrowMini /><Step n="03" t="자동 동기화" s="실시간 시세 + 잔고" active />

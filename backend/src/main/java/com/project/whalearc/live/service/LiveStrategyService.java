@@ -22,6 +22,7 @@ import com.project.whalearc.strategy.service.SignalEvaluator;
 import com.project.whalearc.trade.domain.Order;
 import com.project.whalearc.trade.domain.Portfolio;
 import com.project.whalearc.trade.service.PortfolioService;
+import com.project.whalearc.trade.service.UserLockRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -68,6 +69,7 @@ public class LiveStrategyService {
     private final UsStockPriceProvider usStockPriceProvider;
     private final List<OrderGateway> orderGateways;
     private final LiveOrderLogRepository orderLogRepository;
+    private final UserLockRegistry userLockRegistry;
 
     /** 전역 킬스위치 — 켜지면 스케줄러가 모든 평가를 건너뛴다. */
     private final AtomicBoolean killSwitch = new AtomicBoolean(false);
@@ -123,23 +125,6 @@ public class LiveStrategyService {
             throw new IllegalArgumentException("할당 금액은 0보다 커야 합니다.");
         }
         validateRiskParams(req);
-
-        // 자금 예약 가드(over-allocation 방지): 활성(RUNNING/PAUSED) 배포들의 할당금 합 + 신규 할당이
-        // 가용 현금을 넘지 않게 한다. 현금을 별도 버킷으로 옮기지 않고 cashBalance를 단일 출처로 유지
-        // (터틀 turtleAllocated의 이중트랙 정합성 문제를 피함). 정지(STOPPED)된 배포는 자동으로 예약 해제됨.
-        Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
-        BigDecimal cash = portfolio.getCashBalance() != null ? portfolio.getCashBalance() : BigDecimal.ZERO;
-        BigDecimal reserved = deploymentRepository
-                .findByUserIdAndStatusIn(userId, List.of(
-                        LiveStrategyDeployment.Status.RUNNING, LiveStrategyDeployment.Status.PAUSED))
-                .stream()
-                .map(LiveStrategyDeployment::getAllocatedCash)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (reserved.add(allocatedCash).compareTo(cash) > 0) {
-            throw new IllegalArgumentException(
-                    "할당 금액이 가용 현금을 초과합니다(이미 자동매매에 예약된 금액 포함). 가용=" + cash + ", 기예약=" + reserved);
-        }
 
         LiveStrategyDeployment.AccountMode accountMode =
                 req.getAccountMode() != null ? req.getAccountMode() : LiveStrategyDeployment.AccountMode.PAPER;
@@ -198,10 +183,30 @@ public class LiveStrategyService {
         d.setCreatedAt(now);
         d.setUpdatedAt(now);
 
-        LiveStrategyDeployment saved = deploymentRepository.save(d);
-        log.info("라이브 배포 생성: userId={}, deploymentId={}, strategy={}, assets={}, mode={}",
-                userId, saved.getId(), strategyName, targetAssets, accountMode);
-        return saved;
+        // 자금 예약 가드(over-allocation 방지) + 저장을 유저 락 안에서 원자적으로 수행한다.
+        // 활성(RUNNING/PAUSED) 배포들의 할당금 합 + 신규 할당이 가용 현금을 넘지 않게 한다. 현금을 별도
+        // 버킷으로 옮기지 않고 cashBalance를 단일 출처로 유지(터틀 이중트랙 정합성 문제 회피). 정지(STOPPED)는
+        // 자동 예약 해제됨. 락이 없으면 동시 2건 생성이 같은 reserved를 읽어 둘 다 통과(가용현금 초과 예약)할 수 있다.
+        final BigDecimal allocatedCashFinal = allocatedCash;
+        return userLockRegistry.withLock(userId, () -> {
+            Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
+            BigDecimal cash = portfolio.getCashBalance() != null ? portfolio.getCashBalance() : BigDecimal.ZERO;
+            BigDecimal reserved = deploymentRepository
+                    .findByUserIdAndStatusIn(userId, List.of(
+                            LiveStrategyDeployment.Status.RUNNING, LiveStrategyDeployment.Status.PAUSED))
+                    .stream()
+                    .map(LiveStrategyDeployment::getAllocatedCash)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (reserved.add(allocatedCashFinal).compareTo(cash) > 0) {
+                throw new IllegalArgumentException(
+                        "할당 금액이 가용 현금을 초과합니다(이미 자동매매에 예약된 금액 포함). 가용=" + cash + ", 기예약=" + reserved);
+            }
+            LiveStrategyDeployment saved = deploymentRepository.save(d);
+            log.info("라이브 배포 생성: userId={}, deploymentId={}, strategy={}, assets={}, mode={}",
+                    userId, saved.getId(), strategyName, targetAssets, accountMode);
+            return saved;
+        });
     }
 
     public List<LiveStrategyDeployment> getUserDeployments(String userId) {
@@ -232,11 +237,15 @@ public class LiveStrategyService {
     }
 
     private LiveStrategyDeployment transition(String userId, String deploymentId, LiveStrategyDeployment.Status target) {
-        LiveStrategyDeployment d = deploymentRepository.findByIdAndUserId(deploymentId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
-        d.setStatus(target);
-        d.setUpdatedAt(Instant.now());
-        return deploymentRepository.save(d);
+        // 유저 락 안에서 상태 전이 — 평가(evaluateDeployment)와 직렬화해 사용자의 stop/pause가
+        // 동시 평가의 전체문서 save에 덮어써지지 않게 한다(lost-update 방지).
+        return userLockRegistry.withLock(userId, () -> {
+            LiveStrategyDeployment d = deploymentRepository.findByIdAndUserId(deploymentId, userId)
+                    .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+            d.setStatus(target);
+            d.setUpdatedAt(Instant.now());
+            return deploymentRepository.save(d);
+        });
     }
 
     // ── 킬스위치 ──────────────────────────────────────────────────────
@@ -266,9 +275,22 @@ public class LiveStrategyService {
         return deploymentRepository.findById(deploymentId).orElse(d);
     }
 
-    /** RUNNING 배포 1건의 모든 심볼을 평가하고 필요 시 주문을 낸다. 포지션별 예외는 격리. */
+    /**
+     * RUNNING 배포 1건의 모든 심볼을 평가하고 필요 시 주문을 낸다. 포지션별 예외는 격리.
+     *
+     * <p>동시성: 스케줄러(cron)와 수동 evaluateNow가 같은 배포를 동시에 평가하면 read-modify-save 가
+     * lost-update 를 일으켜 포지션/실현손익 장부가 유실될 수 있다. 이를 막기 위해 유저 락 안에서
+     * <b>DB에서 최신 배포를 다시 읽어</b> 그 사본을 평가·저장한다(인자 d는 stale 스냅샷일 수 있어 식별자로만 사용).
+     * OrderGateway가 거치는 OrderService도 같은 유저 락(ReentrantLock)을 재진입하므로 안전하다.
+     */
     public void evaluateDeployment(LiveStrategyDeployment d) {
-        if (d.getStatus() != LiveStrategyDeployment.Status.RUNNING) return;
+        if (d == null || d.getId() == null) return;
+        userLockRegistry.withLock(d.getUserId(), () -> doEvaluateLocked(d.getId()));
+    }
+
+    private void doEvaluateLocked(String deploymentId) {
+        LiveStrategyDeployment d = deploymentRepository.findById(deploymentId).orElse(null);
+        if (d == null || d.getStatus() != LiveStrategyDeployment.Status.RUNNING) return;
         OrderGateway gateway = resolveGateway(d.getBrokerType());
 
         // 일별 손익 리셋(KST 자정 경계)
@@ -287,21 +309,16 @@ public class LiveStrategyService {
             }
         }
 
-        // 일일 손실한도 도달 시 자동 일시정지(엔진 결정). 단, 평가 도중 사용자가 stop/pause 했다면 그 상태가 우선.
-        // 최신 status를 DB에서 다시 읽어, 스케줄러 save가 사용자의 상태 변경을 RUNNING으로 되돌리지 않게 한다.
-        // (완전한 동시성 보호 — 분산 락/@Version — 는 이후 단계)
+        // 일일 손실한도 도달 시 자동 일시정지(엔진 결정). 락 안에서 최신본을 읽어 평가하므로 status는
+        // 이미 권위 있는 값(전이도 같은 락으로 직렬화됨). 한도 도달 시에만 PAUSED로 전환한다.
         boolean lossLimitHit = d.getDailyLossLimit() != null
                 && d.getDailyLossLimit().compareTo(BigDecimal.ZERO) > 0
                 && nz(d.getTodayRealizedPnl()).compareTo(d.getDailyLossLimit().negate()) <= 0;
-        LiveStrategyDeployment.Status freshStatus = deploymentRepository.findById(d.getId())
-                .map(LiveStrategyDeployment::getStatus).orElse(d.getStatus());
-        if (lossLimitHit && freshStatus == LiveStrategyDeployment.Status.RUNNING) {
+        if (lossLimitHit) {
             d.setStatus(LiveStrategyDeployment.Status.PAUSED);
             log.warn("일일 손실한도 도달 → 자동 일시정지: deploymentId={}, todayPnl={}, limit={}",
                     d.getId(), d.getTodayRealizedPnl(), d.getDailyLossLimit());
             notifyAutoPause(d);
-        } else {
-            d.setStatus(freshStatus);
         }
         d.setLastEvaluatedAt(Instant.now());
         d.setUpdatedAt(Instant.now());

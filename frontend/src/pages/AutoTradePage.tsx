@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import HelmShell from '../components/HelmShell';
 import Toast, { type ToastItem } from '../components/Toast';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
@@ -67,14 +67,23 @@ const AutoTradePage = () => {
     dailyLossLimit: '',
   });
 
-  // 토스트
+  // 토스트 (언마운트 시 타이머 정리해 stale setState 방지)
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const pushToast = useCallback((type: ToastItem['type'], title: string, message = '') => {
     const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     setToasts(prev => [...prev, { id, type, title, message }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+    const timer = setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+      toastTimers.current.delete(timer);
+    }, 4000);
+    toastTimers.current.add(timer);
   }, []);
   const dismissToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id));
+  useEffect(() => {
+    const timers = toastTimers.current;
+    return () => { timers.forEach(clearTimeout); timers.clear(); };
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -133,10 +142,27 @@ const AutoTradePage = () => {
       pushToast('error', '금액 확인', '할당 금액을 올바르게 입력해주세요.');
       return;
     }
-    const targetAssets = form.targetAssetsText.split(',').map(s => s.trim()).filter(Boolean);
+
+    // 손절·트레일링은 0~100%(서버 validateRiskParams와 동일), 익절은 0 초과만 — 제출 전 검증
+    const pctErr = (label: string, raw: string, capped: boolean): string | null => {
+      if (!raw) return null;
+      const n = Number(raw);
+      if (isNaN(n) || n <= 0) return `${label}은(는) 0보다 큰 값이어야 합니다.`;
+      if (capped && n >= 100) return `${label}은(는) 100%보다 작아야 합니다.`;
+      return null;
+    };
+    const riskError = pctErr('손절률', form.stopLossPct, true)
+      || pctErr('트레일링 스탑률', form.trailingStopPct, true)
+      || pctErr('익절률', form.takeProfitPct, false);
+    if (riskError) { pushToast('error', '리스크 값 확인', riskError); return; }
 
     const selected = allStrategies.find(s => s.id === form.strategyId);
     const isPreset = form.strategyId.startsWith('preset-');
+
+    const typedAssets = form.targetAssetsText.split(',').map(s => s.trim()).filter(Boolean);
+    // 프리셋(직접입력 분기)은 백엔드에 종목 폴백이 없어 비우면 거부된다 → 비웠으면 전략 기본 종목으로 채운다.
+    // 저장 전략(strategyId)은 undefined로 보내면 백엔드가 전략의 기본 종목을 사용한다.
+    const targetAssets = typedAssets.length ? typedAssets : (isPreset ? (selected?.targetAssets ?? []) : []);
 
     setCreating(true);
     try {
@@ -205,6 +231,7 @@ const AutoTradePage = () => {
       const result = await liveTradeService.setKillSwitch(next);
       setKillSwitch(result);
       pushToast(result ? 'error' : 'success', '킬스위치', result ? '전체 자동매매 정지됨' : '킬스위치 해제됨');
+      await loadData(); // 배포 카드 상태/버튼을 즉시 갱신(최대 30초 어긋남 방지)
     } catch (e) {
       pushToast('error', '킬스위치 실패', errMsg(e));
     }
@@ -319,6 +346,26 @@ const AutoTradePage = () => {
                     </div>
                   </div>
 
+                  {/* 일일 손실한도 진행도 — 도달 시 자동 일시정지(안전장치 가시화) */}
+                  {d.dailyLossLimit != null && d.dailyLossLimit > 0 && (() => {
+                    const today = d.todayRealizedPnl ?? 0;
+                    const ratio = Math.min(1, Math.max(0, -today) / d.dailyLossLimit);
+                    const near = ratio >= 0.8;
+                    return (
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between text-[11px] mb-1">
+                          <span className={subText}>오늘 손익 / 일일 손실한도</span>
+                          <span className={`font-semibold ${today < 0 ? 'text-blue-500' : today > 0 ? 'text-red-500' : (isDark ? 'text-slate-300' : 'text-gray-600')}`}>
+                            {today > 0 ? '+' : ''}{formatKRW(today)} / -{formatKRW(d.dailyLossLimit)}
+                          </span>
+                        </div>
+                        <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-white/[0.06]' : 'bg-gray-100'}`}>
+                          <div className={`h-full rounded-full ${near ? 'bg-red-500' : 'bg-amber-400'}`} style={{ width: `${ratio * 100}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* 포지션 */}
                   <div className={`rounded-lg border divide-y ${isDark ? 'border-white/[0.06] divide-white/[0.06]' : 'border-gray-100 divide-gray-100'} mb-3`}>
                     {(d.positions || []).map(p => (
@@ -341,8 +388,9 @@ const AutoTradePage = () => {
                   {/* 액션 */}
                   <div className="flex items-center gap-2">
                     {d.status === 'RUNNING' && (
-                      <button disabled={busyId === d.id} onClick={() => evaluateNow(d)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>
+                      <button disabled={busyId === d.id || killSwitch} onClick={() => evaluateNow(d)}
+                        title={killSwitch ? '전역 킬스위치가 켜져 있어 평가할 수 없습니다.' : undefined}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed ${isDark ? 'bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>
                         지금 평가
                       </button>
                     )}
@@ -449,13 +497,13 @@ const AutoTradePage = () => {
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>리스크 관리 (%, 선택)</label>
                 <div className="grid grid-cols-3 gap-2">
-                  <input type="number" placeholder="손절" value={form.stopLossPct}
+                  <input type="number" min={0} max={100} step="any" placeholder="손절" value={form.stopLossPct}
                     onChange={e => setForm(prev => ({ ...prev, stopLossPct: e.target.value }))}
                     className={`w-full rounded-lg border px-2 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`} />
-                  <input type="number" placeholder="익절" value={form.takeProfitPct}
+                  <input type="number" min={0} step="any" placeholder="익절" value={form.takeProfitPct}
                     onChange={e => setForm(prev => ({ ...prev, takeProfitPct: e.target.value }))}
                     className={`w-full rounded-lg border px-2 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`} />
-                  <input type="number" placeholder="트레일링" value={form.trailingStopPct}
+                  <input type="number" min={0} max={100} step="any" placeholder="트레일링" value={form.trailingStopPct}
                     onChange={e => setForm(prev => ({ ...prev, trailingStopPct: e.target.value }))}
                     className={`w-full rounded-lg border px-2 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`} />
                 </div>

@@ -27,6 +27,7 @@ const SignUpPage = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
@@ -61,10 +62,14 @@ const SignUpPage = () => {
   };
 
   const handleOAuthLogin = async (provider: 'google') => {
+    setOauthLoading(true);
+    setError(null);
     try {
       await authService.loginWithOAuth(provider);
+      // 성공 시 전체 페이지 리다이렉트되므로 로딩 상태 유지(연타 방지)
     } catch (err: any) {
       setError(err.message || `${provider} 로그인에 실패했습니다.`);
+      setOauthLoading(false);
     }
   };
 
@@ -87,14 +92,18 @@ const SignUpPage = () => {
             </div>
 
             <div className="mb-2">
-              <GoogleButton onClick={() => handleOAuthLogin('google')} label="Google로 시작하기" />
+              <GoogleButton
+                onClick={() => handleOAuthLogin('google')}
+                disabled={oauthLoading}
+                label={oauthLoading ? '연결 중...' : 'Google로 시작하기'}
+              />
             </div>
 
             <AuthDivider>또는 이메일로 가입</AuthDivider>
 
-            {error && <AuthAlert tone="error" className="mb-6">{error}</AuthAlert>}
+            {error && <AuthAlert tone="error" className="mb-6"><span id="signup-error">{error}</span></AuthAlert>}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" aria-label="회원가입 폼">
               <div>
                 <label htmlFor="email" className={AUTH_LABEL}>이메일 *</label>
                 <input type="email" id="email" value={email} onChange={(e) => setEmail(e.target.value)} className={AUTH_INPUT} placeholder="email@example.com" required />

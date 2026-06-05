@@ -1276,7 +1276,7 @@ const ConsoleStrategyPage = () => {
           <button onClick={() => setTour(true)} className="inline-flex items-center gap-1.5 rounded-[10px] px-3.5 py-2 text-[13px] font-bold" style={{ border: '1px solid rgba(91,157,255,.4)', background: 'rgba(91,157,255,.14)', color: GLOW }} title="사용법 가이드 투어 다시 보기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="10" /><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .8-1 1.7" strokeLinecap="round" /><circle cx="12" cy="17" r=".6" fill="currentColor" /></svg>가이드 투어 다시 보기</button>
         </div>
         {error && <div className="rounded-xl px-4 py-3 text-[13px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{error}</div>}
-        <div className="grid items-start gap-5" style={{ gridTemplateColumns: 'minmax(0, 280px) minmax(0, 1fr) minmax(0, 320px)' }}>
+        <div className="grid items-start gap-5 grid-cols-1 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)_minmax(0,320px)]">
           <div data-tour="library" className="min-w-0">
           <StrategyLibrary strats={allStrats} activeId={activeId} onPick={(id) => { setActiveId(id); setResult(null); setError(null); }}
             onCreate={() => setBuilder({ mode: 'create' })}

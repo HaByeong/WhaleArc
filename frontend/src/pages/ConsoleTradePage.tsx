@@ -723,7 +723,7 @@ const ConsoleTradePage = () => {
           <p className="mt-2 text-[14px]" style={{ color: INK1 }}>종목을 선택하고 매수·매도를 실행하세요. 실계좌 미연결 상태에서는 VIRT로 안전하게.</p>
         </div>
         {error && <div className="rounded-xl px-4 py-3 text-[13px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{error}</div>}
-        <div className="grid items-start gap-5" style={{ gridTemplateColumns: 'minmax(0, 260px) minmax(0, 1fr) minmax(0, 300px)' }}>
+        <div className="grid items-start gap-5 grid-cols-1 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)_minmax(0,300px)]">
           <StockList assets={displayList} activeSym={activeSym} onPick={setActiveSym} klass={klass} setKlass={k => { setKlass(k); setQuery(''); setSearchResults([]); }} query={query} setQuery={setQuery} canSearch={canSearch} searchResults={searchResults} onSearchPick={onSearchPick} usdKrw={usdKrw} loading={loading} />
           <div className="flex min-w-0 flex-col gap-[18px]">
             {sel ? <>

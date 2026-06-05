@@ -343,7 +343,7 @@ const ConsoleCommunityPage = () => {
         <div className="mb-[18px] flex flex-wrap gap-2">
           {CHANNELS.map(([k, l, ic]) => { const on = ch === k; return <button key={k} onClick={() => setCh(k)} className="inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-[13px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : `1px solid ${HAIR}`, background: on ? SONAR_DIM : CARD, color: on ? SONAR : INK1 }}><span>{ic}</span>{l}</button>; })}
         </div>
-        <div className="grid items-start gap-5" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 320px)' }}>
+        <div className="grid items-start gap-5 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
           <div className="flex min-w-0 flex-col gap-[18px]">
             <Panel style={{ padding: '16px 18px' }}>
               <div className="flex items-center gap-3">

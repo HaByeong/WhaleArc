@@ -87,6 +87,25 @@ class KisPaperTradeClientTest {
 
     @Test
     @SuppressWarnings({"unchecked", "rawtypes"})
+    void realModeUsesLiveTrIdAndDomain() {
+        client.setRealTrading(true);
+        ArgumentCaptor<String> url = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<HttpEntity> cap = ArgumentCaptor.forClass(HttpEntity.class);
+        when(rt.exchange(url.capture(), eq(HttpMethod.POST), cap.capture(), eq(Map.class)))
+                .thenReturn((ResponseEntity) ResponseEntity.ok(Map.of("access_token", "tok", "expires_in", "86400")))
+                .thenReturn((ResponseEntity) ResponseEntity.ok(Map.of("HASH", "HASHED")))
+                .thenReturn((ResponseEntity) ResponseEntity.ok(Map.of("rt_cd", "0", "msg1", "정상", "output", Map.of("ODNO", "1"))));
+
+        client.placeMarketOrder(cred(), Order.OrderType.BUY, "005930", new BigDecimal("1"));
+
+        // 실전 매수 TR + 실전 도메인
+        HttpEntity<?> sent = cap.getAllValues().get(cap.getAllValues().size() - 1);
+        assertEquals("TTTC0802U", sent.getHeaders().getFirst("tr_id"), "실전 매수 TR");
+        assertTrue(url.getAllValues().stream().anyMatch(u -> u.contains("openapi.koreainvestment.com:9443")), "실전 도메인 사용");
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
     void rejectedOrderReturnsNotAccepted() {
         when(rt.exchange(contains("/order-cash"), eq(HttpMethod.POST), any(), eq(Map.class)))
                 .thenReturn((ResponseEntity) ResponseEntity.ok(Map.of("rt_cd", "1", "msg1", "주문가능금액부족")));

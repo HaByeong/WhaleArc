@@ -74,6 +74,10 @@ public class LiveStrategyService {
     /** 전역 킬스위치 — 켜지면 스케줄러가 모든 평가를 건너뛴다. */
     private final AtomicBoolean killSwitch = new AtomicBoolean(false);
 
+    /** 실거래(KIS) 1건당 할당 상한(KRW) — 팻핑거 방지 가드. 소액 검증 후 config로 상향. (null=미설정 시 무제한) */
+    @org.springframework.beans.factory.annotation.Value("${live.broker.kis.max-allocated-krw:100000}")
+    private BigDecimal kisMaxAllocatedKrw;
+
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -140,8 +144,16 @@ public class LiveStrategyService {
                 && brokerType == LiveStrategyDeployment.BrokerType.MOCK) {
             throw new IllegalArgumentException("실계좌(LIVE) 모드는 실거래 브로커가 필요합니다.");
         }
-        // 처리 가능한 게이트웨이가 없으면 거부 (1단계: MOCK 외 미지원 → 실계좌 자동 차단)
+        // 처리 가능한 게이트웨이가 없으면 거부 (MOCK 외 미지원이면 실계좌 자동 차단)
         resolveGateway(brokerType);
+
+        // 실거래(KIS) 1건당 할당 상한 가드 — 팻핑거로 큰 실주문이 나가는 사고 방지(소액 검증 단계)
+        if (brokerType == LiveStrategyDeployment.BrokerType.KIS
+                && kisMaxAllocatedKrw != null
+                && allocatedCash.compareTo(kisMaxAllocatedKrw) > 0) {
+            throw new IllegalArgumentException(
+                    "실거래(KIS) 1건당 할당 한도(" + kisMaxAllocatedKrw + "원)를 초과했습니다. 소액으로 먼저 검증한 뒤 한도를 올리세요.");
+        }
 
         LiveStrategyDeployment d = new LiveStrategyDeployment();
         d.setUserId(userId);

@@ -24,7 +24,12 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -331,5 +336,44 @@ class LiveStrategyServiceTest {
         // 100만원 / 2자산 = 50만원씩 (NONE 상태, 매수는 스케줄러가 시그널 따라)
         assertEquals(0, d.getPositions().get(0).getAllocatedCash().compareTo(BigDecimal.valueOf(500_000)));
         assertEquals(LivePosition.Direction.NONE, d.getPositions().get(0).getDirection());
+    }
+
+    @Test
+    void concurrentEvaluationDoesNotDuplicateOrderOrCorruptLedger() throws Exception {
+        // 스케줄러(cron)와 수동 evaluate가 같은 봉에 같은 배포를 동시에 평가하는 경합을 재현한다.
+        // 유저 락 + 락 안 findById 재조회가 없으면 여러 스레드가 모두 NONE 스냅샷을 읽어 매수를 N건
+        // 발주(중복) + 늦은 save가 이른 save를 덮어써 장부(tradeCount/포지션)가 깨진다.
+        // 수정 후에는 정확히 1건만 진입하고 거래수도 1이어야 한다.
+        when(candlestickService.getCandlesticks(anyString(), anyString(), anyString()))
+                .thenReturn(flatCandles(130, 100));
+
+        LiveStrategyDeployment d = baseDeployment();
+
+        int threads = 4;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(threads);
+        List<Throwable> errors = Collections.synchronizedList(new ArrayList<>());
+        for (int i = 0; i < threads; i++) {
+            pool.submit(() -> {
+                try {
+                    start.await();                 // 모든 스레드를 동시에 출발시켜 경합 창을 넓힌다
+                    svc.evaluateDeployment(d);
+                } catch (Throwable t) {
+                    errors.add(t);
+                } finally {
+                    done.countDown();
+                }
+            });
+        }
+        start.countDown();
+        assertTrue(done.await(10, TimeUnit.SECONDS), "동시 평가가 시간 내 완료되어야 함");
+        pool.shutdownNow();
+
+        assertTrue(errors.isEmpty(), "동시 평가 중 예외가 없어야 함(경합/자료구조 손상 없음): " + errors);
+        assertEquals(1, gateway.placed.size(), "동시 평가에도 매수 주문은 정확히 1건(중복 발주 없음)");
+        LivePosition p = d.getPositions().get(0);
+        assertEquals(LivePosition.Direction.LONG, p.getDirection(), "1회만 진입해 LONG 상태");
+        assertEquals(1, d.getTradeCount(), "거래수 1(이중 집계 없음)");
     }
 }

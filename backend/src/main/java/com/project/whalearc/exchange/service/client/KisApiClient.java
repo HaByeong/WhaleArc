@@ -59,7 +59,11 @@ public class KisApiClient {
                     BASE_URL + TOKEN_PATH, HttpMethod.POST, request, Map.class);
 
             if (response.getBody() != null) {
-                return (String) response.getBody().get("access_token");
+                Object tok = response.getBody().get("access_token");
+                if (tok == null) {
+                    System.err.println("[KIS 토큰] access_token 없음 — 응답: " + response.getBody());
+                }
+                return (String) tok;
             }
         } catch (Exception e) {
             System.err.println("KIS 토큰 발급 실패: " + e.getMessage());
@@ -101,6 +105,12 @@ public class KisApiClient {
 
         HttpEntity<Void> request = new HttpEntity<>(headers);
         ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, request, Map.class);
+
+        // 진단: KIS가 rt_cd!=0(에러)을 줘도 아래에서 조용히 0원 처리되므로, 비정상 응답을 로그로 남긴다.
+        if (response.getBody() != null && !"0".equals(String.valueOf(response.getBody().get("rt_cd")))) {
+            System.err.println("[KIS 잔고조회] 비정상 rt_cd=" + response.getBody().get("rt_cd")
+                    + " msg=" + response.getBody().get("msg1") + " (CANO=" + cano + "-" + acntPrdtCd + ")");
+        }
 
         List<ExchangeHoldingDto> holdings = new ArrayList<>();
         double totalValue = 0;

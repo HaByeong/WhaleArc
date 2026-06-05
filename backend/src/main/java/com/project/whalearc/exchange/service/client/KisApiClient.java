@@ -11,6 +11,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 한국투자증권(KIS) Open API 클라이언트
@@ -26,6 +27,12 @@ public class KisApiClient {
     private static final String CCLD_PATH = "/uapi/domestic-stock/v1/trading/inquire-daily-ccld";
 
     private final RestTemplate restTemplate = new RestTemplate();
+
+    // KIS 접근토큰은 발급이 1분당 1회로 제한(초과 시 EGW00133)되고 유효기간이 24h다.
+    // appkey별로 캐싱해 재사용한다(매 조회마다 새로 발급하던 EGW00133 버그 수정).
+    private final Map<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
+
+    private record CachedToken(String token, long expiresAtMillis) {}
 
     public ExchangePortfolioDto getPortfolio(String appKey, String appSecret,
                                               String secretKey, String accountNumber) {
@@ -45,6 +52,10 @@ public class KisApiClient {
     }
 
     private String getAccessToken(String appKey, String appSecret) {
+        CachedToken cached = tokenCache.get(appKey);
+        if (cached != null && System.currentTimeMillis() < cached.expiresAtMillis()) {
+            return cached.token();
+        }
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -62,8 +73,17 @@ public class KisApiClient {
                 Object tok = response.getBody().get("access_token");
                 if (tok == null) {
                     System.err.println("[KIS 토큰] access_token 없음 — 응답: " + response.getBody());
+                    return null;
                 }
-                return (String) tok;
+                String token = (String) tok;
+                long ttl = 23L * 3600 * 1000;   // 기본 23h (유효 24h - 여유)
+                Object exp = response.getBody().get("expires_in");
+                if (exp != null) {
+                    try { ttl = (long) (Double.parseDouble(String.valueOf(exp)) * 1000) - 60_000; }
+                    catch (NumberFormatException ignore) { /* 기본 사용 */ }
+                }
+                tokenCache.put(appKey, new CachedToken(token, System.currentTimeMillis() + ttl));
+                return token;
             }
         } catch (Exception e) {
             System.err.println("KIS 토큰 발급 실패: " + e.getMessage());

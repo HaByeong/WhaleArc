@@ -66,14 +66,17 @@ public class LimitOrderScheduler {
         }
 
         int executed = 0;
+        int individualFetches = 0;               // 틱당 개별 KIS 조회 횟수 — 한 틱이 5s fixedRate를 넘기지 않도록 상한
+        final int MAX_INDIVIDUAL_FETCHES = 5;
         for (Order order : pendingOrders) {
             Double marketPrice;
             if (order.isUsStock()) {
                 marketPrice = usStockPriceMap.get(order.getStockCode());
             } else if (order.isStock()) {
                 marketPrice = stockPriceMap.get(order.getStockCode());
-                // 캐시에 없으면 개별 조회
-                if (marketPrice == null) {
+                // 캐시에 없으면 개별 조회 (틱당 상한까지만; 초과분은 다음 틱에 재시도)
+                if (marketPrice == null && individualFetches < MAX_INDIVIDUAL_FETCHES) {
+                    individualFetches++;
                     try {
                         Map<String, String> output = kisApiClient.getStockPrice(order.getStockCode());
                         if (output != null) {

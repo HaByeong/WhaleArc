@@ -25,10 +25,17 @@ interface MACDData {
   macdLine: (number | null)[]; signalLine: (number | null)[]; histogram: (number | null)[];
 }
 
+// 첫 EMA를 단일점(arr[0])이 아닌 첫 period개 SMA로 시드 — 앱 표준(utils/indicators.ts)과 일관(데모라 warmup은 시드값으로 채움)
 function ema(arr: number[], period: number): number[] {
   const k = 2 / (period + 1);
-  const result: number[] = [arr[0]];
-  for (let i = 1; i < arr.length; i++) result.push(arr[i] * k + result[i - 1] * (1 - k));
+  const result: number[] = new Array(arr.length);
+  if (arr.length === 0) return result;
+  const seed = Math.min(period, arr.length);
+  let sum = 0;
+  for (let i = 0; i < seed; i++) sum += arr[i];
+  const sma = sum / seed;
+  for (let i = 0; i < seed; i++) result[i] = sma;
+  for (let i = seed; i < arr.length; i++) result[i] = arr[i] * k + result[i - 1] * (1 - k);
   return result;
 }
 

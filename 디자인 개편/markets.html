@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>WhaleArc · 시세</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="icon" type="image/png" href="brand-whale.png">
+<meta name="theme-color" content="#060b1f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-0: #060b1f;
+    --bg-1: #0a1230;
+    --bg-2: #0e1a3d;
+    --ink-0: #ffffff;
+    --ink-1: rgba(255,255,255,.72);
+    --ink-2: rgba(255,255,255,.48);
+    --ink-3: rgba(255,255,255,.28);
+    --line: rgba(255,255,255,.10);
+    --line-strong: rgba(255,255,255,.18);
+    --accent: #2c6fe6;
+    --accent-glow: #5b9dff;
+    --up: #ef4d4d;
+    --down: #4d8aff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg-0);
+    color: var(--ink-0);
+    font-family: 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection { background: var(--accent); color: #fff; }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: .55; transform: scale(.9); }
+  }
+  @keyframes whale-float {
+    0%, 100% { transform: translateY(0) rotate(-1.2deg); }
+    50%      { transform: translateY(-14px) rotate(1deg); }
+  }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-feature-settings: 'tnum'; }
+  a { text-decoration: none; color: inherit; }
+
+  /* hide scrollbar but allow scroll */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+
+  .helm-shell{ margin-left:240px; }
+  @media (max-width: 860px){
+    .helm-aside{ top:auto !important; bottom:0 !important; left:0 !important; right:0 !important; width:auto !important;
+      flex-direction:row !important; align-items:center !important; gap:2px !important;
+      padding:6px 8px !important; border-right:0 !important;
+      border-top:1px solid var(--hair, var(--line)) !important;
+      background:rgba(6,11,31,.94) !important; -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); }
+    .helm-brand, .helm-foot, .navkick { display:none !important; }
+    .helm-nav{ flex-direction:row !important; margin:0 !important; gap:2px !important;
+      width:100% !important; justify-content:space-around !important; overflow-x:auto; }
+    .helm-nav > a{ flex-direction:column !important; gap:3px !important; padding:8px 6px !important;
+      font-size:10px !important; border-radius:10px !important; flex:1; min-width:0; }
+    .navlbl{ display:block !important; font-size:10px !important; }
+    .helm-shell{ margin-left:0 !important; padding-bottom:76px !important; }
+    main{ padding-left:16px !important; padding-right:16px !important; }
+  }
+
+  /* mobile-stack */
+  @media (max-width: 860px){
+    main [style*="minmax("]{ grid-template-columns:1fr !important; }
+    .helm-aside [style*="position:'sticky'"], .helm-shell [style*="sticky"]{ position:static !important; }
+  }
+
+  /* polish-pass */
+  *:focus-visible{ outline:2px solid var(--sonar, var(--accent)); outline-offset:2px; border-radius:4px; }
+  button, a { -webkit-tap-highlight-color:transparent; }
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.12); border-radius:8px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover{ background:rgba(255,255,255,.22); background-clip:content-box; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  html{ scroll-behavior:smooth; }
+
+  /* whalearc-fx */
+  .whalearc-text{ background:linear-gradient(90deg,#fff 0%,#a8d4ff 25%,#4a90e2 50%,#a8d4ff 75%,#fff 100%);
+    background-size:300% 100%; -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; color:transparent;
+    animation:whalearc-shine 5s linear infinite; filter:drop-shadow(0 0 8px rgba(74,144,226,.35)); }
+  @keyframes whalearc-shine{ 0%{background-position:100% 50%;} 100%{background-position:-100% 50%;} }
+  .wt-glow-pro{ border-radius:50%; pointer-events:none;
+    background:radial-gradient(ellipse, rgba(56,189,248,.28) 0%, rgba(74,144,226,.12) 40%, transparent 70%);
+    animation:wt-glow-pro-pulse 3.5s ease-in-out infinite; }
+  @keyframes wt-glow-pro-pulse{ 0%,100%{opacity:.4;transform:scale(.92);} 50%{opacity:1;transform:scale(1.12);} }
+
+  /* depth-fx */
+  body{ background:radial-gradient(130% 95% at 50% -12%, #0e1c42 0%, #070e28 46%, #04081a 100%) no-repeat fixed !important; }
+  body::after{ content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 39px, rgba(124,196,255,.04) 39px 40px),
+      repeating-linear-gradient(90deg, transparent 0 39px, rgba(124,196,255,.04) 39px 40px),
+      radial-gradient(58% 48% at 50% 6%, rgba(91,157,255,.14), transparent 72%);
+    -webkit-mask-image: radial-gradient(115% 82% at 50% -2%, #000 22%, transparent 86%);
+    mask-image: radial-gradient(115% 82% at 50% -2%, #000 22%, transparent 86%); }
+  .helm-aside{ box-shadow: 16px 0 46px -24px rgba(0,0,0,.75); }
+  @media (max-width:860px){ .helm-aside{ box-shadow:0 -16px 40px -22px rgba(0,0,0,.7) !important; } }
+
+  /* nav-sheen-fx */
+  .nav-active{ position:relative; overflow:hidden; }
+  .nav-active::after{ content:''; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
+    background:linear-gradient(108deg, transparent 32%, rgba(180,210,255,.15) 50%, transparent 68%);
+    background-size:220% 100%; animation:nav-sheen 5s ease-in-out infinite; }
+  @keyframes nav-sheen{ 0%{ background-position:150% 0; } 55%,100%{ background-position:-50% 0; } }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="image-slot.js"></script>
+<script type="text/babel" src="primitives.jsx"></script>
+<script type="text/babel" src="sidebar.jsx"></script>
+<script type="text/babel" src="dashboard.jsx"></script>
+<script type="text/babel" src="market-parts.jsx"></script>
+<script type="text/babel" src="markets.jsx"></script>
+<script type="text/babel" src="markets-app.jsx"></script>
+<style id="theme-toggle">
+html[data-theme="light"] .helm-shell{
+  --abyss-0:#eef2f8; --abyss-1:#fff; --abyss-2:#f4f7fc; --abyss-3:#e6ecf6;
+  --bg-0:#eef2f8; --bg-1:#fff; --bg-2:#f4f7fc;
+  --hair:rgba(14,25,54,.10); --hair-strong:rgba(14,25,54,.16);
+  --line:rgba(14,25,54,.10); --line-strong:rgba(14,25,54,.16);
+  --ink-0:#0e1936; --ink-1:rgba(14,25,54,.72); --ink-2:rgba(14,25,54,.5); --ink-3:rgba(14,25,54,.34);
+  --sonar:#2c6fe6; --sonar-glow:rgba(44,111,230,.18); --sonar-dim:rgba(44,111,230,.10);
+  --panel-bg:linear-gradient(180deg,#fff,#f7faff); --topbar-bg:rgba(255,255,255,.85);
+  color:#0e1936;
+}
+html[data-theme="light"] body{ background:radial-gradient(130% 95% at 50% -12%,#f5f8ff 0%,#eaf0fa 52%,#e3eaf6 100%) no-repeat fixed !important; }
+html[data-theme="light"] .helm-shell [style*="255, 255, 255, 0.035"]{ background:#fff !important; box-shadow:0 1px 0 rgba(255,255,255,.6) inset, 0 8px 24px -18px rgba(14,25,54,.18) !important; }
+html[data-theme="light"] .helm-shell [style*="255, 255, 255, 0.04"], html[data-theme="light"] .helm-shell [style*="255, 255, 255, 0.06"], html[data-theme="light"] .helm-shell [style*="255, 255, 255, 0.025"], html[data-theme="light"] .helm-shell [style*="255, 255, 255, 0.02"]{ background:#eef3fa !important; }
+html[data-theme="light"] .helm-shell [style*="color: rgb(255, 255, 255)"]{ color:#0e1936 !important; }
+html[data-theme="light"] .helm-shell [style*="rgba(180, 210, 255"]{ color:#2c6fe6 !important; }
+html[data-theme="light"] .helm-shell [style*="rgb(156, 193, 255)"]{ color:#2c6fe6 !important; }
+html[data-theme="light"] .helm-shell [style*="rgb(207, 225, 255)"]{ color:#2c6fe6 !important; }
+html[data-theme="light"] .helm-shell [style*="rgb(255, 205, 120)"]{ color:#8a5a00 !important; }
+</style>
+<script>(function(){try{var t=localStorage.getItem('wa-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}window.toggleTheme=function(){var l=document.documentElement.getAttribute('data-theme')==='light';if(l){document.documentElement.removeAttribute('data-theme');try{localStorage.setItem('wa-theme','dark');}catch(e){}}else{document.documentElement.setAttribute('data-theme','light');try{localStorage.setItem('wa-theme','light');}catch(e){}}};})();</script>
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html>

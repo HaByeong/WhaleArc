@@ -92,9 +92,11 @@ export function useNotifications(enabled = true) {
         const toastType = (type: string): ToastItem['type'] => {
           switch (type) {
             case 'LIMIT_ORDER_FILLED':
-            case 'MARKET_ORDER_FILLED': return 'success';
+            case 'MARKET_ORDER_FILLED':
+            case 'AUTO_TRADE_EXECUTED': return 'success';
             case 'TURTLE_TRADE': return 'info';
             case 'STRATEGY_EXECUTED': return 'info';
+            case 'PRICE_ALERT': return 'info';
             default: return 'info';
           }
         };

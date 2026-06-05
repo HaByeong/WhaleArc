@@ -17,7 +17,7 @@ const NOVIRT_KEY = 'whalearc_theme_novirt';
 
 // 섹션 기본값: virt 는 라이트, novirt 는 다크
 const DEFAULTS: Record<'virt' | 'novirt', Mode> = {
-  virt: 'light',
+  virt: 'dark',
   novirt: 'dark',
 };
 

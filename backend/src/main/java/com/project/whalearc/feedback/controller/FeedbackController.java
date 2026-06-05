@@ -8,6 +8,7 @@ import com.project.whalearc.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -17,10 +18,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -41,7 +44,7 @@ public class FeedbackController {
         this.userRepository = userRepository;
         this.adminUserIds = adminIds.isBlank()
                 ? Set.of()
-                : Set.of(adminIds.split(","));
+                : Arrays.stream(adminIds.split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
     }
 
     private boolean isAdmin(String userId) {
@@ -66,7 +69,7 @@ public class FeedbackController {
         String userId = jwt.getSubject();
         // 비관리자는 목록 조회 불가 (타 사용자 글/이름 노출 방지)
         if (!isAdmin(userId)) {
-            throw new IllegalArgumentException("피드백 목록 조회 권한이 없습니다.");
+            throw new AccessDeniedException("피드백 목록 조회 권한이 없습니다.");
         }
         Feedback.FeedbackCategory cat = null;
         if (category != null && !category.isBlank()) {
@@ -176,7 +179,7 @@ public class FeedbackController {
                                           @RequestBody Map<String, String> body) {
         String userId = jwt.getSubject();
         if (!isAdmin(userId)) {
-            throw new IllegalArgumentException("관리자만 상태를 변경할 수 있습니다.");
+            throw new AccessDeniedException("관리자만 상태를 변경할 수 있습니다.");
         }
         String statusStr = body.get("status");
         Feedback.FeedbackStatus status;
@@ -206,6 +209,7 @@ public class FeedbackController {
                                                         @RequestParam("file") MultipartFile file) {
         String userId = jwt.getSubject();
         try {
+            feedbackService.verifyCanAddImage(id, userId); // 파일 저장 전 소유권·한도 선검증 (고아 파일 방지)
             String imageUrl = feedbackImageService.saveImage(file);
             feedbackService.addImageUrl(id, userId, imageUrl);
             return ApiResponse.ok(Map.of("url", imageUrl));

@@ -180,7 +180,8 @@ public class CandlestickService {
                     String dateStr = c.get("stck_bsop_date");
                     if (dateStr == null || dateStr.isEmpty()) continue;
                     LocalDate date = LocalDate.parse(dateStr, fmt);
-                    long time = date.atStartOfDay().toEpochSecond(java.time.ZoneOffset.of("+09:00"));
+                    // lightweight-charts는 epoch를 UTC로 해석 → 거래일 자정(UTC) 기준이어야 하루 일찍 표시 안 됨(미국주식 경로와 일치)
+                    long time = date.atStartOfDay(java.time.ZoneOffset.UTC).toEpochSecond();
                     result.add(new CandlestickResponse(time,
                             parseDouble(c.get("stck_oprc")), parseDouble(c.get("stck_hgpr")),
                             parseDouble(c.get("stck_lwpr")), parseDouble(c.get("stck_clpr")),
@@ -197,9 +198,9 @@ public class CandlestickService {
 
     /** 앱 interval 형식을 빗썸 API 형식으로 변환 */
     private String toBithumbInterval(String interval) {
+        // 1w(주봉)는 빗썸 미지원 → 24h로 둔갑시키지 않고 그대로 전달(빗썸이 거부 → 빈 데이터). 잘못된 일봉을 주봉인 척 반환하지 않음.
         return switch (interval) {
             case "1d" -> "24h";
-            case "1w" -> "24h";
             default -> interval; // 1m, 3m, 5m, 10m, 30m, 1h, 6h, 12h 그대로 사용
         };
     }

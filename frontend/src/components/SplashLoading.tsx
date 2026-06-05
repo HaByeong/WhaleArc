@@ -9,7 +9,7 @@ const SplashLoading = ({ message = '불러오는 중...' }: { message?: string }
           src="/tail-sample-2.png"
           alt=""
           className="relative w-full h-full object-contain"
-          style={{ filter: 'brightness(1.5) contrast(1.3) saturate(1.4) drop-shadow(0 0 20px rgba(56,189,248,0.4))' }}
+          style={{ filter: 'brightness(1.5) contrast(1.3) saturate(1.4) drop-shadow(0 0 20px rgba(91,157,255,0.4))' }}
         />
       </div>
       <div className="flex items-center justify-center gap-1.5 mb-4">

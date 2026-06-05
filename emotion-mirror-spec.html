@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: -apple-system, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+    color: #1a2233; line-height: 1.65; margin: 0; font-size: 11pt;
+  }
+  h1 { font-size: 24pt; margin: 0 0 4px; letter-spacing: -0.5px; }
+  h2 {
+    font-size: 14pt; margin: 26px 0 10px; padding-bottom: 6px;
+    border-bottom: 2px solid #1b6ef3; color: #0b3d91; letter-spacing: -0.3px;
+  }
+  h3 { font-size: 11.5pt; margin: 16px 0 6px; color: #0b3d91; }
+  p { margin: 6px 0; }
+  .sub { color: #5b6b85; font-size: 11pt; margin: 2px 0 0; }
+  .whale { color: #1b6ef3; }
+  .lead {
+    background: #eef4ff; border-left: 4px solid #1b6ef3; padding: 12px 16px;
+    border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 11pt;
+  }
+  .note {
+    background: #fff8e6; border-left: 4px solid #f5a623; padding: 10px 14px;
+    border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 10pt;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10pt; }
+  th, td { border: 1px solid #d8e0ee; padding: 7px 9px; text-align: left; vertical-align: top; }
+  th { background: #f3f7ff; color: #0b3d91; font-weight: 600; }
+  code { background: #f0f3f8; padding: 1px 5px; border-radius: 4px; font-size: 9.5pt; color: #b5267a; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { margin: 3px 0; }
+  .flow {
+    display: flex; gap: 10px; justify-content: center; align-items: stretch; margin: 16px 0;
+  }
+  .flow .step {
+    flex: 1; background: #f3f7ff; border: 1.5px solid #1b6ef3; border-radius: 12px;
+    padding: 12px 8px; text-align: center;
+  }
+  .flow .step .num { font-size: 18pt; font-weight: 800; color: #1b6ef3; }
+  .flow .step .t { font-weight: 700; margin-top: 2px; }
+  .flow .step .d { font-size: 9pt; color: #5b6b85; }
+  .flow .arrow { display: flex; align-items: center; font-size: 18pt; color: #1b6ef3; font-weight: 800; }
+
+  /* ===== Phone mockups ===== */
+  .screens { display: flex; gap: 18px; justify-content: center; margin: 14px 0 6px; }
+  .phone {
+    width: 230px; background: #0e1726; border-radius: 26px; padding: 12px 10px 16px;
+    box-shadow: 0 8px 24px rgba(14,23,38,0.25);
+  }
+  .phone .notch {
+    width: 60px; height: 5px; background: #2b3a52; border-radius: 5px; margin: 2px auto 10px;
+  }
+  .scr { background: #f5f8ff; border-radius: 16px; padding: 14px 12px; min-height: 340px; }
+  .scr .cap { display:flex; align-items:center; gap:6px; font-size:9pt; color:#8a96ab; margin-bottom:10px; }
+  .badge {
+    display:inline-block; background:#ffe1e1; color:#d8352a; font-size:8.5pt; font-weight:700;
+    padding:2px 8px; border-radius:20px;
+  }
+  .badge.seal { background:#e7edff; color:#1b6ef3; }
+  .badge.green { background:#dff5e3; color:#1f9d4d; }
+  .pop-title { font-size: 13pt; font-weight: 800; margin: 6px 0 4px; color:#0e1726; }
+  .pop-sub { font-size: 9.5pt; color:#5b6b85; margin-bottom: 14px; }
+  .btn { display:block; text-align:center; padding:10px; border-radius:10px; font-weight:700; font-size:10pt; margin:8px 0; }
+  .btn.impulse { background:#fff; border:1.5px solid #d8352a; color:#d8352a; }
+  .btn.rule { background:#1b6ef3; color:#fff; }
+  .lock { text-align:center; font-size:9pt; color:#8a96ab; margin-top:14px; }
+  .memo { background:#fff; border:1px solid #e1e8f5; border-radius:8px; padding:7px 10px; font-size:9pt; color:#5b6b85; margin:6px 0; }
+
+  /* reveal compare */
+  .reveal-line { font-size:9pt; color:#5b6b85; margin-bottom:2px; }
+  .reveal-emo { font-size:10pt; color:#0e1726; margin-bottom:12px; }
+  .compare { display:flex; gap:8px; margin:10px 0; }
+  .cbox { flex:1; border-radius:10px; padding:10px 6px; text-align:center; }
+  .cbox.bad { background:#fdeaea; border:1.5px solid #f3b4b0; }
+  .cbox.good { background:#e6f7ec; border:1.5px solid #a9e0bd; }
+  .cbox .lbl { font-size:8.5pt; color:#5b6b85; }
+  .cbox .val { font-size:16pt; font-weight:800; margin-top:2px; }
+  .cbox.bad .val { color:#d8352a; }
+  .cbox.good .val { color:#1f9d4d; }
+  .verdict { text-align:center; font-weight:700; font-size:10pt; color:#0b3d91; margin-top:8px; }
+
+  /* dashboard */
+  .dash { background:#fff; border:1px solid #e1e8f5; border-radius:12px; padding:14px 16px; margin:12px 0; }
+  .stat-row { display:flex; gap:12px; margin:10px 0; }
+  .stat { flex:1; background:#f3f7ff; border-radius:10px; padding:10px; text-align:center; }
+  .stat .big { font-size:18pt; font-weight:800; color:#1b6ef3; }
+  .stat .cap2 { font-size:8.5pt; color:#5b6b85; }
+  .bar-wrap { margin:8px 0; }
+  .bar-label { font-size:9pt; display:flex; justify-content:space-between; margin-bottom:3px; }
+  .bar { height:14px; background:#e7edff; border-radius:7px; overflow:hidden; }
+  .bar > span { display:block; height:100%; background:#1b6ef3; border-radius:7px; }
+  .caption { text-align:center; font-size:9pt; color:#8a96ab; margin-top:4px; }
+  .pagebreak { page-break-before: always; }
+  .foot { margin-top:28px; padding-top:10px; border-top:1px solid #e1e8f5; font-size:9pt; color:#8a96ab; text-align:center; }
+</style>
+</head>
+<body>
+
+  <h1>감정 거울 <span class="whale">🐋</span> <span style="font-size:13pt;color:#5b6b85;">Emotion Mirror</span></h1>
+  <p class="sub">WhaleArc · 기능 명세서 — "투기를 투자로, 감정을 데이터로"</p>
+
+  <div class="lead">
+    <strong>한 줄 정의 —</strong> 사용자가 <b>규칙을 어기고 싶었던 순간</b>을 포착·봉인하고, 며칠 뒤
+    <b>"충동대로 했다면 vs 항로(규칙)대로 했다면"</b>의 결과를 숫자로 대조해, 사용자가
+    <b>자기 자신의 감정 패턴</b>을 데이터로 깨닫게 하는 기능. 핵심은 <b>기록이 아니라 대조</b>.
+  </div>
+
+  <h2>핵심 루프 — 3박자</h2>
+  <div class="flow">
+    <div class="step"><div class="num">①</div><div class="t">포착</div><div class="d">감정이 솟는 순간<br>시스템이 먼저 묻는다</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="num">②</div><div class="t">봉인</div><div class="d">그 선택을<br>타임캡슐로 잠근다</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="num">③</div><div class="t">개봉</div><div class="d">며칠 뒤 결과를<br>나란히 비춘다</div></div>
+  </div>
+
+  <h2>화면 예시 — 포착 → 개봉</h2>
+  <div class="screens">
+    <!-- Capture screen -->
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="scr">
+        <div class="cap">🐋 WhaleArc · 모의투자</div>
+        <span class="badge">급락 공포 감지</span>
+        <div class="pop-title">지금 팔고 싶으신가요?</div>
+        <div class="pop-sub">보유하신 BTC가 오늘 <b>−6.2%</b> 하락 중이에요. 항로(전략)는 아직 매도 신호를 주지 않았어요.</div>
+        <div class="btn impulse">😰 그래도 지금 판다</div>
+        <div class="btn rule">🧭 항로를 지킨다</div>
+        <div class="memo">감정 메모 — "더 떨어질 것 같아 무섭다" · 강도 ●●●●○</div>
+        <div class="lock">🔒 이 선택의 결과는 <b>7일 뒤</b> 열립니다</div>
+      </div>
+    </div>
+
+    <!-- Reveal screen -->
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="scr">
+        <div class="cap">🔓 봉인이 열렸습니다</div>
+        <div class="reveal-line">5/21 14:03 · 급락 공포</div>
+        <div class="reveal-emo">"무서워서 팔고 싶었다" <span style="color:#8a96ab;">(강도 4/5)</span></div>
+        <div>당신의 선택 &nbsp;<span class="badge green">🧭 항로를 지켰다</span></div>
+        <div class="compare">
+          <div class="cbox bad">
+            <div class="lbl">충동대로 팔았다면</div>
+            <div class="val">−12.4%</div>
+          </div>
+          <div class="cbox good">
+            <div class="lbl">항로대로 버텼다 ✓</div>
+            <div class="val">+3.1%</div>
+          </div>
+        </div>
+        <div class="verdict">"참길 잘했어요.<br>항로가 옳았습니다." 🐋</div>
+        <div class="lock" style="margin-top:18px;">감정이 당신에게 청구한 비용: <b>15.5%p</b></div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">▲ 왼쪽: 흔들리는 순간의 <b>포착·봉인</b> / 오른쪽: 며칠 뒤 <b>개봉</b> — 항상 "안 한 쪽 결과"를 나란히 비춘다</div>
+
+  <h2>① 포착 — 언제 끼어드나</h2>
+  <p>사용자가 흔들리는 순간을 시스템이 먼저 감지해 말을 건다. <b>막지 않는다 — 묻고 기록만 한다.</b></p>
+  <table>
+    <tr><th>트리거</th><th>조건(예시)</th><th>띄우는 메시지</th></tr>
+    <tr><td>급락 공포</td><td>보유 자산 하루 −5% 이상</td><td>"지금 팔고 싶으신가요?"</td></tr>
+    <tr><td>급등 탐욕(FOMO)</td><td>미보유 자산 단기 +15% 급등</td><td>"지금 올라타고 싶으신가요?"</td></tr>
+    <tr><td>규칙 위반 직전</td><td>전략 신호와 반대 주문 시도</td><td>"항로와 다른 방향이에요. 정말 가시겠어요?"</td></tr>
+    <tr><td>과잉 확인</td><td>하루 차트 조회 N회 초과</td><td>"오늘 벌써 12번 확인하셨어요. 불안하신가요?"</td></tr>
+  </table>
+
+  <h2>③ 개봉 — 4가지 경우의 수</h2>
+  <p>규칙을 지켰든 어겼든 <b>"안 한 쪽 결과"를 반드시 보여준다.</b> 특히 <b>충동이 옳았던 날도 정직하게</b> — 그래야 사용자가 믿는다.</p>
+  <table>
+    <tr><th>선택</th><th>결과</th><th>메시지 톤</th></tr>
+    <tr><td>항로 지킴</td><td>규칙이 옳았음</td><td>"참길 잘했어요. 🐋"</td></tr>
+    <tr><td>항로 지킴</td><td>충동이 옳았음</td><td>"이번엔 충동이 맞았네요. 그래도 장기적으로 규칙이 이기는 이유는…"</td></tr>
+    <tr><td>충동 실행</td><td>충동이 틀렸음</td><td>"그때 흔들렸죠. 다음엔 한 박자 쉬어볼까요?"</td></tr>
+    <tr><td>충동 실행</td><td>충동이 옳았음</td><td>"운이 좋았어요. 같은 선택 10번 하면 몇 번 맞을까요?"</td></tr>
+  </table>
+
+  <div class="pagebreak"></div>
+
+  <h2>감정 패턴 대시보드 — 누적 거울</h2>
+  <p>개별 사건이 쌓이면 <b>"나라는 투자자"의 초상</b>을 그려준다. 사용자가 계속 돌아오는 이유 = 자기 성장을 보는 맛.</p>
+
+  <div class="dash">
+    <div style="font-weight:700;color:#0b3d91;margin-bottom:4px;">🐋 이번 달 나의 항해 일지</div>
+    <div class="stat-row">
+      <div class="stat"><div class="big">9</div><div class="cap2">흔들린 횟수</div></div>
+      <div class="stat"><div class="big">7 : 2</div><div class="cap2">규칙 옳음 : 충동 옳음</div></div>
+      <div class="stat"><div class="big">−24%p</div><div class="cap2">감정이 청구한 비용</div></div>
+    </div>
+
+    <div class="bar-wrap">
+      <div class="bar-label"><span>급등(FOMO)에 약함 — 6번 중 5번 충동 실행</span><span>83%</span></div>
+      <div class="bar"><span style="width:83%;"></span></div>
+    </div>
+    <div class="bar-wrap">
+      <div class="bar-label"><span>급락(공포)엔 강함 — 3번 중 1번만 충동 실행</span><span>33%</span></div>
+      <div class="bar"><span style="width:33%;"></span></div>
+    </div>
+
+    <div class="bar-wrap" style="margin-top:12px;">
+      <div class="bar-label"><span>개선 추이 — 3월 12회 → 5월 4회 흔들림</span><span>점점 고래에 가까워지는 중</span></div>
+      <div class="bar"><span style="width:33%;"></span></div>
+    </div>
+  </div>
+  <div class="caption">▲ "당신은 급락보다 <b>급등(FOMO)에 더 약하다</b>" — 자기 약점을 숫자로 마주하게 한다</div>
+
+  <h2>데이터 모델 (개발용)</h2>
+  <p>핵심 테이블 하나면 시작 가능. 포착 시 <code>insert</code>, 개봉은 스케줄러 배치로 결과 계산.</p>
+  <table>
+    <tr><th>컬럼</th><th>설명</th></tr>
+    <tr><td><code>trigger_type</code></td><td>PANIC_DROP / FOMO_SPIKE / RULE_BREACH / OVER_CHECK</td></tr>
+    <tr><td><code>user_choice</code></td><td>FOLLOW_RULE / FOLLOW_IMPULSE</td></tr>
+    <tr><td><code>price_at_event</code> / <code>price_at_reveal</code></td><td>봉인 시점 가격 / 개봉 시점 가격</td></tr>
+    <tr><td><code>impulse_outcome_pct</code> / <code>rule_outcome_pct</code></td><td>충동대로 / 규칙대로 했을 때 수익률</td></tr>
+    <tr><td><code>reveal_at</code> / <code>is_revealed</code></td><td>개봉 예정 시점 / 개봉 여부</td></tr>
+    <tr><td><code>emotion_note</code> / <code>emotion_intensity</code></td><td>감정 메모 / 강도(1~5)</td></tr>
+  </table>
+  <p class="sub">스택: 포착 = 프론트 인터셉트 + 백엔드 API / 개봉 = <code>@Scheduled</code> 배치 / 대시보드 = 집계 쿼리. 시세는 모의투자용을 재사용 → <b>새 인프라 거의 없음.</b></p>
+
+  <h2>MVP 범위 — 자르는 순서</h2>
+  <table>
+    <tr><th>단계</th><th>범위</th></tr>
+    <tr><td><b>MVP</b></td><td>트리거 1개(<b>급락 공포</b>)만 · 포착 → 봉인 → 7일 뒤 개봉 · 두 결과 대조. 대시보드 없음.</td></tr>
+    <tr><td>v2</td><td>트리거 4개 전부 · 감정 메모/강도 · 누적 대시보드</td></tr>
+    <tr><td>v3</td><td>"가장 약한 순간" 분석 · <b>AI가 패턴 코멘트</b>(프로그램 AI솔루션 활용처)</td></tr>
+  </table>
+  <div class="note">
+    <b>심사·IR 팁 —</b> MVP 데모 하나면 충분하다. "급락 때 팔고 싶었던 순간이 7일 뒤 열려서, 안 판 게 +3%였다고 보여준다" — 이 한 장면이면 심사위원이 "오" 한다.
+  </div>
+
+  <h2>톤 — 성패가 여기 달렸다</h2>
+  <ul>
+    <li>❌ <b>혼내지 마라</b> — "또 충동매매 하셨네요"는 죽음. 사용자가 떠난다.</li>
+    <li>✅ <b>거울이 되어라</b> — 판단은 사용자가, 시스템은 사실만 비춘다.</li>
+    <li>✅ <b>충동이 옳았던 날은 정직하게 인정</b> — 그래야 믿음이 생긴다.</li>
+    <li>✅ <b>고래 서사 유지</b> — "흔들렸다 / 항로 / 유영"을 일관되게.</li>
+  </ul>
+
+  <div class="lead" style="margin-top:20px;">
+    <b>왜 이게 WhaleArc의 유일한 장점인가 —</b> 백테스트·모의투자는 남들도 한다. 하지만 <b>투자자 자신의 감정을 거울처럼 비춰주는 건 당신만 한다.</b>
+    경쟁사가 기능은 베껴도 "투기를 투자로"라는 서사가 없으면 어색하다. 차별점이 <b>기능이 아니라 정체성</b>에 박혀 있다.
+  </div>
+
+  <div class="foot">WhaleArc · 감정 거울(Emotion Mirror) 기능 명세 — whale-arc.com</div>
+
+</body>
+</html>

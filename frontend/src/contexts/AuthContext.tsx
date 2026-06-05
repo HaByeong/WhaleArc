@@ -40,7 +40,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const profile = await userService.getProfile();
       setProfileName(profile?.name ?? null);
-      setOnboardingDone(profile ? !!profile.investmentStyle : false);
+      // 투자성향 저장 완료 OR 사용자가 명시적으로 '건너뛰기'한 경우(localStorage) 온보딩 완료로 간주.
+      // (건너뛰기 후 새로고침 시 다시 온보딩으로 끌려가던 막다른 길 방지)
+      let skipped = false;
+      try { skipped = localStorage.getItem('whalearc_onboarding_skipped') === '1'; } catch { /* ignore */ }
+      setOnboardingDone((profile ? !!profile.investmentStyle : false) || skipped);
     } catch {
       // 프로필 조회 실패 시 온보딩 완료로 간주 (로딩 무한루프 방지)
       setOnboardingDone(true);

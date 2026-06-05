@@ -18,7 +18,12 @@ import java.time.Instant;
 @Document(collection = "orders")
 @CompoundIndexes({
     @CompoundIndex(name = "idx_status_method", def = "{'status': 1, 'orderMethod': 1}"),
-    @CompoundIndex(name = "idx_user_created", def = "{'userId': 1, 'createdAt': -1}")
+    @CompoundIndex(name = "idx_user_created", def = "{'userId': 1, 'createdAt': -1}"),
+    // 멱등성 조회 + 이중체결 방지용 unique(부분: clientOrderId가 문자열일 때만 — null 주문은 제외).
+    // ※ auto-index-creation 이 꺼져 있으면 자동 생성되지 않으므로, 멀티 인스턴스 운영 시
+    //   배포에서 이 인덱스를 수동 생성하거나 auto-index-creation 활성화 필요. 단일 인스턴스는 UserLockRegistry로 직렬화됨.
+    @CompoundIndex(name = "idx_user_clientorder", def = "{'userId': 1, 'clientOrderId': 1}",
+            unique = true, partialFilter = "{ 'clientOrderId': { $type: 'string' } }")
 })
 public class Order {
 
@@ -39,6 +44,7 @@ public class Order {
     private BigDecimal filledPrice;
     private String assetType; // "STOCK", "CRYPTO", "US_STOCK", "ETF" (null → CRYPTO)
     private String memo;
+    private String clientOrderId; // 멱등성 키 (null = 내부/서버 발행 주문)
     private Instant createdAt;
     private Instant updatedAt;
 

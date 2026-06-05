@@ -180,7 +180,7 @@ const LoginPage = () => {
                 <div className="w-3/4 h-3/4 bg-cyan-500/[0.06] rounded-full blur-[50px] animate-pulse" style={{ animationDuration: '4s' }} />
               </div>
               <img src="/tail-sample-2.png" alt="" className="relative w-full h-full object-contain"
-                style={{ filter: 'drop-shadow(0 0 30px rgba(56, 189, 248, 0.18)) drop-shadow(0 0 60px rgba(56, 189, 248, 0.08))' }} />
+                style={{ filter: 'drop-shadow(0 0 30px rgba(91, 157, 255, 0.18)) drop-shadow(0 0 60px rgba(91, 157, 255, 0.08))' }} />
             </div>
             <h3 className="whalearc-text text-3xl md:text-4xl font-bold tracking-tighter mb-2">
               WHALEARC

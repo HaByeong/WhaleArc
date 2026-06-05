@@ -543,6 +543,14 @@ const TradingChart = ({
       });
   }, [symbol, interval, assetType, retryCount]);
 
+  // ─── 로딩 워치독 ──────────────────────────────────────
+  // 어떤 이유로든(예: 인증 토큰 조회 hang) 로딩이 안 끝나면 무한 스피너 대신 재시도 UI 노출
+  useEffect(() => {
+    if (historyLoaded || chartError) return;
+    const t = setTimeout(() => setChartError('차트 데이터를 불러오지 못했습니다.'), 12000);
+    return () => clearTimeout(t);
+  }, [historyLoaded, chartError, symbol, interval, retryCount]);
+
   // ─── 주식 기간 변경 시 visible range 업데이트 ──────────
   useEffect(() => {
     if (assetType !== 'STOCK' || !historyLoaded || dataRef.current.length === 0) return;
@@ -586,21 +594,25 @@ const TradingChart = ({
       {/* 인터벌 선택 + LIVE 표시 */}
       <div className="flex items-center justify-between mb-3">
         {assetType === 'STOCK' ? (
-          <div className="flex items-center space-x-1">
-            <span className={`text-xs mr-1 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>일봉</span>
-            {STOCK_PERIODS.map(p => (
-              <button
-                key={p.months}
-                onClick={() => setStockPeriod(p.months)}
-                className={`px-3 py-1.5 text-xs rounded-full font-medium transition-all ${
-                  stockPeriod === p.months
-                    ? isDark ? 'bg-white/10 text-cyan-400' : 'bg-whale-dark text-white shadow-sm'
-                    : isDark ? 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.05]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            {/* 캔들 종류(정적 라벨) — 기간 선택과 다른 범주이므로 배지+구분선으로 분리 */}
+            <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${isDark ? 'text-slate-400 bg-white/[0.05]' : 'text-gray-500 bg-gray-100'}`}>일봉</span>
+            <span className={`w-px h-3.5 ${isDark ? 'bg-white/10' : 'bg-gray-200'}`} />
+            <div className="flex items-center space-x-1">
+              {STOCK_PERIODS.map(p => (
+                <button
+                  key={p.months}
+                  onClick={() => setStockPeriod(p.months)}
+                  className={`px-3 py-1.5 text-xs rounded-full font-medium transition-all ${
+                    stockPeriod === p.months
+                      ? isDark ? 'bg-white/10 text-cyan-400' : 'bg-whale-dark text-white shadow-sm'
+                      : isDark ? 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.05]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="flex space-x-1">

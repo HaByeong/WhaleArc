@@ -132,7 +132,7 @@ const ConsoleStatusPage = () => {
     <HelmShell active="status" virt={isVirt} userName={userName} session="랭킹 갱신 매일 00:00">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-[18px]">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <div><h1 className="text-[26px] font-bold">항해사 랭킹</h1><p className="mt-2 text-[13.5px]" style={{ color: INK1 }}>각 항해사의 대표 포트폴리오 수익률로 매기는 순위. 마음에 드는 항로는 따라가 보세요.</p></div>
+          <div className="min-w-0"><h1 className="text-[26px] font-bold">항해사 랭킹</h1><p className="mt-2 text-[13.5px]" style={{ color: INK1 }}>각 항해사의 대표 포트폴리오 수익률로 매기는 순위. 마음에 드는 항로는 따라가 보세요.</p></div>
           <div className="flex gap-[3px] rounded-[9px] p-[3px]" style={{ background: ABYSS1, border: `1px solid ${HAIR}` }}>
             {PERIODS.map(p => <button key={p.label} onClick={() => changePeriod(p.label)} className="rounded-md px-3.5 py-1.5 text-[12px] font-semibold" style={{ background: period === p.label ? SONAR_DIM : 'transparent', color: period === p.label ? SONAR : INK2 }}>{p.label}</button>)}
           </div>
@@ -147,9 +147,9 @@ const ConsoleStatusPage = () => {
             <p className="mt-2 text-[13px]" style={{ color: INK3 }}>{error ? '잠시 후 다시 시도해주세요.' : '모의투자로 첫 항해를 시작하면 이곳 순위에 등록됩니다. 가상돈 ₩10,000,000으로 부담 없이 시작해보세요.'}</p>
             {error
               ? <button onClick={load} className="mt-4 rounded-[10px] px-5 py-2.5 text-[13.5px] font-semibold" style={{ border: '1px solid rgba(91,157,255,.32)', background: SONAR_DIM, color: SONAR }}>다시 시도 ↻</button>
-              : <div className="mt-5 flex flex-wrap justify-center gap-2.5">
-                  <button onClick={() => navigate('/virt/dashboard')} className="rounded-[10px] px-5 py-2.5 text-[13.5px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff 0%,#2c6fe6 62%,#2257c8 100%)' }}>모의투자 시작하기 →</button>
-                  <button onClick={() => navigate(`${prefix}/store`)} className="rounded-[10px] px-5 py-2.5 text-[13.5px] font-semibold" style={{ border: '1px solid rgba(91,157,255,.32)', background: SONAR_DIM, color: SONAR }}>전략 학습 둘러보기</button>
+              : <div className="mt-5 flex flex-col items-center gap-2.5 sm:flex-row sm:justify-center">
+                  <button onClick={() => navigate('/virt/dashboard')} className="w-full rounded-[10px] px-5 py-2.5 text-[13.5px] font-bold text-white sm:w-auto" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff 0%,#2c6fe6 62%,#2257c8 100%)' }}>모의투자 시작하기 →</button>
+                  <button onClick={() => navigate(`${prefix}/store`)} className="w-full rounded-[10px] px-5 py-2.5 text-[13.5px] font-semibold sm:w-auto" style={{ border: '1px solid rgba(91,157,255,.32)', background: SONAR_DIM, color: SONAR }}>전략 학습 둘러보기</button>
                 </div>}
           </div>
         ) : (
@@ -220,7 +220,7 @@ const ConsoleStatusPage = () => {
           </>
         )}
 
-        <footer className="mt-2 flex flex-wrap justify-between gap-3 pt-5" style={{ borderTop: `1px solid ${HAIR}` }}>
+        <footer className="mt-2 flex flex-col gap-1 pt-5 sm:flex-row sm:flex-wrap sm:justify-between sm:gap-3" style={{ borderTop: `1px solid ${HAIR}` }}>
           <span className="font-mono text-[11.5px]" style={{ color: INK3 }}>© 2026 WHALEARC · 랭킹은 대표 포트폴리오 수익률 기준 · 투자 권유가 아닙니다.</span>
           <span className="text-[11.5px]" style={{ color: INK3 }}>Built quietly, beneath the surface.</span>
         </footer>

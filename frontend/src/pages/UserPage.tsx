@@ -207,7 +207,7 @@ const UserPage = () => {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full" style={{ background: 'rgba(239,77,77,.12)', border: '1px solid rgba(239,77,77,.28)' }}>
             <svg className="w-7 h-7" style={{ color: '#ef4d4d' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           </div>
-          <h2 className="text-[18px] font-bold">해류가 불안정합니다</h2>
+          <h2 className="text-[18px] font-bold">데이터를 불러오지 못했어요</h2>
           <p className="mt-2 text-[13px]" style={{ color: INK2 }}>{error}</p>
           <button onClick={() => window.location.reload()} className="mt-5 rounded-lg px-5 py-2.5 text-[13px] font-semibold" style={{ background: 'rgba(91,157,255,.12)', border: '1px solid rgba(91,157,255,.32)', color: SONAR }}>다시 시도</button>
         </div>

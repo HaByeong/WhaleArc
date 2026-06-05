@@ -155,8 +155,8 @@ const ErrorCard = ({ onRetry }: { onRetry: () => void }) => (
     <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full" style={{ background: 'rgba(245,208,97,.12)', border: '1px solid rgba(245,208,97,.3)' }}>
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke={COMPASS} strokeWidth="1.6"><path d="M11 3L20 19H2z" strokeLinejoin="round" /><path d="M11 9v4M11 16v.4" strokeLinecap="round" /></svg>
     </div>
-    <h3 className="text-[17px] font-bold">해류가 불안정합니다</h3>
-    <p className="mx-auto mt-2 max-w-[360px] text-[13.5px] text-white/55">자산 정보를 불러오지 못했어요. 잠시 후 다시 시도해주세요.</p>
+    <h3 className="text-[17px] font-bold">자산 정보를 불러오지 못했어요</h3>
+    <p className="mx-auto mt-2 max-w-[360px] text-[13.5px] text-white/55">잠시 후 다시 시도해주세요. 문제가 계속되면 거래소 연결 상태를 확인해주세요.</p>
     <button onClick={onRetry} className="mt-4 rounded-[10px] px-5 py-2.5 text-[13.5px] font-semibold" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.10)', color: SONAR }}>다시 시도 ↻</button>
   </Panel>
 );

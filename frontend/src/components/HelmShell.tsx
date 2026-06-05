@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
 
 /* ────────────────────────────────────────────────────────────
@@ -55,6 +56,10 @@ interface HelmShellProps {
 const HelmShell = ({ children, active, virt = false, session = '정규장 마감 · 다음 개장 09:00', userName = '항해사' }: HelmShellProps) => {
   const navigate = useNavigate();
   const { isDark, canToggle, toggleTheme } = useTheme();
+  const { profileName } = useAuth();
+  // 표시명: DB 닉네임(profileName) 우선 → 없으면 페이지가 넘긴 값(이메일 ID 등) → '항해사'.
+  // 페이지마다 닉네임/이메일ID를 다르게 넘겨 이름이 들쭉날쭉하던 문제를 한 곳에서 통일.
+  const displayName = profileName || userName;
   const prefix = virt ? '/virt' : '';
   const goNav = (path: string) => navigate(prefix + path);
 
@@ -137,10 +142,10 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
         {/* 유저 */}
         <button onClick={() => goNav('/user')} className="flex items-center gap-2.5 px-2 py-1 text-left">
           <span className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] text-[13px] font-bold text-white" style={{ background: 'linear-gradient(135deg,#5b9dff,#2c6fe6)' }}>
-            {userName.slice(0, 1)}
+            {displayName.slice(0, 1)}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] font-semibold">{userName}</span>
+            <span className="block truncate text-[13px] font-semibold">{displayName}</span>
             <span className="block text-[11px] text-white/45">{virt ? '모의 항해사' : '항해사 · Lv.3'}</span>
           </span>
           <span className="text-white/30">⋯</span>

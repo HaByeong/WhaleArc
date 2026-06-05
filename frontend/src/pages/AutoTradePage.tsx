@@ -57,6 +57,7 @@ const AutoTradePage = () => {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
     strategyId: '',
+    accountKind: 'PAPER',   // PAPER(가상자금) | KIS(KIS 모의투자 실연동)
     allocatedCash: '1000000',
     targetAssetsText: '',
     assetType: '',
@@ -180,8 +181,8 @@ const AutoTradePage = () => {
         targetAssets: targetAssets.length ? targetAssets : undefined,
         assetType: form.assetType || undefined,
         interval: form.interval,
-        accountMode: 'PAPER',
-        brokerType: 'MOCK',
+        accountMode: form.accountKind === 'KIS' ? 'LIVE' : 'PAPER',
+        brokerType: form.accountKind === 'KIS' ? 'KIS' : 'MOCK',
         stopLossPct: form.stopLossPct ? Number(form.stopLossPct) : undefined,
         takeProfitPct: form.takeProfitPct ? Number(form.takeProfitPct) : undefined,
         trailingStopPct: form.trailingStopPct ? Number(form.trailingStopPct) : undefined,
@@ -455,6 +456,25 @@ const AutoTradePage = () => {
                   )}
                 </select>
                 <p className={`text-[11px] mt-1 ${subText}`}>기본 제공 전략은 바로 가동할 수 있고, '전략' 페이지에서 만든 내 전략도 선택할 수 있어요.</p>
+              </div>
+
+              {/* 계좌 종류 */}
+              <div>
+                <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>계좌 종류</label>
+                <select
+                  value={form.accountKind}
+                  onChange={e => setForm(prev => ({ ...prev, accountKind: e.target.value }))}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`}
+                >
+                  <option value="PAPER">모의투자 (가상자금)</option>
+                  <option value="KIS">KIS 모의투자 (실계좌 연동 · 돈 0원)</option>
+                </select>
+                {form.accountKind === 'KIS' && (
+                  <p className={`text-[11px] mt-1 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
+                    한국투자증권 <b>모의투자 API</b>로 실제 주문을 보냅니다(실제 돈 X). 거래소 연동에서 <b>KIS 모의투자 키</b>를 먼저 등록하고,
+                    대상 종목은 <b>국내주식 코드(예: 005930)</b>로 지정하세요. 한국 장중에만 체결됩니다.
+                  </p>
+                )}
               </div>
 
               {/* 대상 종목 */}

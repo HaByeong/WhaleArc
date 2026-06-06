@@ -32,8 +32,9 @@ const deployIdFromMemo = (m?: string) => (isAutoMemo(m) ? m!.split(':')[1] : und
 const fmtCur = (n: number, usd: boolean) =>
   usd ? (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       : fmtKRW(n);
-const fmtKRWCompact = (n: number) => // 큰 금액 축약(억/만)
-  n >= 1e8 ? '₩' + (n / 1e8).toFixed(1) + '억' : n >= 1e4 ? '₩' + Math.round(n / 1e4).toLocaleString('ko-KR') + '만' : '₩' + Math.round(n).toLocaleString('ko-KR');
+const fmtKRWCompact = (n: number) => // 큰 금액 축약(조/억/만)
+  n >= 1e12 ? '₩' + (n / 1e12).toFixed(1) + '조' : n >= 1e8 ? '₩' + (n / 1e8).toFixed(1) + '억' : n >= 1e4 ? '₩' + Math.round(n / 1e4).toLocaleString('ko-KR') + '만' : '₩' + Math.round(n).toLocaleString('ko-KR');
+const pctNice = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1)); // 정수면 소수점 생략(반올림 일관)
 
 // ── 용어집 카테고리 (키는 GLOSSARY 키와 동일) ───────────────────────────────
 const TERM_CATEGORIES: { id: string; label: string; keys: string[] }[] = [
@@ -136,6 +137,7 @@ function buildClosedTrades(trades: Trade[], usdKrw: number, deployMap: Map<strin
             pnlKrw: usd && usdKrw > 0 ? pnl * usdKrw : pnl,
             pnlRate: cost > 0 ? (pnl / cost) * 100 : 0,
             auto: isAutoMemo(lot.memo) || isAutoMemo(t.memo), // 진입/청산 중 하나라도 자동매매면 '자동'
+            // 전략 귀속은 '진입(매수) 레그' 우선 — 진입을 결정한 전략이 그 거래의 주인
             strategy: deployMap.get(deployIdFromMemo(lot.memo) || '') || deployMap.get(deployIdFromMemo(t.memo) || ''),
 
             buyAt: lot.at, sellAt: t.executedAt, holdDays,
@@ -156,15 +158,15 @@ const fmtDate = (s?: string) => { const d = parseDate(s); return d ? `${d.getMon
 const ReviewCard = ({ t, checklist }: { t: ClosedTrade; checklist: string[] }) => {
   const storeKey = `wa_review_${t.id}`;
   const [open, setOpen] = useState(false);
-  const [checks, setChecks] = useState<boolean[]>(() => {
-    const base = Array(checklist.length).fill(false);
-    try { const r = JSON.parse(localStorage.getItem(storeKey) || '{}'); if (Array.isArray(r.checks)) return base.map((_, i) => !!r.checks[i]); } catch { /* ignore */ }
-    return base; // 원칙 개수 변경에도 길이 정합
+  // 체크는 '원칙 텍스트'로 키잉 — 원칙을 추가/삭제/재정렬해도 체크가 엉뚱한 항목으로 옮겨가지 않음
+  const [checks, setChecks] = useState<Record<string, boolean>>(() => {
+    try { const r = JSON.parse(localStorage.getItem(storeKey) || '{}'); if (r.checks && !Array.isArray(r.checks)) return r.checks; } catch { /* ignore */ }
+    return {}; // 구(舊) 배열 포맷은 폐기(인덱스 의존이라 신뢰 불가)
   });
   const [memo, setMemo] = useState<string>(() => {
     try { return JSON.parse(localStorage.getItem(storeKey) || '{}').memo || ''; } catch { return ''; }
   });
-  const persist = (c: boolean[], m: string) => { try { localStorage.setItem(storeKey, JSON.stringify({ checks: c, memo: m })); } catch { /* ignore */ } };
+  const persist = (c: Record<string, boolean>, m: string) => { try { localStorage.setItem(storeKey, JSON.stringify({ checks: c, memo: m })); } catch { /* ignore */ } };
   const dir = t.pnl > 0 ? 1 : t.pnl < 0 ? -1 : 0;
   const col = dir > 0 ? UP : dir < 0 ? DOWN : INK1;
   const badge = dir > 0 ? '수익' : dir < 0 ? '손실' : '본전';
@@ -195,9 +197,9 @@ const ReviewCard = ({ t, checklist }: { t: ClosedTrade; checklist: string[] }) =
         <div className="border-t px-4 py-3.5" style={{ borderColor: HAIR, background: CARD }}>
           <div className="mb-2 text-[11px] font-semibold tracking-wide" style={{ color: INK2 }}>복기 체크리스트</div>
           <div className="flex flex-col gap-1.5">
-            {checklist.map((c, i) => (
-              <label key={i} className="flex cursor-pointer items-start gap-2 text-[12.5px]" style={{ color: INK1 }}>
-                <input type="checkbox" checked={checks[i]} onChange={(e) => { const next = checks.map((v, j) => (j === i ? e.target.checked : v)); setChecks(next); persist(next, memo); }}
+            {checklist.map((c) => (
+              <label key={c} className="flex cursor-pointer items-start gap-2 text-[12.5px]" style={{ color: INK1 }}>
+                <input type="checkbox" checked={!!checks[c]} onChange={(e) => { const next = { ...checks, [c]: e.target.checked }; setChecks(next); persist(next, memo); }}
                   className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ accentColor: '#2c6fe6' }} />
                 <span>{c}</span>
               </label>
@@ -243,7 +245,13 @@ const ReviewTab = () => {
     return closed.filter((c) => c.auto && (c.strategy || '자동(기타)') === filter);
   }, [closed, filter]);
   const hasUsd = useMemo(() => view.some((c) => c.usd), [view]);
-  const checklist = useMemo(reviewChecklist, []); // 사용자 매매 원칙(있으면) → 복기 체크리스트로
+  const [checklist, setChecklist] = useState(reviewChecklist); // 사용자 매매 원칙(있으면) → 복기 체크리스트로
+  useEffect(() => { // 원칙 변경(다른 탭/같은 탭) 시 즉시 동기화 — 스테일 방지
+    const refresh = () => setChecklist(reviewChecklist());
+    window.addEventListener('storage', refresh);
+    window.addEventListener('wa-rules-changed', refresh);
+    return () => { window.removeEventListener('storage', refresh); window.removeEventListener('wa-rules-changed', refresh); };
+  }, []);
   const stats = useMemo(() => {
     if (!view.length) return null;
     const wins = view.filter((c) => c.pnl > 0).length;
@@ -352,7 +360,7 @@ const GlossaryTab = () => {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="용어 검색 (예: 샤프, 손절, RSI)"
+        <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="용어 검색" placeholder="용어 검색 (예: 샤프, 손절, RSI)"
           className="flex-1 rounded-lg px-3.5 py-2.5 text-[13px] outline-none" style={{ border: `1px solid ${HAIR}`, background: CARD, color: INK0 }} />
         <div className="flex flex-wrap gap-1.5">
           <Chip on={cat === 'all'} onClick={() => setCat('all')}>전체</Chip>
@@ -412,7 +420,7 @@ const Slider = ({ label, value, min, max, step, onChange, fmt }: { label: string
       <span style={{ color: INK1 }}>{label}</span>
       <span className="font-mono font-bold" style={{ color: INK0 }}>{fmt(value)}</span>
     </div>
-    <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(+e.target.value)} className="w-full" style={{ accentColor: '#2c6fe6' }} />
+    <input type="range" aria-label={label} aria-valuetext={fmt(value)} min={min} max={max} step={step} value={value} onChange={(e) => onChange(+e.target.value)} className="w-full" style={{ accentColor: '#2c6fe6' }} />
   </div>
 );
 const MathCard = ({ title, desc, children }: { title: string; desc: string; children: ReactNode }) => (
@@ -440,7 +448,7 @@ const MathTab = () => {
       </div>
       <MathCard title="① 복리의 힘" desc="작은 수익도 꾸준히 쌓이면 눈덩이처럼 커집니다.">
         <Slider label="원금" value={seed} min={100} max={10000} step={100} onChange={setSeed} fmt={(v) => `${v.toLocaleString()}만원`} />
-        <Slider label="월 수익률" value={monthly} min={0} max={10} step={0.5} onChange={setMonthly} fmt={(v) => `${v}%/월`} />
+        <Slider label="월 수익률" value={monthly} min={0} max={5} step={0.5} onChange={setMonthly} fmt={(v) => `${v}%/월`} />
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg sm:grid-cols-4" style={{ background: HAIR }}>
           {[1, 3, 5, 10].map((y) => (
             <div key={y} className="px-3 py-2.5" style={{ background: 'var(--ci-panel)' }}>
@@ -454,11 +462,11 @@ const MathTab = () => {
         <Slider label="손실률" value={loss} min={5} max={90} step={5} onChange={setLoss} fmt={(v) => `-${v}%`} />
         <div className="rounded-lg px-4 py-3 text-center" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
           <span className="text-[13px]" style={{ color: INK1 }}>-{loss}% 손실 → 본전까지 </span>
-          <span className="font-mono text-[19px] font-bold" style={{ color: UP }}>+{recover === Infinity ? '∞' : recover.toFixed(1)}%</span>
+          <span className="font-mono text-[19px] font-bold" style={{ color: UP }}>+{recover === Infinity ? '∞' : pctNice(recover)}%</span>
           <span className="text-[13px]" style={{ color: INK1 }}> 필요</span>
         </div>
         <div className="flex flex-wrap gap-1.5 text-[11px]" style={{ color: INK2 }}>
-          {[10, 20, 30, 50, 70].map((l) => <span key={l} className="rounded px-2 py-1" style={{ background: CARD }}>-{l}% → +{((l / (100 - l)) * 100).toFixed(0)}%</span>)}
+          {[10, 20, 30, 50, 70].map((l) => <span key={l} className="rounded px-2 py-1" style={{ background: CARD }}>-{l}% → +{pctNice((l / (100 - l)) * 100)}%</span>)}
         </div>
       </MathCard>
       <MathCard title="③ 승률보다 손익비" desc="승률이 낮아도 손익비가 좋으면 장기적으로 이깁니다.">
@@ -479,7 +487,7 @@ const MathTab = () => {
 const RulesTab = () => {
   const [rules, setRules] = useState<string[]>(getUserRules);
   const [draft, setDraft] = useState('');
-  const save = (next: string[]) => { setRules(next); try { localStorage.setItem(RULES_KEY, JSON.stringify(next)); } catch { /* ignore */ } };
+  const save = (next: string[]) => { setRules(next); try { localStorage.setItem(RULES_KEY, JSON.stringify(next)); window.dispatchEvent(new Event('wa-rules-changed')); } catch { /* ignore */ } };
   const add = (text: string) => { const t = text.trim(); if (!t || rules.includes(t)) return; save([...rules, t]); setDraft(''); };
   const remove = (i: number) => save(rules.filter((_, j) => j !== i));
   return (
@@ -489,7 +497,7 @@ const RulesTab = () => {
       </div>
       <div className="flex gap-2">
         <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(draft); }}
-          placeholder="원칙 입력 후 Enter (예: 손절가는 진입 시 미리 정한다)" className="flex-1 rounded-lg px-3.5 py-2.5 text-[13px] outline-none" style={{ border: `1px solid ${HAIR}`, background: CARD, color: INK0 }} />
+          aria-label="매매 원칙 입력" placeholder="원칙 입력 후 Enter (예: 손절가는 진입 시 미리 정한다)" className="flex-1 rounded-lg px-3.5 py-2.5 text-[13px] outline-none" style={{ border: `1px solid ${HAIR}`, background: CARD, color: INK0 }} />
         <button onClick={() => add(draft)} className="rounded-lg px-4 text-[13px] font-bold text-white" style={{ background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}>추가</button>
       </div>
       {rules.length === 0 ? (

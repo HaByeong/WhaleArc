@@ -11,7 +11,7 @@ const NotFoundPage = () => {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[480px] h-[480px] bg-cyan-500/[0.05] rounded-full blur-[120px]" />
       <div className="relative text-center max-w-md">
         <Link to="/" className="inline-flex items-center gap-3 mb-10">
-          <img src="/tail-sample-2.png" alt="" className="w-16 h-16 object-contain"
+          <img src="/brand-whale.png" alt="" className="w-16 h-16 object-contain"
             style={{ filter: 'drop-shadow(0 0 18px rgba(91,157,255,0.4))' }} />
           <span className="whalearc-text text-3xl font-bold tracking-tighter">WHALEARC</span>
         </Link>

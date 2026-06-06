@@ -6,10 +6,10 @@ const SplashLoading = ({ message = '불러오는 중...' }: { message?: string }
           <div className="w-3/4 h-3/4 bg-cyan-500/[0.06] rounded-full blur-[60px] animate-pulse" style={{ animationDuration: '3s' }} />
         </div>
         <img
-          src="/tail-sample-2.png"
+          src="/brand-whale.png"
           alt=""
           className="relative w-full h-full object-contain"
-          style={{ filter: 'brightness(1.5) contrast(1.3) saturate(1.4) drop-shadow(0 0 20px rgba(91,157,255,0.4))' }}
+          style={{ filter: 'drop-shadow(0 0 28px rgba(91,157,255,0.5))' }}
         />
       </div>
       <div className="flex items-center justify-center gap-1.5 mb-4">

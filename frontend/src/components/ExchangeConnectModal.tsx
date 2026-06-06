@@ -26,11 +26,17 @@ const ExchangeConnectModal = ({ exchangeType, account, onClose, onSaved }: {
   const connected = !!account?.connected;
   const isKis = exchangeType === 'KIS';
   const isBitget = exchangeType === 'BITGET'; // Bitget은 Passphrase 필수 (appSecret 필드로 전달)
+  // 거래소별 키 라벨: KIS=앱키/앱시크릿(한투는 이 둘뿐), 업비트=Access/Secret, 비트겟=API/Secret(+Passphrase)
+  const keyLabels = isKis
+    ? { key: '앱키 (App Key)', secret: '앱시크릿 (App Secret)' }
+    : exchangeType === 'UPBIT'
+      ? { key: 'Access Key', secret: 'Secret Key' }
+      : { key: 'API Key', secret: 'Secret Key' };
 
   const save = async () => {
     setSaving(true); setErr(null);
     try {
-      await exchangeService.saveAccount({ exchangeType, apiKey: form.apiKey, secretKey: form.secretKey, ...(isKis ? { appSecret: form.appSecret, accountNumber: form.accountNumber } : isBitget ? { appSecret: form.appSecret } : {}) });
+      await exchangeService.saveAccount({ exchangeType, apiKey: form.apiKey, secretKey: form.secretKey, ...(isKis ? { accountNumber: form.accountNumber } : isBitget ? { appSecret: form.appSecret } : {}) });
       onSaved('실계좌가 연결되었습니다.'); onClose();
     } catch (e: any) { setErr(e?.response?.data?.message || '연결에 실패했습니다. API 키를 확인해주세요.'); }
     finally { setSaving(false); }
@@ -56,11 +62,11 @@ const ExchangeConnectModal = ({ exchangeType, account, onClose, onSaved }: {
           <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-lg text-[15px]" style={{ border: '1px solid rgba(255,255,255,.2)', background: 'rgba(255,255,255,.08)' }}><span aria-hidden="true">✕</span></button>
         </div>
         <div className="flex flex-col gap-3 p-6">
-          <Field label="API Key" value={form.apiKey} onChange={v => setForm(f => ({ ...f, apiKey: v }))} placeholder="API Key 입력" />
-          <Field label="Secret Key" value={form.secretKey} onChange={v => setForm(f => ({ ...f, secretKey: v }))} placeholder="Secret Key 입력" />
+          <Field label={keyLabels.key} value={form.apiKey} onChange={v => setForm(f => ({ ...f, apiKey: v }))} placeholder={`${keyLabels.key} 입력`} />
+          <Field label={keyLabels.secret} value={form.secretKey} onChange={v => setForm(f => ({ ...f, secretKey: v }))} placeholder={`${keyLabels.secret} 입력`} />
           {isKis && <>
-            <Field label="App Secret" value={form.appSecret} onChange={v => setForm(f => ({ ...f, appSecret: v }))} placeholder="App Secret 입력" />
             <Field label="계좌번호" value={form.accountNumber} onChange={v => setForm(f => ({ ...f, accountNumber: v }))} type="text" placeholder="예: 50123456-01" />
+            <p className="text-[11px]" style={{ color: 'var(--ci-ink3)' }}>한국투자증권 개발자센터(apiportal)에서 발급한 <b>앱키·앱시크릿</b>을 입력하세요. 별도의 시크릿키는 없습니다.</p>
           </>}
           {isBitget && <Field label="Passphrase" value={form.appSecret} onChange={v => setForm(f => ({ ...f, appSecret: v }))} placeholder="API 생성 시 설정한 Passphrase" />}
           {connected && <div className="rounded-lg px-3 py-2 text-[11.5px]" style={{ background: 'rgba(255,205,120,.08)', border: '1px solid rgba(255,205,120,.18)', color: '#ffcd78' }}>보안상 기존 키는 표시되지 않습니다. 변경하려면 키를 다시 입력하세요.</div>}

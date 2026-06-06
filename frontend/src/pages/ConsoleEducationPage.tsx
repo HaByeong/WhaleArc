@@ -84,6 +84,11 @@ const getUserRules = (): string[] => {
 };
 // 복기 체크리스트 = 사용자가 정한 원칙(있으면) → 없으면 기본 4문항
 const reviewChecklist = (): string[] => { const r = getUserRules(); return r.length ? r : REVIEW_CHECKS; };
+// 복기 노트 로컬 미러(서버 저장 실패/오프라인 폴백) — 서버가 source of truth, 로컬은 안전망
+const readReviewCache = (key: string): TradeReviewNote => {
+  try { const r = JSON.parse(localStorage.getItem(key) || '{}'); return { checks: r.checks && !Array.isArray(r.checks) ? r.checks : {}, memo: typeof r.memo === 'string' ? r.memo : '' }; }
+  catch { return { checks: {}, memo: '' }; }
+};
 
 // ── FIFO 청산 손익 ──────────────────────────────────────────────────────
 interface ClosedTrade {
@@ -157,18 +162,32 @@ const fmtDate = (s?: string) => { const d = parseDate(s); return d ? `${d.getMon
 
 // ── 복기 카드 ───────────────────────────────────────────────────────────
 const ReviewCard = ({ t, checklist, note }: { t: ClosedTrade; checklist: string[]; note?: TradeReviewNote }) => {
+  const cacheKey = `wa_review_${t.id}`;
   const [open, setOpen] = useState(false);
-  // 체크는 '원칙 텍스트'로 키잉 — 원칙을 추가/삭제/재정렬해도 체크가 엉뚱한 항목으로 옮겨가지 않음
-  const [checks, setChecks] = useState<Record<string, boolean>>(() => note?.checks || {});
-  const [memo, setMemo] = useState<string>(() => note?.memo || '');
-  // 서버 저장(기기 간 동기화) — 빠른 입력은 0.7s 디바운스, 카드 해제 시 마지막 상태 플러시
+  // 체크는 '원칙 텍스트'로 키잉 — 원칙을 추가/삭제/재정렬해도 체크가 엉뚱한 항목으로 옮겨가지 않음.
+  // 초기값은 서버값(note) 우선, 없으면 로컬 미러 폴백.
+  const [checks, setChecks] = useState<Record<string, boolean>>(() => (note ?? readReviewCache(cacheKey)).checks);
+  const [memo, setMemo] = useState<string>(() => (note ?? readReviewCache(cacheKey)).memo);
+  // 서버 저장(기기 간 동기화): 0.7s 디바운스 + 저장 직렬화(순서 보장) + 로컬 미러 + 언마운트 플러시
   const latest = useRef({ checks, memo });
-  latest.current = { checks, memo };
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout>>();
-  const flush = () => { if (!dirty.current) return; dirty.current = false; reviewService.saveReview(t.id, latest.current).catch(() => { /* 실패는 다음 변경 때 재시도 */ }); };
-  const persist = (c: Record<string, boolean>, m: string) => { latest.current = { checks: c, memo: m }; dirty.current = true; clearTimeout(timer.current); timer.current = setTimeout(flush, 700); };
-  useEffect(() => () => flush(), []); // 언마운트 시 마지막 저장 보장
+  const saving = useRef<Promise<unknown>>(Promise.resolve());
+  const flush = () => {
+    if (!dirty.current) return;
+    dirty.current = false;
+    const snap = latest.current;
+    // 직렬화 — 이전 저장 완료 후 다음 저장(네트워크 reorder로 옛값이 새값을 덮어쓰는 것 방지). 실패 시 dirty 복구→재시도
+    saving.current = saving.current.then(() => reviewService.saveReview(t.id, snap)).catch(() => { dirty.current = true; });
+  };
+  const persist = (c: Record<string, boolean>, m: string) => {
+    latest.current = { checks: c, memo: m };
+    try { localStorage.setItem(cacheKey, JSON.stringify({ checks: c, memo: m })); } catch { /* ignore */ } // 로컬 미러(저장 실패해도 유실 안 됨)
+    dirty.current = true;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(flush, 700);
+  };
+  useEffect(() => () => { clearTimeout(timer.current); flush(); }, []); // 언마운트: 타이머 정리 + 마지막 저장
   const dir = t.pnl > 0 ? 1 : t.pnl < 0 ? -1 : 0;
   const col = dir > 0 ? UP : dir < 0 ? DOWN : INK1;
   const badge = dir > 0 ? '수익' : dir < 0 ? '손실' : '본전';

@@ -4,7 +4,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -20,8 +19,8 @@ import java.util.Map;
 @Setter
 @NoArgsConstructor
 @Document(collection = "trade_reviews")
-@CompoundIndex(name = "idx_user_reviewkey", def = "{'userId': 1, 'reviewKey': 1}", unique = true)
 public class TradeReview {
+    // 유일성은 결정적 _id(userId:reviewKey)로 보장(auto-index-creation 꺼져 있어 어노테이션 인덱스는 미생성)
 
     @Id
     private String id;

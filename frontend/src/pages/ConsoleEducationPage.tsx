@@ -5,6 +5,7 @@ import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
 import { tradeService, type Trade } from '../services/tradeService';
 import { marketService } from '../services/marketService';
+import { liveTradeService } from '../services/liveTradeService';
 import { GLOSSARY } from '../components/TermTooltip';
 
 /* ────────────────────────────────────────────────────────────
@@ -25,6 +26,8 @@ const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 const FEE = 0.001; // 체결 수수료율 — 백엔드 TradeRecord.COMMISSION_RATE와 동일(순손익 계산)
 const isUsd = (at?: string) => at === 'US_STOCK' || at === 'ETF'; // USD 표기 자산
 const isAutoMemo = (m?: string) => !!m && m.startsWith('라이브 자동매매'); // 자동매매 체결 식별(MockOrderGateway memo)
+// memo = "라이브 자동매매:<deploymentId>:<symbol>:<side>:<barTime>" → 배포 ID 추출(전략명 매핑용)
+const deployIdFromMemo = (m?: string) => (isAutoMemo(m) ? m!.split(':')[1] : undefined);
 // 통화별 가격/금액 포맷(USD는 $, 그 외 ₩)
 const fmtCur = (n: number, usd: boolean) =>
   usd ? (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -68,6 +71,7 @@ interface ClosedTrade {
   pnlKrw: number;  // 원화 환산(합산용) — USD 자산은 환율 적용
   pnlRate: number; // %, 순매수원가 기준(통화 무관)
   auto: boolean;   // 자동매매(전략)가 진입/청산한 거래인지
+  strategy?: string; // 자동매매면 전략명(배포 매핑 해소 시)
   buyAt: string; sellAt: string; holdDays: number | null;
 }
 
@@ -82,7 +86,7 @@ const parseDate = (s?: string): Date | null => {
 
 const ts = (s?: string) => parseDate(s)?.getTime() ?? 0;
 
-function buildClosedTrades(trades: Trade[], usdKrw: number): { closed: ClosedTrade[]; droppedSells: number } {
+function buildClosedTrades(trades: Trade[], usdKrw: number, deployMap: Map<string, string>): { closed: ClosedTrade[]; droppedSells: number } {
   const byStock: Record<string, Trade[]> = {};
   [...trades].sort((a, b) => ts(a.executedAt) - ts(b.executedAt)).forEach((t) => {
     (byStock[t.stockCode] ||= []).push(t);
@@ -112,6 +116,7 @@ function buildClosedTrades(trades: Trade[], usdKrw: number): { closed: ClosedTra
             pnlKrw: usd && usdKrw > 0 ? pnl * usdKrw : pnl,
             pnlRate: cost > 0 ? (pnl / cost) * 100 : 0,
             auto: isAutoMemo(lot.memo) || isAutoMemo(t.memo), // 진입/청산 중 하나라도 자동매매면 '자동'
+            strategy: deployMap.get(deployIdFromMemo(lot.memo) || '') || deployMap.get(deployIdFromMemo(t.memo) || ''),
 
             buyAt: lot.at, sellAt: t.executedAt, holdDays,
           });
@@ -151,7 +156,7 @@ const ReviewCard = ({ t }: { t: ClosedTrade }) => {
           <div className="flex items-center gap-2">
             <span className="truncate text-[14px] font-bold" style={{ color: INK0 }}>{t.stockName}</span>
             <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: dir > 0 ? 'rgba(239,77,77,.14)' : dir < 0 ? 'rgba(77,138,255,.14)' : 'rgba(255,255,255,.08)', color: col }}>{badge}</span>
-            <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={t.auto ? { background: 'rgba(91,157,255,.14)', color: SONAR } : { background: 'rgba(255,255,255,.06)', color: INK2 }}>{t.auto ? '자동' : '수동'}</span>
+            <span className="max-w-[120px] truncate rounded px-1.5 py-0.5 text-[10px] font-bold" style={t.auto ? { background: 'rgba(91,157,255,.14)', color: SONAR } : { background: 'rgba(255,255,255,.06)', color: INK2 }}>{t.auto ? (t.strategy || '자동') : '수동'}</span>
           </div>
           <div className="mt-1 font-mono text-[11.5px]" style={{ color: INK2 }}>
             {price(t.buyPrice)} → {price(t.sellPrice)} · {t.qty}주 · 보유 {t.holdDays == null ? '-' : t.holdDays === 0 ? '당일' : `${t.holdDays}일`} · {fmtDate(t.buyAt)}~{fmtDate(t.sellAt)}
@@ -189,18 +194,33 @@ const ReviewCard = ({ t }: { t: ClosedTrade }) => {
 const ReviewTab = () => {
   const [trades, setTrades] = useState<Trade[] | null>(null);
   const [usdKrw, setUsdKrw] = useState(0);
+  const [deployMap, setDeployMap] = useState<Map<string, string>>(new Map());
   const [error, setError] = useState(false);
   const load = () => {
     setError(false); setTrades(null);
-    Promise.all([tradeService.getTrades(), marketService.getExchangeRate().catch(() => null)])
-      .then(([t, fx]) => { if (fx?.usdKrw) setUsdKrw(fx.usdKrw); setTrades(Array.isArray(t) ? t : []); })
-      .catch(() => setError(true));
+    Promise.all([
+      tradeService.getTrades(),
+      marketService.getExchangeRate().catch(() => null),
+      liveTradeService.getDeployments().catch(() => []),
+    ]).then(([t, fx, deps]) => {
+      if (fx?.usdKrw) setUsdKrw(fx.usdKrw);
+      setDeployMap(new Map((Array.isArray(deps) ? deps : []).map((d) => [d.id, d.strategyName])));
+      setTrades(Array.isArray(t) ? t : []);
+    }).catch(() => setError(true));
   };
   useEffect(load, []);
-  const { closed, droppedSells } = useMemo(() => (trades ? buildClosedTrades(trades, usdKrw) : { closed: [], droppedSells: 0 }), [trades, usdKrw]);
-  const [filter, setFilter] = useState<'all' | 'auto' | 'manual'>('all');
-  const counts = useMemo(() => ({ all: closed.length, auto: closed.filter((c) => c.auto).length, manual: closed.filter((c) => !c.auto).length }), [closed]);
-  const view = useMemo(() => (filter === 'all' ? closed : closed.filter((c) => (filter === 'auto' ? c.auto : !c.auto))), [closed, filter]);
+  const { closed, droppedSells } = useMemo(() => (trades ? buildClosedTrades(trades, usdKrw, deployMap) : { closed: [], droppedSells: 0 }), [trades, usdKrw, deployMap]);
+  const [filter, setFilter] = useState<string>('all'); // 'all' | '__manual' | <전략명>
+  const groups = useMemo(() => {
+    const byStrat = new Map<string, number>(); let manual = 0;
+    for (const c of closed) { if (c.auto) { const k = c.strategy || '자동(기타)'; byStrat.set(k, (byStrat.get(k) || 0) + 1); } else manual++; }
+    return { manual, strategies: [...byStrat.entries()].sort((a, b) => b[1] - a[1]) };
+  }, [closed]);
+  const view = useMemo(() => {
+    if (filter === 'all') return closed;
+    if (filter === '__manual') return closed.filter((c) => !c.auto);
+    return closed.filter((c) => c.auto && (c.strategy || '자동(기타)') === filter);
+  }, [closed, filter]);
   const hasUsd = useMemo(() => view.some((c) => c.usd), [view]);
   const stats = useMemo(() => {
     if (!view.length) return null;
@@ -232,9 +252,9 @@ const ReviewTab = () => {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-1.5">
-        <Chip on={filter === 'all'} onClick={() => setFilter('all')}>전체 {counts.all}</Chip>
-        <Chip on={filter === 'auto'} onClick={() => setFilter('auto')}>자동매매 {counts.auto}</Chip>
-        <Chip on={filter === 'manual'} onClick={() => setFilter('manual')}>수동 {counts.manual}</Chip>
+        <Chip on={filter === 'all'} onClick={() => setFilter('all')}>전체 {closed.length}</Chip>
+        {groups.manual > 0 && <Chip on={filter === '__manual'} onClick={() => setFilter('__manual')}>수동 {groups.manual}</Chip>}
+        {groups.strategies.map(([name, n]) => <Chip key={name} on={filter === name} onClick={() => setFilter(name)}>{name} {n}</Chip>)}
       </div>
       {!view.length ? (
         <div className="px-6 py-12 text-center text-[13px]" style={{ ...panel, color: INK2 }}>이 분류에 해당하는 거래가 없어요.</div>

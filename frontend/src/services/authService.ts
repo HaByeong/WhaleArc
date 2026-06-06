@@ -31,7 +31,8 @@ export const authService = {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name } },
+      // 이메일 가입은 약관 동의 체크박스를 통과해야 호출되므로 동의 기록을 함께 저장
+      options: { data: { name, terms_agreed: true, terms_agreed_at: new Date().toISOString() } },
     });
     if (error) throw new Error(translateAuthError(error.message));
     return data;

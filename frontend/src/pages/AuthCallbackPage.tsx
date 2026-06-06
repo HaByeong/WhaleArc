@@ -4,26 +4,61 @@ import { userService } from '../services/userService';
 
 const AuthCallbackPage = () => {
   const [error, setError] = useState<string | null>(null);
+  const [needsConsent, setNeedsConsent] = useState(false); // 약관 미동의 OAuth 유저 게이트
+  const [agreed, setAgreed] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const redirectWithOnboardingCheck = async () => {
+    const savedRedirect = localStorage.getItem('whalearc_redirect') || '/dashboard';
+    localStorage.removeItem('whalearc_redirect');
+    try {
+      const profile = await userService.getProfile();
+      if (profile && !profile.investmentStyle) {
+        const onboardingUrl = savedRedirect.startsWith('/virt')
+          ? `/user?onboarding=true&from=${encodeURIComponent(savedRedirect)}`
+          : '/user?onboarding=true';
+        window.location.replace(onboardingUrl);
+        return;
+      }
+    } catch {
+      // 프로필 조회 실패 시 폴백
+    }
+    window.location.replace(savedRedirect);
+  };
+
+  // OAuth 로그인/가입은 자동가입되므로, 약관 동의 기록이 없으면 진입 전 동의 게이트를 띄운다(근본책).
+  const gateThenRedirect = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && !user.user_metadata?.terms_agreed) {
+        setNeedsConsent(true); // 스피너 멈추고 동의 게이트 노출
+        return;
+      }
+    } catch {
+      // 조회 실패 시에도 동의 게이트로(안전측)
+      setNeedsConsent(true);
+      return;
+    }
+    await redirectWithOnboardingCheck();
+  };
+
+  const agreeAndContinue = async () => {
+    if (!agreed || saving) return;
+    setSaving(true);
+    try {
+      await supabase.auth.updateUser({ data: { terms_agreed: true, terms_agreed_at: new Date().toISOString() } });
+    } catch {
+      // 메타데이터 저장 실패해도 진행은 막지 않음(다음 로그인에 재요청)
+    }
+    await redirectWithOnboardingCheck();
+  };
+
+  const declineAndLogout = async () => {
+    try { await supabase.auth.signOut(); } catch { /* ignore */ }
+    window.location.replace('/login');
+  };
 
   useEffect(() => {
-    const redirectWithOnboardingCheck = async () => {
-      const savedRedirect = localStorage.getItem('whalearc_redirect') || '/dashboard';
-      localStorage.removeItem('whalearc_redirect');
-      try {
-        const profile = await userService.getProfile();
-        if (profile && !profile.investmentStyle) {
-          const onboardingUrl = savedRedirect.startsWith('/virt')
-            ? `/user?onboarding=true&from=${encodeURIComponent(savedRedirect)}`
-            : '/user?onboarding=true';
-          window.location.replace(onboardingUrl);
-          return;
-        }
-      } catch {
-        // 프로필 조회 실패 시 폴백
-      }
-      window.location.replace(savedRedirect);
-    };
-
     const handleCallback = async () => {
       try {
         const url = new URL(window.location.href);
@@ -49,7 +84,7 @@ const AuthCallbackPage = () => {
             setTimeout(() => window.location.replace('/login'), 3000);
             return;
           }
-          await redirectWithOnboardingCheck();
+          await gateThenRedirect();
           return;
         }
 
@@ -62,14 +97,14 @@ const AuthCallbackPage = () => {
         }
 
         if (data.session) {
-          await redirectWithOnboardingCheck();
+          await gateThenRedirect();
         } else {
           // 세션이 아직 없으면 onAuthStateChange로 대기
           const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'SIGNED_IN' && session) {
               subscription.unsubscribe();
               try {
-                await redirectWithOnboardingCheck();
+                await gateThenRedirect();
               } catch {
                 setError('로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
                 setTimeout(() => window.location.replace('/login'), 3000);
@@ -94,10 +129,25 @@ const AuthCallbackPage = () => {
   }, []);
 
   return (
-    <div className="wa-force-dark min-h-screen flex items-center justify-center bg-[#060d18] text-white relative overflow-hidden">
+    <div className="wa-force-dark min-h-screen flex items-center justify-center bg-[#060d18] text-white relative overflow-hidden px-6">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-cyan-500/[0.05] rounded-full blur-[120px]" />
       <div className="relative text-center">
-        {error ? (
+        {needsConsent ? (
+          <div className="w-[min(420px,90vw)] rounded-2xl border border-white/10 bg-white/[0.03] p-7 text-left">
+            <h2 className="text-lg font-bold text-white">약관 동의가 필요해요</h2>
+            <p className="mt-2 text-[13px] leading-relaxed text-slate-400">WhaleArc를 이용하려면 이용약관과 개인정보 처리방침에 동의해야 합니다.</p>
+            <label className="mt-5 flex cursor-pointer items-start gap-2.5">
+              <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/[0.04] text-[#2c6fe6] focus:ring-[#5b9dff]/40" />
+              <span className="text-[13px] text-slate-300">
+                <a href="/terms" target="_blank" rel="noreferrer" className="text-cyan-400 underline">이용약관</a> 및 <a href="/privacy" target="_blank" rel="noreferrer" className="text-cyan-400 underline">개인정보 처리방침</a>에 동의합니다.
+              </span>
+            </label>
+            <button onClick={agreeAndContinue} disabled={!agreed || saving} className="mt-5 w-full rounded-xl py-2.5 text-sm font-bold text-white transition-opacity disabled:opacity-50" style={{ background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}>
+              {saving ? '처리 중...' : '동의하고 시작'}
+            </button>
+            <button onClick={declineAndLogout} className="mt-2 w-full text-[12px] text-slate-500 transition-colors hover:text-slate-300">동의하지 않고 나가기</button>
+          </div>
+        ) : error ? (
           <>
             <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
               <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

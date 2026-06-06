@@ -32,6 +32,8 @@ const deployIdFromMemo = (m?: string) => (isAutoMemo(m) ? m!.split(':')[1] : und
 const fmtCur = (n: number, usd: boolean) =>
   usd ? (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       : fmtKRW(n);
+const fmtKRWCompact = (n: number) => // 큰 금액 축약(억/만)
+  n >= 1e8 ? '₩' + (n / 1e8).toFixed(1) + '억' : n >= 1e4 ? '₩' + Math.round(n / 1e4).toLocaleString('ko-KR') + '만' : '₩' + Math.round(n).toLocaleString('ko-KR');
 
 // ── 용어집 카테고리 (키는 GLOSSARY 키와 동일) ───────────────────────────────
 const TERM_CATEGORIES: { id: string; label: string; keys: string[] }[] = [
@@ -62,6 +64,24 @@ const REVIEW_CHECKS = [
   '손절·익절 규칙을 지켰나요?',
   '감정(FOMO·공포)에 휘둘리지 않았나요?',
 ];
+
+// ── 나만의 매매 원칙(localStorage) — 복기 체크리스트와 연동 ───────────────────
+const RULES_KEY = 'wa_trading_rules';
+const STARTER_RULES = [
+  '진입은 전략 신호가 명확할 때만 — 감(感)으로 사지 않는다',
+  '한 거래의 위험은 전체 자산의 2% 이내로 제한한다',
+  '매수와 동시에 손절가를 정하고, 닿으면 무조건 실행한다',
+  '급등 추격매수(FOMO)는 하지 않는다',
+  '한 종목·한 방향에 몰빵하지 않고 분산한다',
+  '계획에 없는 물타기(평단 낮추기)는 하지 않는다',
+  '이익은 길게, 손실은 짧게 — 손익비를 지킨다',
+];
+const getUserRules = (): string[] => {
+  try { const r = JSON.parse(localStorage.getItem(RULES_KEY) || 'null'); return Array.isArray(r) ? r.filter((x) => typeof x === 'string' && x.trim()) : []; }
+  catch { return []; }
+};
+// 복기 체크리스트 = 사용자가 정한 원칙(있으면) → 없으면 기본 4문항
+const reviewChecklist = (): string[] => { const r = getUserRules(); return r.length ? r : REVIEW_CHECKS; };
 
 // ── FIFO 청산 손익 ──────────────────────────────────────────────────────
 interface ClosedTrade {
@@ -133,12 +153,13 @@ function buildClosedTrades(trades: Trade[], usdKrw: number, deployMap: Map<strin
 const fmtDate = (s?: string) => { const d = parseDate(s); return d ? `${d.getMonth() + 1}.${d.getDate()}` : '-'; };
 
 // ── 복기 카드 ───────────────────────────────────────────────────────────
-const ReviewCard = ({ t }: { t: ClosedTrade }) => {
+const ReviewCard = ({ t, checklist }: { t: ClosedTrade; checklist: string[] }) => {
   const storeKey = `wa_review_${t.id}`;
   const [open, setOpen] = useState(false);
   const [checks, setChecks] = useState<boolean[]>(() => {
-    try { const r = JSON.parse(localStorage.getItem(storeKey) || '{}'); return Array.isArray(r.checks) ? r.checks : Array(REVIEW_CHECKS.length).fill(false); }
-    catch { return Array(REVIEW_CHECKS.length).fill(false); }
+    const base = Array(checklist.length).fill(false);
+    try { const r = JSON.parse(localStorage.getItem(storeKey) || '{}'); if (Array.isArray(r.checks)) return base.map((_, i) => !!r.checks[i]); } catch { /* ignore */ }
+    return base; // 원칙 개수 변경에도 길이 정합
   });
   const [memo, setMemo] = useState<string>(() => {
     try { return JSON.parse(localStorage.getItem(storeKey) || '{}').memo || ''; } catch { return ''; }
@@ -174,7 +195,7 @@ const ReviewCard = ({ t }: { t: ClosedTrade }) => {
         <div className="border-t px-4 py-3.5" style={{ borderColor: HAIR, background: CARD }}>
           <div className="mb-2 text-[11px] font-semibold tracking-wide" style={{ color: INK2 }}>복기 체크리스트</div>
           <div className="flex flex-col gap-1.5">
-            {REVIEW_CHECKS.map((c, i) => (
+            {checklist.map((c, i) => (
               <label key={i} className="flex cursor-pointer items-start gap-2 text-[12.5px]" style={{ color: INK1 }}>
                 <input type="checkbox" checked={checks[i]} onChange={(e) => { const next = checks.map((v, j) => (j === i ? e.target.checked : v)); setChecks(next); persist(next, memo); }}
                   className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ accentColor: '#2c6fe6' }} />
@@ -222,6 +243,7 @@ const ReviewTab = () => {
     return closed.filter((c) => c.auto && (c.strategy || '자동(기타)') === filter);
   }, [closed, filter]);
   const hasUsd = useMemo(() => view.some((c) => c.usd), [view]);
+  const checklist = useMemo(reviewChecklist, []); // 사용자 매매 원칙(있으면) → 복기 체크리스트로
   const stats = useMemo(() => {
     if (!view.length) return null;
     const wins = view.filter((c) => c.pnl > 0).length;
@@ -282,7 +304,7 @@ const ReviewTab = () => {
           💡 <b>복기</b>는 결과(손익)보다 <b>과정(규칙을 지켰는가)</b>을 점검하는 거예요. 자동매매도 규칙대로 됐는지, 수동매매는 감정이 끼지 않았는지 함께 봐요.
         </div>
         <div className="flex flex-col gap-2.5">
-          {view.map((t) => <ReviewCard key={t.id} t={t} />)}
+          {view.map((t) => <ReviewCard key={t.id} t={t} checklist={checklist} />)}
         </div>
       </>)}
     </div>
@@ -383,25 +405,140 @@ const MistakesTab = () => (
   </div>
 );
 
+// ── 탭: 투자 수학 ───────────────────────────────────────────────────────
+const Slider = ({ label, value, min, max, step, onChange, fmt }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void; fmt: (v: number) => string }) => (
+  <div>
+    <div className="mb-1.5 flex items-center justify-between text-[12.5px]">
+      <span style={{ color: INK1 }}>{label}</span>
+      <span className="font-mono font-bold" style={{ color: INK0 }}>{fmt(value)}</span>
+    </div>
+    <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(+e.target.value)} className="w-full" style={{ accentColor: '#2c6fe6' }} />
+  </div>
+);
+const MathCard = ({ title, desc, children }: { title: string; desc: string; children: ReactNode }) => (
+  <div style={panel} className="p-5">
+    <div className="text-[15px] font-bold" style={{ color: INK0 }}>{title}</div>
+    <p className="mt-1 text-[12px] leading-relaxed" style={{ color: INK2 }}>{desc}</p>
+    <div className="mt-4 flex flex-col gap-3.5">{children}</div>
+  </div>
+);
+const MathTab = () => {
+  const [seed, setSeed] = useState(1000);   // 만원
+  const [monthly, setMonthly] = useState(2); // %/월
+  const grow = (yrs: number) => seed * 10000 * Math.pow(1 + monthly / 100, yrs * 12);
+  const [loss, setLoss] = useState(30);      // %
+  const recover = loss < 100 ? (loss / (100 - loss)) * 100 : Infinity;
+  const [winRate, setWinRate] = useState(40);
+  const [stop, setStop] = useState(5);
+  const [take, setTake] = useState(15);
+  const ev = (winRate / 100) * take - (1 - winRate / 100) * stop;
+  const rr = stop > 0 ? take / stop : 0;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-xl px-4 py-3 text-[12.5px] leading-relaxed" style={{ background: 'rgba(91,157,255,.07)', border: `1px solid ${HAIR}`, color: INK1 }}>
+        💡 숫자를 직접 움직여 보세요. 투자에서 가장 중요한 <b>복리·손실의 비대칭·손익비</b>를 몸으로 느낄 수 있어요.
+      </div>
+      <MathCard title="① 복리의 힘" desc="작은 수익도 꾸준히 쌓이면 눈덩이처럼 커집니다.">
+        <Slider label="원금" value={seed} min={100} max={10000} step={100} onChange={setSeed} fmt={(v) => `${v.toLocaleString()}만원`} />
+        <Slider label="월 수익률" value={monthly} min={0} max={10} step={0.5} onChange={setMonthly} fmt={(v) => `${v}%/월`} />
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg sm:grid-cols-4" style={{ background: HAIR }}>
+          {[1, 3, 5, 10].map((y) => (
+            <div key={y} className="px-3 py-2.5" style={{ background: 'var(--ci-panel)' }}>
+              <div className="text-[11px]" style={{ color: INK2 }}>{y}년 후</div>
+              <div className="font-mono text-[14px] font-bold" style={{ color: SONAR }}>{fmtKRWCompact(grow(y))}</div>
+            </div>
+          ))}
+        </div>
+      </MathCard>
+      <MathCard title="② 손실의 비대칭" desc="잃으면 그만큼만 벌어선 본전이 안 됩니다 — '잃지 않는 것'이 먼저인 이유.">
+        <Slider label="손실률" value={loss} min={5} max={90} step={5} onChange={setLoss} fmt={(v) => `-${v}%`} />
+        <div className="rounded-lg px-4 py-3 text-center" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
+          <span className="text-[13px]" style={{ color: INK1 }}>-{loss}% 손실 → 본전까지 </span>
+          <span className="font-mono text-[19px] font-bold" style={{ color: UP }}>+{recover === Infinity ? '∞' : recover.toFixed(1)}%</span>
+          <span className="text-[13px]" style={{ color: INK1 }}> 필요</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5 text-[11px]" style={{ color: INK2 }}>
+          {[10, 20, 30, 50, 70].map((l) => <span key={l} className="rounded px-2 py-1" style={{ background: CARD }}>-{l}% → +{((l / (100 - l)) * 100).toFixed(0)}%</span>)}
+        </div>
+      </MathCard>
+      <MathCard title="③ 승률보다 손익비" desc="승률이 낮아도 손익비가 좋으면 장기적으로 이깁니다.">
+        <Slider label="승률" value={winRate} min={10} max={90} step={5} onChange={setWinRate} fmt={(v) => `${v}%`} />
+        <Slider label="손절 폭" value={stop} min={1} max={30} step={1} onChange={setStop} fmt={(v) => `-${v}%`} />
+        <Slider label="익절 폭" value={take} min={1} max={50} step={1} onChange={setTake} fmt={(v) => `+${v}%`} />
+        <div className="rounded-lg px-4 py-3 text-center" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
+          <div className="text-[12px]" style={{ color: INK2 }}>손익비 1 : {rr.toFixed(1)} · 거래당 기대값</div>
+          <div className="font-mono text-[20px] font-bold" style={{ color: ev >= 0 ? UP : DOWN }}>{ev >= 0 ? '+' : ''}{ev.toFixed(2)}%</div>
+          <div className="mt-1 text-[12px]" style={{ color: ev >= 0 ? UP : DOWN }}>{ev >= 0 ? '장기적으로 이득이 기대돼요 👍' : '장기적으로 손실 — 손익비나 승률을 높이세요'}</div>
+        </div>
+      </MathCard>
+    </div>
+  );
+};
+
+// ── 탭: 나만의 매매 원칙 ─────────────────────────────────────────────────
+const RulesTab = () => {
+  const [rules, setRules] = useState<string[]>(getUserRules);
+  const [draft, setDraft] = useState('');
+  const save = (next: string[]) => { setRules(next); try { localStorage.setItem(RULES_KEY, JSON.stringify(next)); } catch { /* ignore */ } };
+  const add = (text: string) => { const t = text.trim(); if (!t || rules.includes(t)) return; save([...rules, t]); setDraft(''); };
+  const remove = (i: number) => save(rules.filter((_, j) => j !== i));
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-xl px-4 py-3 text-[12.5px] leading-relaxed" style={{ background: 'rgba(91,157,255,.07)', border: `1px solid ${HAIR}`, color: INK1 }}>
+        💡 나만의 매매 원칙을 정해두면 <b>거래 복기 체크리스트가 이 원칙으로 바뀝니다</b>. 매매할 때마다 "내 원칙을 지켰나?"를 점검하세요.
+      </div>
+      <div className="flex gap-2">
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(draft); }}
+          placeholder="원칙 입력 후 Enter (예: 손절가는 진입 시 미리 정한다)" className="flex-1 rounded-lg px-3.5 py-2.5 text-[13px] outline-none" style={{ border: `1px solid ${HAIR}`, background: CARD, color: INK0 }} />
+        <button onClick={() => add(draft)} className="rounded-lg px-4 text-[13px] font-bold text-white" style={{ background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}>추가</button>
+      </div>
+      {rules.length === 0 ? (
+        <div className="px-6 py-10 text-center text-[13px]" style={{ ...panel, color: INK2 }}>아직 등록한 원칙이 없어요. 아래 추천에서 골라 담거나 직접 적어보세요.</div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {rules.map((r, i) => (
+            <div key={i} style={{ ...panel, borderRadius: 12 }} className="flex items-center gap-3 px-4 py-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md font-mono text-[12px] font-bold" style={{ background: 'rgba(91,157,255,.12)', color: SONAR }}>{i + 1}</span>
+              <span className="flex-1 text-[13px]" style={{ color: INK0 }}>{r}</span>
+              <button onClick={() => remove(i)} className="text-[12px] transition-colors hover:opacity-70" style={{ color: INK3 }}>삭제</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div>
+        <div className="mb-2 text-[12px] font-bold" style={{ color: SONAR }}>추천 원칙 — 눌러서 담기</div>
+        <div className="flex flex-col gap-1.5">
+          {STARTER_RULES.filter((s) => !rules.includes(s)).map((s) => (
+            <button key={s} onClick={() => add(s)} className="rounded-lg px-3.5 py-2.5 text-left text-[12.5px] transition-colors hover:opacity-80" style={{ background: CARD, border: `1px solid ${HAIR}`, color: INK1 }}>+ {s}</button>
+          ))}
+          {STARTER_RULES.every((s) => rules.includes(s)) && <span className="text-[12px]" style={{ color: INK3 }}>추천 원칙을 모두 담았어요 👍</span>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── 페이지 ──────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'review', label: '거래 복기', desc: '내 모의 매매를 청산 손익으로 복기' },
-  { id: 'glossary', label: '용어집', desc: '투자 용어 54개를 한눈에' },
-  { id: 'mistakes', label: '실수 도감', desc: '자주 빠지는 함정과 피하는 법' },
+  { id: 'review', label: '거래 복기' },
+  { id: 'rules', label: '매매 원칙' },
+  { id: 'glossary', label: '용어집' },
+  { id: 'mistakes', label: '실수 도감' },
+  { id: 'math', label: '투자 수학' },
 ] as const;
 
 const ConsoleEducationPage = () => {
   const { session } = useAuth();
   const { isVirt } = useRoutePrefix();
   const userName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
-  const [tab, setTab] = useState<'review' | 'glossary' | 'mistakes'>('review');
+  const [tab, setTab] = useState<'review' | 'rules' | 'glossary' | 'mistakes' | 'math'>('review');
 
   return (
     <HelmShell active="edu" virt={isVirt} userName={userName} session="학습 노트">
       <div className="mx-auto w-full max-w-[1080px] px-5 py-6 md:px-8">
         <div className="mb-5">
           <h1 className="text-[26px] font-bold tracking-tight" style={{ color: INK0 }}>학습 노트</h1>
-          <p className="mt-1.5 text-[13.5px]" style={{ color: INK1 }}>모의 매매를 <b>복기</b>하고, 용어와 흔한 실수를 익히며 실력을 다져보세요.</p>
+          <p className="mt-1.5 text-[13.5px]" style={{ color: INK1 }}>모의 매매를 <b>복기</b>하고, 나만의 원칙·용어·투자 수학으로 실력을 다져보세요.</p>
         </div>
 
         <div className="mb-5 flex gap-1 overflow-x-auto" style={{ borderBottom: `1px solid ${HAIR}` }}>
@@ -415,8 +552,10 @@ const ConsoleEducationPage = () => {
         </div>
 
         {tab === 'review' && <ReviewTab />}
+        {tab === 'rules' && <RulesTab />}
         {tab === 'glossary' && <GlossaryTab />}
         {tab === 'mistakes' && <MistakesTab />}
+        {tab === 'math' && <MathTab />}
       </div>
     </HelmShell>
   );

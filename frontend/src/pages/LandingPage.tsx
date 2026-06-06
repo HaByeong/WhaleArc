@@ -2,6 +2,14 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { marketService } from '../services/marketService';
+
+// 티커 KRW 가격 컴팩트 포맷(억/만/원) — 빗썸 실시세는 원화라 자릿수가 커서 축약
+const fmtTickerKrw = (n: number): string => {
+  if (n >= 1e8) return (n / 1e8).toFixed(2) + '억';
+  if (n >= 1e4) return Math.round(n / 1e4).toLocaleString('ko-KR') + '만';
+  return '₩' + Math.round(n).toLocaleString('ko-KR');
+};
 
 /* ────────────────────────────────────────────────────────────
    WhaleArc 랜딩 — 「디자인 개편」 mockup 기반 (2026-06)
@@ -125,6 +133,25 @@ const LandingPage = () => {
   const navigate = useNavigate();
   const { session } = useAuth();
   const [scrolled, setScrolled] = useState(false);
+
+  // 티커: 실시간 코인 시세(빗썸, 공개 API라 비로그인서도 동작). 미상장 심볼은 정적값 폴백.
+  const [ticker, setTicker] = useState(TICKER);
+  useEffect(() => {
+    const fetchTicker = () => {
+      marketService.getPrices('CRYPTO').then((coins) => {
+        if (!Array.isArray(coins) || coins.length === 0) return;
+        const bySym = new Map(coins.map((c) => [c.symbol, c]));
+        setTicker(TICKER.map((t) => {
+          const c = bySym.get(t.s);
+          if (!c || !c.price) return t;
+          return { s: t.s, p: fmtTickerKrw(c.price), c: `${c.changeRate >= 0 ? '+' : ''}${c.changeRate.toFixed(2)}%`, up: c.changeRate >= 0 };
+        }));
+      }).catch(() => { /* 실패 시 정적값 유지 */ });
+    };
+    fetchTicker();
+    const id = setInterval(fetchTicker, 30_000); // 30초마다 갱신
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -415,11 +442,11 @@ const LandingPage = () => {
       <section className="py-24" style={{ background: '#060b1f' }}>
         <div className="mx-auto max-w-[1240px] px-6 md:px-14">
           <SectionHeader center kicker="MARKETS" title="지금, 시장은 어떻게 움직이고 있을까요."
-            lede="주요 자산을 한눈에. 로그인하면 실시간 시세로 확인할 수 있어요." />
+            lede="실시간 코인 시세를 미리 둘러보세요. 로그인하면 주식·포트폴리오까지 한 곳에서." />
         </div>
         <div className="relative mt-12 overflow-hidden" style={{ borderTop: '1px solid rgba(255,255,255,.10)', borderBottom: '1px solid rgba(255,255,255,.10)', background: 'linear-gradient(180deg,rgba(91,157,255,.04),transparent)' }}>
           <div className="flex w-max animate-ticker-scroll">
-            {[...TICKER, ...TICKER].map((t, i) => (
+            {[...ticker, ...ticker].map((t, i) => (
               <div key={i} className="flex items-center gap-3 px-7 py-5" style={{ minWidth: 220, borderRight: '1px solid rgba(255,255,255,.06)' }}>
                 <span className="font-mono text-[13px] font-semibold text-white/80">{t.s}</span>
                 <span className="font-mono text-[13px] text-white/55">{t.p}</span>

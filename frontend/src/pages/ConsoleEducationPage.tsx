@@ -333,7 +333,7 @@ const ReviewTab = () => {
           {droppedSells > 0 && <span>* 매수 기록이 조회 범위 밖이라 짝짓지 못한 매도 {droppedSells.toLocaleString()}주는 복기에서 제외됐어요.</span>}
         </div>
         <div className="rounded-xl px-4 py-3 text-[12px] leading-relaxed" style={{ background: 'rgba(91,157,255,.07)', border: `1px solid ${HAIR}`, color: INK1 }}>
-          💡 <b>복기</b>는 결과(손익)보다 <b>과정(규칙을 지켰는가)</b>을 점검하는 거예요. 자동매매도 규칙대로 됐는지, 수동매매는 감정이 끼지 않았는지 함께 봐요.
+          💡 <b>매매 돌아보기(복기)</b>는 결과(손익)보다 <b>과정(규칙을 지켰는가)</b>을 점검하는 거예요. 자동매매도 규칙대로 됐는지, 수동매매는 감정이 끼지 않았는지 함께 봐요.
         </div>
         <div className="flex flex-col gap-2.5">
           {view.map((t) => <ReviewCard key={t.id} t={t} checklist={checklist} note={reviewMap[t.id]} />)}
@@ -648,7 +648,7 @@ const RulesTab = () => {
 
 // ── 페이지 ──────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'review', label: '거래 복기' },
+  { id: 'review', label: '매매 돌아보기' },
   { id: 'rules', label: '매매 원칙' },
   { id: 'glossary', label: '용어집' },
   { id: 'mistakes', label: '흔한 실수' },
@@ -669,7 +669,7 @@ const ConsoleEducationPage = () => {
       <div className="mx-auto w-full max-w-[1080px] px-5 py-6 md:px-8">
         <div className="mb-5">
           <h1 className="text-[26px] font-bold tracking-tight" style={{ color: INK0 }}>학습 노트</h1>
-          <p className="mt-1.5 text-[13.5px]" style={{ color: INK1 }}>모의 매매를 <b>복기</b>하고, 나만의 원칙·용어·투자 계산기로 실력을 다져보세요.</p>
+          <p className="mt-1.5 text-[13.5px]" style={{ color: INK1 }}>모의 매매를 <b>돌아보고</b>, 나만의 원칙·용어·투자 계산기로 실력을 다져보세요.</p>
         </div>
 
         <div className="mb-5 flex gap-1 overflow-x-auto" style={{ borderBottom: `1px solid ${HAIR}` }}>

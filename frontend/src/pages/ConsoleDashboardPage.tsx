@@ -89,6 +89,7 @@ const fmtBtc = (n: number) => (n >= 1e8 ? (n / 1e8).toFixed(2) + '억' : (n / 1e
 function useIndices(): IdxRow[] {
   const [rows, setRows] = useState<IdxRow[]>(INDICES_FALLBACK);
   useEffect(() => {
+    const fetchIdx = () => {
     Promise.all([
       marketService.getPrices('CRYPTO').catch(() => []),
       marketService.getExchangeRate().catch(() => null),
@@ -105,6 +106,10 @@ function useIndices(): IdxRow[] {
       if (fx?.usdKrw) next[3] = ['USD/KRW', fx.usdKrw.toLocaleString('ko-KR', { maximumFractionDigits: 1 }), '', true];
       setRows(next);
     });
+    };
+    fetchIdx();
+    const id = setInterval(fetchIdx, 30_000); // 30초마다 지수 스트립 갱신
+    return () => clearInterval(id);
   }, []);
   return rows;
 }
@@ -385,7 +390,7 @@ const RealDashboard = () => {
     finally { setLoading(false); }
   }, [isPreview]);
   useEffect(() => { loadData(); }, [loadData]);
-  usePolling(loadData, 30000); // 안정적 콜백(useCallback) 전달 — 매 렌더 재구독 방지
+  usePolling(loadData, 10000); // 10초 폴링(실계좌 잔고; KIS는 백엔드 8초 캐시로 호출 디듀프). 안정적 콜백 전달
   // 첫 방문 시 가이드 투어 자동 시작 (완료하면 localStorage에 기록)
   useEffect(() => {
     if (isPreview || loading) return;
@@ -476,7 +481,7 @@ const VirtDashboard = () => {
     finally { setLoading(false); }
   }, [isPreview]);
   useEffect(() => { loadData(); }, [loadData]);
-  usePolling(() => { if (!isPreview) loadData(); }, 30000);
+  usePolling(() => { if (!isPreview) loadData(); }, 10000);
 
   const quickBuy = async (o: typeof FIRST_BUYS[number]) => {
     if (qbBusy) return;

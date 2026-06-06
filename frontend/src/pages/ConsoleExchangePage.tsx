@@ -86,7 +86,7 @@ const ConsoleExchangePage = () => {
   // 30초 자동 갱신 (조용히)
   useEffect(() => {
     if (isPreview) return;
-    const id = setInterval(() => load(true), 30_000);
+    const id = setInterval(() => load(true), 10_000);
     return () => clearInterval(id);
   }, [isPreview, load]);
 

@@ -34,7 +34,7 @@ kis:
     base-url: https://openapi.koreainvestment.com:9443
     appkey: ${KIS_APPKEY:}
     appsecret: ${KIS_APPSECRET:}
-    cache-ttl-ms: 15000
+    cache-ttl-ms: 10000   # 주식 시세 갱신 주기(10초)와 정렬 — 스케줄 갱신이 캐시에 막히지 않게. 스로틀(min-interval)이 레이트리밋 보호
     max-retries: 3
     retry-delay-ms: 500
 

@@ -86,8 +86,8 @@ public class StockPriceProvider {
         });
     }
 
-    /** 15초마다 백그라운드 갱신 — 요청 스레드를 차단하지 않음 */
-    @Scheduled(fixedDelay = 15000, initialDelay = 20000)
+    /** 10초마다 백그라운드 갱신 — 요청 스레드를 차단하지 않음 (KIS 시세 자체는 15~20초 지연이라 그 이상은 무의미) */
+    @Scheduled(fixedDelay = 10000, initialDelay = 20000)
     public void scheduledRefresh() {
         if (!kisApiClient.isConfigured()) return;
         try {

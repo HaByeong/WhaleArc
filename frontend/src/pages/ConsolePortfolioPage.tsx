@@ -248,7 +248,7 @@ const PaperPortfolio = () => {
   useEffect(() => {
     load();
     if (isPreview) return;
-    const t = setInterval(() => load(true), 15_000);
+    const t = setInterval(() => load(true), 10_000);
     return () => clearInterval(t);
   }, [load, isPreview]);
 
@@ -491,7 +491,7 @@ const RealAccountPortfolio = () => {
   useEffect(() => {
     load();
     if (isPreview) return;
-    const t = setInterval(() => load(true), 30_000);
+    const t = setInterval(() => load(true), 10_000);
     return () => clearInterval(t);
   }, [load, isPreview]);
 

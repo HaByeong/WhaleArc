@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
+import { usePolling } from '../hooks/usePolling';
 import HelmShell from '../components/HelmShell';
 import { rankingService, type RankingEntry, type RankingType } from '../services/rankingService';
 
@@ -135,6 +136,7 @@ const ConsoleStatusPage = () => {
       .finally(() => setLoading(false));
   }, [isPreview, period, page]);
   useEffect(() => { load(); }, [load]);
+  usePolling(load, 60_000); // 60초 자동갱신(랭킹은 일 1회 갱신이라 가볍게; 탭 비활성 시 자동 정지)
   const changePeriod = (p: string) => { setPeriod(p); setPage(0); };
 
   const rows = useMemo(() => entries.map(toRow), [entries]);

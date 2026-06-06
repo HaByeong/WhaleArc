@@ -57,28 +57,16 @@ public class KisApiClient {
 
     private record CachedToken(String token, long expiresAtMillis) {}
 
-    // 잔고 조회는 국내 + 해외(US 3거래소)로 호출이 여러 번이라, 짧은 캐시로 폴링/동시요청 중복을 줄여
-    // KIS 레이트리밋(EGW00201)을 방어한다(대시보드 30s 폴링 + 포폴 페이지 동시 조회 디듀프).
-    private static final long PORTFOLIO_TTL_MS = 8000;
-    private final Map<String, CachedPortfolio> portfolioCache = new ConcurrentHashMap<>();
-
-    private record CachedPortfolio(ExchangePortfolioDto dto, long expiresAtMillis) {}
-
+    // 잔고 짧은 캐시(폴링/동시요청 디듀프)는 ExchangeAccountService 계층에서 (userId,exchangeType)로
+    // 일원화(KIS/Upbit/Bitget 공통). 여기서는 토큰만 캐시한다.
     public ExchangePortfolioDto getPortfolio(String appKey, String appSecret,
                                               String secretKey, String accountNumber) {
-        String cacheKey = appKey + "|" + accountNumber;
-        CachedPortfolio cached = portfolioCache.get(cacheKey);
-        if (cached != null && System.currentTimeMillis() < cached.expiresAtMillis()) {
-            return cached.dto();
-        }
         try {
             String accessToken = getAccessToken(appKey, appSecret);
             if (accessToken == null) {
                 return new ExchangePortfolioDto("KIS", true, 0, 0, 0, 0, new ArrayList<>());
             }
-            ExchangePortfolioDto dto = fetchBalance(accessToken, appKey, appSecret, accountNumber);
-            portfolioCache.put(cacheKey, new CachedPortfolio(dto, System.currentTimeMillis() + PORTFOLIO_TTL_MS));
-            return dto;
+            return fetchBalance(accessToken, appKey, appSecret, accountNumber);
         } catch (Exception e) {
             log.warn("KIS API 호출 실패: {}", e.getMessage());
             return new ExchangePortfolioDto("KIS", true, 0, 0, 0, 0, new ArrayList<>());

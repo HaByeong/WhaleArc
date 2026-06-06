@@ -25,6 +25,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -270,14 +271,26 @@ public class RankingService {
         return periodReturns;
     }
 
+    // 대표 항로 수익률 N+1 완화 — getMyPurchasesPerformance(시세조회+상품 findById 루프)는 무거워서,
+    // 리더보드의 각 항로 보유자마다 매 요청 호출하면 동시 폴링 시 증폭된다. (userId,purchaseId)별 30초 캐시로
+    // 동시 사용자/폴링 간 디듀프(랭킹은 일 1회 갱신이라 staleness 무해).
+    private static final long ROUTE_RR_TTL_MS = 30_000;
+    private final Map<String, CachedRouteRr> routeRrCache = new ConcurrentHashMap<>();
+    private record CachedRouteRr(Double rate, long expiresAt) {}
+
     private Double getRouteReturnRate(String userId, String purchaseId) {
+        String key = userId + "|" + purchaseId;
+        CachedRouteRr c = routeRrCache.get(key);
+        if (c != null && System.currentTimeMillis() < c.expiresAt()) return c.rate();
         try {
             List<PurchasePerformanceDto> perfs = quantStoreService.getMyPurchasesPerformance(userId);
-            return perfs.stream()
+            Double rate = perfs.stream()
                     .filter(p -> p.getPurchaseId().equals(purchaseId))
                     .findFirst()
                     .map(PurchasePerformanceDto::getTotalReturnRate)
                     .orElse(null);
+            routeRrCache.put(key, new CachedRouteRr(rate, System.currentTimeMillis() + ROUTE_RR_TTL_MS));
+            return rate;
         } catch (Exception e) {
             return null;
         }

@@ -15,7 +15,9 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +28,12 @@ public class ExchangeAccountService {
     private final KisApiClient kisApiClient;
     private final UpbitApiClient upbitApiClient;
     private final BitgetApiClient bitgetApiClient;
+
+    // 거래소 잔고 짧은 캐시(8초) — 대시보드/포트폴리오 10초 폴링 + 동시 사용자가 외부 거래소 API를
+    // 반복 호출(특히 Bitget 코인당 N+1)하지 않도록 (userId,exchangeType)별 디듀프. KIS/Upbit/Bitget 공통.
+    private static final long PORTFOLIO_CACHE_TTL_MS = 8000;
+    private final Map<String, CachedPortfolio> portfolioCache = new ConcurrentHashMap<>();
+    private record CachedPortfolio(ExchangePortfolioDto dto, long expiresAt) {}
 
     /**
      * 거래소 API 키 등록/수정 (암호화 저장)
@@ -66,6 +74,7 @@ public class ExchangeAccountService {
         account.setUpdatedAt(LocalDateTime.now().toString());
 
         ExchangeAccount saved = exchangeAccountRepository.save(account);
+        portfolioCache.remove(userId + "|" + request.getExchangeType()); // 키 변경 후 stale 잔고 방지
         maskSensitiveFields(saved); // 응답에 암호문 노출 방지 (저장 후 메모리 객체만 마스킹)
         return saved;
     }
@@ -94,12 +103,19 @@ public class ExchangeAccountService {
      */
     public void deleteAccount(String userId, String exchangeType) {
         exchangeAccountRepository.deleteByUserIdAndExchangeType(userId, exchangeType);
+        portfolioCache.remove(userId + "|" + exchangeType); // 연결 해제 후 stale 잔고 즉시 제거
     }
 
     /**
      * 거래소 포트폴리오 조회 (실제 API 연동)
      */
     public ExchangePortfolioDto getPortfolio(String userId, String exchangeType) {
+        String cacheKey = userId + "|" + exchangeType;
+        CachedPortfolio cached = portfolioCache.get(cacheKey);
+        if (cached != null && System.currentTimeMillis() < cached.expiresAt()) {
+            return cached.dto();   // 8초 이내 재요청은 캐시(폴링/동시요청 디듀프)
+        }
+
         Optional<ExchangeAccount> accountOpt = exchangeAccountRepository
                 .findByUserIdAndExchangeType(userId, exchangeType);
 
@@ -114,24 +130,29 @@ public class ExchangeAccountService {
             String apiKey = aesCryptoUtil.decrypt(account.getApiKey());
             String secretKey = aesCryptoUtil.decrypt(account.getSecretKey());
 
+            ExchangePortfolioDto dto;
             switch (exchangeType) {
-                case "KIS":
+                case "KIS": {
                     String appSecret = account.getAppSecret() != null
                             ? aesCryptoUtil.decrypt(account.getAppSecret()) : "";
-                    return kisApiClient.getPortfolio(apiKey, secretKey, appSecret, account.getAccountNumber());
-
+                    dto = kisApiClient.getPortfolio(apiKey, secretKey, appSecret, account.getAccountNumber());
+                    break;
+                }
                 case "UPBIT":
-                    return upbitApiClient.getPortfolio(apiKey, secretKey);
-
-                case "BITGET":
+                    dto = upbitApiClient.getPortfolio(apiKey, secretKey);
+                    break;
+                case "BITGET": {
                     // Bitget은 ACCESS-PASSPHRASE 필수. appSecret 필드를 passphrase로 사용.
                     String passphrase = account.getAppSecret() != null
                             ? aesCryptoUtil.decrypt(account.getAppSecret()) : "";
-                    return bitgetApiClient.getPortfolio(apiKey, secretKey, passphrase);
-
+                    dto = bitgetApiClient.getPortfolio(apiKey, secretKey, passphrase);
+                    break;
+                }
                 default:
-                    return new ExchangePortfolioDto(exchangeType, true, 0, 0, 0, 0, new ArrayList<>());
+                    dto = new ExchangePortfolioDto(exchangeType, true, 0, 0, 0, 0, new ArrayList<>());
             }
+            portfolioCache.put(cacheKey, new CachedPortfolio(dto, System.currentTimeMillis() + PORTFOLIO_CACHE_TTL_MS));
+            return dto;
         } catch (Exception e) {
             System.err.println("거래소 API 호출 실패 (" + exchangeType + "): " + e.getMessage());
             ExchangePortfolioDto failed = new ExchangePortfolioDto(exchangeType, true, 0, 0, 0, 0, new ArrayList<>());

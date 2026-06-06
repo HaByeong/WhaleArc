@@ -388,7 +388,7 @@ const LandingPage = () => {
             <ol className="mt-10 flex flex-col gap-5">
               {[['01', 'VIRT 계좌 개설', '버튼 한 번으로 ₩10,000,000 가상 자금이 지급됩니다.'],
                 ['02', '전략 실행', '실시간 시세로 거래하고, 손익은 즉시 갱신됩니다.'],
-                ['03', '복기와 이관', '결과가 만족스러우면 같은 전략을 실계좌로 한 번에 이관.']].map(([n, t, d]) => (
+                ['03', '복기와 자동화', '결과가 만족스러우면 같은 전략을 모의 자동매매로 바로 적용해보세요.']].map(([n, t, d]) => (
                 <li key={n} className="flex gap-4">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-mono text-[13px]" style={{ background: 'rgba(91,157,255,.10)', color: GLOW, border: '1px solid rgba(91,157,255,.22)' }}>{n}</span>
                   <div>
@@ -443,7 +443,7 @@ const LandingPage = () => {
                   <span className="h-2 w-2 rounded-full animate-pulse-dot" style={{ background: UP, boxShadow: `0 0 6px ${UP}` }} />
                   시뮬레이션 진행 중 · 14일째
                 </span>
-                <span className="font-medium" style={{ color: GLOW }}>실계좌로 이관 →</span>
+                <span className="font-medium" style={{ color: GLOW }}>모의 자동매매로 →</span>
               </div>
             </div>
           </div>

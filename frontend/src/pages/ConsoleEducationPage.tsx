@@ -367,11 +367,12 @@ const ConsoleEducationPage = () => {
           <p className="mt-1.5 text-[13.5px]" style={{ color: INK1 }}>모의 매매를 <b>복기</b>하고, 용어와 흔한 실수를 익히며 실력을 다져보세요.</p>
         </div>
 
-        <div className="mb-5 flex gap-1.5 overflow-x-auto rounded-xl p-1" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
+        <div className="mb-5 flex gap-1 overflow-x-auto" style={{ borderBottom: `1px solid ${HAIR}` }}>
           {TABS.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)} className="flex-1 whitespace-nowrap rounded-lg px-4 py-2.5 text-[13.5px] font-semibold transition-colors"
-              style={tab === t.id ? { background: 'var(--ci-panel)', color: INK0, boxShadow: 'var(--ci-panel-shadow)' } : { color: INK2 }}>
+            <button key={t.id} onClick={() => setTab(t.id)} className="relative whitespace-nowrap px-4 py-3 text-[14px] transition-colors"
+              style={{ color: tab === t.id ? INK0 : INK2, fontWeight: tab === t.id ? 700 : 500 }}>
               {t.label}
+              {tab === t.id && <span className="absolute -bottom-px left-3 right-3 h-0.5 rounded" style={{ background: SONAR }} />}
             </button>
           ))}
         </div>

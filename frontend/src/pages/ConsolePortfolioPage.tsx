@@ -32,6 +32,8 @@ const stripZeros = (s: string) => s.replace(/\.?0+$/, '') || '0';
 const fmtQty = (n: number, stockLike: boolean) => (stockLike ? `${Math.floor(n).toLocaleString('ko-KR')}주` : `${stripZeros(n.toFixed(8))}개`);
 const holdingName = (h: { stockName?: string; stockCode: string }) => h.stockName || h.stockCode;
 const fmtHoldingValue = (h: Holding) => (isUsd(h.assetType) ? '$' + h.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : won(h.marketValue));
+// 실계좌(ExchangeHolding) 단가/평가 표시: 해외주식 USD는 $, 그 외 ₩. (합계·도넛은 항상 KRW 환산)
+const exMoney = (n: number, cur?: string) => cur === 'USD' ? '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : won(n);
 
 const panel: React.CSSProperties = { background: 'var(--ci-panel)', border: '1px solid var(--ci-line)', borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)' };
 const Panel = ({ children, style }: { children: ReactNode; style?: React.CSSProperties }) => <div style={{ ...panel, ...style }}>{children}</div>;
@@ -506,13 +508,16 @@ const RealAccountPortfolio = () => {
   const holdings = port?.holdings ?? [];
   const cashLabel = isStock ? '예수금' : activeTab === 'UPBIT' ? 'KRW 잔고' : 'USDT';
 
+  // 도넛/합계는 항상 KRW 기준 — KIS 해외주식(currency=USD)은 서버가 준 환율로 환산(통화 혼합 방지)
+  const usdKrw = port?.usdtKrwRate || 0;
+  const krwVal = (h: { marketValue: number; currency?: string }) => (h.currency === 'USD' && usdKrw > 0 ? h.marketValue * usdKrw : h.marketValue);
   const alloc = useMemo(() => {
     if (!port) return [] as { c: string; label: string; value: number }[];
     const arr: { c: string; label: string; value: number }[] = [];
     if (port.cashBalance > 0) arr.push({ c: '#7a8aa8', label: isStock ? '예수금' : 'KRW', value: port.cashBalance });
-    port.holdings.forEach((h, i) => { if (h.marketValue > 0) arr.push({ c: CHART_COLORS[i % CHART_COLORS.length], label: h.assetName, value: h.marketValue }); });
+    port.holdings.forEach((h, i) => { const v = krwVal(h); if (v > 0) arr.push({ c: CHART_COLORS[i % CHART_COLORS.length], label: h.assetName, value: v }); });
     return arr;
-  }, [port, isStock]);
+  }, [port, isStock, usdKrw]);
   const allocTotal = alloc.reduce((s, a) => s + a.value, 0);
 
   const openSetup = (t: ExchangeType) => setShowSetup(t);
@@ -589,8 +594,8 @@ const RealAccountPortfolio = () => {
                   const up = h.returnRate >= 0;
                   return (
                     <div key={h.assetCode} className="grid grid-cols-[1fr_auto] items-center gap-3.5 px-[22px] py-3.5" style={{ borderTop: i ? '1px solid var(--ci-line)' : undefined }}>
-                      <div className="min-w-0"><div className="truncate text-[14px] font-semibold">{h.assetName}</div><div className="mt-0.5 font-mono text-[11px] text-white/48">{h.assetCode} · {fmtQty(h.quantity, isStock)} · 평단 {won(h.averagePrice)}</div></div>
-                      <div className="text-right"><div className="font-mono text-[14px] font-bold">{won(h.marketValue)}</div><div className="mt-0.5 font-mono text-[12px] font-semibold" style={{ color: up ? UP : DOWN }}><Tri up={up} />{up ? '+' : ''}{h.returnRate.toFixed(2)}% <span className="text-white/40">({h.profitLoss >= 0 ? '+' : ''}{won(h.profitLoss)})</span></div></div>
+                      <div className="min-w-0"><div className="truncate text-[14px] font-semibold">{h.assetName}{h.currency === 'USD' && <span className="ml-1.5 rounded px-1 py-0.5 text-[9px] font-bold align-middle" style={{ background: 'rgba(91,157,255,.16)', color: SONAR }}>USD</span>}</div><div className="mt-0.5 font-mono text-[11px] text-white/48">{h.assetCode} · {fmtQty(h.quantity, isStock)} · 평단 {exMoney(h.averagePrice, h.currency)}</div></div>
+                      <div className="text-right"><div className="font-mono text-[14px] font-bold">{exMoney(h.marketValue, h.currency)}</div><div className="mt-0.5 font-mono text-[12px] font-semibold" style={{ color: up ? UP : DOWN }}><Tri up={up} />{up ? '+' : ''}{h.returnRate.toFixed(2)}% <span className="text-white/40">({h.profitLoss >= 0 ? '+' : ''}{exMoney(h.profitLoss, h.currency)})</span></div></div>
                     </div>
                   );
                 })}

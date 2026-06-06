@@ -3,8 +3,11 @@ package com.project.whalearc.exchange.service.client;
 import com.project.whalearc.exchange.dto.ExchangeHoldingDto;
 import com.project.whalearc.exchange.dto.ExchangePortfolioDto;
 import com.project.whalearc.exchange.dto.ExchangeTransactionDto;
+import com.project.whalearc.market.service.ExchangeRateService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -14,9 +17,15 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 한국투자증권(KIS) Open API 클라이언트
+ * 한국투자증권(KIS) Open API 클라이언트 (실계좌 잔고/체결 조회)
  * API 문서: https://apiportal.koreainvestment.com
+ *
+ * <p>국내주식(원화) + 해외주식(미국, 달러)을 모두 조회한다. 해외분은 USD 네이티브로 보유종목에 담고
+ * (currency="USD"), 포트폴리오 합계(총평가/손익/수익률)는 USD→KRW 환산해 원화로 통일한다.
+ * 해외 조회는 best-effort: 실패해도 국내분은 그대로 반환(graceful). ⚠ 해외 잔고 응답 필드/거래소코드는
+ * 실계좌(미국주식 보유)로 라이브 검증 필요 — 실패 시 rt_cd/msg 로그로 진단.
  */
+@Slf4j
 @Component("exchangeKisApiClient")
 @RequiredArgsConstructor
 public class KisApiClient {
@@ -24,9 +33,23 @@ public class KisApiClient {
     private static final String BASE_URL = "https://openapi.koreainvestment.com:9443";
     private static final String TOKEN_PATH = "/oauth2/tokenP";
     private static final String BALANCE_PATH = "/uapi/domestic-stock/v1/trading/inquire-balance";
+    private static final String OVRS_BALANCE_PATH = "/uapi/overseas-stock/v1/trading/inquire-balance";
     private static final String CCLD_PATH = "/uapi/domestic-stock/v1/trading/inquire-daily-ccld";
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    // 미국 거래소코드(해외잔고는 거래소별 조회) — 나스닥/뉴욕/아멕스
+    private static final String[] US_EXCHANGES = {"NASD", "NYSE", "AMEX"};
+    private static final int MAX_PAGES = 10;   // 페이지네이션 상한(무한루프 방지)
+
+    private final ExchangeRateService exchangeRateService;
+    private final RestTemplate restTemplate = buildRestTemplate();
+
+    private static RestTemplate buildRestTemplate() {
+        // KIS 지연 시 무한 블로킹 방지 — 연결 5s / 응답 10s 타임아웃
+        SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
+        f.setConnectTimeout(5000);
+        f.setReadTimeout(10000);
+        return new RestTemplate(f);
+    }
 
     // KIS 접근토큰은 발급이 1분당 1회로 제한(초과 시 EGW00133)되고 유효기간이 24h다.
     // appkey별로 캐싱해 재사용한다(매 조회마다 새로 발급하던 EGW00133 버그 수정).
@@ -34,19 +57,30 @@ public class KisApiClient {
 
     private record CachedToken(String token, long expiresAtMillis) {}
 
+    // 잔고 조회는 국내 + 해외(US 3거래소)로 호출이 여러 번이라, 짧은 캐시로 폴링/동시요청 중복을 줄여
+    // KIS 레이트리밋(EGW00201)을 방어한다(대시보드 30s 폴링 + 포폴 페이지 동시 조회 디듀프).
+    private static final long PORTFOLIO_TTL_MS = 8000;
+    private final Map<String, CachedPortfolio> portfolioCache = new ConcurrentHashMap<>();
+
+    private record CachedPortfolio(ExchangePortfolioDto dto, long expiresAtMillis) {}
+
     public ExchangePortfolioDto getPortfolio(String appKey, String appSecret,
                                               String secretKey, String accountNumber) {
+        String cacheKey = appKey + "|" + accountNumber;
+        CachedPortfolio cached = portfolioCache.get(cacheKey);
+        if (cached != null && System.currentTimeMillis() < cached.expiresAtMillis()) {
+            return cached.dto();
+        }
         try {
-            // 1. OAuth 토큰 발급
             String accessToken = getAccessToken(appKey, appSecret);
             if (accessToken == null) {
                 return new ExchangePortfolioDto("KIS", true, 0, 0, 0, 0, new ArrayList<>());
             }
-
-            // 2. 주식잔고 조회
-            return fetchBalance(accessToken, appKey, appSecret, accountNumber);
+            ExchangePortfolioDto dto = fetchBalance(accessToken, appKey, appSecret, accountNumber);
+            portfolioCache.put(cacheKey, new CachedPortfolio(dto, System.currentTimeMillis() + PORTFOLIO_TTL_MS));
+            return dto;
         } catch (Exception e) {
-            System.err.println("KIS API 호출 실패: " + e.getMessage());
+            log.warn("KIS API 호출 실패: {}", e.getMessage());
             return new ExchangePortfolioDto("KIS", true, 0, 0, 0, 0, new ArrayList<>());
         }
     }
@@ -72,7 +106,7 @@ public class KisApiClient {
             if (response.getBody() != null) {
                 Object tok = response.getBody().get("access_token");
                 if (tok == null) {
-                    System.err.println("[KIS 토큰] access_token 없음 — 응답: " + response.getBody());
+                    log.warn("[KIS 토큰] access_token 없음 — 응답: {}", response.getBody());
                     return null;
                 }
                 String token = (String) tok;
@@ -86,92 +120,131 @@ public class KisApiClient {
                 return token;
             }
         } catch (Exception e) {
-            System.err.println("KIS 토큰 발급 실패: " + e.getMessage());
+            log.warn("KIS 토큰 발급 실패: {}", e.getMessage());
         }
         return null;
     }
 
-    @SuppressWarnings("unchecked")
     private ExchangePortfolioDto fetchBalance(String accessToken, String appKey,
                                                String appSecret, String accountNumber) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("authorization", "Bearer " + accessToken);
-        headers.set("appkey", appKey);
-        headers.set("appsecret", appSecret);
-        headers.set("tr_id", "TTTC8434R"); // 주식잔고조회
+        String cano = cano(accountNumber);
+        String acntPrdtCd = acntPrdtCd(accountNumber);
 
-        // 계좌번호 분리 (예: "50123456-01" → CANO=50123456, ACNT_PRDT_CD=01)
-        String cano = accountNumber;
-        String acntPrdtCd = "01";
-        if (accountNumber != null && accountNumber.contains("-")) {
-            String[] parts = accountNumber.split("-");
-            cano = parts[0];
-            acntPrdtCd = parts[1];
-        }
-
-        String url = BASE_URL + BALANCE_PATH
-                + "?CANO=" + cano
-                + "&ACNT_PRDT_CD=" + acntPrdtCd
-                + "&AFHR_FLPR_YN=N"
-                + "&OFL_YN="
-                + "&INQR_DVSN=02"
-                + "&UNPR_DVSN=01"
-                + "&FUND_STTL_ICLD_YN=N"
-                + "&FNCG_AMT_AUTO_RDPT_YN=N"
-                + "&PRCS_DVSN=01"
-                + "&CTX_AREA_FK100="
-                + "&CTX_AREA_NK100=";
-
-        HttpEntity<Void> request = new HttpEntity<>(headers);
-        ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, request, Map.class);
-
-        // 진단: KIS가 rt_cd!=0(에러)을 줘도 아래에서 조용히 0원 처리되므로, 비정상 응답을 로그로 남긴다.
-        if (response.getBody() != null && !"0".equals(String.valueOf(response.getBody().get("rt_cd")))) {
-            System.err.println("[KIS 잔고조회] 비정상 rt_cd=" + response.getBody().get("rt_cd")
-                    + " msg=" + response.getBody().get("msg1") + " (CANO=" + cano + "-" + acntPrdtCd + ")");
-        }
-
+        // 1) 국내주식(원화)
         List<ExchangeHoldingDto> holdings = new ArrayList<>();
-        double totalValue = 0;
-        double totalProfitLoss = 0;
-        double cashBalance = 0;
+        double evalKrw = 0;          // 보유 평가금 합(KRW)
+        double plKrw = 0;            // 손익 합(KRW)
+        double cashKrw = fetchDomestic(accessToken, appKey, appSecret, cano, acntPrdtCd, holdings);
+        for (ExchangeHoldingDto h : holdings) { evalKrw += h.getMarketValue(); plKrw += h.getProfitLoss(); }
 
-        if (response.getBody() != null) {
-            // 보유종목 파싱
-            List<Map<String, Object>> output1 = (List<Map<String, Object>>) response.getBody().get("output1");
+        // 2) 해외주식(미국, USD) — best-effort. 실패해도 국내분은 유지.
+        double usdKrw = exchangeRateService.getUsdKrwRate();
+        if (usdKrw <= 0) usdKrw = 1400;
+        List<ExchangeHoldingDto> overseas = new ArrayList<>();
+        try {
+            fetchOverseas(accessToken, appKey, appSecret, cano, acntPrdtCd, overseas);
+        } catch (Exception e) {
+            log.warn("[KIS 해외잔고] 조회 실패(국내분만 반환): {}", e.getMessage());
+        }
+        for (ExchangeHoldingDto h : overseas) {
+            holdings.add(h);                          // USD 네이티브 값 그대로(표시용)
+            evalKrw += h.getMarketValue() * usdKrw;   // 합계는 원화 환산
+            plKrw += h.getProfitLoss() * usdKrw;
+        }
+
+        double totalValue = evalKrw + cashKrw;
+        double costBasis = evalKrw - plKrw;
+        double totalReturnRate = costBasis > 0 ? (plKrw / costBasis) * 100 : 0;
+        ExchangePortfolioDto dto = new ExchangePortfolioDto("KIS", true, totalValue, plKrw, totalReturnRate, cashKrw, holdings);
+        dto.setUsdtKrwRate(usdKrw);   // 해외 환산에 쓴 USD/KRW (프론트 참고용)
+        return dto;
+    }
+
+    /** 국내주식 잔고(원화). 보유종목을 holdings에 누적하고 예수금(KRW)을 반환. 페이지네이션 처리. */
+    @SuppressWarnings("unchecked")
+    private double fetchDomestic(String accessToken, String appKey, String appSecret,
+                                 String cano, String acntPrdtCd, List<ExchangeHoldingDto> holdings) {
+        double cash = 0;
+        String fk = "", nk = "", trCont = "";
+        for (int page = 0; page < MAX_PAGES; page++) {
+            HttpHeaders headers = baseHeaders(accessToken, appKey, appSecret, "TTTC8434R");
+            if (!trCont.isEmpty()) headers.set("tr_cont", trCont);
+
+            String url = BASE_URL + BALANCE_PATH
+                    + "?CANO=" + cano + "&ACNT_PRDT_CD=" + acntPrdtCd
+                    + "&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                    + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=01"
+                    + "&CTX_AREA_FK100=" + fk + "&CTX_AREA_NK100=" + nk;
+
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            Map<String, Object> b = response.getBody();
+            if (b == null) break;
+            if (!"0".equals(String.valueOf(b.get("rt_cd")))) {
+                log.warn("[KIS 국내잔고] 비정상 rt_cd={} msg={} (CANO={}-{})", b.get("rt_cd"), b.get("msg1"), cano, acntPrdtCd);
+                break;
+            }
+
+            List<Map<String, Object>> output1 = (List<Map<String, Object>>) b.get("output1");
             if (output1 != null) {
                 for (Map<String, Object> item : output1) {
-                    String stockCode = (String) item.get("pdno");
-                    String stockName = (String) item.get("prdt_name");
                     double qty = parseDouble(item.get("hldg_qty"));
-                    double avgPrice = parseDouble(item.get("pchs_avg_pric"));
-                    double curPrice = parseDouble(item.get("prpr"));
-                    double evalAmt = parseDouble(item.get("evlu_amt"));
-                    double pl = parseDouble(item.get("evlu_pfls_amt"));
-                    double plRate = parseDouble(item.get("evlu_pfls_rt"));
-
-                    if (qty > 0) {
-                        holdings.add(new ExchangeHoldingDto(
-                                stockCode, stockName, qty, avgPrice, curPrice, evalAmt, pl, plRate));
-                        totalValue += evalAmt;
-                        totalProfitLoss += pl;
-                    }
+                    if (qty <= 0) continue;
+                    holdings.add(new ExchangeHoldingDto(
+                            (String) item.get("pdno"), (String) item.get("prdt_name"), qty,
+                            parseDouble(item.get("pchs_avg_pric")), parseDouble(item.get("prpr")),
+                            parseDouble(item.get("evlu_amt")), parseDouble(item.get("evlu_pfls_amt")),
+                            parseDouble(item.get("evlu_pfls_rt")), "KRW"));
                 }
             }
+            // 예수금은 계좌 단위라 첫 페이지 값만 취함
+            if (page == 0) {
+                List<Map<String, Object>> output2 = (List<Map<String, Object>>) b.get("output2");
+                if (output2 != null && !output2.isEmpty()) cash = parseDouble(output2.get(0).get("dnca_tot_amt"));
+            }
 
-            // 예수금 파싱
-            List<Map<String, Object>> output2 = (List<Map<String, Object>>) response.getBody().get("output2");
-            if (output2 != null && !output2.isEmpty()) {
-                cashBalance = parseDouble(output2.get(0).get("dnca_tot_amt"));
-                totalValue += cashBalance;
+            // 다음 페이지 여부(tr_cont F/M = 연속) + 연속조회 키
+            String respTrCont = response.getHeaders().getFirst("tr_cont");
+            if (!"F".equals(respTrCont) && !"M".equals(respTrCont)) break;
+            fk = str(b.get("ctx_area_fk100")).trim();
+            nk = str(b.get("ctx_area_nk100")).trim();
+            trCont = "N";
+        }
+        return cash;
+    }
+
+    /** 해외주식 잔고(미국, USD). best-effort — 거래소별(NASD/NYSE/AMEX) 조회해 holdings에 USD 네이티브로 누적. */
+    @SuppressWarnings("unchecked")
+    private void fetchOverseas(String accessToken, String appKey, String appSecret,
+                               String cano, String acntPrdtCd, List<ExchangeHoldingDto> holdings) {
+        for (String excg : US_EXCHANGES) {
+            try {
+                HttpHeaders headers = baseHeaders(accessToken, appKey, appSecret, "TTTS3012R");
+                String url = BASE_URL + OVRS_BALANCE_PATH
+                        + "?CANO=" + cano + "&ACNT_PRDT_CD=" + acntPrdtCd
+                        + "&OVRS_EXCG_CD=" + excg + "&TR_CRCY_CD=USD"
+                        + "&CTX_AREA_FK200=&CTX_AREA_NK200=";
+                ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+                Map<String, Object> b = response.getBody();
+                if (b == null) continue;
+                if (!"0".equals(String.valueOf(b.get("rt_cd")))) {
+                    log.warn("[KIS 해외잔고:{}] 비정상 rt_cd={} msg={}", excg, b.get("rt_cd"), b.get("msg1"));
+                    continue;
+                }
+                List<Map<String, Object>> output1 = (List<Map<String, Object>>) b.get("output1");
+                if (output1 == null) continue;
+                for (Map<String, Object> item : output1) {
+                    double qty = parseDouble(item.get("ovrs_cblc_qty"));
+                    if (qty <= 0) continue;
+                    holdings.add(new ExchangeHoldingDto(
+                            str(item.get("ovrs_pdno")), str(item.get("ovrs_item_name")), qty,
+                            parseDouble(item.get("pchs_avg_pric")), parseDouble(item.get("now_pric2")),
+                            parseDouble(item.get("ovrs_stck_evlu_amt")), parseDouble(item.get("frcr_evlu_pfls_amt")),
+                            parseDouble(item.get("evlu_pfls_rt")), "USD"));
+                }
+            } catch (Exception e) {
+                log.warn("[KIS 해외잔고:{}] 조회 예외: {}", excg, e.getMessage());
             }
         }
-
-        double totalReturnRate = (totalValue - cashBalance) > 0 && totalProfitLoss != 0
-                ? (totalProfitLoss / (totalValue - cashBalance - totalProfitLoss)) * 100 : 0;
-
-        return new ExchangePortfolioDto("KIS", true, totalValue, totalProfitLoss, totalReturnRate, cashBalance, holdings);
     }
 
     /* ───── 체결 내역 조회 (주식일별주문체결, TTTC8001R) ───── */
@@ -183,45 +256,21 @@ public class KisApiClient {
             String accessToken = getAccessToken(appKey, appSecret);
             if (accessToken == null) return txns;
 
-            // 계좌번호 분리 (예: "50123456-01" → CANO=50123456, ACNT_PRDT_CD=01)
-            String cano = accountNumber;
-            String acntPrdtCd = "01";
-            if (accountNumber != null && accountNumber.contains("-")) {
-                String[] parts = accountNumber.split("-");
-                cano = parts[0];
-                acntPrdtCd = parts[1];
-            }
+            String cano = cano(accountNumber);
+            String acntPrdtCd = acntPrdtCd(accountNumber);
 
             DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
             String endDate = LocalDate.now().format(fmt);
             String startDate = LocalDate.now().minusDays(Math.max(1, days)).format(fmt);
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("authorization", "Bearer " + accessToken);
-            headers.set("appkey", appKey);
-            headers.set("appsecret", appSecret);
-            headers.set("tr_id", "TTTC8001R"); // 주식일별주문체결조회
-
+            HttpHeaders headers = baseHeaders(accessToken, appKey, appSecret, "TTTC8001R");
             String url = BASE_URL + CCLD_PATH
-                    + "?CANO=" + cano
-                    + "&ACNT_PRDT_CD=" + acntPrdtCd
-                    + "&INQR_STRT_DT=" + startDate
-                    + "&INQR_END_DT=" + endDate
-                    + "&SLL_BUY_DVSN_CD=00"
-                    + "&INQR_DVSN=00"
-                    + "&PDNO="
-                    + "&CCLD_DVSN=00"
-                    + "&ORD_GNO_BRNO="
-                    + "&ODNO="
-                    + "&INQR_DVSN_3=00"
-                    + "&INQR_DVSN_1="
-                    + "&CTX_AREA_FK100="
-                    + "&CTX_AREA_NK100=";
+                    + "?CANO=" + cano + "&ACNT_PRDT_CD=" + acntPrdtCd
+                    + "&INQR_STRT_DT=" + startDate + "&INQR_END_DT=" + endDate
+                    + "&SLL_BUY_DVSN_CD=00&INQR_DVSN=00&PDNO=&CCLD_DVSN=00&ORD_GNO_BRNO=&ODNO="
+                    + "&INQR_DVSN_3=00&INQR_DVSN_1=&CTX_AREA_FK100=&CTX_AREA_NK100=";
 
-            HttpEntity<Void> request = new HttpEntity<>(headers);
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, request, Map.class);
-
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
             if (response.getBody() != null) {
                 List<Map<String, Object>> output1 = (List<Map<String, Object>>) response.getBody().get("output1");
                 if (output1 != null) {
@@ -242,9 +291,36 @@ public class KisApiClient {
                 }
             }
         } catch (Exception e) {
-            System.err.println("KIS 체결내역 조회 실패: " + e.getMessage());
+            log.warn("KIS 체결내역 조회 실패: {}", e.getMessage());
         }
         return txns;
+    }
+
+    // ───── 헬퍼 ─────
+
+    private HttpHeaders baseHeaders(String accessToken, String appKey, String appSecret, String trId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("authorization", "Bearer " + accessToken);
+        headers.set("appkey", appKey);
+        headers.set("appsecret", appSecret);
+        headers.set("tr_id", trId);
+        return headers;
+    }
+
+    /** 계좌번호 "50123456-01" → CANO=50123456 (하이픈 없으면 그대로). */
+    private String cano(String accountNumber) {
+        if (accountNumber != null && accountNumber.contains("-")) return accountNumber.split("-")[0];
+        return accountNumber;
+    }
+
+    /** 계좌번호 "50123456-01" → ACNT_PRDT_CD=01 (없으면 기본 01). 하이픈 뒤 누락도 안전 처리. */
+    private String acntPrdtCd(String accountNumber) {
+        if (accountNumber != null && accountNumber.contains("-")) {
+            String[] parts = accountNumber.split("-");
+            if (parts.length > 1 && !parts[1].isBlank()) return parts[1];
+        }
+        return "01";
     }
 
     private String str(Object value) {

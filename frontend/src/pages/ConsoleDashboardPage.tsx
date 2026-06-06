@@ -395,8 +395,11 @@ const RealDashboard = () => {
   const selectedConnected = isConn(src);
   const selectedPort = ports[src] || null;
   const meta = EXCHANGES.find(e => e.key === src)!;
-  const equity = selectedPort ? selectedPort.holdings.reduce((s, h) => s + h.marketValue, 0) : 0;
-  const holdings: SumHolding[] = selectedPort ? [...selectedPort.holdings].sort((a, b) => b.marketValue - a.marketValue).slice(0, 5).map(h => ({ name: h.assetName, sub: fmtQty(h.quantity, src === 'KIS'), value: h.marketValue, rate: h.returnRate })) : [];
+  // 보유 평가/평가액은 항상 KRW로 표시. KIS 해외주식(currency=USD)은 서버가 준 환율로 환산해 합산(통화 혼합 방지).
+  const usdKrw = selectedPort?.usdtKrwRate || 0;
+  const krwValue = (h: { marketValue: number; currency?: string }) => (h.currency === 'USD' && usdKrw > 0 ? h.marketValue * usdKrw : h.marketValue);
+  const equity = selectedPort ? selectedPort.totalValue - selectedPort.cashBalance : 0;
+  const holdings: SumHolding[] = selectedPort ? [...selectedPort.holdings].sort((a, b) => krwValue(b) - krwValue(a)).slice(0, 5).map(h => ({ name: h.assetName, sub: fmtQty(h.quantity, src === 'KIS'), value: krwValue(h), rate: h.returnRate })) : [];
   const blips = useMemo(() => blipsFrom((selectedPort?.holdings ?? []).map(h => ({ name: h.assetName, rate: h.returnRate }))), [selectedPort]);
   const goConnect = () => setSetup(src); // 1스텝: 대시보드에서 바로 연결 모달
 

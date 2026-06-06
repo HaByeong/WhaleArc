@@ -16,6 +16,10 @@ const INK1 = 'var(--ci-ink1)', INK2 = 'var(--ci-ink2)', INK3 = 'var(--ci-ink3)';
 const LINE = 'var(--ci-line)';
 const panel: React.CSSProperties = { background: 'var(--ci-panel)', border: `1px solid ${LINE}`, borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)' };
 const fmtKRW = (n: number) => '₩' + Math.round(n || 0).toLocaleString('ko-KR');
+// 보유종목 단가/평가는 표시 통화로(해외주식=USD는 $, 그 외 ₩). 합계는 항상 ₩(서버가 KRW 환산).
+const fmtMoney = (n: number, cur?: string) => cur === 'USD'
+  ? '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  : fmtKRW(n);
 const fmtQty = (n: number) => (Number.isInteger(n) ? n.toLocaleString('ko-KR') : n.toLocaleString('ko-KR', { maximumFractionDigits: 4 }));
 // KIS 체결시각 "20260604 153012" → "06-04 15:30"
 const fmtExecAt = (s: string) => {
@@ -199,11 +203,11 @@ const ConsoleExchangePage = () => {
                       </tr></thead>
                       <tbody>{detailPort.holdings.map((h, i) => (
                         <tr key={h.assetCode + i} style={{ borderTop: `1px solid ${LINE}` }}>
-                          <td className="px-2 py-2.5"><div className="font-semibold">{h.assetName || h.assetCode}</div><div className="font-mono text-[11px]" style={{ color: INK3 }}>{h.assetCode}</div></td>
+                          <td className="px-2 py-2.5"><div className="font-semibold">{h.assetName || h.assetCode}{h.currency === 'USD' && <span className="ml-1.5 rounded px-1 py-0.5 text-[9px] font-bold align-middle" style={{ background: 'rgba(91,157,255,.16)', color: SONAR }}>USD</span>}</div><div className="font-mono text-[11px]" style={{ color: INK3 }}>{h.assetCode}</div></td>
                           <td className="px-2 py-2.5 text-right font-mono">{fmtQty(h.quantity)}</td>
-                          <td className="px-2 py-2.5 text-right font-mono">{fmtKRW(h.averagePrice)}</td>
-                          <td className="px-2 py-2.5 text-right font-mono">{fmtKRW(h.currentPrice)}</td>
-                          <td className="px-2 py-2.5 text-right font-mono font-semibold">{fmtKRW(h.marketValue)}</td>
+                          <td className="px-2 py-2.5 text-right font-mono">{fmtMoney(h.averagePrice, h.currency)}</td>
+                          <td className="px-2 py-2.5 text-right font-mono">{fmtMoney(h.currentPrice, h.currency)}</td>
+                          <td className="px-2 py-2.5 text-right font-mono font-semibold">{fmtMoney(h.marketValue, h.currency)}</td>
                           <td className="px-2 py-2.5 text-right font-mono font-semibold" style={{ color: h.profitLoss >= 0 ? UP : DOWN }}>{h.profitLoss >= 0 ? '+' : ''}{h.returnRate.toFixed(2)}%</td>
                         </tr>
                       ))}</tbody>

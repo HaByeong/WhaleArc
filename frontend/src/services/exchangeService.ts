@@ -33,6 +33,7 @@ export interface ExchangeHolding {
   marketValue: number;
   profitLoss: number;
   returnRate: number;
+  currency?: 'KRW' | 'USD';  // 단가/평가 표시 통화 (KIS 해외주식=USD, 그 외 KRW). 합계는 항상 KRW 환산
 }
 
 export interface ExchangePortfolio {

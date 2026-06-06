@@ -66,7 +66,7 @@ const ExchangeConnectModal = ({ exchangeType, account, onClose, onSaved }: {
           <Field label={keyLabels.secret} value={form.secretKey} onChange={v => setForm(f => ({ ...f, secretKey: v }))} placeholder={`${keyLabels.secret} 입력`} />
           {isKis && <>
             <Field label="계좌번호" value={form.accountNumber} onChange={v => setForm(f => ({ ...f, accountNumber: v }))} type="text" placeholder="예: 50123456-01" />
-            <p className="text-[11px]" style={{ color: 'var(--ci-ink3)' }}>한국투자증권 개발자센터(apiportal)에서 발급한 <b>앱키·앱시크릿</b>을 입력하세요. 별도의 시크릿키는 없습니다.</p>
+            <p className="text-[11px]" style={{ color: 'var(--ci-ink3)' }}>한국투자증권 개발자센터(apiportal)에서 발급한 <b>앱키·앱시크릿</b>을 입력하세요(별도 시크릿키 없음). 잔고 조회는 <b>실계좌(실전투자) 키</b> 기준이며 국내주식·미국주식(달러)을 함께 불러옵니다.</p>
           </>}
           {isBitget && <Field label="Passphrase" value={form.appSecret} onChange={v => setForm(f => ({ ...f, appSecret: v }))} placeholder="API 생성 시 설정한 Passphrase" />}
           {connected && <div className="rounded-lg px-3 py-2 text-[11.5px]" style={{ background: 'rgba(255,205,120,.08)', border: '1px solid rgba(255,205,120,.18)', color: '#ffcd78' }}>보안상 기존 키는 표시되지 않습니다. 변경하려면 키를 다시 입력하세요.</div>}

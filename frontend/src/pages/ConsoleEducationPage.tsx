@@ -469,10 +469,30 @@ const MathTab = () => {
   const [take, setTake] = useState(15);
   const ev = (winRate / 100) * take - (1 - winRate / 100) * stop;
   const rr = stop > 0 ? take / stop : 0;
+  // ④ 72의 법칙
+  const [rate72, setRate72] = useState(6);
+  const y72 = 72 / rate72; const yExact = Math.log(2) / Math.log(1 + rate72 / 100);
+  // ⑤ 수수료가 복리를 갉아먹는 효과
+  const [feeRate, setFeeRate] = useState(7);
+  const [feeCost, setFeeCost] = useState(1);
+  const [feeYears, setFeeYears] = useState(30);
+  const multNo = Math.pow(1 + feeRate / 100, feeYears);
+  const multFee = Math.pow((1 + feeRate / 100) * (1 - feeCost / 100), feeYears);
+  const feeEaten = multNo > 0 ? (1 - multFee / multNo) * 100 : 0; // 비용이 최종 자산에서 먹는 비율 = 1-(1-비용)^기간
+  // ⑥ 분산투자 효과
+  const [divCount, setDivCount] = useState(5);
+  const [divCrash, setDivCrash] = useState(50);
+  const divLoss = divCrash / divCount; // 한 종목만 폭락 시 전체 손실(균등분산 가정)
+  // ⑦ 포지션 사이징
+  const [psCapital, setPsCapital] = useState(1000); // 만원
+  const [psRisk, setPsRisk] = useState(2);
+  const [psStop, setPsStop] = useState(10);
+  const psRiskAmt = (psCapital * psRisk) / 100;              // 최대 허용 손실(만원)
+  const psPosition = psStop > 0 ? psRiskAmt / (psStop / 100) : 0; // 매수 금액(만원)
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-xl px-4 py-3 text-[12.5px] leading-relaxed" style={{ background: 'rgba(91,157,255,.07)', border: `1px solid ${HAIR}`, color: INK1 }}>
-        💡 숫자를 직접 움직여 보세요. 투자에서 가장 중요한 <b>복리·손실의 비대칭·손익비</b>를 몸으로 느낄 수 있어요.
+        💡 숫자를 직접 움직여 보세요. <b>복리·손실·손익비·72법칙·수수료·분산·포지션</b>까지, 투자의 핵심 원리를 머리가 아니라 손으로 익힐 수 있어요.
       </div>
       <MathCard title="① 복리의 힘"
         desc="복리는 '이자에 다시 이자가 붙는' 것이에요. 번 돈을 빼지 않고 다시 굴리면 원금이 점점 커지고, 시간이 갈수록 불어나는 속도가 빨라집니다. 그래서 투자는 일찍 시작해 오래 버틸수록 유리해요."
@@ -516,6 +536,63 @@ const MathTab = () => {
           <div className="mt-1.5 text-[12px] font-semibold" style={{ color: ev >= 0 ? UP : DOWN }}>{ev >= 0 ? '장기적으로 이득이 기대돼요 👍' : '장기적으로 손실 — 손익비나 승률을 높이세요'}</div>
         </div>
         <div className="text-[11px] leading-relaxed" style={{ color: INK3 }}>※ 기대값이 +라도 한 번에 너무 크게 걸면 운 나쁜 연속 손실로 파산할 수 있어요. 그래서 자산을 한 거래에 몰지 않고 나눠 거는 <b>포지션 사이징·분산</b>이 함께 중요합니다.</div>
+      </MathCard>
+
+      <MathCard title="④ 72의 법칙 (2배까지 몇 년?)"
+        desc="내 돈이 2배 되는 데 몇 년 걸릴지 '72 ÷ 연수익률(%)'로 암산할 수 있어요. 연 6%면 약 12년, 연 12%면 약 6년 — 수익률이 2배면 2배 빨라집니다."
+        insight={<>작은 수익률 차이가 큰 시간 차이를 만들어요. 연 3%와 6%는 2배 차이지만 2배 되는 시간은 <b style={{ color: INK0 }}>24년 vs 12년</b> — 그래서 비용을 줄이고 수익률을 조금이라도 높이는 게 복리에선 큽니다.</>}>
+        <Slider label="연 수익률" value={rate72} min={1} max={20} step={1} onChange={setRate72} fmt={(v) => `${v}%/년`} />
+        <div className="rounded-lg px-4 py-3 text-center" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
+          <span className="text-[13px]" style={{ color: INK1 }}>약 </span>
+          <span className="font-mono text-[20px] font-bold" style={{ color: SONAR }}>{y72.toFixed(1)}년</span>
+          <span className="text-[13px]" style={{ color: INK1 }}> 후 2배</span>
+          <div className="mt-1 text-[11.5px]" style={{ color: INK2 }}>정확히 계산하면 {yExact.toFixed(1)}년 — 72법칙이 거의 들어맞아요</div>
+        </div>
+        <div className="text-[11px] leading-relaxed" style={{ color: INK3 }}>※ 빠른 암산용 근사값이에요. 실제 수익은 매년 달라 정확한 시점은 알 수 없습니다.</div>
+      </MathCard>
+
+      <MathCard title="⑤ 수수료가 복리를 갉아먹는다"
+        desc="수수료·세금은 매년 수익에서 조금씩 떼어가요. '1%쯤이야' 싶지만 복리로 수십 년 쌓이면 최종 자산의 상당 부분을 먹습니다."
+        insight={<>수익률을 좇기 전에 <b style={{ color: INK0 }}>'비용부터 낮추는 것'</b>이 가장 확실한 수익이에요. 수익률은 내 맘대로 못 정해도, 수수료·세금은 줄일 수 있으니까요.</>}>
+        <Slider label="연 수익률" value={feeRate} min={3} max={12} step={1} onChange={setFeeRate} fmt={(v) => `${v}%/년`} />
+        <Slider label="연 비용(수수료+세금)" value={feeCost} min={0} max={3} step={0.1} onChange={setFeeCost} fmt={(v) => `${v.toFixed(1)}%/년`} />
+        <Slider label="기간" value={feeYears} min={5} max={40} step={5} onChange={setFeeYears} fmt={(v) => `${v}년`} />
+        <div className="rounded-lg px-4 py-3 text-center" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
+          <div className="text-[12px]" style={{ color: INK2 }}>{feeYears}년 후, 연 {feeCost.toFixed(1)}% 비용이 먹는 몫</div>
+          <div className="font-mono text-[20px] font-bold" style={{ color: DOWN }}>최종 자산의 약 {feeEaten.toFixed(0)}%</div>
+          <div className="mt-1.5 text-[11.5px]" style={{ color: INK2 }}>1,000만원 기준 — 비용 없으면 {fmtKRWCompact(10000000 * multNo)}, 비용 있으면 {fmtKRWCompact(10000000 * multFee)}</div>
+        </div>
+      </MathCard>
+
+      <MathCard title="⑥ 분산투자 효과"
+        desc="한 종목에 전부 넣으면 그 종목이 무너질 때 나도 무너져요. 여러 종목에 나눠 담으면 한 곳이 폭락해도 전체 타격은 그만큼 작아집니다."
+        insight={<>분산은 '더 벌려고'가 아니라 <b style={{ color: INK0 }}>'한 번의 실수가 치명상이 되지 않게'</b> 지켜줘요. 투자는 살아남아야 다음 기회가 있습니다.</>}>
+        <Slider label="나눠 담은 종목 수" value={divCount} min={1} max={20} step={1} onChange={setDivCount} fmt={(v) => `${v}개`} />
+        <Slider label="한 종목 폭락률" value={divCrash} min={10} max={90} step={10} onChange={setDivCrash} fmt={(v) => `-${v}%`} />
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg" style={{ background: HAIR }}>
+          <div className="px-3 py-3 text-center" style={{ background: 'var(--ci-panel)' }}>
+            <div className="text-[11px]" style={{ color: INK2 }}>몰빵 (1종목)</div>
+            <div className="font-mono text-[17px] font-bold" style={{ color: DOWN }}>-{divCrash}%</div>
+          </div>
+          <div className="px-3 py-3 text-center" style={{ background: 'var(--ci-panel)' }}>
+            <div className="text-[11px]" style={{ color: INK2 }}>분산 ({divCount}종목)</div>
+            <div className="font-mono text-[17px] font-bold" style={{ color: divCount > 1 ? UP : DOWN }}>-{pctNice(divLoss)}%</div>
+          </div>
+        </div>
+        <div className="text-[11px] leading-relaxed" style={{ color: INK3 }}>※ '한 종목만 폭락하고 나머지는 그대로'일 때예요. 진짜 분산은 <b>같이 안 움직이는</b> 자산을 섞어야 효과가 커요 — 같은 업종·시장에 몰면 폭락 때 함께 빠집니다.</div>
+      </MathCard>
+
+      <MathCard title="⑦ 포지션 사이징 (얼마 살까?)"
+        desc="'한 번에 최대로 잃어도 괜찮은 금액'을 먼저 정하고, 손절 폭에서 거꾸로 매수 금액을 계산해요. 그래야 한 번 틀려도 정한 만큼만 잃습니다."
+        insight={<>이렇게 하면 손절에 걸려도 자산의 <b style={{ color: INK0 }}>'정한 만큼'</b>만 잃어요. 승률이 낮아도 파산하지 않고 살아남아 다음 기회를 잡는 비결입니다 (③·⑥과 한 세트).</>}>
+        <Slider label="총자산" value={psCapital} min={100} max={10000} step={100} onChange={setPsCapital} fmt={(v) => `${v.toLocaleString()}만원`} />
+        <Slider label="한 거래 최대 손실(위험)" value={psRisk} min={0.5} max={5} step={0.5} onChange={setPsRisk} fmt={(v) => `${v}%`} />
+        <Slider label="손절 폭" value={psStop} min={2} max={30} step={1} onChange={setPsStop} fmt={(v) => `-${v}%`} />
+        <div className="rounded-lg px-4 py-3 text-center" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
+          <div className="text-[12px]" style={{ color: INK2 }}>최대 손실 {fmtKRWCompact(psRiskAmt * 10000)} 이내로 잡으려면 → 매수</div>
+          <div className="font-mono text-[20px] font-bold" style={{ color: SONAR }}>{fmtKRWCompact(psPosition * 10000)}</div>
+          <div className="mt-1.5 text-[11.5px]" style={{ color: INK2 }}>{fmtKRWCompact(psPosition * 10000)} 사서 -{psStop}%에 손절하면 딱 {fmtKRWCompact(psRiskAmt * 10000)}만 손실</div>
+        </div>
       </MathCard>
     </div>
   );

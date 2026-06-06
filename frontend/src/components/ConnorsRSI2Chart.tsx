@@ -264,7 +264,7 @@ export default function ConnorsRSI2Chart() {
   const resize = useCallback(() => {
     const canvas = canvasRef.current; if (!canvas) return;
     dprRef.current = window.devicePixelRatio || 1;
-    const dpr = dprRef.current, rect = canvas.parentElement!.getBoundingClientRect();
+    const dpr = dprRef.current, _p = canvas.parentElement!, rect = { width: _p.clientWidth, height: _p.clientHeight };
     canvas.width = rect.width * dpr; canvas.height = rect.height * dpr;
     canvas.style.width = rect.width + 'px'; canvas.style.height = rect.height + 'px';
     const ctx = canvas.getContext('2d'); if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

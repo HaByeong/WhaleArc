@@ -141,7 +141,7 @@ const LandingPage = () => {
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
     try {
-      const raw = localStorage.getItem('whalearc_landing_ticker');
+      const raw = localStorage.getItem('whalearc_landing_ticker_v2');
       if (raw) {
         const cached = JSON.parse(raw);
         if (cached?.date === today && Array.isArray(cached.rows)) {
@@ -157,9 +157,11 @@ const LandingPage = () => {
         if (!c || !c.price) return t;
         return { s: t.s, p: fmtTickerKrw(c.price), c: `${c.changeRate >= 0 ? '+' : ''}${c.changeRate.toFixed(2)}%`, up: c.changeRate >= 0 };
       });
-      const time = new Date().toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const d = new Date();
+      const p2 = (n: number) => String(n).padStart(2, '0');
+      const time = `${p2(d.getMonth() + 1)}.${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
       setTicker(rows); setTickerTime(time);
-      try { localStorage.setItem('whalearc_landing_ticker', JSON.stringify({ date: today, rows, time })); } catch { /* ignore */ }
+      try { localStorage.setItem('whalearc_landing_ticker_v2', JSON.stringify({ date: today, rows, time })); } catch { /* ignore */ }
     }).catch(() => { /* 실패 시 정적값 유지 */ });
   }, []);
 

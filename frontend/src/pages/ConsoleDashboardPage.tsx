@@ -501,9 +501,12 @@ const VirtDashboard = () => {
 
   const initialCash = portfolio?.initialCash || 10_000_000;
   const total = portfolio?.totalValue ?? 0;
-  const equity = portfolio ? portfolio.holdings.reduce((s, h) => s + h.marketValue, 0) : 0;
+  // 미국주식·ETF(USD)는 환율로 KRW 환산 후 합산/정렬(통화 혼합 방지)
+  const vUsdKrw = portfolio?.usdKrwRate || 0;
+  const vKrw = (h: { marketValue: number; assetType?: string }) => ((h.assetType === 'US_STOCK' || h.assetType === 'ETF') && vUsdKrw > 0 ? h.marketValue * vUsdKrw : h.marketValue);
+  const equity = portfolio ? portfolio.holdings.reduce((s, h) => s + vKrw(h), 0) : 0;
   const pnl = total - initialCash;
-  const holdings: SumHolding[] = portfolio ? [...portfolio.holdings].sort((a, b) => b.marketValue - a.marketValue).slice(0, 5).map(h => ({ name: h.stockName, sub: fmtQty(h.quantity, stockLikeOf(h.assetType)), value: h.marketValue, rate: h.returnRate })) : [];
+  const holdings: SumHolding[] = portfolio ? [...portfolio.holdings].sort((a, b) => vKrw(b) - vKrw(a)).slice(0, 5).map(h => ({ name: h.stockName, sub: fmtQty(h.quantity, stockLikeOf(h.assetType)), value: vKrw(h), rate: h.returnRate })) : [];
   const blips = useMemo(() => blipsFrom((portfolio?.holdings ?? []).map(h => ({ name: h.stockName, rate: h.returnRate }))), [portfolio]);
 
   return (

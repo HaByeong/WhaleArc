@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -67,6 +68,9 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
   const navItems: NavItem[] = virt
     ? (() => { const c = [...NAV]; const i = c.findIndex((n) => n.key === 'learn'); c.splice(i + 1, 0, { label: '학습 노트', icon: 'note', path: '/learn', key: 'edu' }); return c; })()
     : NAV;
+  // 모바일 하단바: 항목이 많아 가로 스크롤 → 선택된 항목을 화면 안으로
+  const mobileNavRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => { mobileNavRef.current?.scrollIntoView({ inline: 'center', block: 'nearest' }); }, [active]);
 
   const handleLogout = async () => {
     try { await authService.logout(); } catch { /* ignore */ }
@@ -197,11 +201,11 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
       </div>
 
       {/* 하단 네비 (모바일) */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex md:hidden" style={{ background: 'rgba(6,11,31,.94)', backdropFilter: 'blur(12px)', borderTop: '1px solid rgba(255,255,255,.10)' }}>
-        {NAV.slice(0, 5).map((it) => {
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex overflow-x-auto md:hidden" style={{ background: 'rgba(6,11,31,.94)', backdropFilter: 'blur(12px)', borderTop: '1px solid rgba(255,255,255,.10)' }}>
+        {navItems.map((it) => {
           const on = it.key === active;
           return (
-            <button key={it.key} onClick={() => goNav(it.path)} className="flex flex-1 flex-col items-center gap-1 py-2 text-[10px]"
+            <button key={it.key} ref={on ? mobileNavRef : null} onClick={() => goNav(it.path)} className="flex min-w-[68px] shrink-0 flex-col items-center gap-1 py-2 text-[10px]"
               style={{ color: on ? '#cfe1ff' : 'rgba(255,255,255,.55)' }}>
               <NavIcon kind={it.icon} />{it.label}
             </button>

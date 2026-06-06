@@ -290,11 +290,15 @@ const PaperPortfolio = () => {
   const cash = portfolio?.cashBalance ?? 0;
   const initialCash = portfolio?.initialCash || 10_000_000;
   const totalValue = portfolio?.totalValue ?? 0;
-  const holdingsValue = holdings.reduce((s, h) => s + h.marketValue, 0);
+  const usdKrw = portfolio?.usdKrwRate || 0;
+  // 미국주식·ETF(USD)는 환율로 KRW 환산 후 합산(통화 혼합 방지) — 백엔드 totalValue와 정합
+  const krwVal = (h: { marketValue: number; assetType?: string }) => (isUsd(h.assetType) && usdKrw > 0 ? h.marketValue * usdKrw : h.marketValue);
+  const krwPnl = (h: { profitLoss: number; assetType?: string }) => (isUsd(h.assetType) && usdKrw > 0 ? h.profitLoss * usdKrw : h.profitLoss);
+  const holdingsValue = holdings.reduce((s, h) => s + krwVal(h), 0);
   const totalPnl = totalValue - initialCash;
   const returnRate = portfolio?.returnRate ?? 0;
   const turtle = portfolio?.turtleAllocated ?? 0;
-  const holdingsPnl = holdings.reduce((s, h) => s + h.profitLoss, 0);
+  const holdingsPnl = holdings.reduce((s, h) => s + krwPnl(h), 0);
 
   // 보유 종목에 적용 항로 배지 (assets[].code → 항로 이름)
   const assetRouteMap = useMemo(() => {
@@ -306,10 +310,10 @@ const PaperPortfolio = () => {
   const alloc = useMemo(() => {
     const arr: { c: string; label: string; value: number }[] = [];
     if (cash > 0) arr.push({ c: '#7a8aa8', label: '현금', value: cash });
-    holdings.forEach((h, i) => { if (h.marketValue > 0) arr.push({ c: CHART_COLORS[i % CHART_COLORS.length], label: holdingName(h), value: h.marketValue }); });
+    holdings.forEach((h, i) => { const v = krwVal(h); if (v > 0) arr.push({ c: CHART_COLORS[i % CHART_COLORS.length], label: holdingName(h), value: v }); });
     if (turtle > 0) arr.push({ c: '#f5d061', label: '터틀 전략', value: turtle });
     return arr;
-  }, [holdings, cash, turtle]);
+  }, [holdings, cash, turtle, usdKrw]);
   const allocTotal = alloc.reduce((s, a) => s + a.value, 0);
 
   // 자산추이 시계열 + KOSPI 리베이스(포트폴리오 시작값 기준)

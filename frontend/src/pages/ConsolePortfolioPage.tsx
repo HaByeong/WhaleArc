@@ -434,13 +434,14 @@ const PaperPortfolio = () => {
             <div className="px-6 py-6">
               <div className="mb-3.5 text-[10.5px] font-semibold tracking-[.2em] text-white/48">자산 배분</div>
               {alloc.length === 0 ? <div className="flex h-[120px] items-center justify-center text-[12.5px]" style={{ color: 'var(--ci-ink3)' }}>{loading ? '불러오는 중…' : '자산이 없습니다'}</div> : (
-                <div className="grid grid-cols-[120px_1fr] items-center gap-5">
-                  <div style={{ width: 120, height: 120 }}><Donut items={alloc} total={allocTotal} /></div>
-                  <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+                <div className="grid grid-cols-[152px_1fr] items-center gap-4">
+                  <div style={{ width: 152, height: 152 }}><Donut items={alloc} total={allocTotal} /></div>
+                  <ul className="m-0 flex list-none flex-col gap-3 p-0">
                     {alloc.map(a => (
-                      <li key={a.label} className="flex items-center justify-between text-[12.5px]">
-                        <span className="inline-flex min-w-0 items-center gap-2"><span className="h-[9px] w-[9px] shrink-0 rounded-full" style={{ background: a.c }} /><span className="truncate">{a.label}</span></span>
-                        <span className="ml-2 shrink-0 font-mono text-white/70">{((a.value / (allocTotal || 1)) * 100).toFixed(1)}%</span>
+                      <li key={a.label} className="flex items-center gap-2 text-[12.5px]">
+                        <span className="h-[9px] w-[9px] shrink-0 rounded-full" style={{ background: a.c }} />
+                        <span className="truncate">{a.label}</span>
+                        <span className="ml-1.5 shrink-0 font-mono font-semibold" style={{ color: 'var(--ci-ink1)' }}>{((a.value / (allocTotal || 1)) * 100).toFixed(1)}%</span>
                       </li>
                     ))}
                   </ul>
@@ -714,10 +715,14 @@ const RealAccountPortfolio = () => {
               {alloc.length > 0 && (
                 <Panel style={{ padding: '22px' }}>
                   <div className="mb-3.5 text-[10.5px] font-semibold tracking-[.2em] text-white/48">자산 배분</div>
-                  <div className="grid grid-cols-[110px_1fr] items-center gap-4">
-                    <div style={{ width: 110, height: 110 }}><Donut items={alloc} total={allocTotal} /></div>
-                    <ul className="m-0 flex list-none flex-col gap-2 p-0">{alloc.slice(0, 6).map(a => (
-                      <li key={a.label} className="flex items-center justify-between text-[12px]"><span className="inline-flex min-w-0 items-center gap-2"><span className="h-[9px] w-[9px] shrink-0 rounded-full" style={{ background: a.c }} /><span className="truncate">{a.label}</span></span><span className="ml-2 shrink-0 font-mono text-white/70">{((a.value / (allocTotal || 1)) * 100).toFixed(1)}%</span></li>
+                  <div className="grid grid-cols-[130px_1fr] items-center gap-4">
+                    <div style={{ width: 130, height: 130 }}><Donut items={alloc} total={allocTotal} /></div>
+                    <ul className="m-0 flex list-none flex-col gap-2.5 p-0">{alloc.slice(0, 6).map(a => (
+                      <li key={a.label} className="flex items-center gap-2 text-[12px]">
+                        <span className="h-[9px] w-[9px] shrink-0 rounded-full" style={{ background: a.c }} />
+                        <span className="truncate">{a.label}</span>
+                        <span className="ml-1.5 shrink-0 font-mono font-semibold" style={{ color: 'var(--ci-ink1)' }}>{((a.value / (allocTotal || 1)) * 100).toFixed(1)}%</span>
+                      </li>
                     ))}</ul>
                   </div>
                 </Panel>

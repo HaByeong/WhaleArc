@@ -13,7 +13,7 @@ const LegalPageLayout = ({ title, updatedDate, children }: LegalPageLayoutProps)
       <div className="relative overflow-hidden pt-10 pb-2 text-center">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[360px] h-[180px] bg-cyan-500/[0.05] rounded-full blur-[100px]" />
         <Link to="/" className="relative inline-flex items-center gap-2">
-          <img src="/tail-sample-2.png" alt="" className="w-8 h-8 object-contain"
+          <img src="/brand-whale.png" alt="" className="h-9 w-9 object-contain"
             style={{ filter: 'drop-shadow(0 0 12px rgba(91,157,255,0.35))' }} />
           <span className="whalearc-text text-lg font-bold tracking-tighter">WHALEARC</span>
         </Link>

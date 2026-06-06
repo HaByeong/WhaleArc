@@ -31,7 +31,7 @@ const pageWindow = (page: number, total: number) => {
 const TIERS: Record<string, { label: string; c: string }> = { blue: { label: '대왕고래', c: '#5b9dff' }, humpback: { label: '혹등고래', c: '#ef4d4d' }, orca: { label: '범고래', c: '#cfa14b' }, beluga: { label: '흰고래', c: '#9aa7c7' } };
 const tierOf = (ret: number) => (ret >= 100 ? 'blue' : ret >= 50 ? 'humpback' : ret >= 20 ? 'orca' : 'beluga');
 const Avatar = ({ name, c, size = 36 }: { name: string; c: string; size?: number }) => (
-  <span className="flex shrink-0 items-center justify-center font-bold" style={{ width: size, height: size, borderRadius: 11, background: `linear-gradient(135deg, ${c}, ${c}88)`, color: ABYSS0, fontSize: size * 0.4 }}>{name.slice(0, 1)}</span>
+  <span className="flex shrink-0 items-center justify-center font-bold" style={{ width: size, height: size, borderRadius: 11, background: `linear-gradient(135deg, ${c}, ${c}cc)`, color: ABYSS0, fontSize: size * 0.4 }}>{name.slice(0, 1)}</span>
 );
 
 type Row = { rank: number; name: string; tier: string; strat: string; ret: number; total: number; change: number; portfolioId: string; me?: boolean };
@@ -75,7 +75,7 @@ const Podium = ({ top, onRoute }: { top: Row[]; onRoute: (id: string) => void })
             <div className="truncate text-[14px] font-bold">{t.name}</div>
             <div className="mt-0.5 text-[11px] font-semibold" style={{ color: tier.c }}>{tier.label}</div>
             <div className="mt-2.5 truncate font-mono font-bold" style={{ fontSize: first ? 'clamp(20px,5.5vw,34px)' : 'clamp(16px,4.5vw,23px)', color: up ? UP : DOWN }}>{up ? '+' : ''}{t.ret.toFixed(1)}%</div>
-            <div className="mt-3 flex items-start justify-center pt-2" style={{ height: htMap[t.rank] - 70, borderRadius: '8px 8px 0 0', background: first ? 'linear-gradient(180deg, rgba(91,157,255,.3), transparent)' : 'linear-gradient(180deg, var(--ci-line-strong), transparent)' }}>
+            <div className="mt-3 flex items-start justify-center pt-2" style={{ height: htMap[t.rank] - 70, borderRadius: '8px 8px 0 0', background: first ? 'linear-gradient(180deg, rgba(91,157,255,.3), transparent)' : 'linear-gradient(180deg, rgba(91,157,255,.16), transparent)' }}>
               <span className="font-mono text-[18px] font-bold" style={{ color: first ? SONAR : INK2 }}>{t.rank}</span>
             </div>
           </button>

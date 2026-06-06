@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface TourStep {
   target: string;       // data-tour 속성값
@@ -66,7 +67,9 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
     }
   };
 
-  return (
+  // body로 포털 — 콘솔 본문(.wa-console-dense)의 zoom 밖에서 렌더해야
+  // getBoundingClientRect(시각좌표)와 position:fixed 좌표계가 일치한다(스포트라이트 정렬).
+  return createPortal((
     <div className="fixed inset-0 z-[9990]" onClick={onFinish}>
       {/* 어두운 오버레이 + 스포트라이트 컷아웃 */}
       <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'none' }}>
@@ -158,7 +161,7 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 };
 
 export default GuideTour;

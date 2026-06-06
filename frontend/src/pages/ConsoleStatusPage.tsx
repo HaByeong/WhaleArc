@@ -65,13 +65,21 @@ const Rrow = ({ t, onRoute }: { t: Row; onRoute: (id: string) => void }) => {
 const Podium = ({ top, onRoute }: { top: Row[]; onRoute: (id: string) => void }) => {
   const order = [top[1], top[0], top[2]].filter(Boolean); const htMap: Record<number, number> = { 1: 132, 2: 104, 3: 88 };
   return (
-    <div className="grid grid-cols-3 items-end gap-3.5">
+    <div className="relative">
+      {/* 포디움 뒤 소나 글로우 — 단조로운 카드 그리드에 깊이감 부여(양 모드 동일 톤) */}
+      <div className="pointer-events-none absolute inset-x-0 -top-5 h-[80%]" style={{ background: 'radial-gradient(56% 82% at 50% 0%, rgba(91,157,255,.13), transparent 72%)' }} />
+      <div className="relative grid grid-cols-3 items-end gap-3.5">
       {order.map(t => {
         const tier = TIERS[t.tier], first = t.rank === 1, up = t.ret >= 0;
         return (
           <button key={t.rank} onClick={() => onRoute(t.portfolioId)} className="min-w-0 overflow-hidden text-center" style={{ ...panel, padding: '18px 10px', border: first ? '1px solid rgba(91,157,255,.4)' : `1px solid ${HAIR}`, background: first ? 'linear-gradient(180deg, rgba(91,157,255,.12), rgba(91,157,255,.04))' : undefined }}>
             <div className="mb-2" style={{ fontSize: first ? 22 : 18 }}>{first ? '🐋' : t.rank === 2 ? '🥈' : '🥉'}</div>
-            <div className="mb-2.5 flex justify-center"><Avatar name={t.name} c={tier.c} size={first ? 52 : 42} /></div>
+            <div className="mb-2.5 flex justify-center">
+              <div className="relative">
+                {first && <div className="pointer-events-none absolute -inset-2.5 rounded-full" style={{ background: 'radial-gradient(circle, rgba(91,157,255,.42), transparent 68%)' }} />}
+                <span className="relative block"><Avatar name={t.name} c={tier.c} size={first ? 52 : 42} /></span>
+              </div>
+            </div>
             <div className="truncate text-[14px] font-bold">{t.name}</div>
             <div className="mt-0.5 text-[11px] font-semibold" style={{ color: tier.c }}>{tier.label}</div>
             <div className="mt-2.5 truncate font-mono font-bold" style={{ fontSize: first ? 'clamp(20px,5.5vw,34px)' : 'clamp(16px,4.5vw,23px)', color: up ? UP : DOWN }}>{up ? '+' : ''}{t.ret.toFixed(1)}%</div>
@@ -81,6 +89,7 @@ const Podium = ({ top, onRoute }: { top: Row[]; onRoute: (id: string) => void })
           </button>
         );
       })}
+      </div>
     </div>
   );
 };
@@ -132,7 +141,11 @@ const ConsoleStatusPage = () => {
     <HelmShell active="status" virt={isVirt} userName={userName} session="랭킹 갱신 매일 00:00">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-[18px]">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0"><h1 className="text-[26px] font-bold">항해사 랭킹</h1><p className="mt-2 text-[13.5px]" style={{ color: INK1 }}>각 항해사의 대표 포트폴리오 수익률로 매기는 순위. 마음에 드는 항로는 따라가 보세요.</p></div>
+          <div className="min-w-0">
+            <div className="mb-2 flex items-center gap-2.5"><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: SONAR, boxShadow: `0 0 8px ${SONAR}` }} /><span className="text-[11.5px] font-semibold tracking-[.18em]" style={{ color: SONAR }}>명예의 전당 · 매일 00:00 갱신</span></div>
+            <h1 className="text-[26px] font-bold">항해사 랭킹</h1>
+            <p className="mt-2 text-[13.5px]" style={{ color: INK1 }}>각 항해사의 대표 포트폴리오 수익률로 매기는 순위. 마음에 드는 항로는 따라가 보세요.</p>
+          </div>
           <div className="flex gap-[3px] rounded-[9px] p-[3px]" style={{ background: ABYSS1, border: `1px solid ${HAIR}` }}>
             {PERIODS.map(p => <button key={p.label} onClick={() => changePeriod(p.label)} className="rounded-md px-3.5 py-1.5 text-[12px] font-semibold" style={{ background: period === p.label ? SONAR_DIM : 'transparent', color: period === p.label ? SONAR : INK2 }}>{p.label}</button>)}
           </div>

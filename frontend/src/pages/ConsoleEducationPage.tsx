@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
 import { tradeService, type Trade } from '../services/tradeService';
+import { marketService } from '../services/marketService';
 import { GLOSSARY } from '../components/TermTooltip';
 
 /* ────────────────────────────────────────────────────────────
@@ -21,6 +22,12 @@ const CARD = 'var(--ci-card)';
 const panel: React.CSSProperties = { background: 'var(--ci-panel)', border: `1px solid ${HAIR}`, borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)' };
 const fmtKRW = (n: number) => (n < 0 ? '-₩' : '₩') + Math.abs(Math.round(n || 0)).toLocaleString('ko-KR');
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
+const FEE = 0.001; // 체결 수수료율 — 백엔드 TradeRecord.COMMISSION_RATE와 동일(순손익 계산)
+const isUsd = (at?: string) => at === 'US_STOCK' || at === 'ETF'; // USD 표기 자산
+// 통화별 가격/금액 포맷(USD는 $, 그 외 ₩)
+const fmtCur = (n: number, usd: boolean) =>
+  usd ? (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : fmtKRW(n);
 
 // ── 용어집 카테고리 (키는 GLOSSARY 키와 동일) ───────────────────────────────
 const TERM_CATEGORIES: { id: string; label: string; keys: string[] }[] = [
@@ -54,8 +61,11 @@ const REVIEW_CHECKS = [
 
 // ── FIFO 청산 손익 ──────────────────────────────────────────────────────
 interface ClosedTrade {
-  id: string; stockCode: string; stockName: string; assetType?: string;
-  qty: number; buyPrice: number; sellPrice: number; pnl: number; pnlRate: number;
+  id: string; stockCode: string; stockName: string; usd: boolean;
+  qty: number; buyPrice: number; sellPrice: number;
+  pnl: number;     // 순손익(수수료 차감), 네이티브 통화
+  pnlKrw: number;  // 원화 환산(합산용) — USD 자산은 환율 적용
+  pnlRate: number; // %, 순매수원가 기준(통화 무관)
   buyAt: string; sellAt: string; holdDays: number | null;
 }
 
@@ -68,39 +78,47 @@ const parseDate = (s?: string): Date | null => {
   return null;
 };
 
-function buildClosedTrades(trades: Trade[]): ClosedTrade[] {
+const ts = (s?: string) => parseDate(s)?.getTime() ?? 0;
+
+function buildClosedTrades(trades: Trade[], usdKrw: number): { closed: ClosedTrade[]; droppedSells: number } {
   const byStock: Record<string, Trade[]> = {};
-  [...trades].sort((a, b) => (a.executedAt || '').localeCompare(b.executedAt || '')).forEach((t) => {
+  [...trades].sort((a, b) => ts(a.executedAt) - ts(b.executedAt)).forEach((t) => {
     (byStock[t.stockCode] ||= []).push(t);
   });
   const closed: ClosedTrade[] = [];
+  let droppedSells = 0; // 기간 밖 매수 등으로 짝짓지 못한 매도 수량
   for (const code of Object.keys(byStock)) {
-    const lots: { qty: number; price: number; at: string }[] = []; // FIFO 매수 잔량
+    const lots: { qty: number; price: number; at: string; id: string }[] = []; // FIFO 매수 잔량
     for (const t of byStock[code]) {
       if (t.orderType === 'BUY') {
-        lots.push({ qty: t.quantity, price: t.price, at: t.executedAt });
+        lots.push({ qty: t.quantity, price: t.price, at: t.executedAt, id: t.id });
       } else {
         let remaining = t.quantity;
+        const usd = isUsd(t.assetType);
         while (remaining > 0 && lots.length > 0) {
           const lot = lots[0];
           const matched = Math.min(remaining, lot.qty);
-          const pnl = (t.price - lot.price) * matched;
+          // 순손익: 매수·매도 양다리 수수료(0.1%) 차감. 매수원가=가격*(1+FEE), 매도수취=가격*(1-FEE)
+          const cost = lot.price * matched * (1 + FEE);
+          const pnl = matched * (t.price * (1 - FEE) - lot.price * (1 + FEE));
           const bd = parseDate(lot.at), sd = parseDate(t.executedAt);
           const holdDays = bd && sd ? Math.max(0, Math.round((sd.getTime() - bd.getTime()) / 86400000)) : null;
           closed.push({
-            id: `${code}_${lot.at}_${t.executedAt}_${closed.length}`,
-            stockCode: code, stockName: t.stockName, assetType: t.assetType,
+            id: `${lot.id}_${t.id}`, // 매수·매도 체결 ID 기반 — 거래가 추가돼도 안정(메모 보존)
+            stockCode: code, stockName: t.stockName, usd,
             qty: matched, buyPrice: lot.price, sellPrice: t.price, pnl,
-            pnlRate: lot.price > 0 ? ((t.price - lot.price) / lot.price) * 100 : 0,
+            pnlKrw: usd && usdKrw > 0 ? pnl * usdKrw : pnl,
+            pnlRate: cost > 0 ? (pnl / cost) * 100 : 0,
             buyAt: lot.at, sellAt: t.executedAt, holdDays,
           });
           lot.qty -= matched; remaining -= matched;
           if (lot.qty <= 0) lots.shift();
         }
+        droppedSells += remaining;
       }
     }
   }
-  return closed.sort((a, b) => (b.sellAt || '').localeCompare(a.sellAt || ''));
+  return { closed: closed.sort((a, b) => ts(b.sellAt) - ts(a.sellAt)), droppedSells };
 }
 
 const fmtDate = (s?: string) => { const d = parseDate(s); return d ? `${d.getMonth() + 1}.${d.getDate()}` : '-'; };
@@ -117,9 +135,10 @@ const ReviewCard = ({ t }: { t: ClosedTrade }) => {
     try { return JSON.parse(localStorage.getItem(storeKey) || '{}').memo || ''; } catch { return ''; }
   });
   const persist = (c: boolean[], m: string) => { try { localStorage.setItem(storeKey, JSON.stringify({ checks: c, memo: m })); } catch { /* ignore */ } };
-  const win = t.pnl >= 0; const col = win ? UP : DOWN;
-  const cur = t.assetType === 'US_STOCK' ? '$' : '₩';
-  const price = (n: number) => (cur === '$' ? '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '₩' + Math.round(n).toLocaleString('ko-KR'));
+  const dir = t.pnl > 0 ? 1 : t.pnl < 0 ? -1 : 0;
+  const col = dir > 0 ? UP : dir < 0 ? DOWN : INK1;
+  const badge = dir > 0 ? '수익' : dir < 0 ? '손실' : '본전';
+  const price = (n: number) => (t.usd ? '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₩' + Math.round(n).toLocaleString('ko-KR'));
 
   return (
     <div style={{ ...panel, borderRadius: 14 }} className="overflow-hidden">
@@ -127,7 +146,7 @@ const ReviewCard = ({ t }: { t: ClosedTrade }) => {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate text-[14px] font-bold" style={{ color: INK0 }}>{t.stockName}</span>
-            <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: win ? 'rgba(239,77,77,.14)' : 'rgba(77,138,255,.14)', color: col }}>{win ? '수익' : '손실'}</span>
+            <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: dir > 0 ? 'rgba(239,77,77,.14)' : dir < 0 ? 'rgba(77,138,255,.14)' : 'rgba(255,255,255,.08)', color: col }}>{badge}</span>
           </div>
           <div className="mt-1 font-mono text-[11.5px]" style={{ color: INK2 }}>
             {price(t.buyPrice)} → {price(t.sellPrice)} · {t.qty}주 · 보유 {t.holdDays == null ? '-' : t.holdDays === 0 ? '당일' : `${t.holdDays}일`} · {fmtDate(t.buyAt)}~{fmtDate(t.sellAt)}
@@ -135,7 +154,7 @@ const ReviewCard = ({ t }: { t: ClosedTrade }) => {
         </div>
         <div className="text-right">
           <div className="font-mono text-[15px] font-bold" style={{ color: col }}>{fmtPct(t.pnlRate)}</div>
-          <div className="font-mono text-[11.5px]" style={{ color: INK2 }}>{fmtKRW(t.pnl)}</div>
+          <div className="font-mono text-[11.5px]" style={{ color: INK2 }}>{fmtCur(t.pnl, t.usd)}</div>
         </div>
         <button onClick={() => setOpen((o) => !o)} className="rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: INK1 }}>
           {open ? '접기' : '복기'}
@@ -164,20 +183,35 @@ const ReviewCard = ({ t }: { t: ClosedTrade }) => {
 // ── 탭: 거래 복기 ───────────────────────────────────────────────────────
 const ReviewTab = () => {
   const [trades, setTrades] = useState<Trade[] | null>(null);
-  useEffect(() => { tradeService.getTrades().then(setTrades).catch(() => setTrades([])); }, []);
-  const closed = useMemo(() => (trades ? buildClosedTrades(trades) : []), [trades]);
+  const [usdKrw, setUsdKrw] = useState(0);
+  const [error, setError] = useState(false);
+  const load = () => {
+    setError(false); setTrades(null);
+    Promise.all([tradeService.getTrades(), marketService.getExchangeRate().catch(() => null)])
+      .then(([t, fx]) => { if (fx?.usdKrw) setUsdKrw(fx.usdKrw); setTrades(Array.isArray(t) ? t : []); })
+      .catch(() => setError(true));
+  };
+  useEffect(load, []);
+  const { closed, droppedSells } = useMemo(() => (trades ? buildClosedTrades(trades, usdKrw) : { closed: [], droppedSells: 0 }), [trades, usdKrw]);
+  const hasUsd = useMemo(() => closed.some((c) => c.usd), [closed]);
   const stats = useMemo(() => {
     if (!closed.length) return null;
     const wins = closed.filter((c) => c.pnl > 0).length;
-    const totalPnl = closed.reduce((s, c) => s + c.pnl, 0);
+    const totalPnl = closed.reduce((s, c) => s + c.pnlKrw, 0); // 원화 환산 합산(통화 혼합 방지)
     const avgRate = closed.reduce((s, c) => s + c.pnlRate, 0) / closed.length;
-    const hold = closed.filter((c) => c.holdDays != null);
-    const avgHold = hold.length ? hold.reduce((s, c) => s + (c.holdDays || 0), 0) / hold.length : null;
     const best = closed.reduce((a, b) => (b.pnlRate > a.pnlRate ? b : a));
     const worst = closed.reduce((a, b) => (b.pnlRate < a.pnlRate ? b : a));
-    return { n: closed.length, winRate: (wins / closed.length) * 100, totalPnl, avgRate, avgHold, best, worst };
+    return { n: closed.length, winRate: (wins / closed.length) * 100, totalPnl, avgRate, best, worst };
   }, [closed]);
 
+  if (error) return (
+    <div style={panel} className="px-6 py-16 text-center">
+      <div className="text-[34px]">⚠️</div>
+      <div className="mt-3 text-[15px] font-bold" style={{ color: INK0 }}>거래 내역을 불러오지 못했어요</div>
+      <p className="mt-2 text-[13px]" style={{ color: INK2 }}>잠시 후 다시 시도해주세요.</p>
+      <button onClick={load} className="mt-4 rounded-lg px-4 py-2 text-[13px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: INK1 }}>다시 시도</button>
+    </div>
+  );
   if (trades === null) return <div className="py-20 text-center text-[13px]" style={{ color: INK2 }}>불러오는 중…</div>;
   if (!closed.length) return (
     <div style={panel} className="px-6 py-16 text-center">
@@ -203,6 +237,11 @@ const ReviewTab = () => {
           <MiniNote tone="down" label="최악의 거래" t={stats.worst} />
         </div>
       )}
+      <div className="flex flex-col gap-1 text-[11.5px]" style={{ color: INK3 }}>
+        <span>* 손익은 체결 수수료(0.1%)를 양방향 차감한 순손익입니다.</span>
+        {hasUsd && <span>* 미국주식·ETF는 현재 환율로 원화 환산해 합산했어요(수익률·개별 손익은 해당 통화 기준).</span>}
+        {droppedSells > 0 && <span>* 매수 기록이 조회 범위 밖이라 짝짓지 못한 매도 {droppedSells.toLocaleString()}주는 복기에서 제외됐어요.</span>}
+      </div>
       <div className="rounded-xl px-4 py-3 text-[12px] leading-relaxed" style={{ background: 'rgba(91,157,255,.07)', border: `1px solid ${HAIR}`, color: INK1 }}>
         💡 <b>복기</b>는 결과(손익)보다 <b>과정(규칙을 지켰는가)</b>을 점검하는 거예요. 이긴 거래도 운이었는지, 진 거래도 규칙대로였는지 체크해보세요.
       </div>

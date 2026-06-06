@@ -13,7 +13,7 @@ import { GLOSSARY } from '../components/TermTooltip';
    ConsoleEducationPage — 학습 노트 (/virt/learn, VIRT 전용)
    ① 거래 복기(매매일지): 내 모의 체결을 FIFO로 매칭해 청산 손익·보유기간 산출 + 복기 체크리스트/메모(localStorage)
    ② 용어집: GLOSSARY 54개 용어를 카테고리·검색으로
-   ③ 실수 도감: 초보가 자주 빠지는 함정과 피하는 법
+   ③ 흔한 실수: 초보가 자주 빠지는 함정과 피하는 법
    ──────────────────────────────────────────────────────────── */
 
 const UP = '#ef4d4d', DOWN = '#4d8aff';
@@ -48,7 +48,7 @@ const TERM_CATEGORIES: { id: string; label: string; keys: string[] }[] = [
   { id: 'basic', label: '기본 개념', keys: ['백테스트', '모의투자', '자동매매'] },
 ];
 
-// ── 실수 도감 ───────────────────────────────────────────────────────────
+// ── 흔한 실수 ───────────────────────────────────────────────────────────
 const MISTAKES: { icon: string; title: string; body: string; fix: string }[] = [
   { icon: '🎯', title: '과최적화 (오버피팅)', body: '백테스트 수익률만 보고 과거에 딱 맞는 파라미터를 찾는 함정. 과거엔 완벽해도 미래엔 무너지기 쉽습니다.', fix: '규칙은 단순하게, 검증은 기간을 나눠서(in/out-of-sample). 샤프·MDD도 함께 보고 수익률 하나만 좇지 않기.' },
   { icon: '🏃', title: 'FOMO 추격매수', body: '"지금 안 사면 놓친다"는 조급함에 급등 꼭대기에서 뇌동매매. 대부분 고점에 물립니다.', fix: '진입 가격·조건을 미리 정하고, 그 조건이 아니면 안 삽니다. 놓친 기회보다 잃지 않는 게 우선.' },
@@ -418,7 +418,7 @@ const Chip = ({ on, onClick, children }: { on: boolean; onClick: () => void; chi
     style={on ? { background: 'rgba(91,157,255,.16)', color: SONAR, border: '1px solid rgba(91,157,255,.32)' } : { background: CARD, color: INK2, border: `1px solid ${HAIR}` }}>{children}</button>
 );
 
-// ── 탭: 실수 도감 ───────────────────────────────────────────────────────
+// ── 탭: 흔한 실수 ───────────────────────────────────────────────────────
 const MistakesTab = () => (
   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
     {MISTAKES.map((m) => (
@@ -437,7 +437,7 @@ const MistakesTab = () => (
   </div>
 );
 
-// ── 탭: 투자 수학 ───────────────────────────────────────────────────────
+// ── 탭: 투자 계산기 ───────────────────────────────────────────────────────
 const Slider = ({ label, value, min, max, step, onChange, fmt }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void; fmt: (v: number) => string }) => (
   <div>
     <div className="mb-1.5 flex items-center justify-between text-[12.5px]">
@@ -560,8 +560,8 @@ const TABS = [
   { id: 'review', label: '거래 복기' },
   { id: 'rules', label: '매매 원칙' },
   { id: 'glossary', label: '용어집' },
-  { id: 'mistakes', label: '실수 도감' },
-  { id: 'math', label: '투자 수학' },
+  { id: 'mistakes', label: '흔한 실수' },
+  { id: 'math', label: '투자 계산기' },
 ] as const;
 
 const ConsoleEducationPage = () => {
@@ -578,7 +578,7 @@ const ConsoleEducationPage = () => {
       <div className="mx-auto w-full max-w-[1080px] px-5 py-6 md:px-8">
         <div className="mb-5">
           <h1 className="text-[26px] font-bold tracking-tight" style={{ color: INK0 }}>학습 노트</h1>
-          <p className="mt-1.5 text-[13.5px]" style={{ color: INK1 }}>모의 매매를 <b>복기</b>하고, 나만의 원칙·용어·투자 수학으로 실력을 다져보세요.</p>
+          <p className="mt-1.5 text-[13.5px]" style={{ color: INK1 }}>모의 매매를 <b>복기</b>하고, 나만의 원칙·용어·투자 계산기로 실력을 다져보세요.</p>
         </div>
 
         <div className="mb-5 flex gap-1 overflow-x-auto" style={{ borderBottom: `1px solid ${HAIR}` }}>

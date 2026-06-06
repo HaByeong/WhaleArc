@@ -64,6 +64,23 @@ export interface CreateDeploymentRequest {
   dailyLossLimit?: number;
 }
 
+// ── 실행 로그 타입 ──
+
+export interface LiveOrderLog {
+  id: string;
+  deploymentId: string;
+  symbol: string;
+  assetType?: string;
+  side: 'BUY' | 'SELL';
+  quantity: number;
+  price: number;
+  clientOrderId: string;
+  brokerOrderId?: string;
+  status: 'FILLED' | 'REJECTED' | 'SUBMITTED';
+  reason: string;
+  createdAt: string;
+}
+
 // ── API 서비스 ──
 
 export const liveTradeService = {
@@ -109,5 +126,11 @@ export const liveTradeService = {
   setKillSwitch: async (engaged: boolean): Promise<boolean> => {
     const response = await apiClient.post(`/api/live/kill-switch?engaged=${engaged}`);
     return !!response.data.data?.killSwitch;
+  },
+
+  // 배포별 실행 로그 (최근 50건, 역순 정렬은 프론트에서)
+  getOrders: async (deploymentId: string): Promise<LiveOrderLog[]> => {
+    const response = await apiClient.get(`/api/live/deployments/${deploymentId}/orders`);
+    return response.data.data || [];
   },
 };

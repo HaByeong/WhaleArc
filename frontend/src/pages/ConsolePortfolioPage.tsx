@@ -71,6 +71,14 @@ const TrendChart = ({ port, kospi, mode }: { port: number[]; kospi: number[] | n
   );
 };
 
+const MetricCard = ({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) => (
+  <div className="rounded-[11px] px-3.5 py-4 text-center" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
+    <div className="text-[10.5px] font-semibold" style={{ color: 'var(--ci-ink3)' }}>{label}</div>
+    <div className="mt-2 font-mono text-[20px] font-bold leading-none" style={{ color }}>{value}</div>
+    <div className="mt-1.5 text-[10.5px]" style={{ color: 'var(--ci-ink3)' }}>{sub}</div>
+  </div>
+);
+
 const Donut = ({ items, total }: { items: { c: string; value: number }[]; total: number }) => {
   const R = 72, inner = 48, C = 2 * Math.PI * R; let acc = 0;
   const safe = total || 1;
@@ -345,6 +353,60 @@ const PaperPortfolio = () => {
   const port = chart ? (mode === 'pct' ? chart.portPct : chart.portValue) : [];
   const kospi = chart ? (mode === 'pct' ? chart.kospiPct : chart.kospiValue) : null;
 
+  // ── 성과 지표 계산 ──
+  const metrics = useMemo(() => {
+    if (history.length < 2) return null;
+    // MDD
+    let peak = history[0].totalValue;
+    let mdd = 0;
+    for (const s of history) {
+      if (s.totalValue > peak) peak = s.totalValue;
+      const dd = peak > 0 ? (peak - s.totalValue) / peak : 0;
+      if (dd > mdd) mdd = dd;
+    }
+    // 일간 수익률 & Sharpe (무위험 수익률 3.5%/년)
+    const dailyRets: number[] = [];
+    for (let i = 1; i < history.length; i++) {
+      const prev = history[i - 1].totalValue;
+      const curr = history[i].totalValue;
+      if (prev > 0) dailyRets.push((curr - prev) / prev);
+    }
+    let sharpe: number | null = null;
+    if (dailyRets.length >= 5) {
+      const mean = dailyRets.reduce((a, b) => a + b, 0) / dailyRets.length;
+      const variance = dailyRets.reduce((a, b) => a + (b - mean) ** 2, 0) / dailyRets.length;
+      const stdev = Math.sqrt(variance);
+      const dailyRf = 0.035 / 252;
+      if (stdev > 0) sharpe = ((mean - dailyRf) / stdev) * Math.sqrt(252);
+    }
+    // 청산 거래 FIFO 매칭 → 승률 + 평균 보유기간
+    const sortedT = [...trades].sort((a, b) => new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime());
+    const buyQ: Record<string, Trade[]> = {};
+    const matched: { win: boolean; holdDays: number }[] = [];
+    for (const t of sortedT) {
+      if (t.orderType === 'BUY') {
+        (buyQ[t.stockCode] ||= []).push(t);
+      } else {
+        const q = buyQ[t.stockCode];
+        if (q?.length) {
+          const buy = q.shift()!;
+          matched.push({
+            win: t.price > buy.price,
+            holdDays: (new Date(t.executedAt).getTime() - new Date(buy.executedAt).getTime()) / 86400000,
+          });
+        }
+      }
+    }
+    const winRate = matched.length > 0 ? (matched.filter(m => m.win).length / matched.length) * 100 : null;
+    const avgHoldDays = matched.length > 0 ? matched.reduce((a, m) => a + m.holdDays, 0) / matched.length : null;
+    // Alpha vs KOSPI
+    let alpha: number | null = null;
+    if (chart?.portPct?.length && chart.kospiPct?.length) {
+      alpha = chart.portPct[chart.portPct.length - 1] - chart.kospiPct[chart.kospiPct.length - 1];
+    }
+    return { mdd: mdd * 100, sharpe, winRate, avgHoldDays, alpha, closedTrades: matched.length };
+  }, [history, trades, chart]);
+
   return (
     <HelmShell active="portfolio" virt={isVirt} userName={userName} session="모의투자 · 15초 갱신">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-[18px]">
@@ -406,6 +468,48 @@ const PaperPortfolio = () => {
           <div className="px-3 pb-[18px]" style={{ height: 250 }}><TrendChart port={port} kospi={kospi} mode={mode} /></div>
           {kospi && <div className="px-[22px] pb-3 text-[10.5px]" style={{ color: 'var(--ci-ink3)' }}>* KOSPI 수익률은 실제 지수 일봉 데이터 기반입니다.</div>}
         </Panel>
+
+        {/* 성과 지표 */}
+        {metrics && (
+          <Panel>
+            <PanelHead kicker="PERFORMANCE" title="성과 지표" />
+            <div className="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3 lg:grid-cols-5">
+              <MetricCard
+                label="샤프 비율"
+                value={metrics.sharpe != null ? metrics.sharpe.toFixed(2) : '—'}
+                sub="≥1.0이면 양호"
+                color={metrics.sharpe != null ? (metrics.sharpe >= 1 ? UP : metrics.sharpe >= 0 ? 'var(--ci-ink0)' : DOWN) : 'var(--ci-ink3)'}
+              />
+              <MetricCard
+                label="최대낙폭 (MDD)"
+                value={`-${metrics.mdd.toFixed(1)}%`}
+                sub="낮을수록 안전"
+                color={metrics.mdd < 10 ? '#4ade80' : metrics.mdd < 20 ? 'var(--ci-ink0)' : DOWN}
+              />
+              <MetricCard
+                label="청산 승률"
+                value={metrics.winRate != null ? `${metrics.winRate.toFixed(1)}%` : '—'}
+                sub={metrics.closedTrades > 0 ? `${metrics.closedTrades}회 청산` : '청산 거래 없음'}
+                color={metrics.winRate != null ? (metrics.winRate >= 50 ? UP : DOWN) : 'var(--ci-ink3)'}
+              />
+              <MetricCard
+                label="평균 보유기간"
+                value={metrics.avgHoldDays != null ? `${metrics.avgHoldDays.toFixed(1)}일` : '—'}
+                sub="청산 기준 FIFO"
+                color="var(--ci-ink0)"
+              />
+              <MetricCard
+                label="KOSPI 대비 Alpha"
+                value={metrics.alpha != null ? `${metrics.alpha >= 0 ? '+' : ''}${metrics.alpha.toFixed(1)}%p` : '—'}
+                sub={metrics.alpha != null ? (metrics.alpha >= 0 ? 'KOSPI 초과' : 'KOSPI 하회') : 'KOSPI 데이터 없음'}
+                color={metrics.alpha != null ? (metrics.alpha >= 0 ? UP : DOWN) : 'var(--ci-ink3)'}
+              />
+            </div>
+            <div className="px-5 pb-4 text-[10.5px]" style={{ color: 'var(--ci-ink3)' }}>
+              * 샤프 비율 무위험수익률 3.5%/년 기준 연환산. 승률은 FIFO 방식 청산 거래만 집계. Alpha는 보유 기간 대비 KOSPI 초과수익률입니다.
+            </div>
+          </Panel>
+        )}
 
         {/* 보유종목 + 항로 */}
         <div className="grid grid-cols-1 items-start gap-[18px] lg:grid-cols-[1.5fr_1fr]">

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
@@ -294,6 +294,8 @@ const ConsoleCommunityPage = () => {
   const [myReturn, setMyReturn] = useState<number | null>(null);
   const [compose, setCompose] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const toastTimer = useRef<number | null>(null);
   const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
@@ -330,6 +332,29 @@ const ConsoleCommunityPage = () => {
   };
   const todayCount = posts.filter(p => { const d = new Date(p.createdAt); const n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate(); }).length;
 
+  // 게시글에서 해시태그 추출 (빈도 상위 8개)
+  const popularTags = useMemo(() => {
+    const tagCount: Record<string, number> = {};
+    for (const p of posts) {
+      const matches = (p.title + ' ' + p.content).match(/#[\w가-힣]+/g) ?? [];
+      for (const tag of matches) tagCount[tag] = (tagCount[tag] || 0) + 1;
+    }
+    return Object.entries(tagCount).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([tag]) => tag);
+  }, [posts]);
+
+  // 검색어 + 해시태그 클라이언트 필터
+  const filteredPosts = useMemo(() => {
+    let list = posts;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      list = list.filter(p => p.title.toLowerCase().includes(q) || p.content.toLowerCase().includes(q));
+    }
+    if (activeTag) {
+      list = list.filter(p => (p.title + ' ' + p.content).includes(activeTag));
+    }
+    return list;
+  }, [posts, searchTerm, activeTag]);
+
   return (
     <HelmShell active="community" virt={isVirt} userName={userName} session="항해사 라운지">
       <div className="mx-auto max-w-[1560px]">
@@ -345,6 +370,42 @@ const ConsoleCommunityPage = () => {
         </div>
         <div className="grid items-start gap-5 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
           <div className="flex min-w-0 flex-col gap-[18px]">
+            {/* 검색바 */}
+            <Panel style={{ padding: '12px 16px' }}>
+              <div className="flex items-center gap-2.5">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: INK3, flexShrink: 0 }}>
+                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                </svg>
+                <input
+                  value={searchTerm}
+                  onChange={e => { setSearchTerm(e.target.value); setActiveTag(null); }}
+                  placeholder="제목·내용으로 검색…"
+                  className="flex-1 bg-transparent text-[13.5px] outline-none"
+                  style={{ color: 'var(--ci-ink0)' }}
+                />
+                {(searchTerm || activeTag) && (
+                  <button onClick={() => { setSearchTerm(''); setActiveTag(null); }} className="text-[11px] rounded px-2 py-0.5" style={{ color: INK2, border: `1px solid ${HAIR}` }}>초기화</button>
+                )}
+              </div>
+              {popularTags.length > 0 && (
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  {popularTags.map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => { setActiveTag(activeTag === tag ? null : tag); setSearchTerm(''); }}
+                      className="rounded-full px-2.5 py-1 text-[11.5px] font-semibold"
+                      style={{
+                        border: activeTag === tag ? '1px solid rgba(91,157,255,.35)' : `1px solid ${HAIR}`,
+                        background: activeTag === tag ? SONAR_DIM : CARD,
+                        color: activeTag === tag ? SONAR : INK2,
+                      }}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Panel>
             <Panel style={{ padding: '16px 18px' }}>
               <div className="flex items-center gap-3">
                 <Avatar name={userName} c="#5b9dff" size={38} />
@@ -355,7 +416,8 @@ const ConsoleCommunityPage = () => {
             {loading ? <Panel style={{ padding: '40px', textAlign: 'center' }}><span className="text-[13px]" style={{ color: INK3 }}>라운지를 불러오는 중…</span></Panel>
               : error ? <Panel style={{ padding: '32px', textAlign: 'center' }}><div className="text-[13px]" style={{ color: INK2 }}>{error}</div><button onClick={loadPosts} className="mt-3 rounded-lg px-4 py-2 text-[12.5px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: SONAR }}>다시 시도</button></Panel>
                 : posts.length === 0 ? <Panel style={{ padding: '48px 24px', textAlign: 'center' }}><div className="text-[28px]">🌊</div><div className="mt-2 text-[14px] font-semibold">{isPreview ? '로그인 후 라운지를 이용할 수 있습니다.' : '아직 일지가 없어요. 첫 항해 일지를 남겨보세요!'}</div></Panel>
-                  : posts.map(p => <Post key={p.id} p={p} userName={userName} onRoute={() => follow(p)} onChange={upsert} onCommentDelta={d => patchPost(p.id, x => ({ ...x, commentCount: Math.max(0, x.commentCount + d) }))} onDelete={removePost} showToast={showToast} />)}
+                  : filteredPosts.length === 0 ? <Panel style={{ padding: '40px 24px', textAlign: 'center' }}><div className="text-[13px]" style={{ color: INK3 }}>검색 결과가 없습니다. 다른 검색어나 태그를 시도해보세요.</div><button onClick={() => { setSearchTerm(''); setActiveTag(null); }} className="mt-3 rounded-lg px-4 py-2 text-[12.5px] font-semibold" style={{ border: `1px solid ${HAIR}`, color: INK1 }}>검색 초기화</button></Panel>
+                    : filteredPosts.map(p => <Post key={p.id} p={p} userName={userName} onRoute={() => follow(p)} onChange={upsert} onCommentDelta={d => patchPost(p.id, x => ({ ...x, commentCount: Math.max(0, x.commentCount + d) }))} onDelete={removePost} showToast={showToast} />)}
           </div>
           <div className="flex flex-col gap-[18px] lg:sticky lg:top-[88px]">
             <Panel>

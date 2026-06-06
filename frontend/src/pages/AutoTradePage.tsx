@@ -4,12 +4,13 @@ import Toast, { type ToastItem } from '../components/Toast';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { strategyService, type Strategy } from '../services/strategyService';
+import { strategyService, type Strategy, type BacktestHistoryItem } from '../services/strategyService';
 import { PRESET_STRATEGIES } from '../data/presetStrategies';
 import {
   liveTradeService,
   type Deployment,
   type DeploymentStatus,
+  type LiveOrderLog,
 } from '../services/liveTradeService';
 
 // ── 헬퍼 ──
@@ -28,6 +29,15 @@ const formatTime = (iso?: string) => {
   }
 };
 
+const formatLogTime = (iso?: string) => {
+  if (!iso) return '-';
+  try {
+    return new Date(iso).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '-';
+  }
+};
+
 const errMsg = (e: unknown, fallback = '오류가 발생했습니다.') => {
   const anyErr = e as { response?: { data?: { message?: string } } };
   return anyErr?.response?.data?.message || fallback;
@@ -38,6 +48,14 @@ const STATUS_META: Record<DeploymentStatus, { label: string; dark: string; light
   PAUSED: { label: '일시정지', dark: 'bg-amber-500/15 text-amber-400', light: 'bg-amber-50 text-amber-600' },
   STOPPED: { label: '정지됨', dark: 'bg-slate-500/15 text-slate-400', light: 'bg-gray-100 text-gray-500' },
   ERROR: { label: '오류', dark: 'bg-red-500/15 text-red-400', light: 'bg-red-50 text-red-600' },
+};
+
+const REASON_LABEL: Record<string, string> = {
+  ENTRY: '진입 신호',
+  STOP: '손절',
+  TAKE_PROFIT: '익절',
+  EXIT_SIGNAL: '청산 신호',
+  TRAILING_STOP: '트레일링 손절',
 };
 
 const AutoTradePage = () => {
@@ -51,13 +69,21 @@ const AutoTradePage = () => {
   const [killSwitch, setKillSwitch] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // 백테스트 히스토리 (백테스트 vs 실전 비교용)
+  const [backtestHistory, setBacktestHistory] = useState<BacktestHistoryItem[]>([]);
+
+  // 실행 로그 (배포별 lazy 로딩)
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [orderLogs, setOrderLogs] = useState<Record<string, LiveOrderLog[]>>({});
+  const [logsLoading, setLogsLoading] = useState<Record<string, boolean>>({});
+
   // 생성 모달
   const [showCreate, setShowCreate] = useState(false);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
     strategyId: '',
-    accountKind: 'PAPER',   // PAPER(가상자금) | KIS(KIS 모의투자 실연동)
+    accountKind: 'PAPER',
     allocatedCash: '1000000',
     targetAssetsText: '',
     assetType: '',
@@ -68,7 +94,6 @@ const AutoTradePage = () => {
     dailyLossLimit: '',
   });
 
-  // 토스트 (언마운트 시 타이머 정리해 stale setState 방지)
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const pushToast = useCallback((type: ToastItem['type'], title: string, message = '') => {
@@ -104,10 +129,32 @@ const AutoTradePage = () => {
       await loadData();
       setPageLoading(false);
     })();
-    // 30초마다 갱신 (스케줄러 평가 반영)
     const timer = setInterval(loadData, 30_000);
     return () => clearInterval(timer);
   }, [loadData]);
+
+  // 백테스트 히스토리 최초 1회 로드
+  useEffect(() => {
+    strategyService.getBacktestHistory().then(setBacktestHistory).catch(() => {});
+  }, []);
+
+  // 실행 로그 lazy 로드 (이미 로드됐으면 토글만)
+  const loadOrders = async (deploymentId: string) => {
+    if (orderLogs[deploymentId] !== undefined) {
+      setExpandedLogId(prev => prev === deploymentId ? null : deploymentId);
+      return;
+    }
+    setExpandedLogId(deploymentId);
+    setLogsLoading(prev => ({ ...prev, [deploymentId]: true }));
+    try {
+      const logs = await liveTradeService.getOrders(deploymentId);
+      setOrderLogs(prev => ({ ...prev, [deploymentId]: logs }));
+    } catch {
+      setOrderLogs(prev => ({ ...prev, [deploymentId]: [] }));
+    } finally {
+      setLogsLoading(prev => ({ ...prev, [deploymentId]: false }));
+    }
+  };
 
   const openCreate = async () => {
     setShowCreate(true);
@@ -120,7 +167,6 @@ const AutoTradePage = () => {
     }
   };
 
-  // 프리셋(기본 제공) + 내가 저장한 전략 모두 선택 가능
   const allStrategies = [...PRESET_STRATEGIES, ...strategies];
 
   const onSelectStrategy = (strategyId: string) => {
@@ -143,8 +189,6 @@ const AutoTradePage = () => {
       pushToast('error', '금액 확인', '할당 금액을 올바르게 입력해주세요.');
       return;
     }
-
-    // 손절·트레일링은 0~100%(서버 validateRiskParams와 동일), 익절은 0 초과만 — 제출 전 검증
     const pctErr = (label: string, raw: string, capped: boolean): string | null => {
       if (!raw) return null;
       const n = Number(raw);
@@ -159,16 +203,12 @@ const AutoTradePage = () => {
 
     const selected = allStrategies.find(s => s.id === form.strategyId);
     const isPreset = form.strategyId.startsWith('preset-');
-
     const typedAssets = form.targetAssetsText.split(',').map(s => s.trim()).filter(Boolean);
-    // 프리셋(직접입력 분기)은 백엔드에 종목 폴백이 없어 비우면 거부된다 → 비웠으면 전략 기본 종목으로 채운다.
-    // 저장 전략(strategyId)은 undefined로 보내면 백엔드가 전략의 기본 종목을 사용한다.
     const targetAssets = typedAssets.length ? typedAssets : (isPreset ? (selected?.targetAssets ?? []) : []);
 
     setCreating(true);
     try {
       await liveTradeService.createDeployment({
-        // 프리셋은 DB에 없으므로 조건을 직접 전송, 저장 전략은 strategyId로
         ...(isPreset
           ? {
               strategyName: selected?.name,
@@ -232,7 +272,7 @@ const AutoTradePage = () => {
       const result = await liveTradeService.setKillSwitch(next);
       setKillSwitch(result);
       pushToast(result ? 'error' : 'success', '킬스위치', result ? '전체 자동매매 정지됨' : '킬스위치 해제됨');
-      await loadData(); // 배포 카드 상태/버튼을 즉시 갱신(최대 30초 어긋남 방지)
+      await loadData();
     } catch (e) {
       pushToast('error', '킬스위치 실패', errMsg(e));
     }
@@ -243,6 +283,8 @@ const AutoTradePage = () => {
   const primaryBtn = isDark
     ? 'bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/30'
     : 'bg-whale-light text-white hover:bg-blue-600';
+  const divBorder = isDark ? 'border-white/[0.06]' : 'border-gray-100';
+  const divideY = isDark ? 'divide-white/[0.06]' : 'divide-gray-100';
 
   if (pageLoading) {
     return (
@@ -307,6 +349,16 @@ const AutoTradePage = () => {
               const sm = STATUS_META[d.status];
               const pnlPositive = (d.realizedPnl ?? 0) > 0;
               const pnlNegative = (d.realizedPnl ?? 0) < 0;
+              const liveReturn = (d.allocatedCash ?? 0) > 0
+                ? ((d.realizedPnl ?? 0) / (d.allocatedCash ?? 1)) * 100 : 0;
+              const liveWinRate = (d.tradeCount ?? 0) > 0
+                ? ((d.winCount ?? 0) / (d.tradeCount ?? 1)) * 100 : null;
+              // 백테스트 히스토리에서 이 배포의 전략명과 매칭되는 가장 최근 결과
+              const matchedBt = backtestHistory
+                .filter(h => h.strategyName === d.strategyName)
+                .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+              const logsOpen = expandedLogId === d.id;
+              const logsData = orderLogs[d.id];
               return (
                 <div key={d.id} className={`rounded-2xl border p-5 ${card}`}>
                   {/* 카드 헤더 */}
@@ -347,7 +399,7 @@ const AutoTradePage = () => {
                     </div>
                   </div>
 
-                  {/* 일일 손실한도 진행도 — 도달 시 자동 일시정지(안전장치 가시화) */}
+                  {/* 일일 손실한도 */}
                   {d.dailyLossLimit != null && d.dailyLossLimit > 0 && (() => {
                     const today = d.todayRealizedPnl ?? 0;
                     const ratio = Math.min(1, Math.max(0, -today) / d.dailyLossLimit);
@@ -368,7 +420,7 @@ const AutoTradePage = () => {
                   })()}
 
                   {/* 포지션 */}
-                  <div className={`rounded-lg border divide-y ${isDark ? 'border-white/[0.06] divide-white/[0.06]' : 'border-gray-100 divide-gray-100'} mb-3`}>
+                  <div className={`rounded-lg border divide-y ${divBorder} ${divideY} mb-3`}>
                     {(d.positions || []).map(p => (
                       <div key={p.symbol} className="flex items-center justify-between px-3 py-2 text-xs">
                         <span className={`font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>{p.symbol}</span>
@@ -386,7 +438,99 @@ const AutoTradePage = () => {
                     ))}
                   </div>
 
-                  {/* 액션 */}
+                  {/* ── 백테스트 vs 실전 비교 ── */}
+                  {matchedBt && (
+                    <div className={`mb-3 rounded-xl border overflow-hidden ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
+                      <div className={`px-3 py-2 flex items-center gap-2 ${isDark ? 'bg-white/[0.03]' : 'bg-gray-50'}`}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+                        </svg>
+                        <span className={`text-[11px] font-semibold ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>백테스트 예상 vs 실전 성과</span>
+                        <span className={`ml-auto text-[10px] ${subText}`}>{matchedBt.stockCode} 기준</span>
+                      </div>
+                      <div className={`grid grid-cols-3 divide-x ${divBorder}`}>
+                        {[
+                          {
+                            label: '수익률',
+                            bt: `${matchedBt.totalReturnRate >= 0 ? '+' : ''}${matchedBt.totalReturnRate.toFixed(1)}%`,
+                            live: `${liveReturn >= 0 ? '+' : ''}${liveReturn.toFixed(1)}%`,
+                            liveColor: liveReturn >= 0 ? 'text-red-500' : 'text-blue-500',
+                          },
+                          {
+                            label: '거래수',
+                            bt: `${matchedBt.totalTrades}건`,
+                            live: `${d.tradeCount}건`,
+                            liveColor: isDark ? 'text-white' : 'text-gray-800',
+                          },
+                          {
+                            label: '승률',
+                            bt: '—',
+                            live: liveWinRate != null ? `${liveWinRate.toFixed(1)}%` : '—',
+                            liveColor: liveWinRate != null && liveWinRate >= 50 ? 'text-red-500' : liveWinRate != null ? 'text-blue-500' : (isDark ? 'text-slate-400' : 'text-gray-400'),
+                          },
+                        ].map(col => (
+                          <div key={col.label} className="px-3 py-2.5 text-center">
+                            <p className={`text-[10px] mb-1 ${subText}`}>{col.label}</p>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span className={`text-[11px] line-through ${subText}`}>{col.bt}</span>
+                              <span className="text-[10px] text-gray-400">→</span>
+                              <span className={`text-[12px] font-bold ${col.liveColor}`}>{col.live}</span>
+                            </div>
+                            <p className={`text-[9px] mt-0.5 ${subText}`}>예상 → 실전</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── 실행 로그 ── */}
+                  <div className={`mb-3 rounded-xl border overflow-hidden ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
+                    <button
+                      onClick={() => loadOrders(d.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-[11px] font-semibold transition-colors ${isDark ? 'text-slate-300 hover:bg-white/[0.03]' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                        실행 로그
+                        {logsData !== undefined && (
+                          <span className={`font-mono ${subText}`}>({logsData.length}건)</span>
+                        )}
+                      </span>
+                      <span>{logsLoading[d.id] ? '불러오는 중…' : logsOpen ? '▲ 접기' : '▼ 펼치기'}</span>
+                    </button>
+                    {logsOpen && !logsLoading[d.id] && (
+                      <div className={`border-t ${divBorder} max-h-[260px] overflow-y-auto`}>
+                        {!logsData || logsData.length === 0 ? (
+                          <p className={`py-6 text-center text-xs ${subText}`}>아직 실행된 주문이 없습니다.</p>
+                        ) : (
+                          [...logsData].reverse().map(log => {
+                            const isBuy = log.side === 'BUY';
+                            const isFilled = log.status === 'FILLED';
+                            return (
+                              <div key={log.id} className={`grid grid-cols-[auto_1fr_auto] items-center gap-2 px-3 py-2.5 border-b last:border-b-0 ${divBorder}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isFilled ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`text-[11px] font-bold ${isBuy ? 'text-red-500' : 'text-blue-500'}`}>{isBuy ? '매수' : '매도'}</span>
+                                    <span className={`text-[11px] font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>{log.symbol}</span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDark ? 'bg-white/[0.06] text-slate-400' : 'bg-gray-100 text-gray-500'}`}>{REASON_LABEL[log.reason] ?? log.reason}</span>
+                                  </div>
+                                  <div className={`text-[10px] mt-0.5 ${subText}`}>
+                                    {formatNum(log.quantity, 4)}개 · {formatKRW(log.price)} · {isFilled ? '체결' : '미체결'}
+                                  </div>
+                                </div>
+                                <span className={`text-[10px] shrink-0 ${subText}`}>{formatLogTime(log.createdAt)}</span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 액션 버튼 */}
                   <div className="flex items-center gap-2">
                     {d.status === 'RUNNING' && (
                       <button disabled={busyId === d.id || killSwitch} onClick={() => evaluateNow(d)}
@@ -433,7 +577,6 @@ const AutoTradePage = () => {
             </div>
 
             <div className="px-5 py-4 space-y-4">
-              {/* 전략 선택 */}
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>전략 *</label>
                 <select
@@ -458,7 +601,6 @@ const AutoTradePage = () => {
                 <p className={`text-[11px] mt-1 ${subText}`}>기본 제공 전략은 바로 가동할 수 있고, '전략' 페이지에서 만든 내 전략도 선택할 수 있어요.</p>
               </div>
 
-              {/* 계좌 종류 */}
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>계좌 종류</label>
                 <select
@@ -479,7 +621,6 @@ const AutoTradePage = () => {
                 )}
               </div>
 
-              {/* 대상 종목 */}
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>대상 종목 (쉼표 구분)</label>
                 <input
@@ -488,10 +629,9 @@ const AutoTradePage = () => {
                   placeholder="예: BTC, ETH 또는 005930, AAPL"
                   className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`}
                 />
-                <p className={`text-[11px] mt-1 ${subText}`}>비워두면 전략의 기본 종목을 사용합니다. 자산군은 자동 판별됩니다.</p>
+                <p className={`text-[11px] mt-1 ${subText}`}>비워두면 전략의 기본 종목을 사용합니다.</p>
               </div>
 
-              {/* 금액 / 인터벌 */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>할당 금액 (원) *</label>
@@ -515,7 +655,6 @@ const AutoTradePage = () => {
                 </div>
               </div>
 
-              {/* 리스크 관리 (선택) */}
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>리스크 관리 (%, 선택)</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -532,7 +671,6 @@ const AutoTradePage = () => {
                 <p className={`text-[11px] mt-1 ${subText}`}>손절·트레일링은 0~100% 사이로 입력하세요.</p>
               </div>
 
-              {/* 일일 손실한도 (선택) */}
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>일일 손실한도 (원, 선택)</label>
                 <input type="number" placeholder="예: 100000" value={form.dailyLossLimit}

@@ -141,7 +141,7 @@ const LandingPage = () => {
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
     try {
-      const raw = localStorage.getItem('whalearc_landing_ticker_v2');
+      const raw = localStorage.getItem('whalearc_landing_ticker_v3');
       if (raw) {
         const cached = JSON.parse(raw);
         if (cached?.date === today && Array.isArray(cached.rows)) {
@@ -159,9 +159,9 @@ const LandingPage = () => {
       });
       const d = new Date();
       const p2 = (n: number) => String(n).padStart(2, '0');
-      const time = `${p2(d.getMonth() + 1)}.${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+      const time = `${p2(d.getMonth() + 1)}.${p2(d.getDate())}`; // 날짜만 — 일일 스냅샷(자정 경계로 갱신)
       setTicker(rows); setTickerTime(time);
-      try { localStorage.setItem('whalearc_landing_ticker_v2', JSON.stringify({ date: today, rows, time })); } catch { /* ignore */ }
+      try { localStorage.setItem('whalearc_landing_ticker_v3', JSON.stringify({ date: today, rows, time })); } catch { /* ignore */ }
     }).catch(() => { /* 실패 시 정적값 유지 */ });
   }, []);
 
@@ -470,7 +470,7 @@ const LandingPage = () => {
         <div className="mx-auto mt-6 flex max-w-[1240px] items-center justify-between px-6 md:px-14">
           <span className="flex items-center gap-2 text-[12.5px] text-white/50">
             모의투자 · 백테스트 · 전략 학습
-            {tickerTime && <span className="text-white/30">· {tickerTime} 기준 (빗썸 · 하루 1회 갱신)</span>}
+            {tickerTime && <span className="text-white/30">· {tickerTime} 기준 · 빗썸 · 매일 00:00 갱신</span>}
           </span>
           <button onClick={() => go('/market')} className="text-[13px] font-medium" style={{ color: GLOW }}>전체 마켓 보기 →</button>
         </div>

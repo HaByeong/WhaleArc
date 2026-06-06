@@ -15,7 +15,7 @@ interface ThemeContextType {
 const VIRT_KEY = 'whalearc_theme_virt';
 const NOVIRT_KEY = 'whalearc_theme_novirt';
 
-// 섹션 기본값: virt 는 라이트, novirt 는 다크
+// 섹션 기본값: 사이트 메인 베이스는 항상 다크. 라이트는 사용자가 토글로 명시할 때만(localStorage 저장).
 const DEFAULTS: Record<'virt' | 'novirt', Mode> = {
   virt: 'dark',
   novirt: 'dark',

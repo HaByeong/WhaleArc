@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useTheme } from '../contexts/ThemeContext';
 
 export interface TourStep {
   target: string;       // data-tour 속성값
@@ -14,7 +15,19 @@ interface GuideTourProps {
   onFinish: () => void;
 }
 
+// 툴팁 팔레트 — 사이트 기본은 다크. 사용자가 라이트로 토글했을 때만 라이트.
+const PALETTE = {
+  dark: { bg: 'linear-gradient(180deg,#16233f,#0c1530)', border: 'rgba(255,255,255,.14)', title: '#f1f5f9', desc: 'rgba(255,255,255,.74)',
+    chip: 'rgba(255,255,255,.08)', chipText: 'rgba(255,255,255,.6)', prevBg: 'rgba(255,255,255,.08)', prevText: '#e2e8f0',
+    dotIdle: 'rgba(255,255,255,.18)', dotDone: 'rgba(91,157,255,.45)', skip: 'rgba(255,255,255,.45)' },
+  light: { bg: '#ffffff', border: 'rgba(0,0,0,.08)', title: '#0f172a', desc: '#334155',
+    chip: '#f3f4f6', chipText: '#6b7280', prevBg: '#f3f4f6', prevText: '#374151',
+    dotIdle: '#e5e7eb', dotDone: 'rgba(74,144,226,.4)', skip: '#9ca3af' },
+};
+
 const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
+  const { isDark } = useTheme();
+  const t = isDark ? PALETTE.dark : PALETTE.light;
   const [currentStep, setCurrentStep] = useState(0);
   const [spotlight, setSpotlight] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [placement, setPlacement] = useState<'top' | 'bottom'>('bottom');
@@ -114,31 +127,34 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
           transform: 'translateX(-50%)',
           ...(placement === 'bottom' ? { bottom: 40 } : { top: 40 }),
           width: 'min(560px, calc(100vw - 32px))',
-          background: '#ffffff',
+          background: t.bg,
+          border: `1px solid ${t.border}`,
           boxShadow: '0 30px 80px -16px rgba(0,0,0,.8), 0 0 0 1px rgba(0,0,0,.08)',
         }}
         onClick={(e) => e.stopPropagation()}
-        className={`z-[9999] rounded-2xl border border-gray-200 p-7 transition-all duration-300 ${animating ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}
+        className={`z-[9999] rounded-2xl p-7 transition-all duration-300 ${animating ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}
       >
         {/* 스텝 카운터 */}
         <div className="flex items-center gap-1.5 mb-4">
           {steps.map((_, i) => (
-            <div key={i} className={`h-2 rounded-full transition-all duration-300 ${
-              i === currentStep ? 'w-7 bg-whale-light' : i < currentStep ? 'w-3 bg-whale-light/40' : 'w-3 bg-gray-200'
-            }`} />
+            <div key={i} className="h-2 rounded-full transition-all duration-300" style={{
+              width: i === currentStep ? 28 : 12,
+              background: i === currentStep ? '#4a90e2' : i < currentStep ? t.dotDone : t.dotIdle,
+            }} />
           ))}
-          <span className="ml-auto rounded-full bg-gray-100 px-2.5 py-1 text-[12.5px] font-bold text-gray-500">{currentStep + 1} / {steps.length}</span>
+          <span className="ml-auto rounded-full px-2.5 py-1 text-[12.5px] font-bold" style={{ background: t.chip, color: t.chipText }}>{currentStep + 1} / {steps.length}</span>
         </div>
 
         {/* 내용 */}
-        <h4 className="mb-2.5 text-[23px] font-extrabold leading-tight" style={{ color: '#0f172a' }}>{step.title}</h4>
-        <div className="mb-6 whitespace-pre-line text-[16px] font-medium leading-relaxed" style={{ color: '#334155' }}>{step.description}</div>
+        <h4 className="mb-2.5 text-[23px] font-extrabold leading-tight" style={{ color: t.title }}>{step.title}</h4>
+        <div className="mb-6 whitespace-pre-line text-[16px] font-medium leading-relaxed" style={{ color: t.desc }}>{step.description}</div>
 
         {/* 버튼 */}
         <div className="flex items-center justify-between">
           <button
             onClick={(e) => { e.stopPropagation(); onFinish(); }}
-            className="text-[14px] font-semibold text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-[14px] font-semibold transition-colors hover:opacity-80"
+            style={{ color: t.skip }}
           >
             건너뛰기
           </button>
@@ -146,7 +162,8 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
             {currentStep > 0 && (
               <button
                 onClick={(e) => { e.stopPropagation(); handlePrev(); }}
-                className="rounded-xl px-5 py-2.5 text-[15px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                className="rounded-xl px-5 py-2.5 text-[15px] font-bold transition-colors hover:opacity-85"
+                style={{ background: t.prevBg, color: t.prevText }}
               >
                 이전
               </button>

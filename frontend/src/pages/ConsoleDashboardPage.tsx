@@ -95,8 +95,9 @@ function useIndices(): IdxRow[] {
       apiClient.get<{ code: string; name: string; price: number; changeRate: number }[]>('/api/market/indices').then(r => r.data).catch(() => []),
     ]).then(([crypto, fx, idx]) => {
       const next: IdxRow[] = [...INDICES_FALLBACK.map(r => [...r] as IdxRow)];
-      const findIdx = (kw: string) => Array.isArray(idx) ? idx.find(i => i.name?.includes(kw) || i.code === (kw === 'KOSPI' ? '0001' : '1001')) : undefined;
-      const kospi = findIdx('KOSPI'), kosdaq = findIdx('KOSDAQ');
+      // API는 code="KOSPI"/"KOSDAQ", name="코스피"/"코스닥"로 응답 → 코드 직접매칭 + 한글명 폴백
+      const findIdx = (code: string, kw: string) => Array.isArray(idx) ? idx.find(i => i.code === code || i.name?.includes(kw)) : undefined;
+      const kospi = findIdx('KOSPI', '코스피'), kosdaq = findIdx('KOSDAQ', '코스닥');
       if (kospi) next[0] = ['KOSPI', kospi.price.toLocaleString('ko-KR', { maximumFractionDigits: 2 }), `${kospi.changeRate >= 0 ? '+' : ''}${kospi.changeRate.toFixed(2)}%`, kospi.changeRate >= 0];
       if (kosdaq) next[1] = ['KOSDAQ', kosdaq.price.toLocaleString('ko-KR', { maximumFractionDigits: 2 }), `${kosdaq.changeRate >= 0 ? '+' : ''}${kosdaq.changeRate.toFixed(2)}%`, kosdaq.changeRate >= 0];
       const btc = Array.isArray(crypto) ? crypto.find(c => c.symbol === 'BTC') : undefined;

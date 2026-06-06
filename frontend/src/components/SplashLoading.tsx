@@ -1,7 +1,7 @@
 const SplashLoading = ({ message = '불러오는 중...' }: { message?: string }) => (
   <div className="min-h-screen w-full bg-[#060d18] flex items-center justify-center overflow-hidden">
     <div className="text-center">
-      <div className="relative w-72 h-72 mx-auto mb-8">
+      <div className="relative w-52 h-52 mx-auto mb-7">
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-3/4 h-3/4 bg-cyan-500/[0.06] rounded-full blur-[60px] animate-pulse" style={{ animationDuration: '3s' }} />
         </div>

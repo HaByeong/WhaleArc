@@ -18,10 +18,11 @@ import { useRoutePrefix } from '../hooks/useRoutePrefix';
    상태·핸들러·온보딩 로직 전부 보존.
    ──────────────────────────────────────────────────────────── */
 
-const SONAR = '#5b9dff';
-const INK1 = 'rgba(255,255,255,.72)', INK2 = 'rgba(255,255,255,.48)', INK3 = 'rgba(255,255,255,.28)';
-const HAIR = 'rgba(255,255,255,.10)';
-const panel: React.CSSProperties = { background: 'linear-gradient(180deg,rgba(20,34,62,.6),rgba(9,17,38,.55))', border: `1px solid ${HAIR}`, borderRadius: 16, boxShadow: '0 1px 0 rgba(255,255,255,.05) inset, 0 10px 28px -18px rgba(0,0,0,.6)' };
+// 라이트/다크 적응 토큰(--ci-*) 사용 — 인라인 스타일은 전역 라이트 리맵을 못 받으므로 변수로 직접 참조
+const SONAR = 'var(--ci-sonar)';
+const INK1 = 'var(--ci-ink1)', INK2 = 'var(--ci-ink2)', INK3 = 'var(--ci-ink3)';
+const HAIR = 'var(--ci-line)';
+const panel: React.CSSProperties = { background: 'var(--ci-panel)', border: `1px solid ${HAIR}`, borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)' };
 const DARK_INPUT = 'w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40';
 
 const INVESTMENT_STYLES: { value: InvestmentStyle; label: string; whale: string; desc: string; img: string }[] = [
@@ -44,12 +45,12 @@ const SelectCard = ({ selected, img, label, whale, desc, onClick }: { selected: 
   <button type="button" onClick={onClick} className="w-full text-left p-4 rounded-xl transition-all duration-200"
     style={selected
       ? { border: `1px solid rgba(91,157,255,.5)`, background: 'rgba(91,157,255,.10)', boxShadow: '0 0 0 1px rgba(91,157,255,.2)' }
-      : { border: `1px solid ${HAIR}`, background: 'rgba(255,255,255,.02)' }}>
+      : { border: `1px solid ${HAIR}`, background: 'var(--ci-card)' }}>
     <div className="flex items-center gap-3">
       <img src={img} alt={label} className="w-10 h-10 object-contain flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
-          <span className="font-bold text-sm" style={{ color: selected ? '#cfe1ff' : INK1 }}>{label}</span>
+          <span className="font-bold text-sm" style={{ color: selected ? 'var(--ci-sonar)' : INK1 }}>{label}</span>
           <span className="text-[11px] italic" style={{ color: INK3 }}>{whale}</span>
         </div>
         <div className="text-xs mt-1" style={{ color: INK2 }}>{desc}</div>
@@ -232,7 +233,7 @@ const UserPage = () => {
         )}
 
         {/* 상단 헤더 */}
-        <div className="mb-8 rounded-2xl p-6 md:p-8 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, rgba(91,157,255,.16), rgba(14,40,56,.42))', border: '1px solid rgba(91,157,255,.28)' }}>
+        <div className="mb-6 rounded-2xl p-6 md:p-7 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, rgba(91,157,255,.16), rgba(91,157,255,.05))', border: '1px solid rgba(91,157,255,.28)' }}>
           <div className="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl" style={{ background: 'rgba(91,157,255,.08)' }} />
           <div className="relative z-10 flex items-center gap-4">
             <span className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold" style={{ background: 'linear-gradient(135deg,#5b9dff,#2c6fe6)', color: '#04121d' }}>
@@ -280,7 +281,7 @@ const UserPage = () => {
                   {profile?.authProvider && (
                     <div>
                       <label className="block text-sm font-medium mb-2" style={{ color: INK2 }}>로그인 방식</label>
-                      <span className="inline-block px-3 py-1.5 rounded-full text-sm font-medium" style={{ background: 'rgba(91,157,255,.12)', color: '#cfe1ff', border: '1px solid rgba(91,157,255,.24)' }}>
+                      <span className="inline-block px-3 py-1.5 rounded-full text-sm font-medium" style={{ background: 'rgba(91,157,255,.12)', color: 'var(--ci-sonar)', border: '1px solid rgba(91,157,255,.24)' }}>
                         {profile.authProvider === 'google' ? 'Google' : profile.authProvider === 'kakao' ? 'Kakao' : '이메일'}
                       </span>
                     </div>
@@ -315,7 +316,7 @@ const UserPage = () => {
                             className="px-3 py-1.5 rounded-full text-sm font-medium transition-all"
                             style={on
                               ? { background: SONAR, color: '#04121d' }
-                              : { background: 'rgba(255,255,255,.04)', color: INK1, border: `1px solid ${HAIR}` }}>
+                              : { background: 'var(--ci-card)', color: INK1, border: `1px solid ${HAIR}` }}>
                             {asset}
                           </button>
                         );
@@ -338,7 +339,7 @@ const UserPage = () => {
                 {favoriteAssets.length > 0 && (
                   <div className="mt-4 flex flex-wrap gap-2">
                     {favoriteAssets.map((asset) => (
-                      <span key={asset} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium" style={{ background: 'rgba(91,157,255,.18)', color: '#cfe1ff' }}>
+                      <span key={asset} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium" style={{ background: 'rgba(91,157,255,.18)', color: 'var(--ci-sonar)' }}>
                         {asset}
                         <button type="button" onClick={() => removeAsset(asset)} className="ml-0.5 text-white/50 hover:text-red-400 transition-colors" aria-label={`${asset} 제거`}>
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -404,7 +405,7 @@ const UserPage = () => {
                   <div className="space-y-2">
                     {['khyun1109@gmail.com', 'jhschris8080@naver.com'].map((mail) => (
                       <a key={mail} href={`mailto:${mail}`} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-white/[0.06]"
-                        style={{ background: 'rgba(255,255,255,.03)', border: `1px solid ${HAIR}`, color: INK1 }}>
+                        style={{ background: 'var(--ci-card)', border: `1px solid ${HAIR}`, color: INK1 }}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                         {mail}
                       </a>

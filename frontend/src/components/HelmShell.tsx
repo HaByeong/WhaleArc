@@ -170,7 +170,7 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
       {/* 본문 — 라이트/다크 토글 (다크일 때만 wa-force-dark) */}
       <div className={`wa-console md:ml-[264px] ${isDark ? 'wa-force-dark text-white' : ''}`} style={{ background: 'var(--ci-page-bg)', minHeight: '100vh' }}>
         {/* 탑바 — 모바일에선 날짜/세션 텍스트 숨겨 오버플로 방지 */}
-        <header className="sticky top-0 z-30 flex items-center gap-2 px-4 py-4 sm:gap-4 md:px-8"
+        <header className="sticky top-0 z-30 flex items-center gap-2 px-4 py-3 sm:gap-4 md:px-8"
           style={{ background: 'var(--ci-topbar)', backdropFilter: 'blur(14px)', borderBottom: '1px solid var(--ci-line)' }}>
           <span className="hidden font-mono text-[12px] tracking-[.06em] sm:inline" style={{ color: 'var(--ci-sonar)' }}>◎ 2026.06.01 (월) · KST</span>
           <span className="hidden h-3.5 w-px sm:block" style={{ background: 'var(--ci-line-strong)' }} />
@@ -188,7 +188,7 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
         </header>
 
         {/* 페이지 콘텐츠 */}
-        <main className="px-4 pb-24 pt-6 md:px-8 md:pb-12">{children}</main>
+        <main className="px-4 pb-24 pt-3 md:px-8 md:pb-12 md:pt-4">{children}</main>
       </div>
 
       {/* 하단 네비 (모바일) */}

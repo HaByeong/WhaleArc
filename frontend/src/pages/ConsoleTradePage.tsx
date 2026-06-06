@@ -716,11 +716,11 @@ const ConsoleTradePage = () => {
 
   return (
     <HelmShell active="trade" virt={isVirt} userName={userName} session={assetType === 'CRYPTO' ? '실시간 시세 · WebSocket' : '시세 10초 갱신'}>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
         <div>
-          <div className="mb-3 flex flex-wrap items-center gap-2.5"><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: UP, boxShadow: `0 0 8px ${UP}` }} /><span className="text-[11.5px] font-semibold tracking-[.18em]" style={{ color: '#9cc1ff' }}>TRADING · VIRT 모의 거래</span></div>
-          <h1 className="text-[32px] font-bold tracking-tight">거래</h1>
-          <p className="mt-2 text-[14px]" style={{ color: INK1 }}>종목을 선택하고 매수·매도를 실행하세요. 실계좌 미연결 상태에서는 VIRT로 안전하게.</p>
+          <div className="mb-2 flex flex-wrap items-center gap-2.5"><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: UP, boxShadow: `0 0 8px ${UP}` }} /><span className="text-[11.5px] font-semibold tracking-[.18em]" style={{ color: '#9cc1ff' }}>TRADING · VIRT 모의 거래</span></div>
+          <h1 className="text-[28px] font-bold tracking-tight">거래</h1>
+          <p className="mt-1 text-[14px]" style={{ color: INK1 }}>종목을 선택하고 매수·매도를 실행하세요. 실계좌 미연결 상태에서는 VIRT로 안전하게.</p>
         </div>
         {error && <div className="rounded-xl px-4 py-3 text-[13px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{error}</div>}
         <div className="grid items-start gap-5 grid-cols-1 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)_minmax(0,300px)]">

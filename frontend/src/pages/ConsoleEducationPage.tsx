@@ -447,17 +447,21 @@ const Slider = ({ label, value, min, max, step, onChange, fmt }: { label: string
     <input type="range" aria-label={label} aria-valuetext={fmt(value)} min={min} max={max} step={step} value={value} onChange={(e) => onChange(+e.target.value)} className="w-full" style={{ accentColor: '#2c6fe6' }} />
   </div>
 );
-const MathCard = ({ title, desc, children }: { title: string; desc: string; children: ReactNode }) => (
+const MathCard = ({ title, desc, children, insight }: { title: string; desc: ReactNode; children: ReactNode; insight: ReactNode }) => (
   <div style={panel} className="p-5">
     <div className="text-[15px] font-bold" style={{ color: INK0 }}>{title}</div>
-    <p className="mt-1 text-[12px] leading-relaxed" style={{ color: INK2 }}>{desc}</p>
+    <p className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: INK1 }}>{desc}</p>
     <div className="mt-4 flex flex-col gap-3.5">{children}</div>
+    <div className="mt-4 rounded-lg px-3.5 py-3 text-[12px] leading-relaxed" style={{ background: 'rgba(91,157,255,.07)', border: `1px solid ${HAIR}`, color: INK1 }}>
+      <b style={{ color: SONAR }}>💡 핵심 </b>{insight}
+    </div>
   </div>
 );
 const MathTab = () => {
   const [seed, setSeed] = useState(1000);   // 만원
   const [monthly, setMonthly] = useState(2); // %/월
   const grow = (yrs: number) => seed * 10000 * Math.pow(1 + monthly / 100, yrs * 12);
+  const mult10 = Math.pow(1 + monthly / 100, 120); // 10년 후 원금 배수
   const [loss, setLoss] = useState(30);      // %
   const recover = loss < 100 ? (loss / (100 - loss)) * 100 : Infinity;
   const [winRate, setWinRate] = useState(40);
@@ -470,7 +474,9 @@ const MathTab = () => {
       <div className="rounded-xl px-4 py-3 text-[12.5px] leading-relaxed" style={{ background: 'rgba(91,157,255,.07)', border: `1px solid ${HAIR}`, color: INK1 }}>
         💡 숫자를 직접 움직여 보세요. 투자에서 가장 중요한 <b>복리·손실의 비대칭·손익비</b>를 몸으로 느낄 수 있어요.
       </div>
-      <MathCard title="① 복리의 힘" desc="작은 수익도 꾸준히 쌓이면 눈덩이처럼 커집니다.">
+      <MathCard title="① 복리의 힘"
+        desc="복리는 '이자에 다시 이자가 붙는' 것이에요. 번 돈을 빼지 않고 다시 굴리면 원금이 점점 커지고, 시간이 갈수록 불어나는 속도가 빨라집니다. 그래서 투자는 일찍 시작해 오래 버틸수록 유리해요."
+        insight={<>수익률 자체보다 <b style={{ color: INK0 }}>'꾸준함 × 시간'</b>이 복리의 진짜 힘이에요. 같은 월 수익률이라도 1년과 10년은 결과가 하늘과 땅 차이 — 월 수익률을 조금만 올려도 10년 뒤엔 크게 벌어집니다.</>}>
         <Slider label="원금" value={seed} min={100} max={10000} step={100} onChange={setSeed} fmt={(v) => `${v.toLocaleString()}만원`} />
         <Slider label="월 수익률" value={monthly} min={0} max={5} step={0.5} onChange={setMonthly} fmt={(v) => `${v}%/월`} />
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg sm:grid-cols-4" style={{ background: HAIR }}>
@@ -481,8 +487,11 @@ const MathTab = () => {
             </div>
           ))}
         </div>
+        <div className="text-center text-[12px]" style={{ color: INK2 }}>→ 10년 후엔 원금의 약 <b className="font-mono" style={{ color: SONAR }}>{mult10.toFixed(1)}배</b> ({monthly}%/월로 꾸준히 굴렸을 때)</div>
       </MathCard>
-      <MathCard title="② 손실의 비대칭" desc="잃으면 그만큼만 벌어선 본전이 안 됩니다 — '잃지 않는 것'이 먼저인 이유.">
+      <MathCard title="② 손실의 비대칭"
+        desc="잃은 만큼만 다시 벌면 본전일 것 같지만 아니에요. -50%면 돈이 절반이 되고, 원래대로 돌아오려면 남은 절반으로 +100%(두 배)를 벌어야 합니다. 손실이 커질수록 회복에 필요한 수익률은 훨씬 가파르게 늘어나요."
+        insight={<>큰 손실 한 번이 그동안 쌓은 수익을 통째로 날립니다. 그래서 <b style={{ color: INK0 }}>'크게 벌기'보다 '크게 잃지 않기'가 먼저</b> — 손절(미리 정한 선에서 끊기)과 분산투자가 중요한 이유예요.</>}>
         <Slider label="손실률" value={loss} min={5} max={90} step={5} onChange={setLoss} fmt={(v) => `-${v}%`} />
         <div className="rounded-lg px-4 py-3 text-center" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
           <span className="text-[13px]" style={{ color: INK1 }}>-{loss}% 손실 → 본전까지 </span>
@@ -493,14 +502,17 @@ const MathTab = () => {
           {[10, 20, 30, 50, 70].map((l) => <span key={l} className="rounded px-2 py-1" style={{ background: CARD }}>-{l}% → +{pctNice((l / (100 - l)) * 100)}%</span>)}
         </div>
       </MathCard>
-      <MathCard title="③ 승률보다 손익비" desc="승률이 낮아도 손익비가 좋으면 장기적으로 이깁니다.">
+      <MathCard title="③ 승률보다 손익비"
+        desc="손익비는 '이길 때 버는 폭'을 '질 때 잃는 폭'으로 나눈 값이에요(예: +15% 벌고 -5% 잃으면 손익비 3). 기대값은 '한 번 거래할 때 평균 얼마를 버는지'를 뜻하고요. 자주 맞히는 것(승률)만큼, 맞힐 때 크게 벌고 틀릴 때 작게 잃는 게 중요합니다."
+        insight={<>승률이 낮아도 손익비가 좋으면(이길 때 크게·질 때 작게) 장기적으로 이깁니다. 반대로 승률이 높아도 한 번의 큰 손실로 무너질 수 있어요. <b style={{ color: INK0 }}>'얼마나 자주 맞히나'보다 '맞힐 때 얼마 벌고 틀릴 때 얼마 잃나'</b>가 더 중요합니다.</>}>
         <Slider label="승률" value={winRate} min={10} max={90} step={5} onChange={setWinRate} fmt={(v) => `${v}%`} />
-        <Slider label="손절 폭" value={stop} min={1} max={30} step={1} onChange={setStop} fmt={(v) => `-${v}%`} />
-        <Slider label="익절 폭" value={take} min={1} max={50} step={1} onChange={setTake} fmt={(v) => `+${v}%`} />
+        <Slider label="손절 폭(질 때)" value={stop} min={1} max={30} step={1} onChange={setStop} fmt={(v) => `-${v}%`} />
+        <Slider label="익절 폭(이길 때)" value={take} min={1} max={50} step={1} onChange={setTake} fmt={(v) => `+${v}%`} />
         <div className="rounded-lg px-4 py-3 text-center" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
           <div className="text-[12px]" style={{ color: INK2 }}>손익비 1 : {rr.toFixed(1)} · 거래당 기대값</div>
           <div className="font-mono text-[20px] font-bold" style={{ color: ev >= 0 ? UP : DOWN }}>{ev >= 0 ? '+' : ''}{ev.toFixed(2)}%</div>
-          <div className="mt-1 text-[12px]" style={{ color: ev >= 0 ? UP : DOWN }}>{ev >= 0 ? '장기적으로 이득이 기대돼요 👍' : '장기적으로 손실 — 손익비나 승률을 높이세요'}</div>
+          <div className="mt-1.5 text-[11.5px]" style={{ color: INK2 }}>10번 거래하면 약 {Math.round(winRate / 10)}번 이기고 {10 - Math.round(winRate / 10)}번 져도 → 평균 거래당 {ev >= 0 ? '+' : ''}{ev.toFixed(1)}%</div>
+          <div className="mt-1.5 text-[12px] font-semibold" style={{ color: ev >= 0 ? UP : DOWN }}>{ev >= 0 ? '장기적으로 이득이 기대돼요 👍' : '장기적으로 손실 — 손익비나 승률을 높이세요'}</div>
         </div>
       </MathCard>
     </div>

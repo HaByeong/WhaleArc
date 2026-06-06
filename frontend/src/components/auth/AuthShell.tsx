@@ -66,8 +66,9 @@ export function AuthHero({
       </Link>
       {badge && <div className="mb-3">{badge}</div>}
       <h1 className="whalearc-text text-3xl font-extrabold tracking-tighter md:text-4xl">{title}</h1>
-      {subtitle && <p className="mt-2 text-balance break-keep text-[15px] text-white/70">{subtitle}</p>}
-      {note && <p className="mx-auto mt-2 max-w-md text-balance break-keep text-sm text-white/45">{note}</p>}
+      {subtitle && <p className="mt-2 break-keep text-[15px] text-white/70">{subtitle}</p>}
+      {/* note: 데스크톱에선 한 줄로, 좁은 화면에선 단어 단위로만 줄바꿈 */}
+      {note && <p className="mt-2 break-keep px-4 text-sm text-white/45 md:whitespace-nowrap">{note}</p>}
       {connectors && connectors.length > 0 && (
         <div className="mt-5 flex items-center justify-center gap-2">
           {connectors.map((name) => (

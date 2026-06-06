@@ -134,23 +134,33 @@ const LandingPage = () => {
   const { session } = useAuth();
   const [scrolled, setScrolled] = useState(false);
 
-  // 티커: 실시간 코인 시세(빗썸, 공개 API라 비로그인서도 동작). 미상장 심볼은 정적값 폴백.
+  // 티커: 코인 시세(빗썸). 공개 랜딩이라 자원 절약 위해 '하루 1회'만 갱신(브라우저 일일 캐시) —
+  // 같은 날 재방문은 재요청 안 함. 미상장 심볼은 정적값 폴백. 갱신 기준 시각을 함께 표시.
   const [ticker, setTicker] = useState(TICKER);
+  const [tickerTime, setTickerTime] = useState('');
   useEffect(() => {
-    const fetchTicker = () => {
-      marketService.getPrices('CRYPTO').then((coins) => {
-        if (!Array.isArray(coins) || coins.length === 0) return;
-        const bySym = new Map(coins.map((c) => [c.symbol, c]));
-        setTicker(TICKER.map((t) => {
-          const c = bySym.get(t.s);
-          if (!c || !c.price) return t;
-          return { s: t.s, p: fmtTickerKrw(c.price), c: `${c.changeRate >= 0 ? '+' : ''}${c.changeRate.toFixed(2)}%`, up: c.changeRate >= 0 };
-        }));
-      }).catch(() => { /* 실패 시 정적값 유지 */ });
-    };
-    fetchTicker();
-    const id = setInterval(fetchTicker, 30_000); // 30초마다 갱신
-    return () => clearInterval(id);
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const raw = localStorage.getItem('whalearc_landing_ticker');
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (cached?.date === today && Array.isArray(cached.rows)) {
+          setTicker(cached.rows); setTickerTime(cached.time || ''); return;
+        }
+      }
+    } catch { /* ignore */ }
+    marketService.getPrices('CRYPTO').then((coins) => {
+      if (!Array.isArray(coins) || coins.length === 0) return;
+      const bySym = new Map(coins.map((c) => [c.symbol, c]));
+      const rows = TICKER.map((t) => {
+        const c = bySym.get(t.s);
+        if (!c || !c.price) return t;
+        return { s: t.s, p: fmtTickerKrw(c.price), c: `${c.changeRate >= 0 ? '+' : ''}${c.changeRate.toFixed(2)}%`, up: c.changeRate >= 0 };
+      });
+      const time = new Date().toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      setTicker(rows); setTickerTime(time);
+      try { localStorage.setItem('whalearc_landing_ticker', JSON.stringify({ date: today, rows, time })); } catch { /* ignore */ }
+    }).catch(() => { /* 실패 시 정적값 유지 */ });
   }, []);
 
   useEffect(() => {
@@ -442,7 +452,7 @@ const LandingPage = () => {
       <section className="py-24" style={{ background: '#060b1f' }}>
         <div className="mx-auto max-w-[1240px] px-6 md:px-14">
           <SectionHeader center kicker="MARKETS" title="지금, 시장은 어떻게 움직이고 있을까요."
-            lede="실시간 코인 시세를 미리 둘러보세요. 로그인하면 주식·포트폴리오까지 한 곳에서." />
+            lede="주요 코인 시세를 미리 둘러보세요. 로그인하면 실시간 시세·포트폴리오까지 한 곳에서." />
         </div>
         <div className="relative mt-12 overflow-hidden" style={{ borderTop: '1px solid rgba(255,255,255,.10)', borderBottom: '1px solid rgba(255,255,255,.10)', background: 'linear-gradient(180deg,rgba(91,157,255,.04),transparent)' }}>
           <div className="flex w-max animate-ticker-scroll">
@@ -458,6 +468,7 @@ const LandingPage = () => {
         <div className="mx-auto mt-6 flex max-w-[1240px] items-center justify-between px-6 md:px-14">
           <span className="flex items-center gap-2 text-[12.5px] text-white/50">
             모의투자 · 백테스트 · 전략 학습
+            {tickerTime && <span className="text-white/30">· {tickerTime} 기준 (빗썸 · 하루 1회 갱신)</span>}
           </span>
           <button onClick={() => go('/market')} className="text-[13px] font-medium" style={{ color: GLOW }}>전체 마켓 보기 →</button>
         </div>

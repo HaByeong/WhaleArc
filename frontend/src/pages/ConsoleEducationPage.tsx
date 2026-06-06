@@ -24,6 +24,7 @@ const fmtKRW = (n: number) => (n < 0 ? '-₩' : '₩') + Math.abs(Math.round(n |
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 const FEE = 0.001; // 체결 수수료율 — 백엔드 TradeRecord.COMMISSION_RATE와 동일(순손익 계산)
 const isUsd = (at?: string) => at === 'US_STOCK' || at === 'ETF'; // USD 표기 자산
+const isAutoMemo = (m?: string) => !!m && m.startsWith('라이브 자동매매'); // 자동매매 체결 식별(MockOrderGateway memo)
 // 통화별 가격/금액 포맷(USD는 $, 그 외 ₩)
 const fmtCur = (n: number, usd: boolean) =>
   usd ? (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -66,6 +67,7 @@ interface ClosedTrade {
   pnl: number;     // 순손익(수수료 차감), 네이티브 통화
   pnlKrw: number;  // 원화 환산(합산용) — USD 자산은 환율 적용
   pnlRate: number; // %, 순매수원가 기준(통화 무관)
+  auto: boolean;   // 자동매매(전략)가 진입/청산한 거래인지
   buyAt: string; sellAt: string; holdDays: number | null;
 }
 
@@ -88,10 +90,10 @@ function buildClosedTrades(trades: Trade[], usdKrw: number): { closed: ClosedTra
   const closed: ClosedTrade[] = [];
   let droppedSells = 0; // 기간 밖 매수 등으로 짝짓지 못한 매도 수량
   for (const code of Object.keys(byStock)) {
-    const lots: { qty: number; price: number; at: string; id: string }[] = []; // FIFO 매수 잔량
+    const lots: { qty: number; price: number; at: string; id: string; memo?: string }[] = []; // FIFO 매수 잔량
     for (const t of byStock[code]) {
       if (t.orderType === 'BUY') {
-        lots.push({ qty: t.quantity, price: t.price, at: t.executedAt, id: t.id });
+        lots.push({ qty: t.quantity, price: t.price, at: t.executedAt, id: t.id, memo: t.memo });
       } else {
         let remaining = t.quantity;
         const usd = isUsd(t.assetType);
@@ -109,6 +111,8 @@ function buildClosedTrades(trades: Trade[], usdKrw: number): { closed: ClosedTra
             qty: matched, buyPrice: lot.price, sellPrice: t.price, pnl,
             pnlKrw: usd && usdKrw > 0 ? pnl * usdKrw : pnl,
             pnlRate: cost > 0 ? (pnl / cost) * 100 : 0,
+            auto: isAutoMemo(lot.memo) || isAutoMemo(t.memo), // 진입/청산 중 하나라도 자동매매면 '자동'
+
             buyAt: lot.at, sellAt: t.executedAt, holdDays,
           });
           lot.qty -= matched; remaining -= matched;
@@ -147,6 +151,7 @@ const ReviewCard = ({ t }: { t: ClosedTrade }) => {
           <div className="flex items-center gap-2">
             <span className="truncate text-[14px] font-bold" style={{ color: INK0 }}>{t.stockName}</span>
             <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: dir > 0 ? 'rgba(239,77,77,.14)' : dir < 0 ? 'rgba(77,138,255,.14)' : 'rgba(255,255,255,.08)', color: col }}>{badge}</span>
+            <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={t.auto ? { background: 'rgba(91,157,255,.14)', color: SONAR } : { background: 'rgba(255,255,255,.06)', color: INK2 }}>{t.auto ? '자동' : '수동'}</span>
           </div>
           <div className="mt-1 font-mono text-[11.5px]" style={{ color: INK2 }}>
             {price(t.buyPrice)} → {price(t.sellPrice)} · {t.qty}주 · 보유 {t.holdDays == null ? '-' : t.holdDays === 0 ? '당일' : `${t.holdDays}일`} · {fmtDate(t.buyAt)}~{fmtDate(t.sellAt)}
@@ -193,16 +198,19 @@ const ReviewTab = () => {
   };
   useEffect(load, []);
   const { closed, droppedSells } = useMemo(() => (trades ? buildClosedTrades(trades, usdKrw) : { closed: [], droppedSells: 0 }), [trades, usdKrw]);
-  const hasUsd = useMemo(() => closed.some((c) => c.usd), [closed]);
+  const [filter, setFilter] = useState<'all' | 'auto' | 'manual'>('all');
+  const counts = useMemo(() => ({ all: closed.length, auto: closed.filter((c) => c.auto).length, manual: closed.filter((c) => !c.auto).length }), [closed]);
+  const view = useMemo(() => (filter === 'all' ? closed : closed.filter((c) => (filter === 'auto' ? c.auto : !c.auto))), [closed, filter]);
+  const hasUsd = useMemo(() => view.some((c) => c.usd), [view]);
   const stats = useMemo(() => {
-    if (!closed.length) return null;
-    const wins = closed.filter((c) => c.pnl > 0).length;
-    const totalPnl = closed.reduce((s, c) => s + c.pnlKrw, 0); // 원화 환산 합산(통화 혼합 방지)
-    const avgRate = closed.reduce((s, c) => s + c.pnlRate, 0) / closed.length;
-    const best = closed.reduce((a, b) => (b.pnlRate > a.pnlRate ? b : a));
-    const worst = closed.reduce((a, b) => (b.pnlRate < a.pnlRate ? b : a));
-    return { n: closed.length, winRate: (wins / closed.length) * 100, totalPnl, avgRate, best, worst };
-  }, [closed]);
+    if (!view.length) return null;
+    const wins = view.filter((c) => c.pnl > 0).length;
+    const totalPnl = view.reduce((s, c) => s + c.pnlKrw, 0); // 원화 환산 합산(통화 혼합 방지)
+    const avgRate = view.reduce((s, c) => s + c.pnlRate, 0) / view.length;
+    const best = view.reduce((a, b) => (b.pnlRate > a.pnlRate ? b : a));
+    const worst = view.reduce((a, b) => (b.pnlRate < a.pnlRate ? b : a));
+    return { n: view.length, winRate: (wins / view.length) * 100, totalPnl, avgRate, best, worst };
+  }, [view]);
 
   if (error) return (
     <div style={panel} className="px-6 py-16 text-center">
@@ -223,31 +231,40 @@ const ReviewTab = () => {
 
   return (
     <div className="flex flex-col gap-4">
-      {stats && (
-        <div style={panel} className="grid grid-cols-2 gap-px overflow-hidden md:grid-cols-4" >
-          <Stat label="청산 거래" value={`${stats.n}건`} />
-          <Stat label="승률" value={`${stats.winRate.toFixed(0)}%`} color={stats.winRate >= 50 ? UP : INK0} />
-          <Stat label="평균 수익률" value={fmtPct(stats.avgRate)} color={stats.avgRate >= 0 ? UP : DOWN} />
-          <Stat label="실현 손익 합계" value={fmtKRW(stats.totalPnl)} color={stats.totalPnl >= 0 ? UP : DOWN} />
+      <div className="flex flex-wrap gap-1.5">
+        <Chip on={filter === 'all'} onClick={() => setFilter('all')}>전체 {counts.all}</Chip>
+        <Chip on={filter === 'auto'} onClick={() => setFilter('auto')}>자동매매 {counts.auto}</Chip>
+        <Chip on={filter === 'manual'} onClick={() => setFilter('manual')}>수동 {counts.manual}</Chip>
+      </div>
+      {!view.length ? (
+        <div className="px-6 py-12 text-center text-[13px]" style={{ ...panel, color: INK2 }}>이 분류에 해당하는 거래가 없어요.</div>
+      ) : (<>
+        {stats && (
+          <div style={panel} className="grid grid-cols-2 gap-px overflow-hidden md:grid-cols-4" >
+            <Stat label="청산 거래" value={`${stats.n}건`} />
+            <Stat label="승률" value={`${stats.winRate.toFixed(0)}%`} color={stats.winRate >= 50 ? UP : INK0} />
+            <Stat label="평균 수익률" value={fmtPct(stats.avgRate)} color={stats.avgRate >= 0 ? UP : DOWN} />
+            <Stat label="실현 손익 합계" value={fmtKRW(stats.totalPnl)} color={stats.totalPnl >= 0 ? UP : DOWN} />
+          </div>
+        )}
+        {stats && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <MiniNote tone="up" label="최고의 거래" t={stats.best} />
+            <MiniNote tone="down" label="최악의 거래" t={stats.worst} />
+          </div>
+        )}
+        <div className="flex flex-col gap-1 text-[11.5px]" style={{ color: INK3 }}>
+          <span>* 손익은 체결 수수료(0.1%)를 양방향 차감한 순손익입니다.</span>
+          {hasUsd && <span>* 미국주식·ETF는 현재 환율로 원화 환산해 합산했어요(수익률·개별 손익은 해당 통화 기준).</span>}
+          {droppedSells > 0 && <span>* 매수 기록이 조회 범위 밖이라 짝짓지 못한 매도 {droppedSells.toLocaleString()}주는 복기에서 제외됐어요.</span>}
         </div>
-      )}
-      {stats && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <MiniNote tone="up" label="최고의 거래" t={stats.best} />
-          <MiniNote tone="down" label="최악의 거래" t={stats.worst} />
+        <div className="rounded-xl px-4 py-3 text-[12px] leading-relaxed" style={{ background: 'rgba(91,157,255,.07)', border: `1px solid ${HAIR}`, color: INK1 }}>
+          💡 <b>복기</b>는 결과(손익)보다 <b>과정(규칙을 지켰는가)</b>을 점검하는 거예요. 자동매매도 규칙대로 됐는지, 수동매매는 감정이 끼지 않았는지 함께 봐요.
         </div>
-      )}
-      <div className="flex flex-col gap-1 text-[11.5px]" style={{ color: INK3 }}>
-        <span>* 손익은 체결 수수료(0.1%)를 양방향 차감한 순손익입니다.</span>
-        {hasUsd && <span>* 미국주식·ETF는 현재 환율로 원화 환산해 합산했어요(수익률·개별 손익은 해당 통화 기준).</span>}
-        {droppedSells > 0 && <span>* 매수 기록이 조회 범위 밖이라 짝짓지 못한 매도 {droppedSells.toLocaleString()}주는 복기에서 제외됐어요.</span>}
-      </div>
-      <div className="rounded-xl px-4 py-3 text-[12px] leading-relaxed" style={{ background: 'rgba(91,157,255,.07)', border: `1px solid ${HAIR}`, color: INK1 }}>
-        💡 <b>복기</b>는 결과(손익)보다 <b>과정(규칙을 지켰는가)</b>을 점검하는 거예요. 이긴 거래도 운이었는지, 진 거래도 규칙대로였는지 체크해보세요.
-      </div>
-      <div className="flex flex-col gap-2.5">
-        {closed.map((t) => <ReviewCard key={t.id} t={t} />)}
-      </div>
+        <div className="flex flex-col gap-2.5">
+          {view.map((t) => <ReviewCard key={t.id} t={t} />)}
+        </div>
+      </>)}
     </div>
   );
 };

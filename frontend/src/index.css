@@ -682,6 +682,13 @@ body.whalearc-dark .wa-force-dark .text-slate-600 {
 .wa-legal .border-amber-200 { border-color: rgba(251, 191, 36, 0.25) !important; }
 .wa-legal .text-amber-800 { color: #fcd34d !important; }
 
+/* 콘솔 본문 밀도 — 데스크톱에서 '브라우저 75~80% 축소' 느낌으로 한 화면에 더 많이 보이게.
+   px 기반 디자인이라 값별 조정 대신 균일 zoom으로 비율 유지(타이틀/카드/간격이 함께 축소).
+   모바일은 100% 유지(이미 좁음). 값(0.8)을 조절하면 밀도가 바뀜. */
+@media (min-width: 768px) {
+  .wa-console-dense { zoom: 0.8; }
+}
+
 /* ════════════════════════════════════════════════════════════
    콘솔 본문 라이트/다크 테마 (.wa-console)
    사이드바는 항상 다크(.wa-force-dark 아일랜드). 본문만 토글.

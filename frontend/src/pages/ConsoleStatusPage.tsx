@@ -69,13 +69,13 @@ const Podium = ({ top, onRoute }: { top: Row[]; onRoute: (id: string) => void })
       {order.map(t => {
         const tier = TIERS[t.tier], first = t.rank === 1, up = t.ret >= 0;
         return (
-          <button key={t.rank} onClick={() => onRoute(t.portfolioId)} className="min-w-0 overflow-hidden text-center" style={{ ...panel, padding: '18px 10px', border: first ? '1px solid rgba(91,157,255,.4)' : `1px solid ${HAIR}`, background: first ? 'linear-gradient(180deg, rgba(91,157,255,.12), rgba(14,40,56,.4))' : undefined }}>
+          <button key={t.rank} onClick={() => onRoute(t.portfolioId)} className="min-w-0 overflow-hidden text-center" style={{ ...panel, padding: '18px 10px', border: first ? '1px solid rgba(91,157,255,.4)' : `1px solid ${HAIR}`, background: first ? 'linear-gradient(180deg, rgba(91,157,255,.12), rgba(91,157,255,.04))' : undefined }}>
             <div className="mb-2" style={{ fontSize: first ? 22 : 18 }}>{first ? '🐋' : t.rank === 2 ? '🥈' : '🥉'}</div>
             <div className="mb-2.5 flex justify-center"><Avatar name={t.name} c={tier.c} size={first ? 52 : 42} /></div>
             <div className="truncate text-[14px] font-bold">{t.name}</div>
             <div className="mt-0.5 text-[11px] font-semibold" style={{ color: tier.c }}>{tier.label}</div>
             <div className="mt-2.5 truncate font-mono font-bold" style={{ fontSize: first ? 'clamp(20px,5.5vw,34px)' : 'clamp(16px,4.5vw,23px)', color: up ? UP : DOWN }}>{up ? '+' : ''}{t.ret.toFixed(1)}%</div>
-            <div className="mt-3 flex items-start justify-center pt-2" style={{ height: htMap[t.rank] - 70, borderRadius: '8px 8px 0 0', background: first ? 'linear-gradient(180deg, rgba(91,157,255,.3), transparent)' : 'linear-gradient(180deg, rgba(255,255,255,.06), transparent)' }}>
+            <div className="mt-3 flex items-start justify-center pt-2" style={{ height: htMap[t.rank] - 70, borderRadius: '8px 8px 0 0', background: first ? 'linear-gradient(180deg, rgba(91,157,255,.3), transparent)' : 'linear-gradient(180deg, var(--ci-line-strong), transparent)' }}>
               <span className="font-mono text-[18px] font-bold" style={{ color: first ? SONAR : INK2 }}>{t.rank}</span>
             </div>
           </button>
@@ -175,7 +175,7 @@ const ConsoleStatusPage = () => {
 
             {/* 내 순위 */}
             {my && (
-              <div style={{ ...panel, padding: '18px 22px', background: 'linear-gradient(135deg, rgba(91,157,255,.12), rgba(14,40,56,.4))', border: '1px solid rgba(91,157,255,.32)' }}>
+              <div style={{ ...panel, padding: '18px 22px', background: 'linear-gradient(135deg, rgba(91,157,255,.12), rgba(91,157,255,.04))', border: '1px solid rgba(91,157,255,.32)' }}>
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <div className="text-center"><div className="text-[10.5px] tracking-[.1em]" style={{ color: INK2 }}>내 순위</div><div className="font-mono text-[36px] font-bold leading-none">#{my.currentRank}</div></div>

@@ -210,12 +210,12 @@ const WelcomeBanner = ({ name, blips }: { name: string; blips: { sym: string; x:
   return (
   <section className="wa-force-dark relative overflow-hidden rounded-[18px] text-white" style={{ background: 'radial-gradient(120% 100% at 80% 20%, #1d3a7a 0%, #0e1a3d 55%, #0a1230 100%)', border: '1px solid rgba(255,255,255,.18)' }}>
     <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(40% 60% at 20% 90%, rgba(80,140,255,.18), transparent 70%)' }} />
-    <div className="relative grid items-center gap-6 p-6 md:grid-cols-[1fr_auto] md:p-7">
+    <div className="relative grid items-center gap-6 p-7 md:grid-cols-[1fr_auto] md:p-9">
       <div>
-        <div className="mb-2.5 flex items-center gap-2.5"><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: SONAR, boxShadow: `0 0 8px ${SONAR}` }} /><span className="text-[11.5px] font-semibold tracking-[.18em]" style={{ color: '#9cc1ff' }}>TODAY · 오늘의 항해</span></div>
-        <h1 className="text-[28px] font-bold leading-tight tracking-tight">{name}님, 다시 바다에 오셨군요.</h1>
-        <p className="mt-2 text-[15px] text-white/70">오늘도 시장의 바다를 유영해볼까요?</p>
-        <div className="mt-5 flex max-w-[520px] flex-wrap items-center gap-x-8 gap-y-3 border-t border-white/10 pt-4">
+        <div className="mb-3.5 flex items-center gap-2.5"><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: SONAR, boxShadow: `0 0 8px ${SONAR}` }} /><span className="text-[11.5px] font-semibold tracking-[.18em]" style={{ color: '#9cc1ff' }}>TODAY · 오늘의 항해</span></div>
+        <h1 className="text-[32px] font-bold leading-tight tracking-tight">{name}님, 다시 바다에 오셨군요.</h1>
+        <p className="mt-2.5 text-[15px] text-white/70">오늘도 시장의 바다를 유영해볼까요?</p>
+        <div className="mt-6 flex max-w-[520px] flex-wrap items-center gap-x-8 gap-y-3 border-t border-white/10 pt-[18px]">
           {indices.map(([n, v, d, u]) => (
             <div key={n} className="flex flex-col gap-0.5"><span className="text-[10.5px] font-semibold tracking-[.12em] text-white/45">{n}</span><span className="font-mono text-[14px] font-semibold">{v}</span>{d && <span className="font-mono text-[11px] font-semibold" style={{ color: u ? UP : DOWN }}>{d}</span>}</div>
           ))}

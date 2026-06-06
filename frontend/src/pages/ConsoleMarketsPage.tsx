@@ -428,22 +428,22 @@ const ConsoleMarketsPage = () => {
 
   return (
     <HelmShell active="markets" virt={isVirt} userName={userName} session={assetType === 'CRYPTO' ? '실시간 시세 · WebSocket' : '시세 10초 갱신'}>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         {/* 헤더 */}
         <div>
-          <div className="mb-2 flex items-center gap-2.5">{(() => { const live = assetType === 'CRYPTO'; const dot = !live ? 'var(--ci-sonar)' : wsConnected ? UP : '#f5d061'; const label = !live ? '자동 갱신 · 10초' : wsConnected ? 'LIVE · 실시간 연결됨' : '실시간 연결 중…'; return <><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: dot, boxShadow: `0 0 8px ${dot}` }} /><span className="text-[11.5px] font-semibold tracking-[.18em]" style={{ color: live && !wsConnected ? '#f5d061' : 'var(--ci-sonar)' }}>{label}</span></>; })()}</div>
-          <h1 className="text-[28px] font-bold tracking-tight">시장 현황</h1>
-          <p className="mt-1 text-[14px]" style={{ color: INK1 }}>주식 · 미국주식 · ETF · 가상화폐 시세를 한 곳에서 살펴보세요.</p>
+          <div className="mb-3 flex items-center gap-2.5">{(() => { const live = assetType === 'CRYPTO'; const dot = !live ? 'var(--ci-sonar)' : wsConnected ? UP : '#f5d061'; const label = !live ? '자동 갱신 · 10초' : wsConnected ? 'LIVE · 실시간 연결됨' : '실시간 연결 중…'; return <><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: dot, boxShadow: `0 0 8px ${dot}` }} /><span className="text-[11.5px] font-semibold tracking-[.18em]" style={{ color: live && !wsConnected ? '#f5d061' : 'var(--ci-sonar)' }}>{label}</span></>; })()}</div>
+          <h1 className="text-[36px] font-bold tracking-tight">시장 현황</h1>
+          <p className="mt-2 text-[14.5px]" style={{ color: INK1 }}>주식 · 미국주식 · ETF · 가상화폐 시세를 한 곳에서 살펴보세요.</p>
         </div>
         {/* 인덱스 스트립 */}
         <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
           {indices.map(ix => {
             const u = ix.changeRate >= 0; const hasData = ix.price > 0;
             return (
-              <div key={ix.code} className="rounded-[14px] p-4" style={{ ...mkCard }}>
+              <div key={ix.code} className="rounded-[14px] p-5" style={{ ...mkCard }}>
                 <div className="text-[11px] font-semibold tracking-[.14em]" style={{ color: INK2 }}>{ix.name}</div>
-                <div className="mt-1.5 flex items-baseline justify-between">
-                  <span className="font-mono text-[21px] font-semibold">{hasData ? ix.price.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) : '—'}</span>
+                <div className="mt-2 flex items-baseline justify-between">
+                  <span className="font-mono text-[22px] font-semibold">{hasData ? ix.price.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) : '—'}</span>
                   {hasData && <span className="font-mono text-[13px] font-semibold" style={{ color: u ? UP : DOWN }}>{u ? '+' : ''}{ix.changeRate.toFixed(2)}%</span>}
                 </div>
               </div>

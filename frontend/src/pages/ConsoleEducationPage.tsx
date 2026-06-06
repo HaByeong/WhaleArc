@@ -488,6 +488,7 @@ const MathTab = () => {
           ))}
         </div>
         <div className="text-center text-[12px]" style={{ color: INK2 }}>→ 10년 후엔 원금의 약 <b className="font-mono" style={{ color: SONAR }}>{mult10.toFixed(1)}배</b> ({monthly}%/월로 꾸준히 굴렸을 때)</div>
+        <div className="text-[11px] leading-relaxed" style={{ color: INK3 }}>※ 실제 수익은 매달 들쭉날쭉하고 평균적으로 이보다 훨씬 낮아요(주식 장기평균 ≈ 연 7~10%, 월 1%도 안 됨). 이건 '꾸준한 복리가 얼마나 강한지'의 <b>원리</b>를 보여주는 예시이지, 기대 수익이 아닙니다.</div>
       </MathCard>
       <MathCard title="② 손실의 비대칭"
         desc="잃은 만큼만 다시 벌면 본전일 것 같지만 아니에요. -50%면 돈이 절반이 되고, 원래대로 돌아오려면 남은 절반으로 +100%(두 배)를 벌어야 합니다. 손실이 커질수록 회복에 필요한 수익률은 훨씬 가파르게 늘어나요."
@@ -514,6 +515,7 @@ const MathTab = () => {
           <div className="mt-1.5 text-[11.5px]" style={{ color: INK2 }}>10번 거래하면 약 {Math.round(winRate / 10)}번 이기고 {10 - Math.round(winRate / 10)}번 져도 → 평균 거래당 {ev >= 0 ? '+' : ''}{ev.toFixed(1)}%</div>
           <div className="mt-1.5 text-[12px] font-semibold" style={{ color: ev >= 0 ? UP : DOWN }}>{ev >= 0 ? '장기적으로 이득이 기대돼요 👍' : '장기적으로 손실 — 손익비나 승률을 높이세요'}</div>
         </div>
+        <div className="text-[11px] leading-relaxed" style={{ color: INK3 }}>※ 기대값이 +라도 한 번에 너무 크게 걸면 운 나쁜 연속 손실로 파산할 수 있어요. 그래서 자산을 한 거래에 몰지 않고 나눠 거는 <b>포지션 사이징·분산</b>이 함께 중요합니다.</div>
       </MathCard>
     </div>
   );

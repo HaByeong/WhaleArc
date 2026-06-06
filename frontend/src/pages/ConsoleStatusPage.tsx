@@ -30,6 +30,12 @@ const pageWindow = (page: number, total: number) => {
 // 고래 등급 = 대표 수익률 기준 (API 미제공 → 파생)
 const TIERS: Record<string, { label: string; c: string }> = { blue: { label: '대왕고래', c: '#5b9dff' }, humpback: { label: '혹등고래', c: '#ef4d4d' }, orca: { label: '범고래', c: '#cfa14b' }, beluga: { label: '흰고래', c: '#9aa7c7' } };
 const tierOf = (ret: number) => (ret >= 100 ? 'blue' : ret >= 50 ? 'humpback' : ret >= 20 ? 'orca' : 'beluga');
+// 포디움/리더보드 메달 색(금·은·동) — 랭킹에 '명예의 전당' 색감 부여(양 모드 공통 톤)
+const MEDAL: Record<number, { c: string; border: string; bg: string; ped: string; glow: string }> = {
+  1: { c: '#f5c451', border: 'rgba(245,196,81,.55)', bg: 'linear-gradient(180deg, rgba(245,196,81,.16), rgba(245,196,81,.035))', ped: 'linear-gradient(180deg, rgba(245,196,81,.34), transparent)', glow: 'rgba(245,196,81,.45)' },
+  2: { c: '#bcc6d8', border: 'rgba(188,198,216,.5)', bg: 'linear-gradient(180deg, rgba(188,198,216,.14), rgba(188,198,216,.035))', ped: 'linear-gradient(180deg, rgba(188,198,216,.30), transparent)', glow: 'rgba(188,198,216,.4)' },
+  3: { c: '#d68f54', border: 'rgba(214,143,84,.5)', bg: 'linear-gradient(180deg, rgba(214,143,84,.14), rgba(214,143,84,.035))', ped: 'linear-gradient(180deg, rgba(214,143,84,.30), transparent)', glow: 'rgba(214,143,84,.4)' },
+};
 const Avatar = ({ name, c, size = 36 }: { name: string; c: string; size?: number }) => (
   <span className="flex shrink-0 items-center justify-center font-bold" style={{ width: size, height: size, borderRadius: 11, background: `linear-gradient(135deg, ${c}, ${c}cc)`, color: ABYSS0, fontSize: size * 0.4 }}>{name.slice(0, 1)}</span>
 );
@@ -49,7 +55,7 @@ const Rrow = ({ t, onRoute }: { t: Row; onRoute: (id: string) => void }) => {
   const tier = TIERS[t.tier], up = t.ret >= 0;
   return (
     <div className="grid items-center gap-3.5 px-5 py-3.5" style={{ gridTemplateColumns: COLS, background: t.me ? SONAR_DIM : 'transparent', borderTop: `1px solid ${HAIR}`, borderLeft: t.me ? `2px solid ${SONAR}` : '2px solid transparent' }}>
-      <span className="text-center font-mono text-[16px] font-bold" style={{ color: t.me ? SONAR : INK2 }}>{t.rank}</span>
+      <span className="text-center font-mono text-[16px] font-bold" style={{ color: t.rank <= 3 ? MEDAL[t.rank].c : t.me ? SONAR : INK2 }}>{t.rank}</span>
       <Avatar name={t.name} c={tier.c} />
       <div className="min-w-0">
         <div className="flex items-center gap-2"><span className="truncate text-[14px] font-semibold">{t.name}</span>{t.me && <span className="rounded px-1.5 py-px text-[10px] font-bold text-white" style={{ background: SONAR }}>나</span>}</div>
@@ -66,25 +72,26 @@ const Podium = ({ top, onRoute }: { top: Row[]; onRoute: (id: string) => void })
   const order = [top[1], top[0], top[2]].filter(Boolean); const htMap: Record<number, number> = { 1: 132, 2: 104, 3: 88 };
   return (
     <div className="relative">
-      {/* 포디움 뒤 소나 글로우 — 단조로운 카드 그리드에 깊이감 부여(양 모드 동일 톤) */}
-      <div className="pointer-events-none absolute inset-x-0 -top-5 h-[80%]" style={{ background: 'radial-gradient(56% 82% at 50% 0%, rgba(91,157,255,.13), transparent 72%)' }} />
+      {/* 포디움 뒤 금빛 글로우 — 1위(중앙) 강조 + 명예의 전당 색감(양 모드 공통) */}
+      <div className="pointer-events-none absolute inset-x-0 -top-5 h-[80%]" style={{ background: 'radial-gradient(54% 82% at 50% 0%, rgba(245,196,81,.14), transparent 72%)' }} />
       <div className="relative grid grid-cols-3 items-end gap-3.5">
       {order.map(t => {
         const tier = TIERS[t.tier], first = t.rank === 1, up = t.ret >= 0;
+        const md = MEDAL[t.rank] ?? MEDAL[3];
         return (
-          <button key={t.rank} onClick={() => onRoute(t.portfolioId)} className="min-w-0 overflow-hidden text-center" style={{ ...panel, padding: '18px 10px', border: first ? '1px solid rgba(91,157,255,.4)' : `1px solid ${HAIR}`, background: first ? 'linear-gradient(180deg, rgba(91,157,255,.12), rgba(91,157,255,.04))' : undefined }}>
-            <div className="mb-2" style={{ fontSize: first ? 22 : 18 }}>{first ? '🐋' : t.rank === 2 ? '🥈' : '🥉'}</div>
+          <button key={t.rank} onClick={() => onRoute(t.portfolioId)} className="min-w-0 overflow-hidden text-center" style={{ ...panel, padding: '18px 10px', border: `1px solid ${md.border}`, background: md.bg }}>
+            <div className="mb-2" style={{ fontSize: first ? 24 : 18 }}>{first ? '🥇' : t.rank === 2 ? '🥈' : '🥉'}</div>
             <div className="mb-2.5 flex justify-center">
               <div className="relative">
-                {first && <div className="pointer-events-none absolute -inset-2.5 rounded-full" style={{ background: 'radial-gradient(circle, rgba(91,157,255,.42), transparent 68%)' }} />}
+                <div className="pointer-events-none absolute rounded-full" style={{ inset: first ? -10 : -7, background: `radial-gradient(circle, ${md.glow}, transparent 68%)` }} />
                 <span className="relative block"><Avatar name={t.name} c={tier.c} size={first ? 52 : 42} /></span>
               </div>
             </div>
             <div className="truncate text-[14px] font-bold">{t.name}</div>
             <div className="mt-0.5 text-[11px] font-semibold" style={{ color: tier.c }}>{tier.label}</div>
             <div className="mt-2.5 truncate font-mono font-bold" style={{ fontSize: first ? 'clamp(20px,5.5vw,34px)' : 'clamp(16px,4.5vw,23px)', color: up ? UP : DOWN }}>{up ? '+' : ''}{t.ret.toFixed(1)}%</div>
-            <div className="mt-3 flex items-start justify-center pt-2" style={{ height: htMap[t.rank] - 70, borderRadius: '8px 8px 0 0', background: first ? 'linear-gradient(180deg, rgba(91,157,255,.3), transparent)' : 'linear-gradient(180deg, rgba(91,157,255,.16), transparent)' }}>
-              <span className="font-mono text-[18px] font-bold" style={{ color: first ? SONAR : INK2 }}>{t.rank}</span>
+            <div className="mt-3 flex items-start justify-center pt-2" style={{ height: htMap[t.rank] - 70, borderRadius: '8px 8px 0 0', background: md.ped }}>
+              <span className="font-mono text-[18px] font-bold" style={{ color: md.c }}>{t.rank}</span>
             </div>
           </button>
         );
@@ -173,12 +180,12 @@ const ConsoleStatusPage = () => {
             {stats && (
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
                 {[
-                  { l: '참여 항해사', v: `${totalCount}명`, c: 'var(--ci-ink0)' },
-                  { l: '평균 수익률', v: `${stats.avgReturn >= 0 ? '+' : ''}${stats.avgReturn.toFixed(2)}%`, c: stats.avgReturn >= 0 ? UP : DOWN },
-                  { l: '수익 항해사', v: `${stats.positiveCount}명`, c: UP },
-                  { l: '손실 항해사', v: `${stats.negativeCount}명`, c: DOWN },
+                  { l: '참여 항해사', v: `${totalCount}명`, c: 'var(--ci-ink0)', a: SONAR },
+                  { l: '평균 수익률', v: `${stats.avgReturn >= 0 ? '+' : ''}${stats.avgReturn.toFixed(2)}%`, c: stats.avgReturn >= 0 ? UP : DOWN, a: stats.avgReturn >= 0 ? UP : DOWN },
+                  { l: '수익 항해사', v: `${stats.positiveCount}명`, c: UP, a: UP },
+                  { l: '손실 항해사', v: `${stats.negativeCount}명`, c: DOWN, a: DOWN },
                 ].map(s => (
-                  <div key={s.l} style={{ ...panel, padding: '14px 18px' }}>
+                  <div key={s.l} style={{ ...panel, padding: '14px 18px', borderLeft: `3px solid ${s.a}` }}>
                     <div className="text-[11px] tracking-[.08em]" style={{ color: INK2 }}>{s.l}</div>
                     <div className="mt-1 font-mono text-[20px] font-bold" style={{ color: s.c }}>{s.v}</div>
                   </div>

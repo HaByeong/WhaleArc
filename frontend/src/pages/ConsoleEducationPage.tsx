@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
 import { tradeService, type Trade } from '../services/tradeService';
 import { marketService } from '../services/marketService';
 import { liveTradeService } from '../services/liveTradeService';
+import { reviewService, type TradeReviewNote } from '../services/reviewService';
 import { GLOSSARY } from '../components/TermTooltip';
 
 /* ────────────────────────────────────────────────────────────
@@ -155,18 +156,19 @@ function buildClosedTrades(trades: Trade[], usdKrw: number, deployMap: Map<strin
 const fmtDate = (s?: string) => { const d = parseDate(s); return d ? `${d.getMonth() + 1}.${d.getDate()}` : '-'; };
 
 // ── 복기 카드 ───────────────────────────────────────────────────────────
-const ReviewCard = ({ t, checklist }: { t: ClosedTrade; checklist: string[] }) => {
-  const storeKey = `wa_review_${t.id}`;
+const ReviewCard = ({ t, checklist, note }: { t: ClosedTrade; checklist: string[]; note?: TradeReviewNote }) => {
   const [open, setOpen] = useState(false);
   // 체크는 '원칙 텍스트'로 키잉 — 원칙을 추가/삭제/재정렬해도 체크가 엉뚱한 항목으로 옮겨가지 않음
-  const [checks, setChecks] = useState<Record<string, boolean>>(() => {
-    try { const r = JSON.parse(localStorage.getItem(storeKey) || '{}'); if (r.checks && !Array.isArray(r.checks)) return r.checks; } catch { /* ignore */ }
-    return {}; // 구(舊) 배열 포맷은 폐기(인덱스 의존이라 신뢰 불가)
-  });
-  const [memo, setMemo] = useState<string>(() => {
-    try { return JSON.parse(localStorage.getItem(storeKey) || '{}').memo || ''; } catch { return ''; }
-  });
-  const persist = (c: Record<string, boolean>, m: string) => { try { localStorage.setItem(storeKey, JSON.stringify({ checks: c, memo: m })); } catch { /* ignore */ } };
+  const [checks, setChecks] = useState<Record<string, boolean>>(() => note?.checks || {});
+  const [memo, setMemo] = useState<string>(() => note?.memo || '');
+  // 서버 저장(기기 간 동기화) — 빠른 입력은 0.7s 디바운스, 카드 해제 시 마지막 상태 플러시
+  const latest = useRef({ checks, memo });
+  latest.current = { checks, memo };
+  const dirty = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const flush = () => { if (!dirty.current) return; dirty.current = false; reviewService.saveReview(t.id, latest.current).catch(() => { /* 실패는 다음 변경 때 재시도 */ }); };
+  const persist = (c: Record<string, boolean>, m: string) => { latest.current = { checks: c, memo: m }; dirty.current = true; clearTimeout(timer.current); timer.current = setTimeout(flush, 700); };
+  useEffect(() => () => flush(), []); // 언마운트 시 마지막 저장 보장
   const dir = t.pnl > 0 ? 1 : t.pnl < 0 ? -1 : 0;
   const col = dir > 0 ? UP : dir < 0 ? DOWN : INK1;
   const badge = dir > 0 ? '수익' : dir < 0 ? '손실' : '본전';
@@ -218,6 +220,7 @@ const ReviewTab = () => {
   const [trades, setTrades] = useState<Trade[] | null>(null);
   const [usdKrw, setUsdKrw] = useState(0);
   const [deployMap, setDeployMap] = useState<Map<string, string>>(new Map());
+  const [reviewMap, setReviewMap] = useState<Record<string, TradeReviewNote>>({});
   const [error, setError] = useState(false);
   const load = () => {
     setError(false); setTrades(null);
@@ -225,9 +228,11 @@ const ReviewTab = () => {
       tradeService.getTrades(),
       marketService.getExchangeRate().catch(() => null),
       liveTradeService.getDeployments().catch(() => []),
-    ]).then(([t, fx, deps]) => {
+      reviewService.getReviews().catch(() => ({})),
+    ]).then(([t, fx, deps, reviews]) => {
       if (fx?.usdKrw) setUsdKrw(fx.usdKrw);
       setDeployMap(new Map((Array.isArray(deps) ? deps : []).map((d) => [d.id, d.strategyName])));
+      setReviewMap(reviews || {});
       setTrades(Array.isArray(t) ? t : []);
     }).catch(() => setError(true));
   };
@@ -312,7 +317,7 @@ const ReviewTab = () => {
           💡 <b>복기</b>는 결과(손익)보다 <b>과정(규칙을 지켰는가)</b>을 점검하는 거예요. 자동매매도 규칙대로 됐는지, 수동매매는 감정이 끼지 않았는지 함께 봐요.
         </div>
         <div className="flex flex-col gap-2.5">
-          {view.map((t) => <ReviewCard key={t.id} t={t} checklist={checklist} />)}
+          {view.map((t) => <ReviewCard key={t.id} t={t} checklist={checklist} note={reviewMap[t.id]} />)}
         </div>
       </>)}
     </div>
@@ -490,6 +495,7 @@ const RulesTab = () => {
   const save = (next: string[]) => { setRules(next); try { localStorage.setItem(RULES_KEY, JSON.stringify(next)); window.dispatchEvent(new Event('wa-rules-changed')); } catch { /* ignore */ } };
   const add = (text: string) => { const t = text.trim(); if (!t || rules.includes(t)) return; save([...rules, t]); setDraft(''); };
   const remove = (i: number) => save(rules.filter((_, j) => j !== i));
+  const move = (i: number, dir: -1 | 1) => { const j = i + dir; if (j < 0 || j >= rules.length) return; const next = [...rules]; [next[i], next[j]] = [next[j], next[i]]; save(next); };
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-xl px-4 py-3 text-[12.5px] leading-relaxed" style={{ background: 'rgba(91,157,255,.07)', border: `1px solid ${HAIR}`, color: INK1 }}>
@@ -508,7 +514,11 @@ const RulesTab = () => {
             <div key={i} style={{ ...panel, borderRadius: 12 }} className="flex items-center gap-3 px-4 py-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md font-mono text-[12px] font-bold" style={{ background: 'rgba(91,157,255,.12)', color: SONAR }}>{i + 1}</span>
               <span className="flex-1 text-[13px]" style={{ color: INK0 }}>{r}</span>
-              <button onClick={() => remove(i)} className="text-[12px] transition-colors hover:opacity-70" style={{ color: INK3 }}>삭제</button>
+              <div className="flex shrink-0 flex-col">
+                <button onClick={() => move(i, -1)} disabled={i === 0} aria-label="위로 이동" className="text-[9px] leading-none transition-opacity disabled:opacity-25 hover:opacity-70" style={{ color: INK2 }}>▲</button>
+                <button onClick={() => move(i, 1)} disabled={i === rules.length - 1} aria-label="아래로 이동" className="text-[9px] leading-none transition-opacity disabled:opacity-25 hover:opacity-70" style={{ color: INK2 }}>▼</button>
+              </div>
+              <button onClick={() => remove(i)} className="shrink-0 text-[12px] transition-colors hover:opacity-70" style={{ color: INK3 }}>삭제</button>
             </div>
           ))}
         </div>
@@ -540,6 +550,9 @@ const ConsoleEducationPage = () => {
   const { isVirt } = useRoutePrefix();
   const userName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
   const [tab, setTab] = useState<'review' | 'rules' | 'glossary' | 'mistakes' | 'math'>('review');
+  // 모바일(탭바 가로 스크롤)에서 선택한 탭이 화면 밖이면 가운데로 스크롤
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  useEffect(() => { tabRefs.current[tab]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }, [tab]);
 
   return (
     <HelmShell active="edu" virt={isVirt} userName={userName} session="학습 노트">
@@ -551,7 +564,7 @@ const ConsoleEducationPage = () => {
 
         <div className="mb-5 flex gap-1 overflow-x-auto" style={{ borderBottom: `1px solid ${HAIR}` }}>
           {TABS.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)} className="relative whitespace-nowrap px-4 py-3 text-[14px] transition-colors"
+            <button key={t.id} ref={(el) => { tabRefs.current[t.id] = el; }} onClick={() => setTab(t.id)} className="relative whitespace-nowrap px-4 py-3 text-[14px] transition-colors"
               style={{ color: tab === t.id ? INK0 : INK2, fontWeight: tab === t.id ? 700 : 500 }}>
               {t.label}
               {tab === t.id && <span className="absolute -bottom-px left-3 right-3 h-0.5 rounded" style={{ background: SONAR }} />}

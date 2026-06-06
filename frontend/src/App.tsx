@@ -23,6 +23,7 @@ const ConsoleTradePage = lazy(() => import('./pages/ConsoleTradePage'));
 const ConsoleStrategyPage = lazy(() => import('./pages/ConsoleStrategyPage'));
 const AutoTradePage = lazy(() => import('./pages/AutoTradePage'));
 const ConsoleLearnPage = lazy(() => import('./pages/ConsoleLearnPage'));
+const ConsoleEducationPage = lazy(() => import('./pages/ConsoleEducationPage'));
 const ConsoleCommunityPage = lazy(() => import('./pages/ConsoleCommunityPage'));
 const ConsoleStatusPage = lazy(() => import('./pages/ConsoleStatusPage'));
 const ConsoleBillingPage = lazy(() => import('./pages/ConsoleBillingPage'));
@@ -188,6 +189,7 @@ function App() {
           <Route path="/virt/strategy" element={<ProtectedRoute><ConsoleStrategyPage /></ProtectedRoute>} />
           <Route path="/virt/auto-trade" element={<ProtectedRoute><AutoTradePage /></ProtectedRoute>} />
           <Route path="/virt/store" element={<ProtectedRoute><ConsoleLearnPage /></ProtectedRoute>} />
+          <Route path="/virt/learn" element={<ProtectedRoute><ConsoleEducationPage /></ProtectedRoute>} />
           <Route path="/virt/ranking" element={<ProtectedRoute><ConsoleStatusPage /></ProtectedRoute>} />
           <Route path="/virt/feedback" element={<ProtectedRoute><ConsoleCommunityPage /></ProtectedRoute>} />
           <Route path="/virt/billing" element={<ProtectedRoute><ConsoleBillingPage /></ProtectedRoute>} />
@@ -202,6 +204,7 @@ function App() {
           {import.meta.env.DEV && <Route path="/preview/strategy" element={<ConsoleStrategyPage />} />}
           {import.meta.env.DEV && <Route path="/preview/auto-trade" element={<AutoTradePage />} />}
           {import.meta.env.DEV && <Route path="/preview/learn" element={<ConsoleLearnPage />} />}
+          {import.meta.env.DEV && <Route path="/preview/edu" element={<ConsoleEducationPage />} />}
           {import.meta.env.DEV && <Route path="/preview/community" element={<ConsoleCommunityPage />} />}
           {import.meta.env.DEV && <Route path="/preview/status" element={<ConsoleStatusPage />} />}
           {import.meta.env.DEV && <Route path="/preview/billing" element={<ConsoleBillingPage />} />}

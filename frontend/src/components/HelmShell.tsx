@@ -13,7 +13,7 @@ import { authService } from '../services/authService';
 const SONAR = '#5b9dff';
 const UP = '#ef4d4d';
 
-type IconKind = 'helm' | 'pie' | 'sonar' | 'swap' | 'route' | 'book' | 'chat' | 'gauge' | 'card' | 'bolt';
+type IconKind = 'helm' | 'pie' | 'sonar' | 'swap' | 'route' | 'book' | 'chat' | 'gauge' | 'card' | 'bolt' | 'note';
 
 const NavIcon = ({ kind }: { kind: IconKind }) => {
   const common = { width: 20, height: 20, viewBox: '0 0 22 22', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -25,6 +25,7 @@ const NavIcon = ({ kind }: { kind: IconKind }) => {
     case 'route': return <svg {...common}><circle cx="5" cy="17" r="2.5" /><circle cx="17" cy="5" r="2.5" /><path strokeDasharray="2 2" d="M6.5 15C12 10 9 8 15.5 6.5" /></svg>;
     case 'book': return <svg {...common}><path d="M11 5C9 3.5 5.5 3.5 3.5 4.5v12C5.5 15.5 9 15.5 11 17M11 5c2-1.5 5.5-1.5 7.5-.5v12c-2-1-5.5-1-7.5.5M11 5v12" /></svg>;
     case 'chat': return <svg {...common}><path d="M4 5h14v9H9l-4 3.5V14H4z" /></svg>;
+    case 'note': return <svg {...common}><rect x="5" y="3.5" width="13" height="16" rx="1.5" /><path d="M8.5 8h6M8.5 11.5h6M8.5 15h3.5" /></svg>;
     case 'gauge': return <svg {...common}><path d="M4 15a7 7 0 0 1 14 0" /><path d="M11 15l4-3.5" /><circle cx="11" cy="15" r="1.2" fill="currentColor" stroke="none" /></svg>;
     case 'card': return <svg {...common}><rect x="2" y="5" width="18" height="13" rx="2" /><path d="M2 9.5h18M5.5 14h4" /></svg>;
     case 'bolt': return <svg {...common}><path d="M12 2 4 13h6l-1 7 8-11h-6z" /></svg>;
@@ -62,6 +63,10 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
   const displayName = profileName || userName;
   const prefix = virt ? '/virt' : '';
   const goNav = (path: string) => navigate(prefix + path);
+  // '학습 노트'(거래 복기·용어집·실수도감)는 VIRT 전용 — 모의 매매 복기가 핵심이라 모의 섹션에만 노출
+  const navItems: NavItem[] = virt
+    ? (() => { const c = [...NAV]; const i = c.findIndex((n) => n.key === 'learn'); c.splice(i + 1, 0, { label: '학습 노트', icon: 'note', path: '/learn', key: 'edu' }); return c; })()
+    : NAV;
 
   const handleLogout = async () => {
     try { await authService.logout(); } catch { /* ignore */ }
@@ -91,7 +96,7 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
       {/* 네비 */}
       <nav className="helm-nav mt-4 flex flex-1 flex-col gap-0.5">
         <div className="navkick px-3 pb-2.5 text-[10px] font-semibold tracking-[.2em] text-white/30">항로</div>
-        {NAV.map((it) => {
+        {navItems.map((it) => {
           const on = it.key === active;
           return (
             <button key={it.key} onClick={() => goNav(it.path)} className={`flex items-center gap-3 rounded-[10px] px-3 py-[11px] text-[14px] transition-colors${on ? ' nav-active' : ''}`}

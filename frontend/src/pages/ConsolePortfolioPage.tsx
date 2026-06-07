@@ -71,11 +71,14 @@ const TrendChart = ({ port, kospi, mode }: { port: number[]; kospi: number[] | n
   );
 };
 
-const MetricCard = ({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) => (
-  <div className="rounded-[11px] px-3.5 py-4 text-center" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
+const MetricCard = ({ label, value, sub, color, explain }: { label: string; value: string; sub: string; color: string; explain?: string }) => (
+  <div className="flex flex-col rounded-[11px] px-3.5 py-4 text-center" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
     <div className="text-[10.5px] font-semibold" style={{ color: 'var(--ci-ink3)' }}>{label}</div>
     <div className="mt-2 font-mono text-[20px] font-bold leading-none" style={{ color }}>{value}</div>
     <div className="mt-1.5 text-[10.5px]" style={{ color: 'var(--ci-ink3)' }}>{sub}</div>
+    {explain && (
+      <div className="mt-2.5 rounded-[7px] px-2.5 py-2 text-[10.5px] leading-snug" style={{ background: 'var(--ci-panel)', color: 'var(--ci-ink2)', border: '1px solid var(--ci-line)' }}>{explain}</div>
+    )}
   </div>
 );
 
@@ -473,37 +476,71 @@ const PaperPortfolio = () => {
         {/* 성과 지표 */}
         {metrics && (
           <Panel>
-            <PanelHead kicker="PERFORMANCE" title="성과 지표" />
+            <PanelHead kicker="PERFORMANCE" title="성과 지표" right={
+              <span className="text-[11px] text-white/50">각 숫자 아래에 쉬운 설명을 달았어요</span>
+            } />
             <div className="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3 lg:grid-cols-5">
               <MetricCard
                 label="샤프 비율"
                 value={metrics.sharpe != null ? metrics.sharpe.toFixed(2) : '—'}
                 sub="≥1.0이면 양호"
                 color={metrics.sharpe != null ? (metrics.sharpe >= 1 ? UP : metrics.sharpe >= 0 ? 'var(--ci-ink0)' : DOWN) : 'var(--ci-ink3)'}
+                explain={
+                  metrics.sharpe == null ? '데이터 5일 이상 필요' :
+                  metrics.sharpe >= 1.5 ? '위험 대비 수익이 매우 우수해요' :
+                  metrics.sharpe >= 1.0 ? '위험 대비 수익이 양호해요' :
+                  metrics.sharpe >= 0 ? '수익은 내고 있지만 변동이 큰 편' :
+                  '수익보다 변동이 더 큰 상태예요'
+                }
               />
               <MetricCard
                 label="최대낙폭 (MDD)"
                 value={`-${metrics.mdd.toFixed(1)}%`}
                 sub="낮을수록 안전"
                 color={metrics.mdd < 10 ? '#4ade80' : metrics.mdd < 20 ? 'var(--ci-ink0)' : DOWN}
+                explain={
+                  metrics.mdd < 5 ? '최대 5% 미만 하락 — 매우 안정적' :
+                  metrics.mdd < 10 ? `가장 많이 빠진 구간 ${metrics.mdd.toFixed(0)}% — 안정적인 편` :
+                  metrics.mdd < 20 ? `최대 ${metrics.mdd.toFixed(0)}% 하락한 적 있어요. 분산 고려를` :
+                  `낙폭이 큰 편이에요. 손절 설정을 권장합니다`
+                }
               />
               <MetricCard
                 label="청산 승률"
                 value={metrics.winRate != null ? `${metrics.winRate.toFixed(1)}%` : '—'}
                 sub={metrics.closedTrades > 0 ? `${metrics.closedTrades}회 청산` : '청산 거래 없음'}
                 color={metrics.winRate != null ? (metrics.winRate >= 50 ? UP : DOWN) : 'var(--ci-ink3)'}
+                explain={
+                  metrics.winRate == null ? '청산 거래가 없어요' :
+                  metrics.winRate >= 60 ? `10회 중 ${Math.round(metrics.winRate / 10)}회 수익 마감` :
+                  metrics.winRate >= 50 ? '손익 균형 수준 (50% 이상)' :
+                  '손실 마감이 더 많아요. 전략 점검을'
+                }
               />
               <MetricCard
                 label="평균 보유기간"
                 value={metrics.avgHoldDays != null ? `${metrics.avgHoldDays.toFixed(1)}일` : '—'}
                 sub="청산 기준 FIFO"
                 color="var(--ci-ink0)"
+                explain={
+                  metrics.avgHoldDays == null ? '청산 거래가 없어요' :
+                  metrics.avgHoldDays < 1 ? '하루 안에 사고 팔아요 (단타)' :
+                  metrics.avgHoldDays < 7 ? `평균 ${metrics.avgHoldDays.toFixed(0)}일 보유 (단기)` :
+                  metrics.avgHoldDays < 30 ? `평균 ${metrics.avgHoldDays.toFixed(0)}일 보유 (중기)` :
+                  `평균 ${metrics.avgHoldDays.toFixed(0)}일 보유 (장기)`
+                }
               />
               <MetricCard
                 label="KOSPI 대비 Alpha"
                 value={metrics.alpha != null ? `${metrics.alpha >= 0 ? '+' : ''}${metrics.alpha.toFixed(1)}%p` : '—'}
                 sub={metrics.alpha != null ? (metrics.alpha >= 0 ? 'KOSPI 초과' : 'KOSPI 하회') : 'KOSPI 데이터 없음'}
                 color={metrics.alpha != null ? (metrics.alpha >= 0 ? UP : DOWN) : 'var(--ci-ink3)'}
+                explain={
+                  metrics.alpha == null ? 'KOSPI 비교 데이터 없음' :
+                  metrics.alpha >= 5 ? `KOSPI보다 ${metrics.alpha.toFixed(1)}%p 더 벌었어요` :
+                  metrics.alpha >= 0 ? `KOSPI와 비슷하거나 약간 앞서요` :
+                  `KOSPI보다 ${Math.abs(metrics.alpha).toFixed(1)}%p 덜 벌었어요`
+                }
               />
             </div>
             <div className="px-5 pb-4 text-[10.5px]" style={{ color: 'var(--ci-ink3)' }}>

@@ -77,6 +77,10 @@ const AutoTradePage = () => {
   const [orderLogs, setOrderLogs] = useState<Record<string, LiveOrderLog[]>>({});
   const [logsLoading, setLogsLoading] = useState<Record<string, boolean>>({});
 
+  // 자동매매 교육 게이트
+  const [showGuide, setShowGuide] = useState(false);
+  const [guideChecked, setGuideChecked] = useState(false);
+
   // 생성 모달
   const [showCreate, setShowCreate] = useState(false);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
@@ -157,6 +161,16 @@ const AutoTradePage = () => {
   };
 
   const openCreate = async () => {
+    const guideSeen = (() => { try { return localStorage.getItem('wa_autotrade_guide') === '1'; } catch { return false; } })();
+    if (!guideSeen) {
+      setGuideChecked(false);
+      setShowGuide(true);
+    } else {
+      await _doOpenCreate();
+    }
+  };
+
+  const _doOpenCreate = async () => {
     setShowCreate(true);
     if (strategies.length === 0) {
       try {
@@ -165,6 +179,12 @@ const AutoTradePage = () => {
         pushToast('error', '전략 목록 실패', errMsg(e));
       }
     }
+  };
+
+  const confirmGuide = async (neverAgain: boolean) => {
+    if (neverAgain) { try { localStorage.setItem('wa_autotrade_guide', '1'); } catch {} }
+    setShowGuide(false);
+    await _doOpenCreate();
   };
 
   const allStrategies = [...PRESET_STRATEGIES, ...strategies];
@@ -563,6 +583,73 @@ const AutoTradePage = () => {
           </div>
         )}
       </div>
+
+      {/* 자동매매 시작 전 교육 게이트 모달 */}
+      {showGuide && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowGuide(false)}>
+          <div
+            className={`w-full max-w-md rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--wa-card-bg,#0f1b2d)] border border-white/10' : 'bg-white'}`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className={`px-6 py-5 border-b ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
+              <div className={`text-[10.5px] font-bold tracking-[.18em] mb-1 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>BEFORE YOU START</div>
+              <h2 className={`text-[18px] font-bold ${isDark ? 'text-white' : 'text-gray-800'}`}>자동매매, 이것만 알고 시작해요</h2>
+              <p className={`text-[12px] mt-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>3분이면 충분합니다. 모의투자라 돈 걱정은 없어요.</p>
+            </div>
+            <div className="px-6 py-4 space-y-3.5">
+              {[
+                {
+                  icon: '🎭',
+                  title: '이건 가상 돈입니다',
+                  body: '실제 내 계좌 돈이 나가지 않아요. 시스템이 ₩1,000만 가상 자금으로 연습합니다. 잘못 눌러도 괜찮아요.',
+                },
+                {
+                  icon: '📡',
+                  title: '봉 단위 평가 = 정해진 시간마다 신호 확인',
+                  body: '"1시간봉"이면 1시간마다 한 번 조건을 체크합니다. 조건에 맞으면 자동으로 사고 팔아요.',
+                },
+                {
+                  icon: '🛡️',
+                  title: '손절 설정을 꼭 하세요',
+                  body: '손절 없이 운영하면 손실이 계속 쌓일 수 있어요. 예: -5% 손절 = 매수가 대비 5% 하락 시 자동 매도.',
+                },
+                {
+                  icon: '⏸️',
+                  title: '언제든 멈출 수 있어요',
+                  body: '실행 중에도 일시정지 또는 중지 버튼으로 즉시 멈출 수 있고, 상단 킬스위치로 전체 정지도 가능합니다.',
+                },
+              ].map((item, i) => (
+                <div key={i} className={`flex gap-3 rounded-[10px] p-3.5 ${isDark ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
+                  <span className="text-[22px] shrink-0 mt-0.5">{item.icon}</span>
+                  <div>
+                    <div className={`text-[13px] font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>{item.title}</div>
+                    <div className={`text-[11.5px] mt-0.5 leading-relaxed ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{item.body}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className={`px-6 py-4 border-t ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
+              <label className="flex items-center gap-2.5 cursor-pointer mb-4">
+                <input type="checkbox" checked={guideChecked} onChange={e => setGuideChecked(e.target.checked)} className="w-4 h-4 rounded accent-blue-500" />
+                <span className={`text-[13px] ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>위 내용을 읽고 이해했습니다</span>
+              </label>
+              <div className="flex gap-2.5">
+                <button onClick={() => setShowGuide(false)} className={`flex-1 rounded-lg py-2.5 text-[13px] font-semibold ${isDark ? 'text-slate-300 border border-white/10 hover:bg-white/5' : 'text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+                  나중에
+                </button>
+                <button
+                  onClick={() => confirmGuide(guideChecked)}
+                  disabled={!guideChecked}
+                  className="flex-[2] rounded-lg py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
+                  style={{ background: guideChecked ? 'linear-gradient(135deg,#3b82f6,#2563eb)' : undefined, border: guideChecked ? 'none' : '1px solid var(--ci-line)' }}
+                >
+                  {guideChecked ? '이해했어요 — 자동매매 만들기 →' : '체크 후 진행할 수 있어요'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 생성 모달 */}
       {showCreate && (

@@ -459,6 +459,12 @@ const FIRST_BUYS: { stockCode: string; stockName: string; quantity: number; asse
   { stockCode: 'BTC', stockName: '비트코인', quantity: 0.0001, assetType: 'CRYPTO', label: '비트코인 0.0001개' },
 ];
 
+const ONBOARD_STEPS = [
+  { icon: '🛒', title: '첫 종목 매수해보기', desc: '시장가로 한 종목만 사봐도 거래의 흐름을 느낄 수 있어요.', action: '/virt/trade', label: '거래 화면으로 →' },
+  { icon: '📊', title: '전략 백테스트 실행', desc: '내가 만든 조건이 과거에 돈을 벌었는지 한 번 눌러 확인해보세요.', action: '/virt/strategy', label: '백테스트 해보기 →' },
+  { icon: '🤖', title: '자동매매 설정하기', desc: '전략을 골라 자동으로 사고 팔도록 맡기면 24시간 운영됩니다.', action: '/virt/auto-trade', label: '자동매매 시작 →' },
+];
+
 const VirtDashboard = () => {
   const navigate = useNavigate();
   const { session } = useAuth();
@@ -471,6 +477,13 @@ const VirtDashboard = () => {
   const [qbMsg, setQbMsg] = useState<{ msg: string; ok: boolean } | null>(null);
   const qbTimer = useRef<number | null>(null);
   useEffect(() => () => { if (qbTimer.current) clearTimeout(qbTimer.current); }, []);
+  const [onboardDismissed, setOnboardDismissed] = useState(() => {
+    try { return localStorage.getItem('wa_onboarding') === '1'; } catch { return false; }
+  });
+  const dismissOnboard = () => {
+    setOnboardDismissed(true);
+    try { localStorage.setItem('wa_onboarding', '1'); } catch {}
+  };
   const isPreview = import.meta.env.DEV && window.location.pathname.startsWith('/preview');
 
   const loadData = useCallback(async () => {
@@ -513,6 +526,32 @@ const VirtDashboard = () => {
     <HelmShell active="home" virt={true} userName={name} session="모의투자 · 가상 항해">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-5">
         <WelcomeBanner name={name} blips={blips} />
+        {/* 온보딩 가이드 — 신규 유저(보유 종목 0, 미해제) */}
+        {!loading && !error && portfolio && portfolio.holdings.length === 0 && !onboardDismissed && (
+          <Panel style={{ padding: '26px 28px', border: '1px solid rgba(91,157,255,.3)', background: 'linear-gradient(135deg,rgba(91,157,255,.08) 0%,rgba(63,214,160,.05) 60%,transparent)' }}>
+            <div className="mb-1 text-[10.5px] font-bold tracking-[.22em]" style={{ color: SONAR }}>GETTING STARTED</div>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-[18px] font-bold">WhaleArc, 이렇게 시작하세요</h3>
+                <p className="mt-1 text-[13px]" style={{ color: 'var(--ci-ink2)' }}>총 3단계 — 각 카드를 클릭해 직접 해봐요. 실제 돈은 없어요, 가상 ₩1,000만입니다.</p>
+              </div>
+              <button onClick={dismissOnboard} className="shrink-0 rounded-lg px-3.5 py-1.5 text-[11.5px] font-semibold" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)', color: 'var(--ci-ink3)' }}>시작 준비 완료 ✕</button>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {ONBOARD_STEPS.map((s, i) => (
+                <button key={i} onClick={() => navigate(s.action)} className="group flex flex-col gap-1.5 rounded-[12px] p-4 text-left transition-colors" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[17px]" style={{ background: 'rgba(91,157,255,.15)' }}>{s.icon}</span>
+                    <span className="text-[11px] font-bold tracking-[.1em]" style={{ color: SONAR }}>STEP {i + 1}</span>
+                  </div>
+                  <div className="text-[13.5px] font-semibold" style={{ color: 'var(--ci-ink0)' }}>{s.title}</div>
+                  <div className="text-[12px] leading-relaxed" style={{ color: 'var(--ci-ink2)' }}>{s.desc}</div>
+                  <div className="mt-auto pt-1.5 text-[11.5px] font-semibold" style={{ color: SONAR }}>{s.label}</div>
+                </button>
+              ))}
+            </div>
+          </Panel>
+        )}
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(300px,1fr)]">
           <div className="flex flex-col gap-5">
             {loading ? <LoadingCard />

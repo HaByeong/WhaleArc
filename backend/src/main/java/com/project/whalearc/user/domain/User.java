@@ -38,6 +38,12 @@ public class User {
         this.authProvider = authProvider;
     }
 
+    /** 자동매매 접근 가능 여부 — BASIC 이상 또는 ADMIN(등급 무관). 프론트 canAutoTrade와 동일 기준. */
+    public boolean canAutoTrade() {
+        if (role == Role.ADMIN) return true;
+        return tier != null && tier.ordinal() >= Tier.BASIC.ordinal();
+    }
+
     /** 구독 등급. 순서가 곧 권한 크기(FREE < BASIC < PRO). */
     public enum Tier { FREE, BASIC, PRO }
 

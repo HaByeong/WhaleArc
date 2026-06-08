@@ -501,10 +501,10 @@ const PaperPortfolio = () => {
                 sub="낮을수록 안전"
                 color={metrics.mdd < 10 ? '#4ade80' : metrics.mdd < 20 ? 'var(--ci-ink0)' : DOWN}
                 explain={
-                  metrics.mdd < 5 ? '최대 5% 미만 하락 — 매우 안정적' :
-                  metrics.mdd < 10 ? `가장 많이 빠진 구간 ${metrics.mdd.toFixed(0)}% — 안정적인 편` :
-                  metrics.mdd < 20 ? `최대 ${metrics.mdd.toFixed(0)}% 하락한 적 있어요. 분산 고려를` :
-                  `낙폭이 큰 편이에요. 손절 설정을 권장합니다`
+                  metrics.mdd < 5 ? '낙폭이 매우 작아 안정적이에요' :
+                  metrics.mdd < 10 ? '낙폭이 10% 미만 — 안정적인 편' :
+                  metrics.mdd < 20 ? '한 번쯤 큰 하락이 있었어요. 분산을 고려하세요' :
+                  '낙폭이 큰 편이에요. 손절 설정을 권장합니다'
                 }
               />
               <MetricCard
@@ -526,10 +526,10 @@ const PaperPortfolio = () => {
                 color="var(--ci-ink0)"
                 explain={
                   metrics.avgHoldDays == null ? '청산 거래가 없어요' :
-                  metrics.avgHoldDays < 1 ? '하루 안에 사고 팔아요 (단타)' :
-                  metrics.avgHoldDays < 7 ? `평균 ${metrics.avgHoldDays.toFixed(0)}일 보유 (단기)` :
-                  metrics.avgHoldDays < 30 ? `평균 ${metrics.avgHoldDays.toFixed(0)}일 보유 (중기)` :
-                  `평균 ${metrics.avgHoldDays.toFixed(0)}일 보유 (장기)`
+                  metrics.avgHoldDays < 1 ? '하루 안에 사고파는 단타예요' :
+                  metrics.avgHoldDays < 7 ? '며칠 안에 청산하는 단기 매매예요' :
+                  metrics.avgHoldDays < 30 ? '몇 주 보유하는 중기 매매예요' :
+                  '한 달 이상 보유하는 장기 투자예요'
                 }
               />
               <MetricCard

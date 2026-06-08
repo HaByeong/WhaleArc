@@ -395,7 +395,7 @@ public class LiveStrategyService {
         Order order;
         try {
             order = gateway.placeMarketOrder(d.getUserId(), pos.getSymbol(), pos.getSymbol(),
-                    Order.OrderType.BUY, quantity, assetType, clientOrderId);
+                    Order.OrderType.BUY, quantity, price, assetType, clientOrderId);
         } catch (Exception e) {
             log.warn("라이브 매수 주문 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
             return;
@@ -457,7 +457,7 @@ public class LiveStrategyService {
         Order order;
         try {
             order = gateway.placeMarketOrder(d.getUserId(), pos.getSymbol(), pos.getSymbol(),
-                    Order.OrderType.SELL, quantity, pos.getAssetType(), clientOrderId);
+                    Order.OrderType.SELL, quantity, BigDecimal.valueOf(currentPrice), pos.getAssetType(), clientOrderId);
         } catch (Exception e) {
             log.warn("라이브 매도 주문 실패: deploymentId={}, symbol={}, reason={}, error={}",
                     d.getId(), pos.getSymbol(), reason, e.getMessage());

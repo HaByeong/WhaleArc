@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -106,6 +107,60 @@ public class KisPaperTradeClient {
         if (b.get("output") instanceof Map<?, ?> o) {
             odno = String.valueOf(o.get("ODNO"));
         }
+        return new KisOrderResult(true, odno, msg);
+    }
+
+    /**
+     * 해외(미국) 지정가 주문 접수. 미국은 시장가가 없어 지정가(limitPrice)로 발주한다.
+     * @param ovrsExcgCd 주문 거래소코드(NASD/NYSE/AMEX), ticker 미국 종목코드, quantity 주(정수), limitPrice 주문단가(USD)
+     */
+    public KisOrderResult placeOverseasOrder(KisPaperCredential cred, Order.OrderType side,
+                                             String ovrsExcgCd, String ticker, BigDecimal quantity, BigDecimal limitPrice) {
+        String token = getToken(cred);
+
+        Map<String, String> body = new HashMap<>();
+        body.put("CANO", cred.accountNumber());
+        body.put("ACNT_PRDT_CD", cred.productCode() != null ? cred.productCode() : "01");
+        body.put("OVRS_EXCG_CD", ovrsExcgCd);                          // NASD/NYSE/AMEX
+        body.put("PDNO", ticker);
+        body.put("ORD_QTY", quantity.toBigInteger().toString());      // 미국주식 정수 수량
+        body.put("OVRS_ORD_UNPR", limitPrice.setScale(2, RoundingMode.HALF_UP).toPlainString());
+        body.put("ORD_SVR_DVSN_CD", "0");
+        body.put("ORD_DVSN", "00");                                    // 00 = 지정가 (미국은 시장가 미지원)
+
+        String hash = getHashkey(cred, body);
+        // 실전 미국: 매수 TTTT1002U / 매도 TTTT1006U, 모의: 매수 VTTT1002U / 매도 VTTT1001U
+        String trId = realTrading
+                ? (side == Order.OrderType.BUY ? "TTTT1002U" : "TTTT1006U")
+                : (side == Order.OrderType.BUY ? "VTTT1002U" : "VTTT1001U");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("authorization", "Bearer " + token);
+        headers.set("appkey", cred.appkey());
+        headers.set("appsecret", cred.appsecret());
+        headers.set("tr_id", trId);
+        headers.set("custtype", "P");
+        headers.set("hashkey", hash);
+
+        ResponseEntity<Map> resp = restTemplate.exchange(
+                baseUrl() + "/uapi/overseas-stock/v1/trading/order",
+                HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
+
+        Map<?, ?> b = resp.getBody();
+        String rtCd = b != null ? String.valueOf(b.get("rt_cd")) : null;
+        String msg = b != null ? String.valueOf(b.get("msg1")) : "응답 없음";
+        if (!"0".equals(rtCd)) {
+            log.warn("KIS 해외주문 거부: real={}, excg={}, ticker={}, qty={}, unpr={}, rt_cd={}, msg={}",
+                    realTrading, ovrsExcgCd, ticker, quantity, limitPrice, rtCd, msg);
+            return new KisOrderResult(false, null, msg);
+        }
+        String odno = null;
+        if (b.get("output") instanceof Map<?, ?> o) {
+            odno = String.valueOf(o.get("ODNO"));
+        }
+        log.info("KIS 해외주문 접수: excg={}, ticker={}, side={}, qty={}, unpr={}, odno={}",
+                ovrsExcgCd, ticker, side, quantity, limitPrice, odno);
         return new KisOrderResult(true, odno, msg);
     }
 

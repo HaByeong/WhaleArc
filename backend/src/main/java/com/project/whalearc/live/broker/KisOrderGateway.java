@@ -2,6 +2,8 @@ package com.project.whalearc.live.broker;
 
 import com.project.whalearc.live.domain.LiveStrategyDeployment;
 import com.project.whalearc.live.service.OrderGateway;
+import com.project.whalearc.market.service.UsEtfCatalog;
+import com.project.whalearc.market.service.UsStockPriceProvider;
 import com.project.whalearc.trade.domain.Order;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +32,12 @@ public class KisOrderGateway implements OrderGateway {
 
     private final KisPaperTradeClient kisPaperTradeClient;
     private final KisCredentialResolver credentialResolver;
+    private final UsStockPriceProvider usStockPriceProvider;
+    private final UsEtfCatalog usEtfCatalog;
+
+    // 미국 지정가 체결 버퍼 — 매수는 +1%, 매도는 -1%. (시장가 미지원 시장에서 체결 가능성↑, 1주 단위라 비용 무시)
+    private static final BigDecimal BUY_BUFFER = new BigDecimal("1.01");
+    private static final BigDecimal SELL_BUFFER = new BigDecimal("0.99");
 
     @Override
     public boolean supports(LiveStrategyDeployment.BrokerType brokerType) {
@@ -38,9 +46,22 @@ public class KisOrderGateway implements OrderGateway {
 
     @Override
     public Order placeMarketOrder(String userId, String stockCode, String stockName,
-                                  Order.OrderType side, BigDecimal quantity, String assetType, String clientOrderId) {
+                                  Order.OrderType side, BigDecimal quantity, BigDecimal price,
+                                  String assetType, String clientOrderId) {
         KisPaperCredential cred = credentialResolver.resolve(userId);
-        KisOrderResult result = kisPaperTradeClient.placeMarketOrder(cred, side, stockCode, quantity);
+        KisOrderResult result;
+        if (isUsd(assetType)) {
+            // 미국주식/ETF: 해외 지정가 주문(시장가 미지원). 현재가 ± 버퍼를 지정가로.
+            String ticker = stockCode.toUpperCase();
+            String excg = orderExchangeCode(
+                    "ETF".equalsIgnoreCase(assetType) ? usEtfCatalog.getExchange(ticker)
+                                                       : usStockPriceProvider.getExchange(ticker));
+            BigDecimal limit = price.multiply(side == Order.OrderType.BUY ? BUY_BUFFER : SELL_BUFFER);
+            result = kisPaperTradeClient.placeOverseasOrder(cred, side, excg, ticker, quantity, limit);
+        } else {
+            // 국내주식: 시장가 현금주문
+            result = kisPaperTradeClient.placeMarketOrder(cred, side, stockCode, quantity);
+        }
         if (!result.accepted()) {
             throw new IllegalStateException("KIS 주문 거부: " + result.message());
         }
@@ -56,5 +77,20 @@ public class KisOrderGateway implements OrderGateway {
         order.setFilledQuantity(quantity);
         order.setId(result.brokerOrderNo());
         return order;
+    }
+
+    /** USD 표시 자산(미국주식/ETF) — 해외주문 경로로 보낸다. */
+    private static boolean isUsd(String assetType) {
+        return "US_STOCK".equalsIgnoreCase(assetType) || "ETF".equalsIgnoreCase(assetType);
+    }
+
+    /** 시세 EXCD(NAS/NYS/AMS) → 해외주문 OVRS_EXCG_CD(NASD/NYSE/AMEX). */
+    private static String orderExchangeCode(String excd) {
+        if (excd == null) return "NASD";
+        return switch (excd.toUpperCase()) {
+            case "NYS" -> "NYSE";
+            case "AMS" -> "AMEX";
+            default -> "NASD";   // NAS 및 기타
+        };
     }
 }

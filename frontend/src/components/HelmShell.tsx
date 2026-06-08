@@ -102,7 +102,7 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
         <div className="navkick px-3 pb-2.5 text-[10px] font-semibold tracking-[.2em] text-white/30">항로</div>
         {navItems.map((it) => {
           const on = it.key === active;
-          const locked = it.key === 'autotrade' && !canAutoTrade;   // 자동매매=BASIC 이상 전용
+          const locked = it.key === 'autotrade' && !virt && !canAutoTrade;   // 실거래(일반) 자동매매만 BASIC 이상; 모의(virt)는 공개
           return (
             <button key={it.key} onClick={() => goNav(it.path)} className={`flex items-center gap-3 rounded-[10px] px-3 py-[11px] text-[14px] transition-colors${on ? ' nav-active' : ''}`}
               style={on

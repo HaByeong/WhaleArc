@@ -8,6 +8,7 @@ import { marketService, type MarketPrice, type AssetType } from '../services/mar
 import { tradeService, type Portfolio, type Trade, type Holding, type Order } from '../services/tradeService';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
 import TradingChart from '../components/TradingChart';
+import { Term } from '../components/GlossaryTerm';
 
 /* ────────────────────────────────────────────────────────────
    ConsoleTradePage — 거래(trade) 실데이터 배선
@@ -143,9 +144,9 @@ const NumberField = ({ value, onChange, step = 1, suffix, disabled }: { value: n
 );
 const FieldLabel = ({ children }: { children: ReactNode }) => <span className="text-[11.5px] font-semibold tracking-[.06em]" style={{ color: INK2 }}>{children}</span>;
 
-const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, onPlaced }: {
+const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, onPlaced, isVirt }: {
   sel: MarketPrice; side: string; setSide: (s: string) => void; portfolio: Portfolio | null; usdKrw: number;
-  rtPrice: number | null; notify: (m: string, t?: 'success' | 'error') => void; onPlaced: () => void;
+  rtPrice: number | null; notify: (m: string, t?: 'success' | 'error') => void; onPlaced: () => void; isVirt: boolean;
 }) => {
   const [orderMethod, setOrderMethod] = useState<'LIMIT' | 'MARKET'>('MARKET'); // 시장가 기본(옛 동작 복원)
   const [price, setPrice] = useState(sel.price);
@@ -222,10 +223,16 @@ const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, o
           <button key={k} onClick={() => setOrderMethod(k)} className="flex-1 rounded-lg py-2.5 text-[12.5px] font-semibold" style={{ border: orderMethod === k ? '1px solid rgba(91,157,255,.32)' : `1px solid ${LINE}`, background: orderMethod === k ? 'rgba(91,157,255,.12)' : 'transparent', color: orderMethod === k ? 'var(--ci-ink0)' : INK1 }}>{k === 'LIMIT' ? '지정가' : '시장가'}</button>
         ))}</div>
         <div className="mt-2 rounded-[8px] px-3 py-2 text-[11.5px] leading-snug" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: INK2 }}>
-          {orderMethod === 'MARKET'
-            ? <><span style={{ color: GLOW, fontWeight: 600 }}>시장가</span> — 지금 바로 현재 시세에 즉시 체결됩니다. 빠른 매수/매도에 적합해요.</>
-            : <><span style={{ color: GLOW, fontWeight: 600 }}>지정가</span> — 아래에서 원하는 가격을 입력합니다. 해당 가격에 도달해야 체결돼요. 가격이 안 오면 미체결 상태로 대기합니다.</>
-          }
+          {(() => {
+            const word = orderMethod === 'MARKET' ? '시장가' : '지정가';
+            // VIRT(모의)에서만 용어집 툴팁 연결 — 초보 학습 동선
+            const label = isVirt
+              ? <Term k={word}>{word}</Term>
+              : <span style={{ color: GLOW, fontWeight: 600 }}>{word}</span>;
+            return orderMethod === 'MARKET'
+              ? <>{label} — 지금 바로 현재 시세에 즉시 체결됩니다. 빠른 매수/매도에 적합해요.</>
+              : <>{label} — 아래에서 원하는 가격을 입력합니다. 해당 가격에 도달해야 체결돼요. 가격이 안 오면 미체결 상태로 대기합니다.</>;
+          })()}
         </div>
       </div>
       <div className="mt-[18px]"><div className="flex items-baseline justify-between"><FieldLabel>주문 가격</FieldLabel>{orderMethod === 'MARKET' && <span className="font-mono text-[11px]" style={{ color: INK3 }}>현재가 체결</span>}</div>
@@ -752,7 +759,7 @@ const ConsoleTradePage = () => {
                 </div>
                 {tab === 'chart' && <ChartPanel symbol={sel.symbol} price={sel.price} changeRate={sel.changeRate} assetType={sel.assetType} indicators={indicators} setIndicators={setIndicators} />}
                 {tab === 'order' && <>
-                  <div className="grid gap-[18px] p-5" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(260px, 320px)' }}><OrderTicket sel={sel} side={side} setSide={setSide} portfolio={portfolio} usdKrw={usdKrw} rtPrice={rtPrice} notify={notify} onPlaced={loadAccount} /><Orderbook sel={sel} /></div>
+                  <div className="grid gap-[18px] p-5" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(260px, 320px)' }}><OrderTicket sel={sel} side={side} setSide={setSide} portfolio={portfolio} usdKrw={usdKrw} rtPrice={rtPrice} notify={notify} onPlaced={loadAccount} isVirt={isVirt} /><Orderbook sel={sel} /></div>
                   <PendingOrders orders={orders} onCancel={handleCancel} />
                   <div className="px-5 pb-4 text-[11px]" style={{ color: INK3 }}>단축키 · <b style={{ color: INK2 }}>B</b> 매수 · <b style={{ color: INK2 }}>S</b> 매도</div>
                 </>}

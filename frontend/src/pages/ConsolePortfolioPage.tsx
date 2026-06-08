@@ -603,6 +603,7 @@ const RealAccountPortfolio = () => {
   const [accounts, setAccounts] = useState<ExchangeAccount[]>([]);
   const [portfolios, setPortfolios] = useState<Partial<Record<ExchangeType, ExchangePortfolio | null>>>({});
   const [activeTab, setActiveTab] = useState<ExchangeType>('KIS');
+  const [splitCcy, setSplitCcy] = useState(false);   // 원화/해외 통화 분리 표시 토글
   const autoPickRef = useRef(false); // 최초 로드 시 첫 연결 거래소 자동 선택(이후 사용자 선택 우선)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -658,6 +659,14 @@ const RealAccountPortfolio = () => {
 
   // 도넛/합계는 항상 KRW 기준 — KIS 해외주식(currency=USD)은 서버가 준 환율로 환산(통화 혼합 방지)
   const usdKrw = port?.usdtKrwRate || 0;
+  // 원화/해외 통화 분리 (KIS 실계좌): 해외 = 외화예수금 + 미국주식 보유, 원화 = 총자산 - 해외(KRW환산)
+  const foreignCashUsd = port?.foreignCashUsd ?? 0;
+  const foreignCashKrw = port?.foreignCashKrw ?? 0;
+  const usHoldUsd = holdings.filter(h => h.currency === 'USD').reduce((s, h) => s + (h.marketValue || 0), 0);
+  const foreignValueUsd = foreignCashUsd + usHoldUsd;
+  const foreignValueKrw = foreignCashKrw + usHoldUsd * usdKrw;
+  const domesticValueKrw = (port?.totalValue ?? 0) - foreignValueKrw;
+  const hasForeign = isStock && foreignValueUsd > 0;
   const krwVal = (h: { marketValue: number; currency?: string }) => (h.currency === 'USD' && usdKrw > 0 ? h.marketValue * usdKrw : h.marketValue);
   const alloc = useMemo(() => {
     if (!port) return [] as { c: string; label: string; value: number }[];
@@ -729,6 +738,25 @@ const RealAccountPortfolio = () => {
         ) : (
           <div className="grid grid-cols-1 items-start gap-[18px] lg:grid-cols-[1.5fr_1fr]">
             <div className="flex flex-col gap-[18px]">
+              {/* 통화 분리 토글 (해외 자산 보유 시) */}
+              {hasForeign && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3" style={{ ...panel }}>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-[12.5px] font-semibold" style={{ color: 'var(--ci-ink1)' }}>통화 표시</span>
+                    <div className="inline-flex rounded-lg p-0.5" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
+                      {([['통합', false], ['원화/해외 분리', true]] as const).map(([l, v]) => (
+                        <button key={l} onClick={() => setSplitCcy(v)} className="rounded-md px-2.5 py-1 text-[11.5px] font-semibold" style={{ background: splitCcy === v ? 'rgba(91,157,255,.16)' : 'transparent', color: splitCcy === v ? SONAR : 'var(--ci-ink2)' }}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {splitCcy && (
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[13px]">
+                      <span>원화 <b className="font-semibold">{won(domesticValueKrw)}</b></span>
+                      <span style={{ color: SONAR }}>해외 <b className="font-semibold">${foreignValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b> <span className="text-white/40">({won(foreignValueKrw)})</span></span>
+                    </div>
+                  )}
+                </div>
+              )}
               {/* 지표 카드 */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[['총 자산', won(port.totalValue), 'var(--ci-ink0)'], ['총 손익', `${port.totalProfitLoss >= 0 ? '+' : ''}${won(port.totalProfitLoss)}`, port.totalProfitLoss >= 0 ? UP : DOWN], ['수익률', `${port.totalReturnRate >= 0 ? '+' : ''}${port.totalReturnRate.toFixed(2)}%`, port.totalReturnRate >= 0 ? UP : DOWN], [cashLabel, won(port.cashBalance), 'var(--ci-ink0)']].map(([l, v, c]) => (

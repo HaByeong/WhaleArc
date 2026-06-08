@@ -86,8 +86,10 @@ const REASON_LABEL: Record<string, string> = {
 const AutoTradePage = () => {
   const navigate = useNavigate();
   const { isVirt } = useRoutePrefix();
+  const isLive = !isVirt;                 // 일반 섹션=실거래(실제 돈), /virt=모의(가상자금)
+  const modeLabel = isLive ? '실거래' : '모의';
   const { isDark } = useTheme();
-  const { session } = useAuth();
+  const { session, canAutoTrade, onboardingDone } = useAuth();
   const userName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
 
   const [pageLoading, setPageLoading] = useState(true);
@@ -267,14 +269,14 @@ const AutoTradePage = () => {
         targetAssets: targetAssets.length ? targetAssets : undefined,
         assetType: form.assetType || undefined,
         interval: form.interval,
-        accountMode: form.accountKind === 'KIS' ? 'LIVE' : 'PAPER',
-        brokerType: form.accountKind === 'KIS' ? 'KIS' : 'MOCK',
+        accountMode: isLive ? 'LIVE' : 'PAPER',   // 섹션으로 고정 (일반=실거래, /virt=모의)
+        brokerType: isLive ? 'KIS' : 'MOCK',
         stopLossPct: form.stopLossPct ? Number(form.stopLossPct) : undefined,
         takeProfitPct: form.takeProfitPct ? Number(form.takeProfitPct) : undefined,
         trailingStopPct: form.trailingStopPct ? Number(form.trailingStopPct) : undefined,
         dailyLossLimit: form.dailyLossLimit ? Number(form.dailyLossLimit) : undefined,
       });
-      pushToast('success', '자동매매 시작', '모의 자동매매가 가동되었습니다.');
+      pushToast('success', '자동매매 시작', `${modeLabel} 자동매매가 가동되었습니다.`);
       setShowCreate(false);
       setForm(prev => ({ ...prev, strategyId: '', targetAssetsText: '', stopLossPct: '', takeProfitPct: '', trailingStopPct: '', dailyLossLimit: '' }));
       await loadData();
@@ -331,24 +333,62 @@ const AutoTradePage = () => {
     : 'bg-whale-light text-white hover:bg-blue-600';
   const divBorder = isDark ? 'border-white/[0.06]' : 'border-gray-100';
   const divideY = isDark ? 'divide-white/[0.06]' : 'divide-gray-100';
+  // 이 섹션의 배포만 표시 (일반=실거래 LIVE, /virt=모의 PAPER) — 두 모드 섞임 방지
+  const sectionDeployments = deployments.filter(d => (isLive ? d.accountMode === 'LIVE' : d.accountMode === 'PAPER'));
 
   if (pageLoading) {
     return (
-      <HelmShell active="autotrade" virt={isVirt} userName={userName} session="모의 자동매매">
+      <HelmShell active="autotrade" virt={isVirt} userName={userName} session={`${modeLabel} 자동매매`}>
         <div className={`py-24 text-center text-sm ${subText}`}>자동매매 정보를 불러오는 중...</div>
       </HelmShell>
     );
   }
 
+  // 등급 게이팅: 실거래(일반 섹션)만 BASIC 이상(또는 ADMIN) 전용. 모의(/virt)는 누구나 가능.
+  // 등급 확인 전엔 로딩으로(관리자 잠금화면 깜빡임 방지).
+  if (isLive && onboardingDone === null) {
+    return (
+      <HelmShell active="autotrade" virt={isVirt} userName={userName} session={`${modeLabel} 자동매매`}>
+        <div className={`py-24 text-center text-sm ${subText}`}>등급 정보를 확인하는 중...</div>
+      </HelmShell>
+    );
+  }
+  if (isLive && !canAutoTrade) {
+    return (
+      <HelmShell active="autotrade" virt={isVirt} userName={userName} session="자동매매 · 잠김">
+        <div className="mx-auto max-w-md py-20 text-center">
+          <div className={`mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl ${isDark ? 'bg-white/[0.04]' : 'bg-gray-100'}`}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className={isDark ? 'text-slate-300' : 'text-gray-500'}>
+              <rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" />
+            </svg>
+          </div>
+          <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>실거래 자동매매는 Basic 이상 전용</h1>
+          <p className={`mt-3 text-sm leading-relaxed ${subText}`}>
+            실제 자금으로 매매하는 <b>실거래 자동매매</b>는 <b>Basic 이상 등급</b>에서 이용할 수 있어요.
+            <br /><b>모의 자동매매(가상자금)는 무료</b>이니 먼저 연습해보세요.
+          </p>
+          <div className="mt-6 flex items-center justify-center gap-2.5">
+            <button onClick={() => navigate('/virt/auto-trade')} className={`rounded-xl px-5 py-3 text-sm font-semibold ${isDark ? 'bg-white/[0.06] text-white hover:bg-white/[0.1]' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}>
+              모의로 연습하기
+            </button>
+            <button onClick={() => navigate('/billing')} className={`rounded-xl px-5 py-3 text-sm font-semibold ${primaryBtn}`}>
+              요금제 보기 →
+            </button>
+          </div>
+        </div>
+      </HelmShell>
+    );
+  }
+
   return (
-    <HelmShell active="autotrade" virt={isVirt} userName={userName} session="모의 자동매매">
+    <HelmShell active="autotrade" virt={isVirt} userName={userName} session={`${modeLabel} 자동매매`}>
       <Toast toasts={toasts} onDismiss={dismissToast} />
       <div className="mx-auto max-w-6xl">
         {/* 헤더 */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className={`text-2xl sm:text-3xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>자동매매</h1>
-            <p className={`mt-1 text-sm ${subText}`}>백테스트한 전략을 모의 자금으로 자동 매매합니다. 봉 단위(시간/일)로 신호를 평가해 주문합니다.</p>
+            <h1 className={`text-2xl sm:text-3xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>{modeLabel} 자동매매{isLive && <span className="ml-2 align-middle text-sm font-bold text-amber-500">⚠️ 실제 자금</span>}</h1>
+            <p className={`mt-1 text-sm ${subText}`}>{`백테스트한 전략을 ${isLive ? '실제 자금으로' : '모의(가상) 자금으로'} 자동 매매합니다. 봉 단위(시간/일)로 신호를 평가해 주문합니다.`}</p>
           </div>
           <button onClick={openCreate} className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${primaryBtn}`}>
             + 새 자동매매 시작
@@ -381,17 +421,17 @@ const AutoTradePage = () => {
         </div>
 
         {/* 배포 목록 */}
-        {deployments.length === 0 ? (
+        {sectionDeployments.length === 0 ? (
           <div className={`rounded-2xl border p-12 text-center ${card}`}>
             <p className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-700'}`}>가동 중인 자동매매가 없습니다</p>
-            <p className={`mt-1 text-sm ${subText}`}>전략을 골라 모의 자동매매를 시작해보세요.</p>
+            <p className={`mt-1 text-sm ${subText}`}>{`전략을 골라 ${modeLabel} 자동매매를 시작해보세요.`}</p>
             <button onClick={openCreate} className={`mt-4 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${primaryBtn}`}>
               + 새 자동매매 시작
             </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {deployments.map(d => {
+            {sectionDeployments.map(d => {
               const sm = STATUS_META[d.status];
               const pnlPositive = (d.realizedPnl ?? 0) > 0;
               const pnlNegative = (d.realizedPnl ?? 0) < 0;
@@ -417,7 +457,7 @@ const AutoTradePage = () => {
                             ? (isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-600')
                             : (isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-600')
                         }`}>
-                          {d.accountMode === 'LIVE' ? 'KIS 모의' : '모의'}
+                          {d.accountMode === 'LIVE' ? 'KIS 실거래' : '모의'}
                         </span>
                         <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${isDark ? sm.dark : sm.light}`}>{sm.label}</span>
                       </div>
@@ -692,8 +732,8 @@ const AutoTradePage = () => {
             onClick={e => e.stopPropagation()}
           >
             <div className={`px-5 py-4 border-b ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
-              <h2 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-800'}`}>새 자동매매 시작</h2>
-              <p className={`text-xs mt-0.5 ${subText}`}>모의(가상자금) 자동매매입니다. 실계좌 매매는 준비 중입니다.</p>
+              <h2 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-800'}`}>새 {modeLabel} 자동매매 시작</h2>
+              <p className={`text-xs mt-0.5 ${subText}`}>{isLive ? 'KIS 실전 계좌에 직접 주문하는 실거래입니다 (실제 자금 ⚠️).' : '가상자금으로 안전하게 연습하는 모의 자동매매입니다. 실제 돈은 나가지 않습니다.'}</p>
             </div>
 
             <div className="px-5 py-4 space-y-4">
@@ -722,23 +762,44 @@ const AutoTradePage = () => {
               </div>
 
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>계좌 종류</label>
+                <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>계좌</label>
+                {isLive ? (
+                  <>
+                    <div className={`rounded-lg border px-3 py-2 text-sm font-semibold ${isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                      KIS 실거래 (실제 자금 ⚠️)
+                    </div>
+                    <p className={`text-[11px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
+                      ⚠️ KIS <b>실전 계좌</b>에 직접 주문합니다 — <b>실제 돈이 나갑니다.</b>
+                      거래소 연동에서 KIS 키를 먼저 등록하세요. <b>국내주식(예: 005930)</b>과 <b>미국주식(예: JOBY)</b> 모두 가능하며,
+                      미국주식은 <b>미국 장중(22:30~05:00 KST)</b>에만 체결됩니다(시장가 없어 현재가 지정가로 발주).
+                      안전장치로 <b>1건당 10만원 상한</b>이 걸려 있고, 비상 시 상단 킬스위치로 전체 정지하세요.
+                      <b>처음엔 1주 극소액으로 검증</b>하길 권장합니다.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className={`rounded-lg border px-3 py-2 text-sm font-semibold ${isDark ? 'bg-blue-500/10 border-blue-500/30 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+                      모의투자 (가상자금)
+                    </div>
+                    <p className={`text-[11px] mt-1 ${subText}`}>가상자금으로 안전하게 연습하는 자동매매입니다. <b>실제 돈은 나가지 않습니다.</b> 실거래는 일반(실계좌) 모드의 자동매매에서 진행하세요.</p>
+                  </>
+                )}
+              </div>
+
+              <div>
+                <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>자산 유형</label>
                 <select
-                  value={form.accountKind}
-                  onChange={e => setForm(prev => ({ ...prev, accountKind: e.target.value }))}
+                  value={form.assetType}
+                  onChange={e => setForm(prev => ({ ...prev, assetType: e.target.value }))}
                   className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`}
                 >
-                  <option value="PAPER">모의투자 (가상자금)</option>
-                  <option value="KIS">KIS 모의투자 연동 (실제 자금 ❌)</option>
+                  <option value="">자동 (종목 코드로 판별)</option>
+                  <option value="STOCK">국내주식</option>
+                  <option value="US_STOCK">미국주식 (예: JOBY)</option>
+                  <option value="ETF">미국 ETF</option>
+                  <option value="CRYPTO">코인</option>
                 </select>
-                {form.accountKind === 'KIS' && (
-                  <p className={`text-[11px] mt-1 ${subText}`}>
-                    KIS <b>모의투자(VTS)</b> 서버에 연동해 주문합니다 — <b>실제 돈은 나가지 않습니다.</b>
-                    거래소 연동에서 KIS 키를 먼저 등록하고, 대상 종목은 <b>국내주식 코드(예: 005930)</b>,
-                    한국 장중에만 체결 · 비상 시 상단 킬스위치로 전체 정지.
-                    <br />※ 실계좌(실제 자금) 자동매매는 자본시장법 검토 후 별도 제공 예정입니다.
-                  </p>
-                )}
+                <p className={`text-[11px] mt-1 ${subText}`}>미국주식(JOBY 등)은 <b>미국주식</b>으로 지정하세요. 비워두면 종목 코드로 자동 판별합니다.</p>
               </div>
 
               <div>

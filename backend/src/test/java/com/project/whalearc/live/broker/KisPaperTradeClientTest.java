@@ -106,6 +106,45 @@ class KisPaperTradeClientTest {
 
     @Test
     @SuppressWarnings({"unchecked", "rawtypes"})
+    void buildsOverseasUsBuyOrder() {
+        ArgumentCaptor<HttpEntity> cap = ArgumentCaptor.forClass(HttpEntity.class);
+        when(rt.exchange(contains("/overseas-stock/v1/trading/order"), eq(HttpMethod.POST), cap.capture(), eq(Map.class)))
+                .thenReturn((ResponseEntity) ResponseEntity.ok(Map.of("rt_cd", "0", "msg1", "정상", "output", Map.of("ODNO", "0030"))));
+
+        KisOrderResult r = client.placeOverseasOrder(cred(), Order.OrderType.BUY, "NYSE", "JOBY",
+                new BigDecimal("1"), new BigDecimal("5.4321"));
+
+        assertTrue(r.accepted());
+        assertEquals("0030", r.brokerOrderNo());
+
+        HttpEntity<?> sent = cap.getValue();
+        assertEquals("VTTT1002U", sent.getHeaders().getFirst("tr_id"), "모의 미국 매수 TR");
+
+        @SuppressWarnings("unchecked")
+        Map<String, String> body = (Map<String, String>) sent.getBody();
+        assertEquals("NYSE", body.get("OVRS_EXCG_CD"));
+        assertEquals("JOBY", body.get("PDNO"));
+        assertEquals("1", body.get("ORD_QTY"), "정수 수량");
+        assertEquals("00", body.get("ORD_DVSN"), "지정가");
+        assertEquals("5.43", body.get("OVRS_ORD_UNPR"), "2자리 반올림 지정가");
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void overseasRealSellUsesUsSellTrId() {
+        client.setRealTrading(true);
+        ArgumentCaptor<HttpEntity> cap = ArgumentCaptor.forClass(HttpEntity.class);
+        when(rt.exchange(contains("/overseas-stock/v1/trading/order"), eq(HttpMethod.POST), cap.capture(), eq(Map.class)))
+                .thenReturn((ResponseEntity) ResponseEntity.ok(Map.of("rt_cd", "0", "msg1", "정상", "output", Map.of("ODNO", "1"))));
+
+        client.placeOverseasOrder(cred(), Order.OrderType.SELL, "NASD", "AAPL",
+                new BigDecimal("2"), new BigDecimal("200"));
+
+        assertEquals("TTTT1006U", cap.getValue().getHeaders().getFirst("tr_id"), "실전 미국 매도 TR");
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
     void rejectedOrderReturnsNotAccepted() {
         when(rt.exchange(contains("/order-cash"), eq(HttpMethod.POST), any(), eq(Map.class)))
                 .thenReturn((ResponseEntity) ResponseEntity.ok(Map.of("rt_cd", "1", "msg1", "주문가능금액부족")));

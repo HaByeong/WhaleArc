@@ -61,6 +61,7 @@ public class UsStockPriceProvider {
         POPULAR_US_STOCKS.put("XOM",   new String[]{"엑슨모빌", "NYS"});
         POPULAR_US_STOCKS.put("COIN",  new String[]{"코인베이스", "NAS"});
         POPULAR_US_STOCKS.put("PLTR",  new String[]{"팔란티어", "NAS"});
+        POPULAR_US_STOCKS.put("JOBY",  new String[]{"조비 에비에이션", "NYS"});
     }
 
     @PostConstruct

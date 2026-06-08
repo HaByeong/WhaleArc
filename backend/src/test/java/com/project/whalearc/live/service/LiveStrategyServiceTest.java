@@ -60,7 +60,8 @@ class LiveStrategyServiceTest {
             return b == LiveStrategyDeployment.BrokerType.MOCK;
         }
         @Override public Order placeMarketOrder(String userId, String code, String name,
-                                                Order.OrderType side, BigDecimal quantity, String assetType, String clientOrderId) {
+                                                Order.OrderType side, BigDecimal quantity, BigDecimal price,
+                                                String assetType, String clientOrderId) {
             Order o = new Order();
             o.setUserId(userId);
             o.setStockCode(code);

@@ -1,6 +1,7 @@
 package com.project.whalearc.live.controller;
 
 import com.project.whalearc.common.dto.ApiResponse;
+import com.project.whalearc.live.config.AutoTradeAccessChecker;
 import com.project.whalearc.live.domain.LiveOrderLog;
 import com.project.whalearc.live.domain.LiveStrategyDeployment;
 import com.project.whalearc.live.dto.CreateDeploymentRequest;
@@ -23,11 +24,18 @@ import java.util.Map;
 public class LiveStrategyController {
 
     private final LiveStrategyService liveStrategyService;
+    private final AutoTradeAccessChecker autoTradeAccessChecker;
 
     @PostMapping("/deployments")
     public ResponseEntity<ApiResponse<DeploymentResponse>> createDeployment(
             @AuthenticationPrincipal Jwt jwt, @RequestBody CreateDeploymentRequest request) {
         String userId = jwt.getSubject();
+        // 실거래(LIVE)=실제 돈은 BASIC 이상(또는 ADMIN)만. 모의(PAPER)는 전체 공개.
+        if (request.getAccountMode() == LiveStrategyDeployment.AccountMode.LIVE
+                && !autoTradeAccessChecker.canTradeLive(userId)) {
+            return ResponseEntity.status(403)
+                    .body(ApiResponse.error("실거래 자동매매는 Basic 이상 등급에서 이용할 수 있습니다."));
+        }
         try {
             LiveStrategyDeployment d = liveStrategyService.createDeployment(userId, request);
             return ResponseEntity.ok(ApiResponse.ok(DeploymentResponse.from(d)));

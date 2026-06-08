@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import HelmShell from '../components/HelmShell';
 import Toast, { type ToastItem } from '../components/Toast';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
@@ -61,7 +62,8 @@ const REASON_LABEL: Record<string, string> = {
 const AutoTradePage = () => {
   const { isVirt } = useRoutePrefix();
   const { isDark } = useTheme();
-  const { session } = useAuth();
+  const { session, canAutoTrade, onboardingDone } = useAuth();
+  const navigate = useNavigate();
   const userName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
 
   const [pageLoading, setPageLoading] = useState(true);
@@ -290,6 +292,35 @@ const AutoTradePage = () => {
     return (
       <HelmShell active="autotrade" virt={isVirt} userName={userName} session="모의 자동매매">
         <div className={`py-24 text-center text-sm ${subText}`}>자동매매 정보를 불러오는 중...</div>
+      </HelmShell>
+    );
+  }
+
+  // 등급 게이팅: 자동매매는 BASIC 이상(또는 ADMIN) 전용. 등급 확인 전엔 로딩으로(관리자 잠금화면 깜빡임 방지).
+  if (onboardingDone === null) {
+    return (
+      <HelmShell active="autotrade" virt={isVirt} userName={userName} session="모의 자동매매">
+        <div className={`py-24 text-center text-sm ${subText}`}>등급 정보를 확인하는 중...</div>
+      </HelmShell>
+    );
+  }
+  if (!canAutoTrade) {
+    return (
+      <HelmShell active="autotrade" virt={isVirt} userName={userName} session="자동매매 · 잠김">
+        <div className="mx-auto max-w-md py-20 text-center">
+          <div className={`mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl ${isDark ? 'bg-white/[0.04]' : 'bg-gray-100'}`}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className={isDark ? 'text-slate-300' : 'text-gray-500'}>
+              <rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" />
+            </svg>
+          </div>
+          <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>자동매매는 Basic 이상 전용</h1>
+          <p className={`mt-3 text-sm leading-relaxed ${subText}`}>
+            전략을 자동으로 실행하는 자동매매는 <b>Basic 이상 등급</b>에서 이용할 수 있어요. 등급을 올리면 잠금이 해제됩니다.
+          </p>
+          <button onClick={() => navigate(`${isVirt ? '/virt' : ''}/billing`)} className={`mt-6 rounded-xl px-5 py-3 text-sm font-semibold ${primaryBtn}`}>
+            요금제 보기 →
+          </button>
+        </div>
       </HelmShell>
     );
   }

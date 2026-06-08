@@ -58,7 +58,7 @@ interface HelmShellProps {
 const HelmShell = ({ children, active, virt = false, session = '정규장 마감 · 다음 개장 09:00', userName = '항해사' }: HelmShellProps) => {
   const navigate = useNavigate();
   const { isDark, canToggle, toggleTheme } = useTheme();
-  const { profileName } = useAuth();
+  const { profileName, canAutoTrade } = useAuth();
   // 표시명: DB 닉네임(profileName) 우선 → 없으면 페이지가 넘긴 값(이메일 ID 등) → '항해사'.
   // 페이지마다 닉네임/이메일ID를 다르게 넘겨 이름이 들쭉날쭉하던 문제를 한 곳에서 통일.
   const displayName = profileName || userName;
@@ -102,13 +102,19 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
         <div className="navkick px-3 pb-2.5 text-[10px] font-semibold tracking-[.2em] text-white/30">항로</div>
         {navItems.map((it) => {
           const on = it.key === active;
+          const locked = it.key === 'autotrade' && !canAutoTrade;   // 자동매매=BASIC 이상 전용
           return (
             <button key={it.key} onClick={() => goNav(it.path)} className={`flex items-center gap-3 rounded-[10px] px-3 py-[11px] text-[14px] transition-colors${on ? ' nav-active' : ''}`}
               style={on
                 ? { color: '#cfe1ff', fontWeight: 600, background: 'linear-gradient(180deg,rgba(91,157,255,.16),rgba(44,111,230,.07))', border: '1px solid rgba(91,157,255,.28)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)' }
-                : { color: 'rgba(255,255,255,.72)', fontWeight: 500, border: '1px solid transparent' }}>
+                : { color: locked ? 'rgba(255,255,255,.42)' : 'rgba(255,255,255,.72)', fontWeight: 500, border: '1px solid transparent' }}>
               <NavIcon kind={it.icon} />
               <span className="helm-label">{it.label}</span>
+              {locked && (
+                <svg className="helm-label" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: 'auto', opacity: .55 }} aria-label="잠김">
+                  <rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                </svg>
+              )}
             </button>
           );
         })}

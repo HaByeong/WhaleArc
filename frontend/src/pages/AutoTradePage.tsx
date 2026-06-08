@@ -609,16 +609,33 @@ const AutoTradePage = () => {
                   className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`}
                 >
                   <option value="PAPER">모의투자 (가상자금)</option>
-                  <option value="KIS">KIS 모의투자 연동 (실제 자금 ❌)</option>
+                  <option value="KIS">KIS 실거래 (실제 자금 ⚠️)</option>
                 </select>
                 {form.accountKind === 'KIS' && (
-                  <p className={`text-[11px] mt-1 ${subText}`}>
-                    KIS <b>모의투자(VTS)</b> 서버에 연동해 주문합니다 — <b>실제 돈은 나가지 않습니다.</b>
-                    거래소 연동에서 KIS 키를 먼저 등록하고, 대상 종목은 <b>국내주식 코드(예: 005930)</b>,
-                    한국 장중에만 체결 · 비상 시 상단 킬스위치로 전체 정지.
-                    <br />※ 실계좌(실제 자금) 자동매매는 자본시장법 검토 후 별도 제공 예정입니다.
+                  <p className={`text-[11px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
+                    ⚠️ KIS <b>실전 계좌</b>에 직접 주문합니다 — <b>실제 돈이 나갑니다.</b>
+                    거래소 연동에서 KIS 키를 먼저 등록하세요. <b>국내주식(예: 005930)</b>과 <b>미국주식(예: JOBY)</b> 모두 가능하며,
+                    미국주식은 <b>미국 장중(22:30~05:00 KST)</b>에만 체결됩니다(시장가 없어 현재가 지정가로 발주).
+                    안전장치로 <b>1건당 10만원 상한</b>이 걸려 있고, 비상 시 상단 킬스위치로 전체 정지하세요.
+                    <b>처음엔 1주 극소액으로 검증</b>하길 권장합니다.
                   </p>
                 )}
+              </div>
+
+              <div>
+                <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>자산 유형</label>
+                <select
+                  value={form.assetType}
+                  onChange={e => setForm(prev => ({ ...prev, assetType: e.target.value }))}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`}
+                >
+                  <option value="">자동 (종목 코드로 판별)</option>
+                  <option value="STOCK">국내주식</option>
+                  <option value="US_STOCK">미국주식 (예: JOBY)</option>
+                  <option value="ETF">미국 ETF</option>
+                  <option value="CRYPTO">코인</option>
+                </select>
+                <p className={`text-[11px] mt-1 ${subText}`}>미국주식(JOBY 등)은 <b>미국주식</b>으로 지정하세요. 비워두면 종목 코드로 자동 판별합니다.</p>
               </div>
 
               <div>

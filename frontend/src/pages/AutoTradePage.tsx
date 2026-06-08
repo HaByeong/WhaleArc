@@ -189,7 +189,9 @@ const AutoTradePage = () => {
   };
 
   const openCreate = async () => {
-    const guideSeen = (() => { try { return localStorage.getItem('wa_autotrade_guide') === '1'; } catch { return false; } })();
+    // 모의/실거래 별도 키 — 모의에서 '다시 보지 않기' 해도 실거래 경고는 따로 노출
+    const guideKey = `wa_autotrade_guide_${isLive ? 'live' : 'paper'}`;
+    const guideSeen = (() => { try { return localStorage.getItem(guideKey) === '1'; } catch { return false; } })();
     if (!guideSeen) {
       setGuideChecked(false);
       setShowGuide(true);
@@ -210,7 +212,7 @@ const AutoTradePage = () => {
   };
 
   const confirmGuide = async (neverAgain: boolean) => {
-    if (neverAgain) { try { localStorage.setItem('wa_autotrade_guide', '1'); } catch {} }
+    if (neverAgain) { try { localStorage.setItem(`wa_autotrade_guide_${isLive ? 'live' : 'paper'}`, '1'); } catch {} }
     setShowGuide(false);
     await _doOpenCreate();
   };
@@ -664,15 +666,21 @@ const AutoTradePage = () => {
             <div className={`px-6 py-5 border-b ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
               <div className={`text-[10.5px] font-bold tracking-[.18em] mb-1 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>BEFORE YOU START</div>
               <h2 className={`text-[18px] font-bold ${isDark ? 'text-white' : 'text-gray-800'}`}>자동매매, 이것만 알고 시작해요</h2>
-              <p className={`text-[12px] mt-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>3분이면 충분합니다. 모의투자라 돈 걱정은 없어요.</p>
+              <p className={`text-[12px] mt-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{isLive ? '3분이면 충분합니다. 실제 자금이 오가니 꼭 확인하세요.' : '3분이면 충분합니다. 모의투자라 돈 걱정은 없어요.'}</p>
             </div>
             <div className="px-6 py-4 space-y-3.5">
               {[
-                {
-                  icon: '🎭',
-                  title: '이건 가상 돈입니다',
-                  body: '실제 내 계좌 돈이 나가지 않아요. 시스템이 ₩1,000만 가상 자금으로 연습합니다. 잘못 눌러도 괜찮아요.',
-                },
+                isLive
+                  ? {
+                      icon: '💸',
+                      title: '실제 자금이 거래됩니다',
+                      body: '주문이 체결되면 진짜 내 돈이 사고팔립니다. 손실도 실제예요 — 소액으로 시작하고 손절·일일 손실한도를 꼭 설정하세요.',
+                    }
+                  : {
+                      icon: '🎭',
+                      title: '이건 가상 돈입니다',
+                      body: '실제 내 계좌 돈이 나가지 않아요. 시스템이 ₩1,000만 가상 자금으로 연습합니다. 잘못 눌러도 괜찮아요.',
+                    },
                 {
                   icon: '📡',
                   title: '봉 단위 평가 = 정해진 시간마다 신호 확인',

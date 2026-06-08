@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import HelmShell from '../components/HelmShell';
 import Toast, { type ToastItem } from '../components/Toast';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
@@ -83,6 +84,7 @@ const REASON_LABEL: Record<string, string> = {
 };
 
 const AutoTradePage = () => {
+  const navigate = useNavigate();
   const { isVirt } = useRoutePrefix();
   const { isDark } = useTheme();
   const { session } = useAuth();
@@ -657,10 +659,13 @@ const AutoTradePage = () => {
               ))}
             </div>
             <div className={`px-6 py-4 border-t ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
-              <label className="flex items-center gap-2.5 cursor-pointer mb-4">
+              <label className="flex items-center gap-2.5 cursor-pointer mb-2.5">
                 <input type="checkbox" checked={guideChecked} onChange={e => setGuideChecked(e.target.checked)} className="w-4 h-4 rounded accent-blue-500" />
                 <span className={`text-[13px] ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>위 내용을 읽고 이해했습니다</span>
               </label>
+              <button onClick={() => navigate('/virt/learn?tab=mistakes')} className={`mb-4 text-[12px] font-semibold transition-opacity hover:opacity-80 ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>
+                📚 자동매매가 처음이면 — 학습 노트 '흔한 실수'에서 손절·리스크 더 보기 →
+              </button>
               <div className="flex gap-2.5">
                 <button onClick={() => setShowGuide(false)} className={`flex-1 rounded-lg py-2.5 text-[13px] font-semibold ${isDark ? 'text-slate-300 border border-white/10 hover:bg-white/5' : 'text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
                   나중에

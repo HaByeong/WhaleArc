@@ -579,6 +579,10 @@ const VirtDashboard = () => {
                 );
               })}
             </div>
+            {/* 학습 노트 발견 동선 — 시작 전 기초가 낯설면 */}
+            <button onClick={() => navigate('/virt/learn?tab=math')} className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold transition-opacity hover:opacity-80" style={{ color: SONAR }}>
+              📚 투자가 처음이라면 — 학습 노트의 '투자 계산기'로 기초 원리부터 (복리·손익비·분산)
+            </button>
           </Panel>
         )}
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(300px,1fr)]">

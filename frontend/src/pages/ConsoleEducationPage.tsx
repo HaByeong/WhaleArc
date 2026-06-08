@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
@@ -655,11 +656,22 @@ const TABS = [
   { id: 'math', label: '투자 계산기' },
 ] as const;
 
+type TabId = (typeof TABS)[number]['id'];
+
 const ConsoleEducationPage = () => {
   const { session } = useAuth();
   const { isVirt } = useRoutePrefix();
   const userName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
-  const [tab, setTab] = useState<'review' | 'rules' | 'glossary' | 'mistakes' | 'math'>('review');
+  // 탭 딥링크 — ?tab=glossary 등으로 특정 탭 직행(다른 화면의 맥락 링크가 가리킴)
+  const [params, setParams] = useSearchParams();
+  const initialTab = (TABS.some((t) => t.id === params.get('tab')) ? params.get('tab') : 'review') as TabId;
+  const [tab, setTab] = useState<TabId>(initialTab);
+  const changeTab = (id: TabId) => {
+    setTab(id);
+    const next = new URLSearchParams(params);
+    next.set('tab', id);
+    setParams(next, { replace: true });
+  };
   // 모바일(탭바 가로 스크롤)에서 선택한 탭이 화면 밖이면 가운데로 스크롤
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   useEffect(() => { tabRefs.current[tab]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }, [tab]);
@@ -674,7 +686,7 @@ const ConsoleEducationPage = () => {
 
         <div className="mb-5 flex gap-1 overflow-x-auto" style={{ borderBottom: `1px solid ${HAIR}` }}>
           {TABS.map((t) => (
-            <button key={t.id} ref={(el) => { tabRefs.current[t.id] = el; }} onClick={() => setTab(t.id)} className="relative whitespace-nowrap px-4 py-3 text-[14px] transition-colors"
+            <button key={t.id} ref={(el) => { tabRefs.current[t.id] = el; }} onClick={() => changeTab(t.id)} className="relative whitespace-nowrap px-4 py-3 text-[14px] transition-colors"
               style={{ color: tab === t.id ? INK0 : INK2, fontWeight: tab === t.id ? 700 : 500 }}>
               {t.label}
               {tab === t.id && <span className="absolute -bottom-px left-3 right-3 h-0.5 rounded" style={{ background: SONAR }} />}

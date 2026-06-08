@@ -477,7 +477,9 @@ const PaperPortfolio = () => {
         {metrics && (
           <Panel>
             <PanelHead kicker="PERFORMANCE" title="성과 지표" right={
-              <span className="text-[11px] text-white/50">각 숫자 아래에 쉬운 설명을 달았어요</span>
+              <button onClick={() => navigate('/virt/learn?tab=glossary')} className="rounded-md px-2.5 py-1 text-[11px] font-semibold text-white/80 transition-colors hover:bg-white/10 hover:text-white" style={{ border: '1px solid rgba(255,255,255,.22)' }}>
+                용어가 궁금하면 → 학습 노트
+              </button>
             } />
             <div className="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3 lg:grid-cols-5">
               <MetricCard

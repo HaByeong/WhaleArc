@@ -141,13 +141,16 @@ public class KisApiClient {
         }
 
         // 해외 외화예수금(달러 현금)도 KRW로 환산해 예수금에 포함 (fetchOverseas는 보유종목만 읽음)
-        cashKrw += fetchOverseasCash(accessToken, appKey, appSecret, cano, acntPrdtCd);
+        double[] foreignCash = fetchOverseasCash(accessToken, appKey, appSecret, cano, acntPrdtCd);
+        cashKrw += foreignCash[0];
 
         double totalValue = evalKrw + cashKrw;
         double costBasis = evalKrw - plKrw;
         double totalReturnRate = costBasis > 0 ? (plKrw / costBasis) * 100 : 0;
         ExchangePortfolioDto dto = new ExchangePortfolioDto("KIS", true, totalValue, plKrw, totalReturnRate, cashKrw, holdings);
-        dto.setUsdtKrwRate(usdKrw);   // 해외 환산에 쓴 USD/KRW (프론트 참고용)
+        dto.setUsdtKrwRate(usdKrw);              // 해외 환산에 쓴 USD/KRW (프론트 참고용)
+        dto.setForeignCashKrw(foreignCash[0]);   // 외화예수금 분리 표시용
+        dto.setForeignCashUsd(foreignCash[1]);
         return dto;
     }
 
@@ -242,9 +245,10 @@ public class KisApiClient {
      * 해외 외화예수금(달러 현금)을 KRW로 환산해 반환. 해외주식 체결기준현재잔고(CTRP6504R)의 output2를 사용한다.
      * (fetchOverseas는 보유종목 output1만 읽어 외화 현금이 누락되므로 별도 조회.) best-effort — 실패 시 0.
      */
+    /** @return double[]{ KRW환산합계, USD원금합계 } */
     @SuppressWarnings("unchecked")
-    private double fetchOverseasCash(String accessToken, String appKey, String appSecret,
-                                     String cano, String acntPrdtCd) {
+    private double[] fetchOverseasCash(String accessToken, String appKey, String appSecret,
+                                       String cano, String acntPrdtCd) {
         try {
             HttpHeaders headers = baseHeaders(accessToken, appKey, appSecret, "CTRP6504R");
             String url = BASE_URL + "/uapi/overseas-stock/v1/trading/inquire-present-balance"
@@ -252,25 +256,28 @@ public class KisApiClient {
                     + "&WCRC_FRCR_DVSN_CD=02&NATN_CD=000&TR_MKET_CD=00&INQR_DVSN_CD=00";
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
             Map<String, Object> b = response.getBody();
-            if (b == null) return 0;
+            if (b == null) return new double[]{0, 0};
             if (!"0".equals(String.valueOf(b.get("rt_cd")))) {
                 log.warn("[KIS 외화예수금] 비정상 rt_cd={} msg={}", b.get("rt_cd"), b.get("msg1"));
-                return 0;
+                return new double[]{0, 0};
             }
             List<Map<String, Object>> output2 = (List<Map<String, Object>>) b.get("output2");
-            if (output2 == null) return 0;
-            double krw = 0;
+            if (output2 == null) return new double[]{0, 0};
+            double krw = 0, usd = 0;
             for (Map<String, Object> item : output2) {
                 double frcrCash = parseDouble(item.get("frcr_dncl_amt_2"));   // 외화예수금
                 if (frcrCash == 0) continue;
                 double rate = parseDouble(item.get("frst_bltn_exrt"));        // 최초고시환율
                 if (rate <= 0) rate = 1.0;
                 krw += frcrCash * rate;
+                // 통화코드 미제공 시 해외 주력 통화 USD로 간주
+                String ccy = str(item.get("crcy_cd"));
+                if (ccy == null || ccy.isBlank() || "USD".equalsIgnoreCase(ccy)) usd += frcrCash;
             }
-            return krw;
+            return new double[]{krw, usd};
         } catch (Exception e) {
             log.warn("[KIS 외화예수금] 조회 예외: {}", e.getMessage());
-            return 0;
+            return new double[]{0, 0};
         }
     }
 

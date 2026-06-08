@@ -43,8 +43,10 @@ export interface ExchangePortfolio {
   totalProfitLoss: number;
   totalReturnRate: number;
   cashBalance: number;
+  foreignCashKrw?: number;  // 외화예수금(KRW 환산) — 통화 분리 표시용
+  foreignCashUsd?: number;  // 외화예수금(USD 원금) — 통화 분리 표시용
   holdings: ExchangeHolding[];
-  usdtKrwRate?: number;  // BITGET: USDT→KRW 환산 환율 (0/미설정이면 미표시)
+  usdtKrwRate?: number;  // BITGET: USDT→KRW 환산 환율 / KIS: USD→KRW 환율 (0/미설정이면 미표시)
   fetchOk?: boolean;     // 거래소 API 조회 성공 여부 (false면 실패 → 빈 계좌와 구분, 에러 UI 표시)
 }
 

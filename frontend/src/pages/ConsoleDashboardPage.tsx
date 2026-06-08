@@ -7,6 +7,8 @@ import { usePolling } from '../hooks/usePolling';
 import { userService } from '../services/userService';
 import { exchangeService, type ExchangeType, type ExchangeAccount, type ExchangePortfolio } from '../services/exchangeService';
 import { tradeService, type Portfolio } from '../services/tradeService';
+import { strategyService } from '../services/strategyService';
+import { liveTradeService } from '../services/liveTradeService';
 import { marketService, type MarketPrice } from '../services/marketService';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
 import ExchangeConnectModal from '../components/ExchangeConnectModal';
@@ -460,10 +462,10 @@ const FIRST_BUYS: { stockCode: string; stockName: string; quantity: number; asse
 ];
 
 const ONBOARD_STEPS = [
-  { icon: '🛒', title: '첫 종목 매수해보기', desc: '시장가로 한 종목만 사봐도 거래의 흐름을 느낄 수 있어요.', action: '/virt/trade', label: '거래 화면으로 →' },
-  { icon: '📊', title: '전략 백테스트 실행', desc: '내가 만든 조건이 과거에 돈을 벌었는지 한 번 눌러 확인해보세요.', action: '/virt/strategy', label: '백테스트 해보기 →' },
-  { icon: '🤖', title: '자동매매 설정하기', desc: '전략을 골라 자동으로 사고 팔도록 맡기면 24시간 운영됩니다.', action: '/virt/auto-trade', label: '자동매매 시작 →' },
-];
+  { key: 'trade', icon: '🛒', title: '첫 종목 매수해보기', desc: '시장가로 한 종목만 사봐도 거래의 흐름을 느낄 수 있어요.', action: '/virt/trade', label: '거래 화면으로 →', doneLabel: '첫 거래 완료' },
+  { key: 'backtest', icon: '📊', title: '전략 백테스트 실행', desc: '내가 만든 조건이 과거에 돈을 벌었는지 한 번 눌러 확인해보세요.', action: '/virt/strategy', label: '백테스트 해보기 →', doneLabel: '백테스트 경험함' },
+  { key: 'auto', icon: '🤖', title: '자동매매 설정하기', desc: '전략을 골라 자동으로 사고 팔도록 맡기면 24시간 운영됩니다.', action: '/virt/auto-trade', label: '자동매매 시작 →', doneLabel: '자동매매 가동함' },
+] as const;
 
 const VirtDashboard = () => {
   const navigate = useNavigate();
@@ -480,6 +482,8 @@ const VirtDashboard = () => {
   const [onboardDismissed, setOnboardDismissed] = useState(() => {
     try { return localStorage.getItem('wa_onboarding') === '1'; } catch { return false; }
   });
+  const [hasBacktest, setHasBacktest] = useState(false);
+  const [hasDeployment, setHasDeployment] = useState(false);
   const dismissOnboard = () => {
     setOnboardDismissed(true);
     try { localStorage.setItem('wa_onboarding', '1'); } catch {}
@@ -495,6 +499,15 @@ const VirtDashboard = () => {
   }, [isPreview]);
   useEffect(() => { loadData(); }, [loadData]);
   usePolling(() => { if (!isPreview) loadData(); }, 10000);
+
+  // 온보딩 진행 추적 — 미해제 신규 유저에 한해 백테스트·자동매매 경험 여부 1회 조회
+  useEffect(() => {
+    if (isPreview || onboardDismissed) return;
+    let alive = true;
+    strategyService.getBacktestHistory().then(h => { if (alive) setHasBacktest((h?.length ?? 0) > 0); }).catch(() => {});
+    liveTradeService.getDeployments().then(d => { if (alive) setHasDeployment((d?.length ?? 0) > 0); }).catch(() => {});
+    return () => { alive = false; };
+  }, [isPreview, onboardDismissed]);
 
   const quickBuy = async (o: typeof FIRST_BUYS[number]) => {
     if (qbBusy) return;
@@ -522,33 +535,49 @@ const VirtDashboard = () => {
   const holdings: SumHolding[] = portfolio ? [...portfolio.holdings].sort((a, b) => vKrw(b) - vKrw(a)).slice(0, 5).map(h => ({ name: h.stockName, sub: fmtQty(h.quantity, stockLikeOf(h.assetType)), value: vKrw(h), rate: h.returnRate })) : [];
   const blips = useMemo(() => blipsFrom((portfolio?.holdings ?? []).map(h => ({ name: h.stockName, rate: h.returnRate }))), [portfolio]);
 
+  // 온보딩 단계 완료 여부 (실데이터 기반)
+  const hasTraded = !!portfolio && portfolio.holdings.length > 0;
+  const stepDone: Record<string, boolean> = { trade: hasTraded, backtest: hasBacktest, auto: hasDeployment };
+  const doneCount = Object.values(stepDone).filter(Boolean).length;
+  const showOnboard = !loading && !error && !!portfolio && !onboardDismissed && doneCount < ONBOARD_STEPS.length;
+
   return (
     <HelmShell active="home" virt={true} userName={name} session="모의투자 · 가상 항해">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-5">
         <WelcomeBanner name={name} blips={blips} />
-        {/* 온보딩 가이드 — 신규 유저(보유 종목 0, 미해제) */}
-        {!loading && !error && portfolio && portfolio.holdings.length === 0 && !onboardDismissed && (
+        {/* 온보딩 가이드 — 신규 유저(3단계 미완료, 미해제) */}
+        {showOnboard && (
           <Panel style={{ padding: '26px 28px', border: '1px solid rgba(91,157,255,.3)', background: 'linear-gradient(135deg,rgba(91,157,255,.08) 0%,rgba(63,214,160,.05) 60%,transparent)' }}>
             <div className="mb-1 text-[10.5px] font-bold tracking-[.22em]" style={{ color: SONAR }}>GETTING STARTED</div>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="text-[18px] font-bold">WhaleArc, 이렇게 시작하세요</h3>
-                <p className="mt-1 text-[13px]" style={{ color: 'var(--ci-ink2)' }}>총 3단계 — 각 카드를 클릭해 직접 해봐요. 실제 돈은 없어요, 가상 ₩1,000만입니다.</p>
+                <p className="mt-1 text-[13px]" style={{ color: 'var(--ci-ink2)' }}>총 3단계 중 <b style={{ color: SONAR }}>{doneCount}개 완료</b> — 각 카드를 눌러 직접 해봐요. 실제 돈은 없어요, 가상 ₩1,000만입니다.</p>
               </div>
-              <button onClick={dismissOnboard} className="shrink-0 rounded-lg px-3.5 py-1.5 text-[11.5px] font-semibold" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)', color: 'var(--ci-ink3)' }}>시작 준비 완료 ✕</button>
+              <button onClick={dismissOnboard} className="shrink-0 rounded-lg px-3.5 py-1.5 text-[11.5px] font-semibold" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)', color: 'var(--ci-ink3)' }}>가이드 닫기 ✕</button>
+            </div>
+            {/* 진행 바 */}
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--ci-card)' }}>
+              <div className="h-full rounded-full transition-all" style={{ width: `${(doneCount / ONBOARD_STEPS.length) * 100}%`, background: `linear-gradient(90deg, ${SONAR}, #3fd6a0)` }} />
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              {ONBOARD_STEPS.map((s, i) => (
-                <button key={i} onClick={() => navigate(s.action)} className="group flex flex-col gap-1.5 rounded-[12px] p-4 text-left transition-colors" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[17px]" style={{ background: 'rgba(91,157,255,.15)' }}>{s.icon}</span>
-                    <span className="text-[11px] font-bold tracking-[.1em]" style={{ color: SONAR }}>STEP {i + 1}</span>
-                  </div>
-                  <div className="text-[13.5px] font-semibold" style={{ color: 'var(--ci-ink0)' }}>{s.title}</div>
-                  <div className="text-[12px] leading-relaxed" style={{ color: 'var(--ci-ink2)' }}>{s.desc}</div>
-                  <div className="mt-auto pt-1.5 text-[11.5px] font-semibold" style={{ color: SONAR }}>{s.label}</div>
-                </button>
-              ))}
+              {ONBOARD_STEPS.map((s, i) => {
+                const done = stepDone[s.key];
+                return (
+                  <button key={s.key} onClick={() => navigate(s.action)} className="group flex flex-col gap-1.5 rounded-[12px] p-4 text-left transition-colors" style={{ background: 'var(--ci-card)', border: done ? '1px solid rgba(63,214,160,.4)' : '1px solid var(--ci-line)', opacity: done ? 0.78 : 1 }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[17px]" style={{ background: done ? 'rgba(63,214,160,.18)' : 'rgba(91,157,255,.15)' }}>{done ? '✅' : s.icon}</span>
+                        <span className="text-[11px] font-bold tracking-[.1em]" style={{ color: done ? '#3fd6a0' : SONAR }}>STEP {i + 1}</span>
+                      </div>
+                      {done && <span className="text-[10.5px] font-semibold" style={{ color: '#3fd6a0' }}>완료</span>}
+                    </div>
+                    <div className="text-[13.5px] font-semibold" style={{ color: 'var(--ci-ink0)', textDecoration: done ? 'line-through' : 'none', textDecorationColor: 'rgba(63,214,160,.5)' }}>{s.title}</div>
+                    <div className="text-[12px] leading-relaxed" style={{ color: 'var(--ci-ink2)' }}>{s.desc}</div>
+                    <div className="mt-auto pt-1.5 text-[11.5px] font-semibold" style={{ color: done ? '#3fd6a0' : SONAR }}>{done ? `✓ ${s.doneLabel}` : s.label}</div>
+                  </button>
+                );
+              })}
             </div>
           </Panel>
         )}

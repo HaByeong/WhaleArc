@@ -29,6 +29,30 @@ const formatTime = (iso?: string) => {
   }
 };
 
+const INTERVAL_LABELS: Record<string, string> = {
+  '1m': '1분봉', '5m': '5분봉', '15m': '15분봉', '30m': '30분봉',
+  '1h': '1시간봉', '4h': '4시간봉', '1d': '일봉',
+};
+const parseIntervalMs = (iv: string): number => {
+  const m = iv?.match(/^(\d+)(m|h|d)$/i);
+  if (!m) return 0;
+  const n = parseInt(m[1]);
+  const u = m[2].toLowerCase();
+  return n * (u === 'm' ? 60_000 : u === 'h' ? 3_600_000 : 86_400_000);
+};
+// RUNNING 배포의 다음 평가 예상 시점 (그 외 상태는 null → 미표시, 상태 배지로 충분)
+const nextEvalLabel = (d: { lastEvaluatedAt?: string; interval: string; status: string }): string | null => {
+  if (d.status !== 'RUNNING') return null;
+  const ms = parseIntervalMs(d.interval);
+  if (!ms || !d.lastEvaluatedAt) return '다음 봉 마감 시 평가';
+  const remaining = new Date(d.lastEvaluatedAt).getTime() + ms - Date.now();
+  if (remaining <= 0) return '곧 평가 예정';
+  const mins = Math.round(remaining / 60_000);
+  if (mins < 60) return `다음 평가까지 약 ${mins}분`;
+  const hrs = Math.floor(mins / 60), rm = mins % 60;
+  return `다음 평가까지 약 ${hrs}시간${rm > 0 ? ` ${rm}분` : ''}`;
+};
+
 const formatLogTime = (iso?: string) => {
   if (!iso) return '-';
   try {
@@ -396,7 +420,11 @@ const AutoTradePage = () => {
                         <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${isDark ? sm.dark : sm.light}`}>{sm.label}</span>
                       </div>
                       <p className={`mt-1 text-xs ${subText}`}>
-                        {(d.targetAssets || []).join(', ')} · {d.assetType || '-'} · {d.interval} · 마지막 평가 {formatTime(d.lastEvaluatedAt)}
+                        {(d.targetAssets || []).join(', ')} · {d.assetType || '-'} · {INTERVAL_LABELS[d.interval] ?? d.interval}
+                        {nextEvalLabel(d) && (
+                          <span className="ml-2 font-semibold" style={{ color: '#3fd6a0' }}>{nextEvalLabel(d)}</span>
+                        )}
+                        <span className={`ml-1.5 ${isDark ? 'text-white/30' : 'text-gray-400'}`}>· 마지막 {formatTime(d.lastEvaluatedAt)}</span>
                       </p>
                     </div>
                   </div>
@@ -743,19 +771,31 @@ const AutoTradePage = () => {
               </div>
 
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>리스크 관리 (%, 선택)</label>
-                <div className="grid grid-cols-3 gap-2">
-                  <input type="number" min={0} max={100} step="any" placeholder="손절" value={form.stopLossPct}
-                    onChange={e => setForm(prev => ({ ...prev, stopLossPct: e.target.value }))}
-                    className={`w-full rounded-lg border px-2 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`} />
-                  <input type="number" min={0} step="any" placeholder="익절" value={form.takeProfitPct}
-                    onChange={e => setForm(prev => ({ ...prev, takeProfitPct: e.target.value }))}
-                    className={`w-full rounded-lg border px-2 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`} />
-                  <input type="number" min={0} max={100} step="any" placeholder="트레일링" value={form.trailingStopPct}
-                    onChange={e => setForm(prev => ({ ...prev, trailingStopPct: e.target.value }))}
-                    className={`w-full rounded-lg border px-2 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`} />
+                <div className="flex items-center justify-between mb-1">
+                  <label className={`block text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>리스크 관리 (%, 선택)</label>
+                  <button type="button"
+                    onClick={() => setForm(prev => ({ ...prev, stopLossPct: '5', takeProfitPct: '10' }))}
+                    className={`text-[11px] font-semibold rounded-md px-2 py-1 ${isDark ? 'bg-blue-500/15 text-blue-300 hover:bg-blue-500/25' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>
+                    💡 초보자 추천값 (손절 5%·익절 10%)
+                  </button>
                 </div>
-                <p className={`text-[11px] mt-1 ${subText}`}>손절·트레일링은 0~100% 사이로 입력하세요.</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { k: 'stopLossPct', name: '손절', ph: '예: 5', max: 100 },
+                    { k: 'takeProfitPct', name: '익절', ph: '예: 10', max: undefined },
+                    { k: 'trailingStopPct', name: '트레일링', ph: '예: 3', max: 100 },
+                  ] as const).map(f => (
+                    <div key={f.k}>
+                      <div className={`text-[10.5px] font-semibold text-center mb-0.5 ${subText}`}>{f.name}</div>
+                      <input type="number" min={0} max={f.max} step="any" placeholder={f.ph} value={form[f.k]}
+                        onChange={e => setForm(prev => ({ ...prev, [f.k]: e.target.value }))}
+                        className={`w-full rounded-lg border px-2 py-2 text-sm text-center ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`} />
+                    </div>
+                  ))}
+                </div>
+                <div className={`mt-1.5 text-[11px] leading-relaxed ${subText}`}>
+                  <b>손절</b> 5% = 매수가보다 5% 떨어지면 자동 매도(손실 제한) · <b>익절</b> 10% = 10% 오르면 차익실현 · <b>트레일링</b> = 최고가 대비 % 떨어지면 매도. 비워두면 미적용됩니다.
+                </div>
               </div>
 
               <div>

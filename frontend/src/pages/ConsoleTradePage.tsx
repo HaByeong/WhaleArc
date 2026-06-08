@@ -221,6 +221,12 @@ const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, o
         <div className="mt-1.5 flex gap-1.5">{(['LIMIT', 'MARKET'] as const).map(k => (
           <button key={k} onClick={() => setOrderMethod(k)} className="flex-1 rounded-lg py-2.5 text-[12.5px] font-semibold" style={{ border: orderMethod === k ? '1px solid rgba(91,157,255,.32)' : `1px solid ${LINE}`, background: orderMethod === k ? 'rgba(91,157,255,.12)' : 'transparent', color: orderMethod === k ? 'var(--ci-ink0)' : INK1 }}>{k === 'LIMIT' ? '지정가' : '시장가'}</button>
         ))}</div>
+        <div className="mt-2 rounded-[8px] px-3 py-2 text-[11.5px] leading-snug" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: INK2 }}>
+          {orderMethod === 'MARKET'
+            ? <><span style={{ color: GLOW, fontWeight: 600 }}>시장가</span> — 지금 바로 현재 시세에 즉시 체결됩니다. 빠른 매수/매도에 적합해요.</>
+            : <><span style={{ color: GLOW, fontWeight: 600 }}>지정가</span> — 아래에서 원하는 가격을 입력합니다. 해당 가격에 도달해야 체결돼요. 가격이 안 오면 미체결 상태로 대기합니다.</>
+          }
+        </div>
       </div>
       <div className="mt-[18px]"><div className="flex items-baseline justify-between"><FieldLabel>주문 가격</FieldLabel>{orderMethod === 'MARKET' && <span className="font-mono text-[11px]" style={{ color: INK3 }}>현재가 체결</span>}</div>
         <NumberField value={orderMethod === 'MARKET' ? Math.round(cur * 100) / 100 : price} onChange={setPrice} step={tick} disabled={orderMethod === 'MARKET'} suffix={needsFx ? '$' : '원'} /></div>

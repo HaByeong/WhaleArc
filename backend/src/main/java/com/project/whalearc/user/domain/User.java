@@ -25,10 +25,22 @@ public class User {
 
     private String authProvider; // "email", "google", "kakao"
 
+    /** 구독 등급 — 기능 접근 범위(예: 자동매매=PRO). 결제 연동 전 기본 FREE. */
+    private Tier tier = Tier.FREE;
+
+    /** 권한 역할 — tier와 별개 축. ADMIN은 등급 무관 전 기능 접근(자동매매 포함). */
+    private Role role = Role.USER;
+
     public User(String supabaseId, String email, String name, String authProvider) {
         this.supabaseId = supabaseId;
         this.email = email;
         this.name = name;
         this.authProvider = authProvider;
     }
+
+    /** 구독 등급. 순서가 곧 권한 크기(FREE < BASIC < PRO). */
+    public enum Tier { FREE, BASIC, PRO }
+
+    /** 권한 역할. ADMIN = 운영자(소유자). */
+    public enum Role { USER, ADMIN }
 }

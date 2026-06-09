@@ -11,6 +11,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.HashMap;
@@ -44,6 +47,7 @@ public class KisPaperTradeClient {
     private String liveBaseUrl = "https://openapi.koreainvestment.com:9443";
 
     private RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final Map<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
 
@@ -52,6 +56,27 @@ public class KisPaperTradeClient {
     /** 실전이면 실전 도메인(openapi:9443), 아니면 모의투자(openapivts:29443). */
     private String baseUrl() {
         return realTrading ? liveBaseUrl : paperBaseUrl;
+    }
+
+    /**
+     * JSON 본문 POST — 본문을 byte[]로 직렬화하고 Content-Length를 명시한다.
+     *
+     * <p>KIS 게이트웨이는 {@code Transfer-Encoding: chunked} POST를 라우팅 단계에서 거부한다(EGW00202
+     * "GW라우팅 중 오류"). RestTemplate 기본 경로가 본문을 스트리밍(chunked)하면 주문이 통째로 실패하므로,
+     * 본문을 미리 byte[]로 직렬화해 Content-Length를 박는다. 추가로 hashkey 계산 본문과 주문 본문을
+     * 동일한 objectMapper 직렬화로 맞춰 HASH 불일치(서명 오류)도 방지한다.
+     */
+    @SuppressWarnings("rawtypes")
+    private ResponseEntity<Map> postJson(String url, Map<String, String> body, HttpHeaders headers) {
+        byte[] json;
+        try {
+            json = objectMapper.writeValueAsBytes(body);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("KIS 요청 본문 직렬화 실패", e);
+        }
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setContentLength(json.length);
+        return restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(json, headers), Map.class);
     }
 
     /** 테스트 주입용(네트워크 없이 검증). */
@@ -92,9 +117,7 @@ public class KisPaperTradeClient {
         headers.set("custtype", "P");
         headers.set("hashkey", hash);
 
-        ResponseEntity<Map> resp = restTemplate.exchange(
-                baseUrl() + "/uapi/domestic-stock/v1/trading/order-cash",
-                HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
+        ResponseEntity<Map> resp = postJson(baseUrl() + "/uapi/domestic-stock/v1/trading/order-cash", body, headers);
 
         Map<?, ?> b = resp.getBody();
         String rtCd = b != null ? String.valueOf(b.get("rt_cd")) : null;
@@ -143,9 +166,7 @@ public class KisPaperTradeClient {
         headers.set("custtype", "P");
         headers.set("hashkey", hash);
 
-        ResponseEntity<Map> resp = restTemplate.exchange(
-                baseUrl() + "/uapi/overseas-stock/v1/trading/order",
-                HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
+        ResponseEntity<Map> resp = postJson(baseUrl() + "/uapi/overseas-stock/v1/trading/order", body, headers);
 
         Map<?, ?> b = resp.getBody();
         String rtCd = b != null ? String.valueOf(b.get("rt_cd")) : null;
@@ -176,8 +197,7 @@ public class KisPaperTradeClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        ResponseEntity<Map> resp = restTemplate.exchange(
-                baseUrl() + "/oauth2/tokenP", HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
+        ResponseEntity<Map> resp = postJson(baseUrl() + "/oauth2/tokenP", body, headers);
         Map<?, ?> b = resp.getBody();
         if (b == null || b.get("access_token") == null) {
             throw new IllegalStateException("KIS 토큰 발급 실패");
@@ -199,8 +219,7 @@ public class KisPaperTradeClient {
         headers.set("appkey", cred.appkey());
         headers.set("appsecret", cred.appsecret());
 
-        ResponseEntity<Map> resp = restTemplate.exchange(
-                baseUrl() + "/uapi/hashkey", HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
+        ResponseEntity<Map> resp = postJson(baseUrl() + "/uapi/hashkey", body, headers);
         Map<?, ?> b = resp.getBody();
         if (b == null || b.get("HASH") == null) {
             throw new IllegalStateException("KIS hashkey 발급 실패");

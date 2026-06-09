@@ -1,5 +1,6 @@
 package com.project.whalearc.live.broker;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.whalearc.trade.domain.Order;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,18 @@ class KisPaperTradeClientTest {
         return new KisPaperCredential("ak", "as", "12345678", "01");
     }
 
+    private final ObjectMapper testMapper = new ObjectMapper();
+
+    /** postJson이 본문을 byte[](JSON)로 보내므로 파싱해서 Map으로 검증. */
+    @SuppressWarnings("unchecked")
+    private Map<String, String> bodyOf(HttpEntity<?> entity) {
+        try {
+            return testMapper.readValue((byte[]) entity.getBody(), Map.class);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @Test
     @SuppressWarnings({"unchecked", "rawtypes"})
     void buildsPaperMarketBuyOrder() {
@@ -64,8 +77,7 @@ class KisPaperTradeClientTest {
         assertEquals("HASHED", sent.getHeaders().getFirst("hashkey"));
         assertEquals("ak", sent.getHeaders().getFirst("appkey"));
 
-        @SuppressWarnings("unchecked")
-        Map<String, String> body = (Map<String, String>) sent.getBody();
+        Map<String, String> body = bodyOf(sent);
         assertEquals("01", body.get("ORD_DVSN"), "시장가");
         assertEquals("10", body.get("ORD_QTY"), "정수 수량");
         assertEquals("0", body.get("ORD_UNPR"), "시장가는 단가 0");
@@ -120,8 +132,7 @@ class KisPaperTradeClientTest {
         HttpEntity<?> sent = cap.getValue();
         assertEquals("VTTT1002U", sent.getHeaders().getFirst("tr_id"), "모의 미국 매수 TR");
 
-        @SuppressWarnings("unchecked")
-        Map<String, String> body = (Map<String, String>) sent.getBody();
+        Map<String, String> body = bodyOf(sent);
         assertEquals("NYSE", body.get("OVRS_EXCG_CD"));
         assertEquals("JOBY", body.get("PDNO"));
         assertEquals("1", body.get("ORD_QTY"), "정수 수량");

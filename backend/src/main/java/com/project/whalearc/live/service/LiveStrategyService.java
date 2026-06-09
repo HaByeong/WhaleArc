@@ -342,14 +342,23 @@ public class LiveStrategyService {
         // 주식류(국내/미국/ETF)는 KIS가 일봉만 제공하므로 인터벌을 1d로 고정, 코인은 배포 인터벌 사용
         String interval = isStockLike(assetType) ? "1d" : d.getInterval();
         List<CandlestickResponse> candles = candlestickService.getCandlesticks(pos.getSymbol(), interval, assetType);
-        if (candles == null || candles.isEmpty()) return;
+        if (candles == null || candles.isEmpty()) {
+            log.warn("라이브 평가 스킵(캔들 비어있음): deploymentId={}, symbol={}, assetType={}, interval={} — KIS 캔들조회 실패/초당한도(EGW00201) 가능",
+                    d.getId(), pos.getSymbol(), assetType, interval);
+            return;
+        }
         // 시간순(과거→현재) 정렬 보장 (코인 빗썸 응답은 정렬 미보장)
         candles = new ArrayList<>(candles);
         candles.sort(Comparator.comparingLong(CandlestickResponse::getTime));
 
         int idx = candles.size() - 1;
         double currentPrice = candles.get(idx).getClose();
-        if (currentPrice <= 0) return;
+        if (currentPrice <= 0) {
+            log.warn("라이브 평가 스킵(현재가 0 이하): deploymentId={}, symbol={}, close={}", d.getId(), pos.getSymbol(), currentPrice);
+            return;
+        }
+        log.info("라이브 평가: deploymentId={}, symbol={}, assetType={}, dir={}, price={}({})",
+                d.getId(), pos.getSymbol(), assetType, pos.getDirection(), currentPrice, isUsd(assetType) ? "USD" : "KRW");
 
         Map<String, double[]> iv = indicatorContextBuilder.calculateIndicators(
                 candles, d.getIndicators(), d.getEntryConditions(), d.getExitConditions());
@@ -392,6 +401,8 @@ public class LiveStrategyService {
             return;
         }
 
+        log.info("라이브 매수 시도: deploymentId={}, symbol={}, assetType={}, qty={}, price={}({}), broker={}",
+                d.getId(), pos.getSymbol(), assetType, quantity, price, isUsd(assetType) ? "USD" : "KRW", d.getBrokerType());
         Order order;
         try {
             order = gateway.placeMarketOrder(d.getUserId(), pos.getSymbol(), pos.getSymbol(),

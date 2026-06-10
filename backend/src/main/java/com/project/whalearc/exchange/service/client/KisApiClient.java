@@ -64,12 +64,16 @@ public class KisApiClient {
         try {
             String accessToken = getAccessToken(appKey, appSecret);
             if (accessToken == null) {
-                return new ExchangePortfolioDto("KIS", true, 0, 0, 0, 0, new ArrayList<>());
+                ExchangePortfolioDto failed = new ExchangePortfolioDto("KIS", true, 0, 0, 0, 0, new ArrayList<>());
+                failed.setFetchOk(false);   // 토큰 발급 실패 → 빈 계좌와 구분(에러 UI·자산추이 스냅샷 스킵)
+                return failed;
             }
             return fetchBalance(accessToken, appKey, appSecret, accountNumber);
         } catch (Exception e) {
             log.warn("KIS API 호출 실패: {}", e.getMessage());
-            return new ExchangePortfolioDto("KIS", true, 0, 0, 0, 0, new ArrayList<>());
+            ExchangePortfolioDto failed = new ExchangePortfolioDto("KIS", true, 0, 0, 0, 0, new ArrayList<>());
+            failed.setFetchOk(false);
+            return failed;
         }
     }
 

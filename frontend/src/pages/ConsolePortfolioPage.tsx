@@ -481,13 +481,23 @@ const PaperPortfolio = () => {
     }
     const winRate = matched.length > 0 ? (matched.filter(m => m.win).length / matched.length) * 100 : null;
     const avgHoldDays = matched.length > 0 ? matched.reduce((a, m) => a + m.holdDays, 0) / matched.length : null;
-    // Alpha vs KOSPI
+    // Alpha vs KOSPI — 전체 기간 기준(차트 일/월/년 토글과 무관하게 일정해야 함).
+    // 이전엔 chart(range 다운샘플)에서 가져와 range 토글 시 알파만 바뀌는 불일치가 있었음.
     let alpha: number | null = null;
-    if (chart?.portPct?.length && chart.kospiPct?.length) {
-      alpha = chart.portPct[chart.portPct.length - 1] - chart.kospiPct[chart.kospiPct.length - 1];
+    if (kospiHistory.length) {
+      const startVal = history[0].totalValue, endVal = history[history.length - 1].totalValue;
+      const portPct = startVal > 0 ? ((endVal - startVal) / startVal) * 100 : 0;
+      const sorted = [...kospiHistory].sort((a, b) => a.date.localeCompare(b.date));
+      let startClose = 0;
+      for (const k of sorted) { if (k.date <= history[0].date) startClose = k.close; }
+      if (!startClose) startClose = sorted[0].close;
+      let endClose = startClose;
+      for (const k of sorted) { if (k.date <= history[history.length - 1].date) endClose = k.close; }
+      const kospiPct = startClose > 0 ? ((endClose - startClose) / startClose) * 100 : 0;
+      alpha = portPct - kospiPct;
     }
     return { mdd: mdd * 100, sharpe, winRate, avgHoldDays, alpha, closedTrades: matched.length };
-  }, [history, trades, chart]);
+  }, [history, trades, kospiHistory]);
 
   return (
     <HelmShell active="portfolio" virt={isVirt} userName={userName} session="모의투자 · 15초 갱신">

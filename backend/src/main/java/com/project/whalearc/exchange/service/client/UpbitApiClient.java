@@ -101,7 +101,9 @@ public class UpbitApiClient {
 
         } catch (Exception e) {
             System.err.println("업비트 API 호출 실패: " + e.getMessage());
-            return new ExchangePortfolioDto("UPBIT", true, 0, 0, 0, 0, new ArrayList<>());
+            ExchangePortfolioDto failed = new ExchangePortfolioDto("UPBIT", true, 0, 0, 0, 0, new ArrayList<>());
+            failed.setFetchOk(false);   // 조회 실패 → 빈 계좌와 구분(에러 UI·자산추이 스냅샷 스킵)
+            return failed;
         }
     }
 

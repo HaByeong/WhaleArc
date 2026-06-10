@@ -47,7 +47,7 @@ const Tri = ({ up }: { up: boolean }) => (
   <svg width="9" height="9" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 2 }}><path d={up ? 'M5 1l4 7H1z' : 'M5 9L1 2h8z'} fill={up ? UP : DOWN} /></svg>
 );
 
-const TrendChart = ({ port, kospi, mode, days = 0 }: { port: number[]; kospi: number[] | null; mode: 'value' | 'pct'; days?: number }) => {
+const TrendChart = ({ port, kospi, mode, days = 0, real = false }: { port: number[]; kospi: number[] | null; mode: 'value' | 'pct'; days?: number; real?: boolean }) => {
   if (port.length < 2) return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
       <svg width="34" height="34" viewBox="0 0 24 24" fill="none" style={{ color: 'var(--ci-ink3)', opacity: .65 }}><path d="M3 3v16a2 2 0 0 0 2 2h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><path d="M7 14l3.5-3.5 3 3L21 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2.5 2.5" /></svg>
@@ -55,7 +55,9 @@ const TrendChart = ({ port, kospi, mode, days = 0 }: { port: number[]; kospi: nu
       <div className="max-w-[360px] text-[12px] leading-relaxed" style={{ color: 'var(--ci-ink3)' }}>
         {days >= 1
           ? <>현재 <b style={{ color: SONAR }}>{days}일치</b> 기록됐어요. 자산은 <b>하루 한 번(자정)</b> 저장되며, <b>이틀치</b>가 모이면 추이 그래프가 자동으로 그려집니다.</>
-          : <>거래를 시작하면 자산이 <b>매일 자정에 한 번</b> 기록돼요. <b>이틀치</b>가 모이는 내일 이후부터 추이 그래프가 표시됩니다.</>}
+          : real
+            ? <>연결된 거래소 자산이 <b>매일 자정에 한 번</b> 기록돼요. <b>이틀치</b>가 모이는 내일 이후부터 추이 그래프가 표시됩니다.</>
+            : <>거래를 시작하면 자산이 <b>매일 자정에 한 번</b> 기록돼요. <b>이틀치</b>가 모이는 내일 이후부터 추이 그래프가 표시됩니다.</>}
       </div>
     </div>
   );
@@ -735,7 +737,7 @@ const RealAccountPortfolio = () => {
           <Panel style={{ overflow: 'hidden' }}>
             <PanelHead kicker="VOYAGE LOG" title="자산 추이" right={<span className="text-[11px] text-white/60">매일 자정 1회 기록 · KRW 합계</span>} />
             <div className="px-3 pb-[18px] pt-2" style={{ height: 250 }}>
-              <TrendChart port={history.map(s => s.totalValueKrw)} kospi={null} mode="value" days={history.length} />
+              <TrendChart port={history.map(s => s.totalValueKrw)} kospi={null} mode="value" days={history.length} real />
             </div>
           </Panel>
         )}

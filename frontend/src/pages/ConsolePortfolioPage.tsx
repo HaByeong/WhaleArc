@@ -47,8 +47,18 @@ const Tri = ({ up }: { up: boolean }) => (
   <svg width="9" height="9" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 2 }}><path d={up ? 'M5 1l4 7H1z' : 'M5 9L1 2h8z'} fill={up ? UP : DOWN} /></svg>
 );
 
-const TrendChart = ({ port, kospi, mode }: { port: number[]; kospi: number[] | null; mode: 'value' | 'pct' }) => {
-  if (port.length < 2) return <div className="flex h-full items-center justify-center text-[13px]" style={{ color: 'var(--ci-ink3)' }}>자산 추이 데이터 수집 중 — 하루 1회 스냅샷, 최소 2일 필요</div>;
+const TrendChart = ({ port, kospi, mode, days = 0 }: { port: number[]; kospi: number[] | null; mode: 'value' | 'pct'; days?: number }) => {
+  if (port.length < 2) return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" style={{ color: 'var(--ci-ink3)', opacity: .65 }}><path d="M3 3v16a2 2 0 0 0 2 2h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><path d="M7 14l3.5-3.5 3 3L21 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2.5 2.5" /></svg>
+      <div className="text-[13.5px] font-semibold" style={{ color: 'var(--ci-ink2)' }}>{days >= 1 ? '자산 추이를 기록하고 있어요' : '아직 자산 추이 기록이 없어요'}</div>
+      <div className="max-w-[360px] text-[12px] leading-relaxed" style={{ color: 'var(--ci-ink3)' }}>
+        {days >= 1
+          ? <>현재 <b style={{ color: SONAR }}>{days}일치</b> 기록됐어요. 자산은 <b>하루 한 번(자정)</b> 저장되며, <b>이틀치</b>가 모이면 추이 그래프가 자동으로 그려집니다.</>
+          : <>거래를 시작하면 자산이 <b>매일 자정에 한 번</b> 기록돼요. <b>이틀치</b>가 모이는 내일 이후부터 추이 그래프가 표시됩니다.</>}
+      </div>
+    </div>
+  );
   const W = 880, H = 250, padL = 8, padR = 52, padT = 12, padB = 28;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const all = [...port, ...(kospi ?? [])]; const max = Math.max(...all), min = Math.min(...all); const range = (max - min) || 1;
@@ -469,7 +479,7 @@ const PaperPortfolio = () => {
             <span className="inline-flex items-center gap-1.5"><span style={{ width: 14, height: 2, background: SONAR }} />내 포트폴리오</span>
             {kospi && <span className="inline-flex items-center gap-1.5"><span style={{ width: 14, borderTop: '2px dashed var(--ci-ink3)' }} />KOSPI</span>}
           </div>
-          <div className="px-3 pb-[18px]" style={{ height: 250 }}><TrendChart port={port} kospi={kospi} mode={mode} /></div>
+          <div className="px-3 pb-[18px]" style={{ height: 250 }}><TrendChart port={port} kospi={kospi} mode={mode} days={history.length} /></div>
           {kospi && <div className="px-[22px] pb-3 text-[10.5px]" style={{ color: 'var(--ci-ink3)' }}>* KOSPI 수익률은 실제 지수 일봉 데이터 기반입니다.</div>}
         </Panel>
 

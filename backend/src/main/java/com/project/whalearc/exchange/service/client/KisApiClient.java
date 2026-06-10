@@ -160,6 +160,7 @@ public class KisApiClient {
                                  String cano, String acntPrdtCd, List<ExchangeHoldingDto> holdings) {
         double cash = 0;
         String fk = "", nk = "", trCont = "";
+        Set<String> seen = new HashSet<>();   // 연속조회(페이지) 간 같은 종목 중복 적재 방지 → 개수·평가합 부풀림 차단
         for (int page = 0; page < MAX_PAGES; page++) {
             HttpHeaders headers = baseHeaders(accessToken, appKey, appSecret, "TTTC8434R");
             if (!trCont.isEmpty()) headers.set("tr_cont", trCont);
@@ -183,8 +184,10 @@ public class KisApiClient {
                 for (Map<String, Object> item : output1) {
                     double qty = parseDouble(item.get("hldg_qty"));
                     if (qty <= 0) continue;
+                    String pdno = (String) item.get("pdno");
+                    if (pdno != null && !seen.add(pdno)) continue;   // 이미 담은 종목(페이지 중복) 스킵
                     holdings.add(new ExchangeHoldingDto(
-                            (String) item.get("pdno"), (String) item.get("prdt_name"), qty,
+                            pdno, (String) item.get("prdt_name"), qty,
                             parseDouble(item.get("pchs_avg_pric")), parseDouble(item.get("prpr")),
                             parseDouble(item.get("evlu_amt")), parseDouble(item.get("evlu_pfls_amt")),
                             parseDouble(item.get("evlu_pfls_rt")), "KRW"));
@@ -210,6 +213,7 @@ public class KisApiClient {
     @SuppressWarnings("unchecked")
     private void fetchOverseas(String accessToken, String appKey, String appSecret,
                                String cano, String acntPrdtCd, List<ExchangeHoldingDto> holdings) {
+        Set<String> seen = new HashSet<>();   // 거래소(NASD/NYSE/AMEX) 간 같은 종목 중복 적재 방지
         for (String excg : US_EXCHANGES) {
             try {
                 HttpHeaders headers = baseHeaders(accessToken, appKey, appSecret, "TTTS3012R");
@@ -229,8 +233,10 @@ public class KisApiClient {
                 for (Map<String, Object> item : output1) {
                     double qty = parseDouble(item.get("ovrs_cblc_qty"));
                     if (qty <= 0) continue;
+                    String pdno = str(item.get("ovrs_pdno"));
+                    if (!pdno.isEmpty() && !seen.add(pdno)) continue;   // 다른 거래소 응답에 중복된 종목 스킵
                     holdings.add(new ExchangeHoldingDto(
-                            str(item.get("ovrs_pdno")), str(item.get("ovrs_item_name")), qty,
+                            pdno, str(item.get("ovrs_item_name")), qty,
                             parseDouble(item.get("pchs_avg_pric")), parseDouble(item.get("now_pric2")),
                             parseDouble(item.get("ovrs_stck_evlu_amt")), parseDouble(item.get("frcr_evlu_pfls_amt")),
                             parseDouble(item.get("evlu_pfls_rt")), "USD"));

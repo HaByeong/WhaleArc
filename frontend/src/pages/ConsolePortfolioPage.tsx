@@ -133,6 +133,21 @@ const mergeAllocByLabel = (items: { c: string; label: string; value: number }[])
   return [...m.values()];
 };
 
+// 실계좌 보유목록 정리 — 거래소가 같은 자산(assetCode)을 중복 entry로 주거나 수량 0 유령을
+// 포함시키면 보유 개수·목록·도넛이 부풀려짐. 자산당 1줄(첫 항목 유지) + 수량>0만.
+// ※ 보유목록은 자산당 1줄이 정상이므로 합산이 아닌 keep-first (합산 시 수량·평가가 2배가 됨).
+const dedupeHoldings = <T extends { assetCode: string; quantity: number }>(hs: T[]): T[] => {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const h of hs) {
+    if (h.quantity <= 0) continue;
+    if (seen.has(h.assetCode)) continue;
+    seen.add(h.assetCode);
+    out.push(h);
+  }
+  return out;
+};
+
 const Donut = ({ items, total }: { items: { c: string; value: number }[]; total: number }) => {
   const R = 72, inner = 48, C = 2 * Math.PI * R; let acc = 0;
   const safe = total || 1;
@@ -727,7 +742,8 @@ const RealAccountPortfolio = () => {
   const port = portfolios[activeTab] || null;
   const connected = isConn(activeTab);
   const isStock = activeTab === 'KIS';
-  const holdings = port?.holdings ?? [];
+  // 거래소 중복 entry/수량0 유령 제거 → 보유 개수·목록·도넛·통화분리 모두 정확
+  const holdings = useMemo(() => dedupeHoldings(port?.holdings ?? []), [port]);
   const cashLabel = isStock ? '예수금' : activeTab === 'UPBIT' ? 'KRW 잔고' : 'USDT';
 
   // 도넛/합계는 항상 KRW 기준 — KIS 해외주식(currency=USD)은 서버가 준 환율로 환산(통화 혼합 방지)
@@ -745,9 +761,9 @@ const RealAccountPortfolio = () => {
     if (!port) return [] as { c: string; label: string; value: number }[];
     const arr: { c: string; label: string; value: number }[] = [];
     if (port.cashBalance > 0) arr.push({ c: '#7a8aa8', label: isStock ? '예수금' : 'KRW', value: port.cashBalance });
-    port.holdings.forEach((h, i) => { const v = krwVal(h); if (v > 0) arr.push({ c: CHART_COLORS[i % CHART_COLORS.length], label: h.assetName, value: v }); });
+    holdings.forEach((h, i) => { const v = krwVal(h); if (v > 0) arr.push({ c: CHART_COLORS[i % CHART_COLORS.length], label: h.assetName, value: v }); });
     return mergeAllocByLabel(arr);
-  }, [port, isStock, usdKrw]);
+  }, [port, holdings, isStock, usdKrw]);
   const allocTotal = alloc.reduce((s, a) => s + a.value, 0);
 
   const openSetup = (t: ExchangeType) => setShowSetup(t);

@@ -62,6 +62,12 @@ export interface ExchangeTransaction {
   status: string;      // FILLED / PENDING
 }
 
+// 실계좌 자산 추이 스냅샷 (일별, KRW 합계)
+export interface ExchangeSnapshot {
+  date: string;            // "2026-06-09"
+  totalValueKrw: number;
+}
+
 // API 서비스
 export const exchangeService = {
   // API 키 등록/수정
@@ -97,5 +103,11 @@ export const exchangeService = {
   getTransactions: async (exchangeType: ExchangeType, days = 30): Promise<ExchangeTransaction[]> => {
     const response = await apiClient.get(`/api/exchange/transactions/${exchangeType}`, { params: { days } });
     return response.data.data;
+  },
+
+  // 실계좌 자산 추이(일별 스냅샷) 조회 — 기본 30일
+  getHistory: async (days = 30): Promise<ExchangeSnapshot[]> => {
+    const response = await apiClient.get('/api/exchange/history', { params: { days } });
+    return response.data.data || [];
   },
 };

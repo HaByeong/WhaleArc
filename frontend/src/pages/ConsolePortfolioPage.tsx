@@ -6,7 +6,7 @@ import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
 import { tradeService, portfolioService, type Portfolio, type Holding, type Trade, type PortfolioSnapshot } from '../services/tradeService';
 import { quantStoreService, type PurchasePerformance } from '../services/quantStoreService';
-import { exchangeService, type ExchangeType, type ExchangeAccount, type ExchangePortfolio } from '../services/exchangeService';
+import { exchangeService, type ExchangeType, type ExchangeAccount, type ExchangePortfolio, type ExchangeSnapshot } from '../services/exchangeService';
 import ExchangeConnectModal from '../components/ExchangeConnectModal';
 import apiClient from '../utils/api';
 
@@ -612,6 +612,7 @@ const RealAccountPortfolio = () => {
   const userName = email ? email.split('@')[0] : '항해사';
   const [accounts, setAccounts] = useState<ExchangeAccount[]>([]);
   const [portfolios, setPortfolios] = useState<Partial<Record<ExchangeType, ExchangePortfolio | null>>>({});
+  const [history, setHistory] = useState<ExchangeSnapshot[]>([]);  // 자산 추이(일별 스냅샷)
   const [activeTab, setActiveTab] = useState<ExchangeType>('KIS');
   const [splitCcy, setSplitCcy] = useState(false);   // 원화/해외 통화 분리 표시 토글
   const autoPickRef = useRef(false); // 최초 로드 시 첫 연결 거래소 자동 선택(이후 사용자 선택 우선)
@@ -653,6 +654,12 @@ const RealAccountPortfolio = () => {
     const t = setInterval(() => load(true), 10_000);
     return () => clearInterval(t);
   }, [load, isPreview]);
+
+  // 자산 추이 — 일별 스냅샷(매일 자정 기록)은 폴링 불필요, 최초 1회 로드
+  useEffect(() => {
+    if (isPreview) return;
+    exchangeService.getHistory(30).then(setHistory).catch(() => {});
+  }, [isPreview]);
 
   const isConn = (t: ExchangeType) => accounts.some(a => a.exchangeType === t && a.connected);
   const connectedList = EXCHANGES.filter(e => isConn(e.key));
@@ -719,6 +726,16 @@ const RealAccountPortfolio = () => {
                   <div className="mt-1 font-mono text-[15px] font-semibold">{c ? won(portfolios[e.key]?.totalValue || 0) : <span style={{ color: 'var(--ci-ink3)' }}>미연결</span>}</div>
                 </div>
               ); })}
+            </div>
+          </Panel>
+        )}
+
+        {/* 자산 추이 (일별 스냅샷 — ExchangeSnapshotScheduler가 매일 자정 KRW 합계 기록) */}
+        {hasAny && (
+          <Panel style={{ overflow: 'hidden' }}>
+            <PanelHead kicker="VOYAGE LOG" title="자산 추이" right={<span className="text-[11px] text-white/60">매일 자정 1회 기록 · KRW 합계</span>} />
+            <div className="px-3 pb-[18px] pt-2" style={{ height: 250 }}>
+              <TrendChart port={history.map(s => s.totalValueKrw)} kospi={null} mode="value" days={history.length} />
             </div>
           </Panel>
         )}

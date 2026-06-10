@@ -121,6 +121,18 @@ const MetricCard = ({ label, value, sub, color, explain }: { label: string; valu
   </div>
 );
 
+// 자산 배분 항목 중 같은 라벨(자산명) 병합 — 거래소가 동일 자산을 중복으로 주거나
+// 현금 라벨과 겹칠 때 도넛 조각·범례 중복 및 React key 충돌 방지(값은 합산, 색은 첫 항목 유지).
+const mergeAllocByLabel = (items: { c: string; label: string; value: number }[]) => {
+  const m = new Map<string, { c: string; label: string; value: number }>();
+  for (const it of items) {
+    const prev = m.get(it.label);
+    if (prev) prev.value += it.value;
+    else m.set(it.label, { ...it });
+  }
+  return [...m.values()];
+};
+
 const Donut = ({ items, total }: { items: { c: string; value: number }[]; total: number }) => {
   const R = 72, inner = 48, C = 2 * Math.PI * R; let acc = 0;
   const safe = total || 1;
@@ -374,7 +386,7 @@ const PaperPortfolio = () => {
     if (cash > 0) arr.push({ c: '#7a8aa8', label: '현금', value: cash });
     holdings.forEach((h, i) => { const v = krwVal(h); if (v > 0) arr.push({ c: CHART_COLORS[i % CHART_COLORS.length], label: holdingName(h), value: v }); });
     if (turtle > 0) arr.push({ c: '#f5d061', label: '터틀 전략', value: turtle });
-    return arr;
+    return mergeAllocByLabel(arr);
   }, [holdings, cash, turtle, usdKrw]);
   const allocTotal = alloc.reduce((s, a) => s + a.value, 0);
 
@@ -492,8 +504,8 @@ const PaperPortfolio = () => {
                 <div className="grid grid-cols-[152px_1fr] items-center gap-4">
                   <div style={{ width: 152, height: 152 }}><Donut items={alloc} total={allocTotal} /></div>
                   <ul className="m-0 flex list-none flex-col gap-3 p-0">
-                    {alloc.map(a => (
-                      <li key={a.label} className="flex items-center gap-2 text-[12.5px]">
+                    {alloc.map((a, i) => (
+                      <li key={i} className="flex items-center gap-2 text-[12.5px]">
                         <span className="h-[9px] w-[9px] shrink-0 rounded-full" style={{ background: a.c }} />
                         <span className="truncate">{a.label}</span>
                         <span className="ml-1.5 shrink-0 font-mono font-semibold" style={{ color: 'var(--ci-ink1)' }}>{((a.value / (allocTotal || 1)) * 100).toFixed(1)}%</span>
@@ -734,7 +746,7 @@ const RealAccountPortfolio = () => {
     const arr: { c: string; label: string; value: number }[] = [];
     if (port.cashBalance > 0) arr.push({ c: '#7a8aa8', label: isStock ? '예수금' : 'KRW', value: port.cashBalance });
     port.holdings.forEach((h, i) => { const v = krwVal(h); if (v > 0) arr.push({ c: CHART_COLORS[i % CHART_COLORS.length], label: h.assetName, value: v }); });
-    return arr;
+    return mergeAllocByLabel(arr);
   }, [port, isStock, usdKrw]);
   const allocTotal = alloc.reduce((s, a) => s + a.value, 0);
 
@@ -859,8 +871,8 @@ const RealAccountPortfolio = () => {
                   <div className="mb-3.5 text-[10.5px] font-semibold tracking-[.2em] text-white/48">자산 배분</div>
                   <div className="grid grid-cols-[130px_1fr] items-center gap-4">
                     <div style={{ width: 130, height: 130 }}><Donut items={alloc} total={allocTotal} /></div>
-                    <ul className="m-0 flex list-none flex-col gap-2.5 p-0">{alloc.slice(0, 6).map(a => (
-                      <li key={a.label} className="flex items-center gap-2 text-[12px]">
+                    <ul className="m-0 flex list-none flex-col gap-2.5 p-0">{alloc.slice(0, 6).map((a, i) => (
+                      <li key={i} className="flex items-center gap-2 text-[12px]">
                         <span className="h-[9px] w-[9px] shrink-0 rounded-full" style={{ background: a.c }} />
                         <span className="truncate">{a.label}</span>
                         <span className="ml-1.5 shrink-0 font-mono font-semibold" style={{ color: 'var(--ci-ink1)' }}>{((a.value / (allocTotal || 1)) * 100).toFixed(1)}%</span>

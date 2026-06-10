@@ -364,9 +364,9 @@ const blipsFrom = (hs: { name: string; rate: number }[]) => hs.length === 0 ? []
 /* ── 실계좌 홈 (non-virt, exchangeService) ── */
 const RealDashboard = () => {
   const navigate = useNavigate();
-  const { session } = useAuth();
-  const fallbackName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
-  const [name, setName] = useState(fallbackName);
+  const { profileName } = useAuth();
+  // 표시명은 AuthContext의 DB 닉네임(profileName) 단일 소스로 — 이메일 ID↔닉네임 깜빡임 방지(로딩 중 '항해사')
+  const name = profileName || '항해사';
   const [accounts, setAccounts] = useState<ExchangeAccount[]>([]);
   const [ports, setPorts] = useState<Partial<Record<ExchangeType, ExchangePortfolio | null>>>({});
   const [src, setSrc] = useState<ExchangeType>('KIS');
@@ -380,8 +380,6 @@ const RealDashboard = () => {
     if (isPreview) { setLoading(false); return; } // 프리뷰(비로그인) 401 리다이렉트 방지
     try {
       setError(false);
-      const profile = await userService.getProfile().catch(() => null);
-      if (profile?.name) setName(profile.name);
       const accs = await exchangeService.getAccounts(); // 실패 시 throw → '미연결'이 아닌 에러 UI로 구분
       setAccounts(accs);
       const p: Partial<Record<ExchangeType, ExchangePortfolio | null>> = {};
@@ -469,9 +467,9 @@ const ONBOARD_STEPS = [
 
 const VirtDashboard = () => {
   const navigate = useNavigate();
-  const { session } = useAuth();
-  const fallbackName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
-  const [name, setName] = useState(fallbackName);
+  const { profileName } = useAuth();
+  // 표시명은 AuthContext의 DB 닉네임(profileName) 단일 소스로 — 이메일 ID↔닉네임 깜빡임 방지(로딩 중 '항해사')
+  const name = profileName || '항해사';
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -492,7 +490,6 @@ const VirtDashboard = () => {
 
   const loadData = useCallback(async () => {
     if (isPreview) { setLoading(false); return; } // 프리뷰(비로그인) 401 리다이렉트 방지
-    userService.getProfile().then(p => { if (p?.name) setName(p.name); }).catch(() => {});
     try { setPortfolio(await tradeService.getPortfolio()); setError(false); }
     catch { setError(true); }
     finally { setLoading(false); }

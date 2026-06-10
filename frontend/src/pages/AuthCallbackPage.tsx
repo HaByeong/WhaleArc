@@ -12,7 +12,12 @@ const AuthCallbackPage = () => {
     const savedRedirect = localStorage.getItem('whalearc_redirect') || '/dashboard';
     localStorage.removeItem('whalearc_redirect');
     try {
-      const profile = await userService.getProfile();
+      // 온보딩 체크는 비핵심 — 백엔드가 느려도 로그인 진입을 막지 않도록 4초 레이스.
+      // (타임아웃 시 null → 그냥 목적지로 진입, "바다로 입수 중..." 장시간 멈춤 방지)
+      const profile = await Promise.race([
+        userService.getProfile(),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 4000)),
+      ]);
       if (profile && !profile.investmentStyle) {
         const onboardingUrl = savedRedirect.startsWith('/virt')
           ? `/user?onboarding=true&from=${encodeURIComponent(savedRedirect)}`

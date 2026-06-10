@@ -216,7 +216,7 @@ const AutoTradePage = () => {
   };
 
   const confirmGuide = async (neverAgain: boolean) => {
-    if (neverAgain) { try { localStorage.setItem(`wa_autotrade_guide_${isLive ? 'live' : 'paper'}`, '1'); } catch {} }
+    if (neverAgain) { try { localStorage.setItem(`wa_autotrade_guide_${isLive ? 'live' : 'paper'}`, '1'); } catch { /* localStorage 미지원 시 무시 */ } }
     setShowGuide(false);
     await _doOpenCreate();
   };

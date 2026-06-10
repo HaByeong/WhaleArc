@@ -6,6 +6,7 @@ import com.project.whalearc.live.domain.LiveOrderLog;
 import com.project.whalearc.live.dto.CreateDeploymentRequest;
 import com.project.whalearc.live.repository.LiveOrderLogRepository;
 import com.project.whalearc.live.repository.LiveStrategyDeploymentRepository;
+import com.project.whalearc.exchange.service.client.BitgetApiClient;
 import com.project.whalearc.market.dto.CandlestickResponse;
 import com.project.whalearc.market.service.CandlestickService;
 import com.project.whalearc.market.service.ExchangeRateService;
@@ -67,6 +68,7 @@ public class LiveStrategyService {
     private final ExchangeRateService exchangeRateService;
     private final UsEtfCatalog usEtfCatalog;
     private final UsStockPriceProvider usStockPriceProvider;
+    private final BitgetApiClient bitgetApiClient;
     private final List<OrderGateway> orderGateways;
     private final LiveOrderLogRepository orderLogRepository;
     private final UserLockRegistry userLockRegistry;
@@ -77,6 +79,14 @@ public class LiveStrategyService {
     /** 실거래(KIS) 1건당 할당 상한(KRW) — 팻핑거 방지 가드. 소액 검증 후 config로 상향. (null=미설정 시 무제한) */
     @org.springframework.beans.factory.annotation.Value("${live.broker.kis.max-allocated-krw:100000}")
     private BigDecimal kisMaxAllocatedKrw;
+
+    /** 실거래(Bitget) 1건당 할당 상한(KRW) — KIS와 동일한 팻핑거 방지 가드. */
+    @org.springframework.beans.factory.annotation.Value("${live.broker.bitget.max-allocated-krw:100000}")
+    private BigDecimal bitgetMaxAllocatedKrw;
+
+    /** 선물 레버리지 허용 상한 — 과도한 레버리지 방지(소액 검증 단계). config로 상향. */
+    @org.springframework.beans.factory.annotation.Value("${live.broker.bitget.max-leverage:10}")
+    private int bitgetMaxLeverage;
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -154,6 +164,30 @@ public class LiveStrategyService {
             throw new IllegalArgumentException(
                     "실거래(KIS) 1건당 할당 한도(" + kisMaxAllocatedKrw + "원)를 초과했습니다. 소액으로 먼저 검증한 뒤 한도를 올리세요.");
         }
+        // 실거래(Bitget) 1건당 할당 상한 가드 — KIS와 동일
+        if (brokerType == LiveStrategyDeployment.BrokerType.BITGET
+                && bitgetMaxAllocatedKrw != null
+                && allocatedCash.compareTo(bitgetMaxAllocatedKrw) > 0) {
+            throw new IllegalArgumentException(
+                    "실거래(Bitget) 1건당 할당 한도(" + bitgetMaxAllocatedKrw + "원)를 초과했습니다. 소액으로 먼저 검증한 뒤 한도를 올리세요.");
+        }
+
+        // 시장 종류/레버리지 — 선물(FUTURES)은 현재 Bitget만 지원. 레버리지는 [1, 상한] 범위.
+        LiveStrategyDeployment.MarketType marketType =
+                req.getMarketType() != null ? req.getMarketType() : LiveStrategyDeployment.MarketType.SPOT;
+        Integer leverage = req.getLeverage();
+        if (marketType == LiveStrategyDeployment.MarketType.FUTURES) {
+            if (brokerType != LiveStrategyDeployment.BrokerType.BITGET) {
+                throw new IllegalArgumentException("선물(FUTURES) 자동매매는 현재 Bitget만 지원합니다.");
+            }
+            int lev = leverage != null ? leverage : 1;
+            if (lev < 1 || lev > bitgetMaxLeverage) {
+                throw new IllegalArgumentException("레버리지는 1배 이상 " + bitgetMaxLeverage + "배 이하여야 합니다.");
+            }
+            leverage = lev;
+        } else {
+            leverage = null;   // 현물은 레버리지 무의미 — 저장하지 않음
+        }
 
         LiveStrategyDeployment d = new LiveStrategyDeployment();
         d.setUserId(userId);
@@ -166,6 +200,8 @@ public class LiveStrategyService {
         d.setInterval(req.getInterval() != null && !req.getInterval().isBlank() ? req.getInterval() : "1h");
         d.setAccountMode(accountMode);
         d.setBrokerType(brokerType);
+        d.setMarketType(marketType);
+        d.setLeverage(leverage);
         d.setStatus(LiveStrategyDeployment.Status.RUNNING);
         d.setAllocatedCash(allocatedCash);
         d.setStopLossPct(req.getStopLossPct());
@@ -248,6 +284,28 @@ public class LiveStrategyService {
         return transition(userId, deploymentId, LiveStrategyDeployment.Status.STOPPED);
     }
 
+    /**
+     * 배포 삭제. 가동 중(RUNNING)인 배포는 삭제 불가 — 먼저 정지/일시정지해야 한다(실행 중 평가와의 경합 방지).
+     * 주의: 정지된 배포라도 거래소에 열린 포지션은 청산되지 않으므로(앱은 추적만 중단), 잔여 포지션은
+     * 거래소에서 직접 정리해야 한다. 유저 락 안에서 평가와 직렬화한다.
+     */
+    public void deleteDeployment(String userId, String deploymentId) {
+        userLockRegistry.withLock(userId, () -> {
+            LiveStrategyDeployment d = deploymentRepository.findByIdAndUserId(deploymentId, userId)
+                    .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+            if (d.getStatus() == LiveStrategyDeployment.Status.RUNNING) {
+                throw new IllegalArgumentException("가동 중인 자동매매는 삭제할 수 없습니다. 먼저 정지(또는 일시정지)하세요.");
+            }
+            deploymentRepository.delete(d);
+            try {
+                orderLogRepository.deleteByDeploymentId(deploymentId);
+            } catch (Exception e) {
+                log.warn("배포 삭제 시 주문 로그 정리 실패: deploymentId={}, error={}", deploymentId, e.getMessage());
+            }
+            log.info("라이브 배포 삭제: userId={}, deploymentId={}", userId, deploymentId);
+        });
+    }
+
     private LiveStrategyDeployment transition(String userId, String deploymentId, LiveStrategyDeployment.Status target) {
         // 유저 락 안에서 상태 전이 — 평가(evaluateDeployment)와 직렬화해 사용자의 stop/pause가
         // 동시 평가의 전체문서 save에 덮어써지지 않게 한다(lost-update 방지).
@@ -285,6 +343,65 @@ public class LiveStrategyService {
         }
         evaluateDeployment(d);
         return deploymentRepository.findById(deploymentId).orElse(d);
+    }
+
+    /**
+     * 수동 "지금 청산" — 배포의 모든 보유(LONG) 포지션을 즉시 시장가 청산한다. 신호/익절·손절을 기다리지
+     * 않고 사용자가 직접 닫는다. 유저 락 안에서 평가와 직렬화하고, DB 최신본을 읽어 처리한다.
+     * @return 청산 후 최신 배포. 보유 포지션이 없으면 예외.
+     */
+    public LiveStrategyDeployment closeNow(String userId, String deploymentId) {
+        deploymentRepository.findByIdAndUserId(deploymentId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+        userLockRegistry.withLock(userId, () -> doCloseNowLocked(deploymentId));
+        return deploymentRepository.findById(deploymentId)
+                .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+    }
+
+    private void doCloseNowLocked(String deploymentId) {
+        LiveStrategyDeployment d = deploymentRepository.findById(deploymentId).orElse(null);
+        if (d == null) return;
+        OrderGateway gateway = resolveGateway(d.getBrokerType());
+        boolean closedAny = false;
+        for (LivePosition pos : d.getPositions()) {
+            if (pos.getDirection() != LivePosition.Direction.LONG) continue;
+            try {
+                double price = latestPrice(d, pos);
+                if (price <= 0) {
+                    log.warn("지금 청산 스킵(현재가 0 이하): deploymentId={}, symbol={}", d.getId(), pos.getSymbol());
+                    continue;
+                }
+                // 멱등 barTime은 현재 초 — 같은 초 더블클릭은 디듀프, 청산 후 direction=NONE이라 재청산도 방지.
+                closePosition(d, pos, gateway, price, "MANUAL", Instant.now().getEpochSecond());
+                closedAny = true;
+            } catch (Exception e) {
+                log.error("지금 청산 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
+            }
+        }
+        if (!closedAny) {
+            throw new IllegalArgumentException("청산할 보유 포지션이 없습니다.");
+        }
+        d.setUpdatedAt(Instant.now());
+        deploymentRepository.save(d);
+    }
+
+    /** 포지션의 최신 현재가(네이티브 통화) — 브로커별 캔들 출처에서 마지막 종가. 청산가 산정용. */
+    private double latestPrice(LiveStrategyDeployment d, LivePosition pos) {
+        String assetType = pos.getAssetType();
+        List<CandlestickResponse> candles;
+        if (d.getBrokerType() == LiveStrategyDeployment.BrokerType.BITGET) {
+            String sym = BitgetApiClient.toSpotSymbol(pos.getSymbol());
+            candles = d.isFutures()
+                    ? bitgetApiClient.getFuturesCandles(sym, d.getInterval(), 2)
+                    : bitgetApiClient.getSpotCandles(sym, d.getInterval(), 2);
+        } else {
+            String interval = isStockLike(assetType) ? "1d" : d.getInterval();
+            candles = candlestickService.getCandlesticks(pos.getSymbol(), interval, assetType);
+        }
+        if (candles == null || candles.isEmpty()) return 0;
+        candles = new ArrayList<>(candles);
+        candles.sort(Comparator.comparingLong(CandlestickResponse::getTime));
+        return candles.get(candles.size() - 1).getClose();
     }
 
     /**
@@ -339,12 +456,21 @@ public class LiveStrategyService {
 
     private void evaluatePosition(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway) {
         String assetType = pos.getAssetType();
-        // 주식류(국내/미국/ETF)는 KIS가 일봉만 제공하므로 인터벌을 1d로 고정, 코인은 배포 인터벌 사용
+        // 시세 출처: Bitget 브로커면 Bitget 현물 캔들(USDT 기준), 그 외엔 기존 경로(주식=KIS 일봉, 코인=빗썸 KRW).
+        // 거래소와 신호 평가 시세를 일치시켜 가격 괴리를 막는다.
         String interval = isStockLike(assetType) ? "1d" : d.getInterval();
-        List<CandlestickResponse> candles = candlestickService.getCandlesticks(pos.getSymbol(), interval, assetType);
+        List<CandlestickResponse> candles;
+        if (d.getBrokerType() == LiveStrategyDeployment.BrokerType.BITGET) {
+            String bgSymbol = BitgetApiClient.toSpotSymbol(pos.getSymbol());   // BTCUSDT (현물·선물 공통)
+            candles = d.isFutures()
+                    ? bitgetApiClient.getFuturesCandles(bgSymbol, d.getInterval(), 200)
+                    : bitgetApiClient.getSpotCandles(bgSymbol, d.getInterval(), 200);
+        } else {
+            candles = candlestickService.getCandlesticks(pos.getSymbol(), interval, assetType);
+        }
         if (candles == null || candles.isEmpty()) {
-            log.warn("라이브 평가 스킵(캔들 비어있음): deploymentId={}, symbol={}, assetType={}, interval={} — KIS 캔들조회 실패/초당한도(EGW00201) 가능",
-                    d.getId(), pos.getSymbol(), assetType, interval);
+            log.warn("라이브 평가 스킵(캔들 비어있음): deploymentId={}, symbol={}, assetType={}, interval={}, broker={} — 캔들조회 실패/한도 가능",
+                    d.getId(), pos.getSymbol(), assetType, interval, d.getBrokerType());
             return;
         }
         // 시간순(과거→현재) 정렬 보장 (코인 빗썸 응답은 정렬 미보장)
@@ -358,7 +484,7 @@ public class LiveStrategyService {
             return;
         }
         log.info("라이브 평가: deploymentId={}, symbol={}, assetType={}, dir={}, price={}({})",
-                d.getId(), pos.getSymbol(), assetType, pos.getDirection(), currentPrice, isUsd(assetType) ? "USD" : "KRW");
+                d.getId(), pos.getSymbol(), assetType, pos.getDirection(), currentPrice, priceInForeign(d, assetType) ? "FX" : "KRW");
 
         Map<String, double[]> iv = indicatorContextBuilder.calculateIndicators(
                 candles, d.getIndicators(), d.getEntryConditions(), d.getExitConditions());
@@ -383,17 +509,19 @@ public class LiveStrategyService {
         if (orderLogRepository.existsByClientOrderId(clientOrderId)) return;
 
         String assetType = pos.getAssetType();
-        BigDecimal price = BigDecimal.valueOf(currentPrice);   // 네이티브 통화(미국주식/ETF는 USD, 그 외 KRW)
-        // allocatedCash는 KRW 기준. 미국주식/ETF는 가격이 USD이므로 KRW 환산 단가로 나눠 수량을 산정한다.
-        BigDecimal krwPerUnit = isUsd(assetType)
-                ? price.multiply(BigDecimal.valueOf(exchangeRateService.getUsdKrwRate()))
+        BigDecimal price = BigDecimal.valueOf(currentPrice);   // 네이티브 통화(미국주식/ETF=USD, Bitget 코인=USDT, 그 외 KRW)
+        // allocatedCash는 KRW 기준. 외화 표시 자산(미국주식/ETF=USD, Bitget=USDT)은 KRW 환산 단가로 나눠 수량을 산정한다.
+        BigDecimal krwPerUnit = priceInForeign(d, assetType)
+                ? price.multiply(BigDecimal.valueOf(nativeKrwRate(d, assetType)))
                 : price;
         if (krwPerUnit.compareTo(BigDecimal.ZERO) <= 0) {
             log.warn("라이브 매수 불가(환산 단가 0 이하): deploymentId={}, symbol={}, price={}", d.getId(), pos.getSymbol(), price);
             return;
         }
         int scale = isStockLike(assetType) ? 0 : 8;   // 주식류는 정수 수량, 코인은 소수 8자리
-        BigDecimal quantity = alloc.divide(krwPerUnit, scale, RoundingMode.DOWN);
+        // 선물은 레버리지만큼 노출(수량)을 키운다: 수량 = (할당증거금 × 레버리지) / 단가. 현물은 레버리지=1.
+        BigDecimal exposure = alloc.multiply(BigDecimal.valueOf(d.effectiveLeverage()));
+        BigDecimal quantity = exposure.divide(krwPerUnit, scale, RoundingMode.DOWN);
         if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
             // 분배 금액이 1주(또는 최소 단위) 가격보다 작아 수량이 0이 됨 — 조용한 무동작 방지용 경고
             log.warn("라이브 매수 불가(분배 자금으로 수량 0): deploymentId={}, symbol={}, alloc={}, krwPerUnit={}",
@@ -402,10 +530,10 @@ public class LiveStrategyService {
         }
 
         log.info("라이브 매수 시도: deploymentId={}, symbol={}, assetType={}, qty={}, price={}({}), broker={}",
-                d.getId(), pos.getSymbol(), assetType, quantity, price, isUsd(assetType) ? "USD" : "KRW", d.getBrokerType());
+                d.getId(), pos.getSymbol(), assetType, quantity, price, priceInForeign(d, assetType) ? "FX" : "KRW", d.getBrokerType());
         Order order;
         try {
-            order = gateway.placeMarketOrder(d.getUserId(), pos.getSymbol(), pos.getSymbol(),
+            order = gateway.placeMarketOrder(d, d.getUserId(), pos.getSymbol(), pos.getSymbol(),
                     Order.OrderType.BUY, quantity, price, assetType, clientOrderId);
         } catch (Exception e) {
             log.warn("라이브 매수 주문 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
@@ -414,10 +542,13 @@ public class LiveStrategyService {
         if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return;
 
         BigDecimal fill = order.getFilledPrice() != null ? order.getFilledPrice() : price;
-        recordOrder(d, pos, "BUY", quantity, fill, clientOrderId, order.getId(), "ENTRY");
+        // 실제 체결수량이 있으면 그 값을 장부에 반영(Bitget 시장가 매수는 USDT 금액 주문이라 체결 base 수량이 산정값과 다를 수 있음)
+        BigDecimal filledQty = order.getFilledQuantity() != null && order.getFilledQuantity().compareTo(BigDecimal.ZERO) > 0
+                ? order.getFilledQuantity() : quantity;
+        recordOrder(d, pos, "BUY", filledQty, fill, clientOrderId, order.getId(), "ENTRY");
         pos.setDirection(LivePosition.Direction.LONG);
         pos.setAvgPrice(fill);
-        pos.setQuantity(quantity);
+        pos.setQuantity(filledQty);
         pos.setTrailRef(fill);
         pos.setStopLoss(d.getStopLossPct() != null ? pctBelow(fill, d.getStopLossPct()) : null);
         pos.setTradeCount(pos.getTradeCount() + 1);
@@ -467,7 +598,7 @@ public class LiveStrategyService {
 
         Order order;
         try {
-            order = gateway.placeMarketOrder(d.getUserId(), pos.getSymbol(), pos.getSymbol(),
+            order = gateway.placeMarketOrder(d, d.getUserId(), pos.getSymbol(), pos.getSymbol(),
                     Order.OrderType.SELL, quantity, BigDecimal.valueOf(currentPrice), pos.getAssetType(), clientOrderId);
         } catch (Exception e) {
             log.warn("라이브 매도 주문 실패: deploymentId={}, symbol={}, reason={}, error={}",
@@ -481,9 +612,9 @@ public class LiveStrategyService {
         BigDecimal pnlNative = pos.getAvgPrice() != null
                 ? fill.subtract(pos.getAvgPrice()).multiply(quantity)
                 : BigDecimal.ZERO;
-        // 손익은 KRW로 통일(미국주식/ETF는 USD→KRW 환산). avgPrice/fill은 네이티브 통화.
-        BigDecimal pnl = isUsd(pos.getAssetType())
-                ? pnlNative.multiply(BigDecimal.valueOf(exchangeRateService.getUsdKrwRate()))
+        // 손익은 KRW로 통일(외화 표시 자산은 환산). avgPrice/fill은 네이티브 통화(미국=USD, Bitget=USDT).
+        BigDecimal pnl = priceInForeign(d, pos.getAssetType())
+                ? pnlNative.multiply(BigDecimal.valueOf(nativeKrwRate(d, pos.getAssetType())))
                 : pnlNative;
 
         pos.setRealizedPnl(nz(pos.getRealizedPnl()).add(pnl));
@@ -590,6 +721,22 @@ public class LiveStrategyService {
     /** USD 표시 자산(미국주식/ETF) 여부 — KRW 환산이 필요한 자산. */
     private static boolean isUsd(String assetType) {
         return "US_STOCK".equalsIgnoreCase(assetType) || "ETF".equalsIgnoreCase(assetType);
+    }
+
+    /**
+     * 현재가가 외화 표시(KRW 환산 필요)인지. 미국주식/ETF=USD, Bitget 코인=USDT 캔들이라 외화.
+     * MOCK 코인(빗썸 KRW 캔들)은 외화가 아니다 — 브로커까지 봐야 통화를 정확히 판별할 수 있다.
+     */
+    private boolean priceInForeign(LiveStrategyDeployment d, String assetType) {
+        return isUsd(assetType) || d.getBrokerType() == LiveStrategyDeployment.BrokerType.BITGET;
+    }
+
+    /** 네이티브(외화)→KRW 환율. 미국주식/ETF=USD/KRW, Bitget 코인=USDT/KRW. */
+    private double nativeKrwRate(LiveStrategyDeployment d, String assetType) {
+        if (d.getBrokerType() == LiveStrategyDeployment.BrokerType.BITGET) {
+            return bitgetApiClient.getUsdtKrwRate();
+        }
+        return exchangeRateService.getUsdKrwRate();
     }
 
     /**

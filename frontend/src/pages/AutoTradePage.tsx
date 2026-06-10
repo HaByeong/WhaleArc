@@ -81,6 +81,7 @@ const REASON_LABEL: Record<string, string> = {
   TAKE_PROFIT: '익절',
   EXIT_SIGNAL: '청산 신호',
   TRAILING_STOP: '트레일링 손절',
+  MANUAL: '수동 청산',
 };
 
 const AutoTradePage = () => {
@@ -116,6 +117,9 @@ const AutoTradePage = () => {
   const [form, setForm] = useState({
     strategyId: '',
     accountKind: 'PAPER',
+    brokerType: 'KIS',          // 실거래 브로커 (KIS 국내·미국주식 / BITGET 코인). 모의는 항상 MOCK.
+    marketType: 'SPOT',         // Bitget 전용: SPOT(현물) / FUTURES(선물·레버리지)
+    leverage: '5',              // 선물 레버리지 배수
     allocatedCash: '1000000',
     targetAssetsText: '',
     assetType: '',
@@ -251,6 +255,15 @@ const AutoTradePage = () => {
       || pctErr('익절률', form.takeProfitPct, false);
     if (riskError) { pushToast('error', '리스크 값 확인', riskError); return; }
 
+    // 선물 레버리지 검증 (Bitget 선물에서만)
+    if (isLive && form.brokerType === 'BITGET' && form.marketType === 'FUTURES') {
+      const lev = Number(form.leverage);
+      if (!Number.isInteger(lev) || lev < 1 || lev > 10) {
+        pushToast('error', '레버리지 확인', '레버리지는 1~10배의 정수로 입력해주세요.');
+        return;
+      }
+    }
+
     const selected = allStrategies.find(s => s.id === form.strategyId);
     const isPreset = form.strategyId.startsWith('preset-');
     const typedAssets = form.targetAssetsText.split(',').map(s => s.trim()).filter(Boolean);
@@ -272,7 +285,13 @@ const AutoTradePage = () => {
         assetType: form.assetType || undefined,
         interval: form.interval,
         accountMode: isLive ? 'LIVE' : 'PAPER',   // 섹션으로 고정 (일반=실거래, /virt=모의)
-        brokerType: isLive ? 'KIS' : 'MOCK',
+        brokerType: isLive ? (form.brokerType as 'KIS' | 'BITGET') : 'MOCK',
+        ...(isLive && form.brokerType === 'BITGET'
+          ? {
+              marketType: form.marketType as 'SPOT' | 'FUTURES',
+              ...(form.marketType === 'FUTURES' ? { leverage: Number(form.leverage) } : {}),
+            }
+          : {}),
         stopLossPct: form.stopLossPct ? Number(form.stopLossPct) : undefined,
         takeProfitPct: form.takeProfitPct ? Number(form.takeProfitPct) : undefined,
         trailingStopPct: form.trailingStopPct ? Number(form.trailingStopPct) : undefined,
@@ -302,6 +321,23 @@ const AutoTradePage = () => {
     }
   };
 
+  const handleDelete = async (d: Deployment) => {
+    if (!window.confirm(
+      `'${d.strategyName}' 자동매매를 삭제할까요?\n\n` +
+      `주의: 거래소에 열린 포지션이 있으면 앱에서 더 이상 추적되지 않습니다. 잔여 포지션은 거래소에서 직접 확인·정리하세요.`
+    )) return;
+    setBusyId(d.id);
+    try {
+      await liveTradeService.deleteDeployment(d.id);
+      setDeployments(prev => prev.filter(x => x.id !== d.id));
+      pushToast('success', '삭제됨', `'${d.strategyName}' 자동매매를 삭제했습니다.`);
+    } catch (e) {
+      pushToast('error', '삭제 실패', errMsg(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const evaluateNow = async (d: Deployment) => {
     setBusyId(d.id);
     try {
@@ -310,6 +346,24 @@ const AutoTradePage = () => {
       pushToast('success', '평가 완료', `'${d.strategyName}' 신호를 즉시 평가했습니다.`);
     } catch (e) {
       pushToast('error', '평가 실패', errMsg(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const closeNow = async (d: Deployment) => {
+    const hasPosition = (d.positions || []).some(p => p.direction === 'LONG');
+    if (!hasPosition) { pushToast('error', '청산 불가', '보유 중인 포지션이 없습니다.'); return; }
+    if (!window.confirm(`'${d.strategyName}'의 보유 포지션을 지금 시장가로 청산할까요?`)) return;
+    setBusyId(d.id);
+    try {
+      const updated = await liveTradeService.closeNow(d.id);
+      setDeployments(prev => prev.map(x => (x.id === d.id ? updated : x)));
+      pushToast('success', '청산 완료', `'${d.strategyName}' 포지션을 청산했습니다.`);
+      // 캐시된 실행 로그 무효화 — 다음에 펼칠 때 청산 주문이 반영되도록
+      setOrderLogs(prev => { const n = { ...prev }; delete n[d.id]; return n; });
+    } catch (e) {
+      pushToast('error', '청산 실패', errMsg(e));
     } finally {
       setBusyId(null);
     }
@@ -459,7 +513,11 @@ const AutoTradePage = () => {
                             ? (isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-600')
                             : (isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-600')
                         }`}>
-                          {d.accountMode === 'LIVE' ? 'KIS 실거래' : '모의'}
+                          {d.accountMode === 'LIVE'
+                            ? d.brokerType === 'BITGET'
+                              ? `Bitget ${d.marketType === 'FUTURES' ? `선물 ${d.leverage ?? ''}x` : '현물'}`
+                              : 'KIS 실거래'
+                            : '모의'}
                         </span>
                         <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${isDark ? sm.dark : sm.light}`}>{sm.label}</span>
                       </div>
@@ -631,6 +689,14 @@ const AutoTradePage = () => {
                         지금 평가
                       </button>
                     )}
+                    {/* 지금 청산 — 보유 포지션이 있을 때(신호/익절손절 안 기다리고 즉시 시장가 청산) */}
+                    {(d.positions || []).some(p => p.direction === 'LONG') && (
+                      <button disabled={busyId === d.id} onClick={() => closeNow(d)}
+                        title="보유 포지션 전부 시장가 청산"
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-orange-500/15 text-orange-300 hover:bg-orange-500/25' : 'bg-orange-50 text-orange-700 hover:bg-orange-100'}`}>
+                        지금 청산
+                      </button>
+                    )}
                     {d.status === 'RUNNING' ? (
                       <button disabled={busyId === d.id} onClick={() => changeStatus(d, 'pause')}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>
@@ -646,6 +712,14 @@ const AutoTradePage = () => {
                       <button disabled={busyId === d.id} onClick={() => changeStatus(d, 'stop')}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-red-500/15 text-red-300 hover:bg-red-500/25' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}>
                         정지
+                      </button>
+                    )}
+                    {/* 삭제 — 가동 중이 아닐 때만(먼저 정지해야 함) */}
+                    {d.status !== 'RUNNING' && (
+                      <button disabled={busyId === d.id} onClick={() => handleDelete(d)}
+                        title="자동매매 카드 삭제 (거래소 포지션은 직접 정리 필요)"
+                        className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-red-300' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-red-600'}`}>
+                        삭제
                       </button>
                     )}
                   </div>
@@ -741,7 +815,7 @@ const AutoTradePage = () => {
           >
             <div className={`px-5 py-4 border-b ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
               <h2 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-800'}`}>새 {modeLabel} 자동매매 시작</h2>
-              <p className={`text-xs mt-0.5 ${subText}`}>{isLive ? 'KIS 실전 계좌에 직접 주문하는 실거래입니다 (실제 자금 ⚠️).' : '가상자금으로 안전하게 연습하는 모의 자동매매입니다. 실제 돈은 나가지 않습니다.'}</p>
+              <p className={`text-xs mt-0.5 ${subText}`}>{isLive ? '실전 계좌(KIS·Bitget)에 직접 주문하는 실거래입니다 (실제 자금 ⚠️).' : '가상자금으로 안전하게 연습하는 모의 자동매매입니다. 실제 돈은 나가지 않습니다.'}</p>
             </div>
 
             <div className="px-5 py-4 space-y-4">
@@ -770,19 +844,34 @@ const AutoTradePage = () => {
               </div>
 
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>계좌</label>
+                <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>{isLive ? '거래소 (브로커)' : '계좌'}</label>
                 {isLive ? (
                   <>
-                    <div className={`rounded-lg border px-3 py-2 text-sm font-semibold ${isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
-                      KIS 실거래 (실제 자금 ⚠️)
-                    </div>
-                    <p className={`text-[11px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
-                      ⚠️ KIS <b>실전 계좌</b>에 직접 주문합니다 — <b>실제 돈이 나갑니다.</b>
-                      거래소 연동에서 KIS 키를 먼저 등록하세요. <b>국내주식(예: 005930)</b>과 <b>미국주식(예: JOBY)</b> 모두 가능하며,
-                      미국주식은 <b>미국 장중(22:30~05:00 KST)</b>에만 체결됩니다(시장가 없어 현재가 지정가로 발주).
-                      안전장치로 <b>1건당 10만원 상한</b>이 걸려 있고, 비상 시 상단 킬스위치로 전체 정지하세요.
-                      <b>처음엔 1주 극소액으로 검증</b>하길 권장합니다.
-                    </p>
+                    <select
+                      value={form.brokerType}
+                      onChange={e => setForm(prev => ({ ...prev, brokerType: e.target.value }))}
+                      className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700'}`}
+                    >
+                      <option value="KIS">KIS 한국투자증권 — 국내·미국주식 (실제 자금 ⚠️)</option>
+                      <option value="BITGET">Bitget — 코인 현물·선물 (실제 자금 ⚠️)</option>
+                    </select>
+                    {form.brokerType === 'KIS' ? (
+                      <p className={`text-[11px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
+                        ⚠️ KIS <b>실전 계좌</b>에 직접 주문합니다 — <b>실제 돈이 나갑니다.</b>
+                        거래소 연동에서 KIS 키를 먼저 등록하세요. <b>국내주식(예: 005930)</b>과 <b>미국주식(예: JOBY)</b> 모두 가능하며,
+                        미국주식은 <b>미국 장중(22:30~05:00 KST)</b>에만 체결됩니다(시장가 없어 현재가 지정가로 발주).
+                        안전장치로 <b>1건당 10만원 상한</b>이 걸려 있고, 비상 시 상단 킬스위치로 전체 정지하세요.
+                        <b>처음엔 1주 극소액으로 검증</b>하길 권장합니다.
+                      </p>
+                    ) : (
+                      <p className={`text-[11px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
+                        ⚠️ Bitget <b>현물(Spot) 계좌</b>에 직접 주문합니다 — <b>실제 돈이 나갑니다.</b>
+                        거래소 연동에서 Bitget 키(<b>apiKey·secretKey·passphrase</b>)를 먼저 등록하세요. <b>코인(예: BTC, ETH)</b>만 거래하며
+                        가격·신호는 <b>Bitget USDT 시세</b> 기준입니다. 할당 금액(원)은 <b>USDT로 환산</b>되어 주문되고,
+                        최소 주문금액(보통 5 USDT) 이상이어야 합니다. 안전장치로 <b>1건당 10만원 상한</b>이 걸려 있습니다.
+                        <b>처음엔 극소액으로 검증</b>하길 권장합니다.
+                      </p>
+                    )}
                   </>
                 ) : (
                   <>
@@ -793,6 +882,45 @@ const AutoTradePage = () => {
                   </>
                 )}
               </div>
+
+              {/* Bitget 전용: 현물/선물 + 레버리지 */}
+              {isLive && form.brokerType === 'BITGET' && (
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>거래 시장</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { v: 'SPOT', label: '현물 (Spot)', desc: '레버리지 없음' },
+                      { v: 'FUTURES', label: '선물 (Futures)', desc: '레버리지 ⚠️' },
+                    ] as const).map(m => {
+                      const active = form.marketType === m.v;
+                      return (
+                        <button key={m.v} type="button"
+                          onClick={() => setForm(prev => ({ ...prev, marketType: m.v }))}
+                          className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                            active
+                              ? (isDark ? 'bg-amber-500/15 border-amber-500/40 text-amber-200' : 'bg-amber-50 border-amber-300 text-amber-700')
+                              : (isDark ? 'bg-white/[0.04] border-white/10 text-slate-300' : 'bg-white border-gray-300 text-gray-700')
+                          }`}>
+                          <div className="text-sm font-semibold">{m.label}</div>
+                          <div className={`text-[10.5px] ${active ? '' : subText}`}>{m.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {form.marketType === 'FUTURES' && (
+                    <div className="mt-2">
+                      <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>레버리지 (배)</label>
+                      <input type="number" min={1} max={10} step={1} value={form.leverage}
+                        onChange={e => setForm(prev => ({ ...prev, leverage: e.target.value }))}
+                        className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`} />
+                      <p className={`text-[11px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
+                        ⚠️ 레버리지 {form.leverage || '?'}배 — 손익이 {form.leverage || '?'}배로 증폭됩니다. 청산(원금 전액 손실) 위험이 커지니
+                        <b> 반드시 손절을 설정</b>하고 <b>극소액</b>으로 시작하세요. (1~10배, isolated 마진)
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>자산 유형</label>

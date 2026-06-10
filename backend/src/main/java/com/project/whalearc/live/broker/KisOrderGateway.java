@@ -45,7 +45,7 @@ public class KisOrderGateway implements OrderGateway {
     }
 
     @Override
-    public Order placeMarketOrder(String userId, String stockCode, String stockName,
+    public Order placeMarketOrder(LiveStrategyDeployment deployment, String userId, String stockCode, String stockName,
                                   Order.OrderType side, BigDecimal quantity, BigDecimal price,
                                   String assetType, String clientOrderId) {
         KisPaperCredential cred = credentialResolver.resolve(userId);

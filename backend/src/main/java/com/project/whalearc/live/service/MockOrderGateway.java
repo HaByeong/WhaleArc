@@ -29,7 +29,7 @@ public class MockOrderGateway implements OrderGateway {
     }
 
     @Override
-    public Order placeMarketOrder(String userId, String stockCode, String stockName,
+    public Order placeMarketOrder(LiveStrategyDeployment deployment, String userId, String stockCode, String stockName,
                                   Order.OrderType side, BigDecimal quantity, BigDecimal price,
                                   String assetType, String clientOrderId) {
         // 모의는 OrderService 가상 체결(시장가)이라 price(지정가 산출용)는 사용하지 않는다.

@@ -37,6 +37,10 @@ public class CreateDeploymentRequest {
     private LiveStrategyDeployment.AccountMode accountMode;  // null이면 PAPER
     private LiveStrategyDeployment.BrokerType brokerType;    // null이면 MOCK
 
+    // 거래 시장/레버리지 (Bitget 전용) — null이면 SPOT, leverage는 선물에서만 사용
+    private LiveStrategyDeployment.MarketType marketType;
+    private Integer leverage;
+
     // 리스크 파라미터 (퍼센트, 선택)
     private BigDecimal stopLossPct;
     private BigDecimal takeProfitPct;

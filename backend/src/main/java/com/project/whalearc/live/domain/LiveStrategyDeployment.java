@@ -52,6 +52,10 @@ public class LiveStrategyDeployment {
     private AccountMode accountMode = AccountMode.PAPER;
     private BrokerType brokerType = BrokerType.MOCK;
 
+    // ── 거래 시장/레버리지 (Bitget 전용; KIS/MOCK은 SPOT·레버리지 1 고정) ──
+    private MarketType marketType = MarketType.SPOT;   // SPOT(현물) / FUTURES(USDT 무기한 선물)
+    private Integer leverage;                          // 선물 레버리지 배수 (현물/미설정이면 1로 취급)
+
     @Indexed
     private Status status = Status.RUNNING;
 
@@ -83,7 +87,19 @@ public class LiveStrategyDeployment {
 
     public enum BrokerType { MOCK, KIS, UPBIT, BITGET }
 
+    /** 거래 시장 종류. SPOT=현물, FUTURES=USDT 무기한 선물(레버리지). */
+    public enum MarketType { SPOT, FUTURES }
+
     public enum Status { RUNNING, PAUSED, STOPPED, ERROR }
+
+    /** 레버리지 배수(미설정/현물이면 1). */
+    public int effectiveLeverage() {
+        return (marketType == MarketType.FUTURES && leverage != null && leverage > 0) ? leverage : 1;
+    }
+
+    public boolean isFutures() {
+        return marketType == MarketType.FUTURES;
+    }
 
     /**
      * 심볼 1개의 라이브 포지션 상태. (Strategy의 Condition/Indicator처럼 별도 컬렉션이 아닌 임베드 객체)

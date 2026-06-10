@@ -5,6 +5,7 @@ import type { Indicator, Condition } from './strategyService';
 
 export type AccountMode = 'PAPER' | 'LIVE';
 export type BrokerType = 'MOCK' | 'KIS' | 'UPBIT' | 'BITGET';
+export type MarketType = 'SPOT' | 'FUTURES';
 export type DeploymentStatus = 'RUNNING' | 'PAUSED' | 'STOPPED' | 'ERROR';
 export type PositionDirection = 'NONE' | 'LONG';
 
@@ -30,6 +31,8 @@ export interface Deployment {
   interval: string;
   accountMode: AccountMode;
   brokerType: BrokerType;
+  marketType?: MarketType;
+  leverage?: number;
   status: DeploymentStatus;
   allocatedCash: number;
   stopLossPct?: number;
@@ -58,6 +61,8 @@ export interface CreateDeploymentRequest {
   allocatedCash: number;
   accountMode?: AccountMode;
   brokerType?: BrokerType;
+  marketType?: MarketType;
+  leverage?: number;
   stopLossPct?: number;
   takeProfitPct?: number;
   trailingStopPct?: number;
@@ -111,9 +116,20 @@ export const liveTradeService = {
     return response.data.data;
   },
 
+  // 배포 삭제 (가동 중이면 백엔드가 거부 — 먼저 정지 필요)
+  deleteDeployment: async (deploymentId: string): Promise<void> => {
+    await apiClient.delete(`/api/live/deployments/${deploymentId}`);
+  },
+
   // 수동 즉시 평가 (정시 cron 대기 없이 1회 평가)
   evaluateNow: async (deploymentId: string): Promise<Deployment> => {
     const response = await apiClient.post(`/api/live/deployments/${deploymentId}/evaluate`);
+    return response.data.data;
+  },
+
+  // 수동 즉시 청산 (보유 포지션 전부 시장가 청산)
+  closeNow: async (deploymentId: string): Promise<Deployment> => {
+    const response = await apiClient.post(`/api/live/deployments/${deploymentId}/close`);
     return response.data.data;
   },
 

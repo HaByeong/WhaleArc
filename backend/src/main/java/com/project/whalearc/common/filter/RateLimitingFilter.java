@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -85,6 +86,13 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    // 오래된(2 윈도우 이상 지난) 카운터 엔트리를 주기적으로 제거 — 맵 무한 증가(메모리 누수) 방지
+    @Scheduled(fixedDelay = 300_000L)
+    public void evictStaleCounters() {
+        long now = System.currentTimeMillis();
+        requestCounters.entrySet().removeIf(e -> now - e.getValue().windowStart() > WINDOW_MS * 2);
+    }
+
     private String getClientIp(HttpServletRequest request) {
         // 인증된 사용자는 userId 기반 제한 (IP 우회 불가)
         var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
@@ -98,6 +106,8 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     private static class RequestCounter {
         private final AtomicInteger count = new AtomicInteger(0);
         private volatile long windowStart = System.currentTimeMillis();
+
+        long windowStart() { return windowStart; }
 
         boolean tryAcquire(int limit) {
             long now = System.currentTimeMillis();

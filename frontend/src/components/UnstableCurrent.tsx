@@ -1,4 +1,4 @@
-const UnstableCurrent = ({ message = '해류가 불안정합니다', sub = '데이터를 다시 불러오고 있어요...' }: { message?: string; sub?: string }) => (
+const UnstableCurrent = ({ message = '데이터를 불러오지 못했어요', sub = '잠시 후 다시 시도해주세요...' }: { message?: string; sub?: string }) => (
   <div className="relative overflow-hidden rounded-xl py-12 px-6 text-center">
     {/* 해류 웨이브 배경 */}
     <svg className="absolute inset-0 w-full h-full opacity-30" preserveAspectRatio="none" viewBox="0 0 400 120">

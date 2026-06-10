@@ -62,7 +62,9 @@ public class BacktestService {
             entryConditions = strategy.getEntryConditions();
             exitConditions = strategy.getExitConditions();
         } else {
-            strategyName = "종목 분석";
+            // 프리셋/직접조건 실행은 strategyId가 없으므로, 요청에 실린 표시용 전략명을 우선 사용(서버 저장 히스토리에 올바른 이름 보관)
+            strategyName = (request.getStrategyName() != null && !request.getStrategyName().isBlank())
+                    ? request.getStrategyName() : "종목 분석";
             strategyId = "direct";
             indicators = request.getIndicators();
             entryConditions = request.getEntryConditions();
@@ -286,10 +288,34 @@ public class BacktestService {
             if (w <= 0 || w >= 100) {
                 throw new IllegalArgumentException("첫 자산 비중은 0%와 100% 사이여야 합니다.");
             }
+            // 2자산 리밸런싱은 비중 배분(롱) 전략 — 공매도/롱·숏은 의미가 정의되지 않음
+            if (request.getTradeDirection() != null && !"LONG_ONLY".equalsIgnoreCase(request.getTradeDirection())) {
+                throw new IllegalArgumentException("2자산 리밸런싱은 매수(LONG_ONLY) 전략만 지원합니다.");
+            }
         }
     }
 
     // ── 지표 계산 ─────────────────────────────────────────────────────────
+
+    /** 자동매매용 — 최신 캔들 기준 진입/청산 신호 평가 (백테스트 신호 로직 재사용) */
+    public record SignalCheck(boolean entry, boolean exit) {}
+
+    public SignalCheck evaluateLatestSignal(List<Indicator> indicators,
+                                            List<Condition> entryConditions,
+                                            List<Condition> exitConditions,
+                                            List<CandlestickResponse> candles) {
+        // 종가가 확정된 직전 캔들에서 평가(마지막 캔들은 진행 중일 수 있음).
+        // 백테스트는 확정 캔들로만 매매하므로 동일 규약을 따른다 → 신호 깜빡임/괴리 방지. (크로스오버는 idx-1 필요 → 최소 3개)
+        if (candles == null || candles.size() < 3) return new SignalCheck(false, false);
+        Map<String, double[]> ind = calculateIndicators(candles, indicators, entryConditions, exitConditions);
+        int eval = candles.size() - 2;
+        double price = candles.get(eval).getClose();
+        boolean e = entryConditions != null && !entryConditions.isEmpty()
+                && evaluateConditions(entryConditions, ind, eval, price, candles, 0, eval);
+        boolean x = exitConditions != null && !exitConditions.isEmpty()
+                && evaluateConditions(exitConditions, ind, eval, price, candles, 0, eval);
+        return new SignalCheck(e, x);
+    }
 
     private Map<String, double[]> calculateIndicators(List<CandlestickResponse> candles,
                                                        List<Indicator> indicators,
@@ -799,6 +825,10 @@ public class BacktestService {
             }
 
             // ── 최대 낙폭 & 지속기간 ──
+            // 적립식 외부 납입금은 시장 수익이 아니므로, 납입액만큼 고수위선(peak)을 올려
+            // 현금 유입이 낙폭으로 오인되지 않게 한다. 그 뒤 실제 equity로 낙폭을 계산.
+            // 비-DCA 모드는 contribToday==0 이라 표준 MDD(고점 대비 하락)와 동일.
+            if (contribToday > 0) peakEquity += contribToday;
             if (equity >= peakEquity) {
                 peakEquity = equity;
                 if (drawdownStart >= 0) {
@@ -1098,8 +1128,10 @@ public class BacktestService {
         double cashA = initialCap * weightA;
         double cashB = initialCap * weightB;
         double qtyA = 0, qtyB = 0;
-        double entryPriceA = 0, entryPriceB = 0;
+        double entryPriceA = 0, entryPriceB = 0;       // 가중평균 진입가 (적립 추가매수 시 갱신)
+        double costBasisA = 0, costBasisB = 0;          // 현재 포지션 총 투자원가(수수료 포함) — 손익 분류를 단일자산 경로와 일치시킴
         int entryDayIndexA = 0, entryDayIndexB = 0;
+        double highSinceEntryA = 0, highSinceEntryB = 0; // 트레일링 스탑용 진입 후 최고가
 
         // 적립식
         double monthlyKrw = request.getMonthlyContribution() != null ? request.getMonthlyContribution() : 0.0;
@@ -1111,6 +1143,11 @@ public class BacktestService {
         // 매매 파라미터
         double slippage = request.getSlippagePercent() != null ? request.getSlippagePercent() / 100.0 : 0;
         double commissionRate = request.getCommissionRate() != null ? request.getCommissionRate() / 100.0 : DEFAULT_COMMISSION_RATE;
+        // 리스크 관리 (롱 전용 — 자산별 손절/익절/트레일링). 2자산 모드는 숏 미지원(validateRequest 에서 차단).
+        double stopLoss = request.getStopLossPercent() != null ? request.getStopLossPercent() : 0;
+        double takeProfit = request.getTakeProfitPercent() != null ? request.getTakeProfitPercent() : 0;
+        double trailingStop = request.getTrailingStopPercent() != null ? request.getTrailingStopPercent() : 0;
+        double eps = initialCap * 1e-4; // 유휴현금 추가매수 최소 임계 (먼지 거래 방지)
 
         List<BacktestResponse.TradeDto> trades = new java.util.ArrayList<>();
         List<BacktestResponse.EquityPointDto> equityCurve = new java.util.ArrayList<>();
@@ -1211,11 +1248,16 @@ public class BacktestService {
                             double sellExec = priceA * (1 - slippage);
                             double sellQty = Math.min(qtyA, moveAmount / (sellExec * (1 - commissionRate)));
                             double sellProceeds = sellQty * sellExec * (1 - commissionRate);
+                            double soldCost = qtyA > 0 ? costBasisA * (sellQty / qtyA) : 0; // 비례 원가(수수료 포함)
+                            double rpnl = sellProceeds - soldCost; // 리밸런싱 일부 매도 실현손익 (통계 반영)
+                            costBasisA -= soldCost;
                             qtyA -= sellQty;
                             cashB += sellProceeds;
+                            // 리밸런싱 트림은 재량 진입/청산이 아니므로 승률·ProfitFactor·손익비·연승 통계에서 제외
+                            // (거래내역엔 .pnl 포함해 투명 기록). 단일자산 simulate() 경로와 일관성 유지.
                             trades.add(BacktestResponse.TradeDto.builder()
                                     .date(date).type("REBALANCE_SELL_A").price(round2(sellExec)).quantity(sellQty)
-                                    .pnl(0).pnlPercent(0).reason("리밸런싱: 자산A 일부 매도").holdingDays(0)
+                                    .pnl(round2(rpnl)).pnlPercent(0).reason("리밸런싱: 자산A 일부 매도").holdingDays(0)
                                     .balance(Math.round(cashA + cashB + qtyA * priceA + qtyB * priceB))
                                     .build());
                             aTrades++;
@@ -1232,11 +1274,16 @@ public class BacktestService {
                             double sellExec = priceB * (1 - slippage);
                             double sellQty = Math.min(qtyB, moveAmount / (sellExec * (1 - commissionRate)));
                             double sellProceeds = sellQty * sellExec * (1 - commissionRate);
+                            double soldCost = qtyB > 0 ? costBasisB * (sellQty / qtyB) : 0; // 비례 원가(수수료 포함)
+                            double rpnl = sellProceeds - soldCost; // 리밸런싱 일부 매도 실현손익 (통계 반영)
+                            costBasisB -= soldCost;
                             qtyB -= sellQty;
                             cashA += sellProceeds;
+                            // 리밸런싱 트림은 재량 진입/청산이 아니므로 승률·ProfitFactor·손익비·연승 통계에서 제외
+                            // (거래내역엔 .pnl 포함해 투명 기록). 단일자산 simulate() 경로와 일관성 유지.
                             trades.add(BacktestResponse.TradeDto.builder()
                                     .date(date).type("REBALANCE_SELL_B").price(round2(sellExec)).quantity(sellQty)
-                                    .pnl(0).pnlPercent(0).reason("리밸런싱: 자산B 일부 매도").holdingDays(0)
+                                    .pnl(round2(rpnl)).pnlPercent(0).reason("리밸런싱: 자산B 일부 매도").holdingDays(0)
                                     .balance(Math.round(cashA + cashB + qtyA * priceA + qtyB * priceB))
                                     .build());
                             bTrades++;
@@ -1248,98 +1295,169 @@ public class BacktestService {
             }
             prevYm = curYm;
 
-            // ── 자산A: 자기 신호로 매매 ──
-            if (qtyA == 0 && cashA > 0
-                    && evaluateConditions(entryConditions, indicatorsA, gA, priceA, candlesA, globalOffsetA, aIdx)) {
-                double execPrice = priceA * (1 + slippage);
-                double commAmt = cashA * commissionRate;
-                double buyQty = (cashA - commAmt) / execPrice;
-                qtyA = buyQty;
-                entryPriceA = execPrice;
-                entryDayIndexA = idx;
-                cashA = 0;
-                trades.add(BacktestResponse.TradeDto.builder()
-                        .date(date).type("BUY_A").price(round2(execPrice)).quantity(buyQty)
-                        .pnl(-commAmt).pnlPercent(0).reason("자산A 진입").holdingDays(0)
-                        .balance(Math.round(cashA + cashB + qtyA * priceA + qtyB * priceB))
-                        .build());
-                aTrades++;
-            } else if (qtyA > 0
-                    && evaluateConditions(exitConditions, indicatorsA, gA, priceA, candlesA, globalOffsetA, aIdx)) {
-                double execPrice = priceA * (1 - slippage);
-                double sellProceeds = qtyA * execPrice * (1 - commissionRate);
-                double pnl = sellProceeds - qtyA * entryPriceA;
-                double pnlRate = entryPriceA > 0 ? (execPrice - entryPriceA) / entryPriceA * 100 : 0;
-                int holdDays = idx - entryDayIndexA;
-                if (pnl > 0) {
-                    profitable++; winAmounts.add(pnl); winRates.add(pnlRate);
-                    curStreak = curStreak >= 0 ? curStreak + 1 : 1;
-                    if (curStreak > maxWinStreak) maxWinStreak = curStreak;
-                } else if (pnl < 0) {
-                    losing++; lossAmounts.add(Math.abs(pnl)); lossRates.add(Math.abs(pnlRate));
-                    curStreak = curStreak <= 0 ? curStreak - 1 : -1;
-                    if (-curStreak > maxLossStreak) maxLossStreak = -curStreak;
+            // ── 자산A: 리스크 청산(손절/익절/트레일링) → 신호 매매 → 적립 추가매수 ──
+            boolean aHandled = false;
+            if (qtyA > 0 && entryPriceA > 0 && (stopLoss > 0 || takeProfit > 0 || trailingStop > 0)) {
+                double hi = cA.getHigh(), lo = cA.getLow();
+                if (hi > highSinceEntryA) highSinceEntryA = hi;
+                boolean slHit = stopLoss > 0 && (lo - entryPriceA) / entryPriceA * 100 <= -stopLoss;
+                boolean tpHit = takeProfit > 0 && (hi - entryPriceA) / entryPriceA * 100 >= takeProfit;
+                boolean tsHit = trailingStop > 0 && highSinceEntryA > 0
+                        && (highSinceEntryA - lo) / highSinceEntryA * 100 >= trailingStop;
+                if (slHit && tpHit) tpHit = false; // 손절 우선
+                if (slHit || tpHit || tsHit) {
+                    double exitRef = slHit ? entryPriceA * (1 - stopLoss / 100.0)
+                            : tpHit ? entryPriceA * (1 + takeProfit / 100.0)
+                            : highSinceEntryA * (1 - trailingStop / 100.0);
+                    double execPrice = exitRef * (1 - slippage);
+                    double sellProceeds = qtyA * execPrice * (1 - commissionRate);
+                    double pnl = sellProceeds - costBasisA; // 수수료 포함 원가 기준 (단일자산 경로와 일치)
+                    double pnlRate = entryPriceA > 0 ? (execPrice - entryPriceA) / entryPriceA * 100 : 0;
+                    int holdDays = idx - entryDayIndexA;
+                    if (pnl > 0) { profitable++; winAmounts.add(pnl); winRates.add(pnlRate); curStreak = curStreak >= 0 ? curStreak + 1 : 1; if (curStreak > maxWinStreak) maxWinStreak = curStreak; }
+                    else if (pnl < 0) { losing++; lossAmounts.add(Math.abs(pnl)); lossRates.add(Math.abs(pnlRate)); curStreak = curStreak <= 0 ? curStreak - 1 : -1; if (-curStreak > maxLossStreak) maxLossStreak = -curStreak; }
+                    holdingDaysList.add(holdDays);
+                    cashA += sellProceeds;
+                    String reason = slHit ? String.format("자산A 손절 (%.1f%%)", -stopLoss)
+                            : tpHit ? String.format("자산A 익절 (+%.1f%%)", takeProfit)
+                            : String.format("자산A 트레일링 스탑 (-%.1f%%)", trailingStop);
+                    trades.add(BacktestResponse.TradeDto.builder()
+                            .date(date).type("SELL_A").price(round2(execPrice)).quantity(qtyA)
+                            .pnl(round2(pnl)).pnlPercent(round2(pnlRate)).reason(reason).holdingDays(holdDays)
+                            .balance(Math.round(cashA + cashB + qtyB * priceB)).build());
+                    qtyA = 0; entryPriceA = 0; costBasisA = 0; highSinceEntryA = 0; aTrades++;
+                    aHandled = true;
                 }
-                holdingDaysList.add(holdDays);
-                cashA += sellProceeds;
-                trades.add(BacktestResponse.TradeDto.builder()
-                        .date(date).type("SELL_A").price(round2(execPrice)).quantity(qtyA)
-                        .pnl(round2(pnl)).pnlPercent(round2(pnlRate)).reason("자산A 청산")
-                        .holdingDays(holdDays)
-                        .balance(Math.round(cashA + cashB + qtyB * priceB))
-                        .build());
-                qtyA = 0;
-                entryPriceA = 0;
-                aTrades++;
+            }
+            if (!aHandled) {
+                boolean entrySigA = evaluateConditions(entryConditions, indicatorsA, gA, priceA, candlesA, globalOffsetA, aIdx);
+                if (qtyA == 0 && cashA > 0 && entrySigA) {
+                    double execPrice = priceA * (1 + slippage);
+                    double commAmt = cashA * commissionRate;
+                    double buyQty = (cashA - commAmt) / execPrice;
+                    qtyA = buyQty; entryPriceA = execPrice; entryDayIndexA = idx; highSinceEntryA = priceA;
+                    costBasisA = cashA; cashA = 0;
+                    trades.add(BacktestResponse.TradeDto.builder()
+                            .date(date).type("BUY_A").price(round2(execPrice)).quantity(buyQty)
+                            .pnl(-commAmt).pnlPercent(0).reason("자산A 진입").holdingDays(0)
+                            .balance(Math.round(cashA + cashB + qtyA * priceA + qtyB * priceB)).build());
+                    aTrades++;
+                } else if (qtyA > 0
+                        && evaluateConditions(exitConditions, indicatorsA, gA, priceA, candlesA, globalOffsetA, aIdx)) {
+                    double execPrice = priceA * (1 - slippage);
+                    double sellProceeds = qtyA * execPrice * (1 - commissionRate);
+                    double pnl = sellProceeds - costBasisA;
+                    double pnlRate = entryPriceA > 0 ? (execPrice - entryPriceA) / entryPriceA * 100 : 0;
+                    int holdDays = idx - entryDayIndexA;
+                    if (pnl > 0) { profitable++; winAmounts.add(pnl); winRates.add(pnlRate); curStreak = curStreak >= 0 ? curStreak + 1 : 1; if (curStreak > maxWinStreak) maxWinStreak = curStreak; }
+                    else if (pnl < 0) { losing++; lossAmounts.add(Math.abs(pnl)); lossRates.add(Math.abs(pnlRate)); curStreak = curStreak <= 0 ? curStreak - 1 : -1; if (-curStreak > maxLossStreak) maxLossStreak = -curStreak; }
+                    holdingDaysList.add(holdDays);
+                    cashA += sellProceeds;
+                    trades.add(BacktestResponse.TradeDto.builder()
+                            .date(date).type("SELL_A").price(round2(execPrice)).quantity(qtyA)
+                            .pnl(round2(pnl)).pnlPercent(round2(pnlRate)).reason("자산A 청산").holdingDays(holdDays)
+                            .balance(Math.round(cashA + cashB + qtyB * priceB)).build());
+                    qtyA = 0; entryPriceA = 0; costBasisA = 0; highSinceEntryA = 0; aTrades++;
+                } else if (qtyA > 0 && cashA > eps && entrySigA) {
+                    // 적립 추가매수: 보유 중 유휴현금(적립·리밸런싱 유입)을 진입신호에 추가 투입 (DCA 재투자)
+                    double execPrice = priceA * (1 + slippage);
+                    double commAmt = cashA * commissionRate;
+                    double addQty = (cashA - commAmt) / execPrice;
+                    double newQty = qtyA + addQty;
+                    entryPriceA = (entryPriceA * qtyA + execPrice * addQty) / newQty;
+                    costBasisA += cashA; qtyA = newQty; cashA = 0;
+                    trades.add(BacktestResponse.TradeDto.builder()
+                            .date(date).type("BUY_A").price(round2(execPrice)).quantity(addQty)
+                            .pnl(-commAmt).pnlPercent(0).reason("자산A 추가 매수 (적립)").holdingDays(0)
+                            .balance(Math.round(cashA + cashB + qtyA * priceA + qtyB * priceB)).build());
+                    aTrades++;
+                }
             }
 
-            // ── 자산B: 자기 신호로 매매 ──
-            if (qtyB == 0 && cashB > 0
-                    && evaluateConditions(entryConditions, indicatorsB, gB, priceB, candlesB, globalOffsetB, bIdx)) {
-                double execPrice = priceB * (1 + slippage);
-                double commAmt = cashB * commissionRate;
-                double buyQty = (cashB - commAmt) / execPrice;
-                qtyB = buyQty;
-                entryPriceB = execPrice;
-                entryDayIndexB = idx;
-                cashB = 0;
-                trades.add(BacktestResponse.TradeDto.builder()
-                        .date(date).type("BUY_B").price(round2(execPrice)).quantity(buyQty)
-                        .pnl(-commAmt).pnlPercent(0).reason("자산B 진입").holdingDays(0)
-                        .balance(Math.round(cashA + cashB + qtyA * priceA + qtyB * priceB))
-                        .build());
-                bTrades++;
-            } else if (qtyB > 0
-                    && evaluateConditions(exitConditions, indicatorsB, gB, priceB, candlesB, globalOffsetB, bIdx)) {
-                double execPrice = priceB * (1 - slippage);
-                double sellProceeds = qtyB * execPrice * (1 - commissionRate);
-                double pnl = sellProceeds - qtyB * entryPriceB;
-                double pnlRate = entryPriceB > 0 ? (execPrice - entryPriceB) / entryPriceB * 100 : 0;
-                int holdDays = idx - entryDayIndexB;
-                if (pnl > 0) {
-                    profitable++; winAmounts.add(pnl); winRates.add(pnlRate);
-                    curStreak = curStreak >= 0 ? curStreak + 1 : 1;
-                    if (curStreak > maxWinStreak) maxWinStreak = curStreak;
-                } else if (pnl < 0) {
-                    losing++; lossAmounts.add(Math.abs(pnl)); lossRates.add(Math.abs(pnlRate));
-                    curStreak = curStreak <= 0 ? curStreak - 1 : -1;
-                    if (-curStreak > maxLossStreak) maxLossStreak = -curStreak;
+            // ── 자산B: 리스크 청산 → 신호 매매 → 적립 추가매수 ──
+            boolean bHandled = false;
+            if (qtyB > 0 && entryPriceB > 0 && (stopLoss > 0 || takeProfit > 0 || trailingStop > 0)) {
+                double hi = cB.getHigh(), lo = cB.getLow();
+                if (hi > highSinceEntryB) highSinceEntryB = hi;
+                boolean slHit = stopLoss > 0 && (lo - entryPriceB) / entryPriceB * 100 <= -stopLoss;
+                boolean tpHit = takeProfit > 0 && (hi - entryPriceB) / entryPriceB * 100 >= takeProfit;
+                boolean tsHit = trailingStop > 0 && highSinceEntryB > 0
+                        && (highSinceEntryB - lo) / highSinceEntryB * 100 >= trailingStop;
+                if (slHit && tpHit) tpHit = false; // 손절 우선
+                if (slHit || tpHit || tsHit) {
+                    double exitRef = slHit ? entryPriceB * (1 - stopLoss / 100.0)
+                            : tpHit ? entryPriceB * (1 + takeProfit / 100.0)
+                            : highSinceEntryB * (1 - trailingStop / 100.0);
+                    double execPrice = exitRef * (1 - slippage);
+                    double sellProceeds = qtyB * execPrice * (1 - commissionRate);
+                    double pnl = sellProceeds - costBasisB; // 수수료 포함 원가 기준 (단일자산 경로와 일치)
+                    double pnlRate = entryPriceB > 0 ? (execPrice - entryPriceB) / entryPriceB * 100 : 0;
+                    int holdDays = idx - entryDayIndexB;
+                    if (pnl > 0) { profitable++; winAmounts.add(pnl); winRates.add(pnlRate); curStreak = curStreak >= 0 ? curStreak + 1 : 1; if (curStreak > maxWinStreak) maxWinStreak = curStreak; }
+                    else if (pnl < 0) { losing++; lossAmounts.add(Math.abs(pnl)); lossRates.add(Math.abs(pnlRate)); curStreak = curStreak <= 0 ? curStreak - 1 : -1; if (-curStreak > maxLossStreak) maxLossStreak = -curStreak; }
+                    holdingDaysList.add(holdDays);
+                    cashB += sellProceeds;
+                    String reason = slHit ? String.format("자산B 손절 (%.1f%%)", -stopLoss)
+                            : tpHit ? String.format("자산B 익절 (+%.1f%%)", takeProfit)
+                            : String.format("자산B 트레일링 스탑 (-%.1f%%)", trailingStop);
+                    trades.add(BacktestResponse.TradeDto.builder()
+                            .date(date).type("SELL_B").price(round2(execPrice)).quantity(qtyB)
+                            .pnl(round2(pnl)).pnlPercent(round2(pnlRate)).reason(reason).holdingDays(holdDays)
+                            .balance(Math.round(cashA + cashB + qtyA * priceA)).build());
+                    qtyB = 0; entryPriceB = 0; costBasisB = 0; highSinceEntryB = 0; bTrades++;
+                    bHandled = true;
                 }
-                holdingDaysList.add(holdDays);
-                cashB += sellProceeds;
-                trades.add(BacktestResponse.TradeDto.builder()
-                        .date(date).type("SELL_B").price(round2(execPrice)).quantity(qtyB)
-                        .pnl(round2(pnl)).pnlPercent(round2(pnlRate)).reason("자산B 청산")
-                        .holdingDays(holdDays)
-                        .balance(Math.round(cashA + cashB + qtyA * priceA))
-                        .build());
-                qtyB = 0;
-                entryPriceB = 0;
-                bTrades++;
+            }
+            if (!bHandled) {
+                boolean entrySigB = evaluateConditions(entryConditions, indicatorsB, gB, priceB, candlesB, globalOffsetB, bIdx);
+                if (qtyB == 0 && cashB > 0 && entrySigB) {
+                    double execPrice = priceB * (1 + slippage);
+                    double commAmt = cashB * commissionRate;
+                    double buyQty = (cashB - commAmt) / execPrice;
+                    qtyB = buyQty; entryPriceB = execPrice; entryDayIndexB = idx; highSinceEntryB = priceB;
+                    costBasisB = cashB; cashB = 0;
+                    trades.add(BacktestResponse.TradeDto.builder()
+                            .date(date).type("BUY_B").price(round2(execPrice)).quantity(buyQty)
+                            .pnl(-commAmt).pnlPercent(0).reason("자산B 진입").holdingDays(0)
+                            .balance(Math.round(cashA + cashB + qtyA * priceA + qtyB * priceB)).build());
+                    bTrades++;
+                } else if (qtyB > 0
+                        && evaluateConditions(exitConditions, indicatorsB, gB, priceB, candlesB, globalOffsetB, bIdx)) {
+                    double execPrice = priceB * (1 - slippage);
+                    double sellProceeds = qtyB * execPrice * (1 - commissionRate);
+                    double pnl = sellProceeds - costBasisB;
+                    double pnlRate = entryPriceB > 0 ? (execPrice - entryPriceB) / entryPriceB * 100 : 0;
+                    int holdDays = idx - entryDayIndexB;
+                    if (pnl > 0) { profitable++; winAmounts.add(pnl); winRates.add(pnlRate); curStreak = curStreak >= 0 ? curStreak + 1 : 1; if (curStreak > maxWinStreak) maxWinStreak = curStreak; }
+                    else if (pnl < 0) { losing++; lossAmounts.add(Math.abs(pnl)); lossRates.add(Math.abs(pnlRate)); curStreak = curStreak <= 0 ? curStreak - 1 : -1; if (-curStreak > maxLossStreak) maxLossStreak = -curStreak; }
+                    holdingDaysList.add(holdDays);
+                    cashB += sellProceeds;
+                    trades.add(BacktestResponse.TradeDto.builder()
+                            .date(date).type("SELL_B").price(round2(execPrice)).quantity(qtyB)
+                            .pnl(round2(pnl)).pnlPercent(round2(pnlRate)).reason("자산B 청산").holdingDays(holdDays)
+                            .balance(Math.round(cashA + cashB + qtyA * priceA)).build());
+                    qtyB = 0; entryPriceB = 0; costBasisB = 0; highSinceEntryB = 0; bTrades++;
+                } else if (qtyB > 0 && cashB > eps && entrySigB) {
+                    // 적립 추가매수: 보유 중 유휴현금(적립·리밸런싱 유입)을 진입신호에 추가 투입 (DCA 재투자)
+                    double execPrice = priceB * (1 + slippage);
+                    double commAmt = cashB * commissionRate;
+                    double addQty = (cashB - commAmt) / execPrice;
+                    double newQty = qtyB + addQty;
+                    entryPriceB = (entryPriceB * qtyB + execPrice * addQty) / newQty;
+                    costBasisB += cashB; qtyB = newQty; cashB = 0;
+                    trades.add(BacktestResponse.TradeDto.builder()
+                            .date(date).type("BUY_B").price(round2(execPrice)).quantity(addQty)
+                            .pnl(-commAmt).pnlPercent(0).reason("자산B 추가 매수 (적립)").holdingDays(0)
+                            .balance(Math.round(cashA + cashB + qtyA * priceA + qtyB * priceB)).build());
+                    bTrades++;
+                }
             }
 
             // ── equity / drawdown / dailyReturn ──
             double equity = cashA + qtyA * priceA + cashB + qtyB * priceB;
+            // 적립식 외부 납입금은 시장 수익이 아니므로, 납입액만큼 고수위선(peak)을 올린 뒤
+            // 실제 equity로 낙폭 계산. 비-DCA는 contribToday==0 이라 표준 MDD와 동일.
+            if (contribToday > 0) peakEquity += contribToday;
             if (equity >= peakEquity) {
                 peakEquity = equity;
                 if (drawdownStart >= 0) {
@@ -1377,7 +1495,7 @@ public class BacktestService {
         if (qtyA > 0) {
             double execPrice = lastPriceA * (1 - slippage);
             double proceeds = qtyA * execPrice * (1 - commissionRate);
-            double pnl = proceeds - qtyA * entryPriceA;
+            double pnl = proceeds - costBasisA;
             double pnlRate = entryPriceA > 0 ? (execPrice - entryPriceA) / entryPriceA * 100 : 0;
             int holdDays = lastIdx - entryDayIndexA;
             if (pnl > 0) {
@@ -1402,7 +1520,7 @@ public class BacktestService {
         if (qtyB > 0) {
             double execPrice = lastPriceB * (1 - slippage);
             double proceeds = qtyB * execPrice * (1 - commissionRate);
-            double pnl = proceeds - qtyB * entryPriceB;
+            double pnl = proceeds - costBasisB;
             double pnlRate = entryPriceB > 0 ? (execPrice - entryPriceB) / entryPriceB * 100 : 0;
             int holdDays = lastIdx - entryDayIndexB;
             if (pnl > 0) {
@@ -1887,21 +2005,23 @@ public class BacktestService {
 
     // ── 샤프 비율 ──
     private double calculateSharpeRatio(List<BacktestResponse.DailyReturnDto> dailyReturns, String assetType) {
-        if (dailyReturns.size() < 2) return 0;
-        double[] returns = dailyReturns.stream().mapToDouble(d -> d.getDailyReturn() / 100.0).toArray();
+        // index 0(첫날)은 시장 수익이 아니라 진입 비용 딥(또는 무거래 0)이므로 제외 → 실제 수익 포인트 2개 이상 필요
+        if (dailyReturns.size() < 3) return 0;
+        double[] returns = dailyReturns.stream().skip(1).mapToDouble(d -> d.getDailyReturn() / 100.0).toArray();
         double mean = Arrays.stream(returns).average().orElse(0);
         double sumSquares = Arrays.stream(returns).map(r -> (r - mean) * (r - mean)).sum();
         double variance = returns.length > 1 ? sumSquares / (returns.length - 1) : 0;
         double stdDev = Math.sqrt(variance);
         if (stdDev == 0) return 0;
-        double factor = ("STOCK".equalsIgnoreCase(assetType) || "US_STOCK".equalsIgnoreCase(assetType)) ? Math.sqrt(252) : Math.sqrt(365);
+        double factor = annualizationFactor(assetType);
         return (mean / stdDev) * factor;
     }
 
     // ── 소르티노 비율 (하방 편차만 사용) ──
     private double calculateSortinoRatio(List<BacktestResponse.DailyReturnDto> dailyReturns, String assetType) {
-        if (dailyReturns.size() < 2) return 0;
-        double[] returns = dailyReturns.stream().mapToDouble(d -> d.getDailyReturn() / 100.0).toArray();
+        // index 0(첫날 진입 비용 딥/무거래)은 시장 수익이 아니므로 제외 → 실제 수익 포인트 2개 이상 필요
+        if (dailyReturns.size() < 3) return 0;
+        double[] returns = dailyReturns.stream().skip(1).mapToDouble(d -> d.getDailyReturn() / 100.0).toArray();
         double mean = Arrays.stream(returns).average().orElse(0);
 
         // 하방 편차: 전체 수익률에 min(r, 0)^2 적용 (표준 Sortino 공식)
@@ -1912,8 +2032,17 @@ public class BacktestService {
         double downDev = Math.sqrt(downVariance);
         if (downDev == 0) return 0;
 
-        double factor = ("STOCK".equalsIgnoreCase(assetType) || "US_STOCK".equalsIgnoreCase(assetType)) ? Math.sqrt(252) : Math.sqrt(365);
+        double factor = annualizationFactor(assetType);
         return (mean / downDev) * factor;
+    }
+
+    // 일별수익률 → 연율화 인자. 주식형(국내·미국주식·ETF)은 거래일 기준 연 ~252일,
+    // 그 외(크립토 등 24/7 자산)는 365일. ETF가 sqrt(365)로 빠져 Sharpe/Sortino가 ~20% 과대 계상되던 버그 수정.
+    private static double annualizationFactor(String assetType) {
+        boolean dailyStock = "STOCK".equalsIgnoreCase(assetType)
+                || "US_STOCK".equalsIgnoreCase(assetType)
+                || "ETF".equalsIgnoreCase(assetType);
+        return Math.sqrt(dailyStock ? 252 : 365);
     }
 
     private int getParam(Map<String, Number> params, String key, int defaultValue) {

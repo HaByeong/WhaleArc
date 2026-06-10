@@ -14,8 +14,8 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 
   if (loading || onboardingDone === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-10 h-10 border-4 border-whale-light border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-[#060d18]">
+        <div className="w-10 h-10 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }

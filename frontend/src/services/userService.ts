@@ -1,10 +1,15 @@
 import apiClient from '../utils/api';
 
+export type UserTier = 'FREE' | 'BASIC' | 'PRO';
+export type UserRole = 'USER' | 'ADMIN';
+
 /** GET /users/me 응답 타입 */
 export interface UserProfile {
   userId: string;
   name: string;
   authProvider?: string;
+  tier?: UserTier;   // 구독 등급 (기능 게이팅용)
+  role?: UserRole;   // 권한 (ADMIN=운영자, 등급 무관 전기능)
   // UserInfo 필드
   bio?: string;
   investmentStyle?: InvestmentStyle;

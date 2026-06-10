@@ -74,7 +74,10 @@ public class VirtKisApiClient {
                         new TypeReference<>() {});
 
                 String token = (String) result.get("access_token");
-                long expiresAt = System.currentTimeMillis() + 23 * 60 * 60 * 1000L;
+                // 고정 23h 대신 응답의 expires_in(초)을 사용(없으면 23h). 만료 1분 전 여유를 두고 캐시.
+                Object expiresInObj = result.get("expires_in");
+                long ttlSec = expiresInObj instanceof Number ? ((Number) expiresInObj).longValue() : 23 * 60 * 60L;
+                long expiresAt = System.currentTimeMillis() + Math.max(60L, ttlSec - 60L) * 1000L;
                 tokenCache.put(userId, new TokenEntry(token, expiresAt));
                 log.info("[Virt] KIS 토큰 발급 성공: userId={}", userId);
                 return token;

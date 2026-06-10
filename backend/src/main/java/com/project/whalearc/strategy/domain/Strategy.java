@@ -7,6 +7,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,6 +39,9 @@ public class Strategy {
     private boolean applied;        // 포트폴리오에 적용 여부
     private int appliedSuccessCount; // 적용 시 매수 성공 자산 수
     private int appliedTotalCount;   // 적용 시 전체 대상 자산 수
+    @Indexed
+    private boolean autoTradingEnabled;     // VIRT 자동매매 ON/OFF
+    private BigDecimal autoTradeAmount;      // 진입 신호 시 종목당 매수 금액(KRW, 모의)
     private Instant createdAt;
     private Instant updatedAt;
 

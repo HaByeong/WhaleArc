@@ -11,15 +11,17 @@ interface ErrorMessageProps {
 
 const OCEAN_MESSAGES: Record<ErrorVariant, { titles: string[]; whales: string[] }> = {
   error: {
-    titles: ['파도가 거칠어요', '잠시 바다가 소용돌이치고 있어요', '해류가 불안정해요'],
+    // 실패 상태는 명확하게(돈 다루는 화면 = 명확성이 신뢰). 분위기는 고래 일러스트로만 유지.
+    titles: ['데이터를 불러오지 못했어요', '잠시 문제가 생겼어요'],
     whales: ['/whales/sperm-whale.png', '/whales/humpback.png', '/whales/gray-whale.png'],
   },
   empty: {
+    // 빈 상태는 격려 톤 유지(에러 아님 — 브랜드 보이스)
     titles: ['이 바다는 고요하네요', '아직 항해를 시작하지 않았어요', '수면 위로 올라온 게 없어요'],
     whales: ['/whales/beluga.png', '/whales/dolphin.png', '/whales/narwhal.png'],
   },
   offline: {
-    titles: ['바다와의 연결이 끊겼어요', '해저 케이블에 문제가 생겼어요', '통신 부이가 응답하지 않아요'],
+    titles: ['인터넷 연결이 끊겼어요', '네트워크에 연결할 수 없어요'],
     whales: ['/whales/orca.png', '/whales/blue-whale.png'],
   },
   notfound: {

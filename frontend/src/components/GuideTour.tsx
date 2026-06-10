@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { useTheme } from '../contexts/ThemeContext';
 
 export interface TourStep {
   target: string;       // data-tour 속성값
@@ -13,11 +15,22 @@ interface GuideTourProps {
   onFinish: () => void;
 }
 
+// 툴팁 팔레트 — 사이트 기본은 다크. 사용자가 라이트로 토글했을 때만 라이트.
+const PALETTE = {
+  dark: { bg: 'linear-gradient(180deg,#16233f,#0c1530)', border: 'rgba(255,255,255,.14)', title: '#f1f5f9', desc: 'rgba(255,255,255,.74)',
+    chip: 'rgba(255,255,255,.08)', chipText: 'rgba(255,255,255,.6)', prevBg: 'rgba(255,255,255,.08)', prevText: '#e2e8f0',
+    dotIdle: 'rgba(255,255,255,.18)', dotDone: 'rgba(91,157,255,.45)', skip: 'rgba(255,255,255,.45)' },
+  light: { bg: '#ffffff', border: 'rgba(0,0,0,.08)', title: '#0f172a', desc: '#334155',
+    chip: '#f3f4f6', chipText: '#6b7280', prevBg: '#f3f4f6', prevText: '#374151',
+    dotIdle: '#e5e7eb', dotDone: 'rgba(74,144,226,.4)', skip: '#9ca3af' },
+};
+
 const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
+  const { isDark } = useTheme();
+  const t = isDark ? PALETTE.dark : PALETTE.light;
   const [currentStep, setCurrentStep] = useState(0);
   const [spotlight, setSpotlight] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
-  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
-  const [arrowDir, setArrowDir] = useState<'top' | 'bottom' | 'left' | 'right'>('bottom');
+  const [placement, setPlacement] = useState<'top' | 'bottom'>('bottom');
   const [animating, setAnimating] = useState(false);
 
   const step = steps[currentStep];
@@ -29,40 +42,16 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
 
     const rect = el.getBoundingClientRect();
     const pad = 8;
-    const s = {
+    setSpotlight({
       top: rect.top - pad,
       left: rect.left - pad,
       width: rect.width + pad * 2,
       height: rect.height + pad * 2,
-    };
-    setSpotlight(s);
+    });
 
-    // 툴팁 위치 계산
-    const tooltipW = 340;
-    const tooltipH = 260;
-    const pos = step.position || 'bottom';
-    let tt: React.CSSProperties = {};
-    let arrow: 'top' | 'bottom' | 'left' | 'right' = 'top';
-
-    const clampTop = (v: number) => Math.max(12, Math.min(v, window.innerHeight - tooltipH - 12));
-    const clampLeft = (v: number) => Math.max(12, Math.min(v, window.innerWidth - tooltipW - 12));
-
-    if (pos === 'bottom' || (!step.position && s.top + s.height + tooltipH + 20 < window.innerHeight)) {
-      tt = { top: s.top + s.height + 12, left: clampLeft(s.left + s.width / 2 - tooltipW / 2) };
-      arrow = 'top';
-    } else if (pos === 'top' || (!step.position && s.top - tooltipH - 20 > 0)) {
-      tt = { top: s.top - tooltipH - 12, left: clampLeft(s.left + s.width / 2 - tooltipW / 2) };
-      arrow = 'bottom';
-    } else if (pos === 'right') {
-      tt = { top: clampTop(s.top + s.height / 2 - tooltipH / 2), left: clampLeft(s.left + s.width + 12) };
-      arrow = 'left';
-    } else {
-      tt = { top: clampTop(s.top + s.height / 2 - tooltipH / 2), left: Math.max(12, s.left - tooltipW - 12) };
-      arrow = 'right';
-    }
-
-    setTooltipStyle({ ...tt, width: tooltipW, position: 'fixed' });
-    setArrowDir(arrow);
+    // 툴팁은 강조 영역을 가리지 않게 화면 상/하단 중앙에 크게 고정 (항상 잘 보이게)
+    const spotCenterY = rect.top + rect.height / 2;
+    setPlacement(spotCenterY < window.innerHeight * 0.52 ? 'bottom' : 'top');
   }, [step, currentStep]);
 
   useEffect(() => {
@@ -91,7 +80,9 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
     }
   };
 
-  return (
+  // body로 포털 — 콘솔 본문(.wa-console-dense)의 zoom 밖에서 렌더해야
+  // getBoundingClientRect(시각좌표)와 position:fixed 좌표계가 일치한다(스포트라이트 정렬).
+  return createPortal((
     <div className="fixed inset-0 z-[9990]" onClick={onFinish}>
       {/* 어두운 오버레이 + 스포트라이트 컷아웃 */}
       <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'none' }}>
@@ -111,7 +102,7 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
         </defs>
         <rect
           x="0" y="0" width="100%" height="100%"
-          fill="rgba(0,0,0,0.6)"
+          fill="rgba(0,0,0,0.82)"
           mask="url(#tour-mask)"
           style={{ pointerEvents: 'auto' }}
         />
@@ -128,62 +119,66 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
         }}
       />
 
-      {/* 툴팁 */}
+      {/* 툴팁 — 강조 영역을 가리지 않게 화면 상/하단 중앙에 크게 고정 */}
       <div
-        style={tooltipStyle}
+        style={{
+          position: 'fixed',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          ...(placement === 'bottom' ? { bottom: 40 } : { top: 40 }),
+          width: 'min(560px, calc(100vw - 32px))',
+          background: t.bg,
+          border: `1px solid ${t.border}`,
+          boxShadow: '0 30px 80px -16px rgba(0,0,0,.8), 0 0 0 1px rgba(0,0,0,.08)',
+        }}
         onClick={(e) => e.stopPropagation()}
-        className={`z-[9999] bg-white rounded-2xl shadow-2xl border border-gray-200 p-5 transition-all duration-300 ${animating ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+        className={`z-[9999] rounded-2xl p-7 transition-all duration-300 ${animating ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}
       >
-        {/* 화살표 */}
-        <div className={`absolute w-3 h-3 bg-white border-gray-200 rotate-45 ${
-          arrowDir === 'top' ? '-top-1.5 left-1/2 -translate-x-1/2 border-l border-t' :
-          arrowDir === 'bottom' ? '-bottom-1.5 left-1/2 -translate-x-1/2 border-r border-b' :
-          arrowDir === 'left' ? 'top-1/2 -left-1.5 -translate-y-1/2 border-l border-b' :
-          'top-1/2 -right-1.5 -translate-y-1/2 border-r border-t'
-        }`} />
-
         {/* 스텝 카운터 */}
-        <div className="flex items-center gap-1.5 mb-3">
+        <div className="flex items-center gap-1.5 mb-4">
           {steps.map((_, i) => (
-            <div key={i} className={`h-1 rounded-full transition-all duration-300 ${
-              i === currentStep ? 'w-5 bg-whale-light' : i < currentStep ? 'w-2 bg-whale-light/40' : 'w-2 bg-gray-200'
-            }`} />
+            <div key={i} className="h-2 rounded-full transition-all duration-300" style={{
+              width: i === currentStep ? 28 : 12,
+              background: i === currentStep ? '#4a90e2' : i < currentStep ? t.dotDone : t.dotIdle,
+            }} />
           ))}
-          <span className="ml-auto text-[10px] text-gray-400">{currentStep + 1}/{steps.length}</span>
+          <span className="ml-auto rounded-full px-2.5 py-1 text-[12.5px] font-bold" style={{ background: t.chip, color: t.chipText }}>{currentStep + 1} / {steps.length}</span>
         </div>
 
         {/* 내용 */}
-        <h4 className="text-sm font-bold text-whale-dark mb-1.5">{step.title}</h4>
-        <div className="text-xs text-gray-500 leading-relaxed mb-4 whitespace-pre-line">{step.description}</div>
+        <h4 className="mb-2.5 text-[23px] font-extrabold leading-tight" style={{ color: t.title }}>{step.title}</h4>
+        <div className="mb-6 whitespace-pre-line text-[16px] font-medium leading-relaxed" style={{ color: t.desc }}>{step.description}</div>
 
         {/* 버튼 */}
         <div className="flex items-center justify-between">
           <button
             onClick={(e) => { e.stopPropagation(); onFinish(); }}
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-[14px] font-semibold transition-colors hover:opacity-80"
+            style={{ color: t.skip }}
           >
             건너뛰기
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {currentStep > 0 && (
               <button
                 onClick={(e) => { e.stopPropagation(); handlePrev(); }}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 transition-colors"
+                className="rounded-xl px-5 py-2.5 text-[15px] font-bold transition-colors hover:opacity-85"
+                style={{ background: t.prevBg, color: t.prevText }}
               >
                 이전
               </button>
             )}
             <button
               onClick={(e) => { e.stopPropagation(); handleNext(); }}
-              className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-whale-light hover:bg-whale-dark transition-colors shadow-sm"
+              className="rounded-xl px-6 py-2.5 text-[15px] font-bold text-white bg-whale-light hover:bg-whale-dark transition-colors shadow-md"
             >
-              {isLast ? '시작하기' : '다음'}
+              {isLast ? '시작하기 →' : '다음 →'}
             </button>
           </div>
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 };
 
 export default GuideTour;

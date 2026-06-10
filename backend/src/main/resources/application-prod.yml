@@ -33,9 +33,10 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
-jwt:
-  secret: ${JWT_SECRET_KEY}
-
 # 실계좌 연동 암호화 키 (필수)
 virt:
   encryption-key: ${VIRT_ENCRYPTION_KEY}
+
+# 거래소 실계좌 자격증명 암호화 키 (필수)
+exchange:
+  encryption-key: ${EXCHANGE_ENCRYPTION_KEY}

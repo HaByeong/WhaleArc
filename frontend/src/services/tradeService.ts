@@ -25,6 +25,7 @@ export interface OrderRequest {
   price?: number; // 지정가 주문일 때만 필요
   assetType?: 'STOCK' | 'CRYPTO' | 'US_STOCK' | 'ETF';
   memo?: string;
+  clientOrderId?: string; // 멱등성 키 — 동일 키 재전송 시 이중 체결 방지
 }
 
 export interface Order {
@@ -36,7 +37,7 @@ export interface Order {
   orderMethod: 'MARKET' | 'LIMIT';
   quantity: number;
   price: number;
-  status: 'PENDING' | 'PARTIALLY_FILLED' | 'FILLED' | 'CANCELLED';
+  status: 'PENDING' | 'FILLED' | 'CANCELLED'; // 백엔드가 실제 내보내는 3개 상태(부분체결 미지원)
   filledQuantity: number;
   filledPrice: number | null;
   assetType?: string;
@@ -83,6 +84,7 @@ export interface Portfolio {
   returnRate: number;
   holdings: Holding[];
   representativePurchaseId?: string | null;
+  usdKrwRate?: number; // USD→KRW 환율 (응답 전용, 통화 분리/환산 표시에 사용)
 }
 
 export interface PortfolioSnapshot {

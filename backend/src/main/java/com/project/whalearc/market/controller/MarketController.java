@@ -304,6 +304,14 @@ public class MarketController {
                 String[] parts = token.trim().split(":");
                 String type = parts[0].toUpperCase();
 
+                // 숫자 파라미터(기간 등)는 1 이상이어야 함 — period<=0 입력으로 인한 ArrayIndexOutOfBounds(500) 방지
+                boolean validParams = true;
+                for (int pi = 1; pi < parts.length; pi++) {
+                    try { if (Integer.parseInt(parts[pi].trim()) < 1) validParams = false; }
+                    catch (NumberFormatException e) { validParams = false; }
+                }
+                if (!validParams) continue; // 잘못된 파라미터의 지표 토큰은 건너뜀
+
                 switch (type) {
                     case "RSI" -> {
                         int period = parts.length > 1 ? Integer.parseInt(parts[1]) : 14;

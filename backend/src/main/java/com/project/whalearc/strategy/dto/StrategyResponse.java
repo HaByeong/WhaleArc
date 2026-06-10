@@ -28,6 +28,8 @@ public class StrategyResponse {
     private boolean applied;
     private int appliedSuccessCount;
     private int appliedTotalCount;
+    private boolean autoTradingEnabled;
+    private java.math.BigDecimal autoTradeAmount;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -46,6 +48,8 @@ public class StrategyResponse {
                 .applied(s.isApplied())
                 .appliedSuccessCount(s.getAppliedSuccessCount())
                 .appliedTotalCount(s.getAppliedTotalCount())
+                .autoTradingEnabled(s.isAutoTradingEnabled())
+                .autoTradeAmount(s.getAutoTradeAmount())
                 .createdAt(s.getCreatedAt())
                 .updatedAt(s.getUpdatedAt())
                 .build();

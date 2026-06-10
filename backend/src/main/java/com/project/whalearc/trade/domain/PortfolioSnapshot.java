@@ -45,7 +45,8 @@ public class PortfolioSnapshot {
             BigDecimal hv = BigDecimal.ZERO;
             for (Holding h : portfolio.getHoldings()) {
                 BigDecimal mv = h.getMarketValue();
-                if (h.isUsStock()) mv = mv.multiply(BigDecimal.valueOf(usdKrwRate));
+                // ETF도 USD 자산이므로 환산해야 totalValue(getTotalValueWithExchangeRate)와 일치 (ETF 미환산 불일치 버그 수정)
+                if (h.isUsStock() || h.isEtf()) mv = mv.multiply(BigDecimal.valueOf(usdKrwRate));
                 hv = hv.add(mv);
             }
             this.holdingsValue = hv;

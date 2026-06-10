@@ -2,6 +2,11 @@ server:
   port: 8080
 
 spring:
+  # @Scheduled 잡들이 단일 스레드로 직렬화돼 빠른 잡(5s/10s)이 느린 잡(시세갱신·스냅샷)에 굶지 않도록 풀 사용
+  task:
+    scheduling:
+      pool:
+        size: 5
   servlet:
     multipart:
       max-file-size: 5MB
@@ -29,7 +34,7 @@ kis:
     base-url: https://openapi.koreainvestment.com:9443
     appkey: ${KIS_APPKEY:}
     appsecret: ${KIS_APPSECRET:}
-    cache-ttl-ms: 15000
+    cache-ttl-ms: 10000   # 주식 시세 갱신 주기(10초)와 정렬 — 스케줄 갱신이 캐시에 막히지 않게. 스로틀(min-interval)이 레이트리밋 보호
     max-retries: 3
     retry-delay-ms: 500
 
@@ -37,9 +42,17 @@ kis:
 feedback:
   admin-user-ids: ${FEEDBACK_ADMIN_IDS:9704ef8d-d8c0-487d-b690-848a4ba758e9,230dcba7-74d3-420a-a276-11404ae3573b}
 
+# 플랫폼 관리자 이메일 (쉼표 구분) — 로그인/동기화 시 해당 이메일은 자동 ADMIN 승격(환경 무관 안정적).
+# supabaseId는 환경(test/prod)마다 달라 이메일로 식별. tier(FREE/BASIC/PRO)와 별개 축.
+app:
+  admin-emails: ${ADMIN_EMAILS:khyun1109@gmail.com,jhschris8080@naver.com}
+
 # USD/KRW 환율 기본값 (Upbit USDT/KRW 실시간 조회 실패 시 사용)
 exchange:
   default-usd-krw: 1400.0
+  # 실계좌 연동 API 키 AES 암호화 키. 로컬 기본값은 기존 저장분 복호화를 위해 값 고정(변경 시 저장된 자격증명 복호화 깨짐).
+  # 프로덕션은 EXCHANGE_ENCRYPTION_KEY 환경변수로 주입.
+  encryption-key: ${EXCHANGE_ENCRYPTION_KEY:dev-local-exchange-encryption-key-32}
 
 # 실계좌 연동 암호화 키 (로컬 개발용 기본값; 프로덕션은 VIRT_ENCRYPTION_KEY 환경변수 사용)
 virt:

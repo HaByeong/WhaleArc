@@ -23,13 +23,19 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class RankingService {
+
+    // 스냅샷 기록(PortfolioService)이 Asia/Seoul 기준이므로 기간 랭킹 기준일 조회도 동일 TZ로 통일
+    // (JVM 기본 TZ 사용 시 자정 직후 하루 어긋나 기준 스냅샷을 못 찾던 문제 방지)
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final PortfolioRepository portfolioRepository;
     private final PortfolioSnapshotRepository snapshotRepository;
@@ -62,7 +68,10 @@ public class RankingService {
         final Map<String, Double> sortMap = periodReturnMap;
         List<Portfolio> sorted;
         if (sortMap != null) {
+            // 기간 랭킹: 기준일 스냅샷이 없는 유저(신규 가입 등)는 '기간 수익률 0%'가 아니라
+            // 아예 제외한다. (getOrDefault 0.0 으로 0% 처럼 끼어 순위·통계를 왜곡하던 버그 수정)
             sorted = allPortfolios.stream()
+                    .filter(p -> sortMap.containsKey(p.getUserId()))
                     .sorted((a, b) -> {
                         double ra = sortMap.getOrDefault(a.getUserId(), 0.0);
                         double rb = sortMap.getOrDefault(b.getUserId(), 0.0);
@@ -159,7 +168,7 @@ public class RankingService {
 
         return RankingResponseDto.builder()
                 .rankingType(type)
-                .snapshotDate(LocalDate.now().toString())
+                .snapshotDate(LocalDate.now(KST).toString())
                 .totalCount(totalCount)
                 .page(page)
                 .size(size)
@@ -182,7 +191,6 @@ public class RankingService {
                                                Map<String, QuantProduct> productMap) {
         User user = userMap.get(p.getUserId());
         String nickname = (user != null && user.getName() != null) ? user.getName() : "익명";
-        String email = (user != null && user.getEmail() != null) ? user.getEmail() : "";
 
         String routeName = null;
         String routeStrategyType = null;
@@ -214,7 +222,7 @@ public class RankingService {
                 .portfolioId(p.getId())
                 .rank(rankMap.getOrDefault(p.getUserId(), totalCount + 1))
                 .nickname(nickname)
-                .portfolioName(email.contains("@") ? email.split("@")[0] + "의 포트폴리오" : nickname + "의 포트폴리오")
+                .portfolioName(nickname + "의 포트폴리오") // 공개 랭킹에 이메일 로컬파트(PII) 노출 금지 — 닉네임만 사용
                 .totalReturn(Math.round(displayReturn * 100.0) / 100.0)
                 .totalValue(p.getTotalValue().doubleValue())
                 .rankChange(0)
@@ -232,9 +240,9 @@ public class RankingService {
      */
     private Map<String, Double> calculatePeriodReturns(List<Portfolio> portfolios, String type) {
         LocalDate baseDate = switch (type) {
-            case "daily" -> LocalDate.now().minusDays(1);
-            case "weekly" -> LocalDate.now().minusWeeks(1);
-            case "monthly" -> LocalDate.now().minusMonths(1);
+            case "daily" -> LocalDate.now(KST).minusDays(1);
+            case "weekly" -> LocalDate.now(KST).minusWeeks(1);
+            case "monthly" -> LocalDate.now(KST).minusMonths(1);
             default -> null;
         };
         if (baseDate == null) return null;
@@ -252,24 +260,37 @@ public class RankingService {
             if (snapshotReturnMap.size() >= portfolios.size()) break;
         }
 
-        // 현재 수익률 - 기준일 수익률
+        // 현재 수익률 - 기준일 수익률 (기준 스냅샷이 없으면 0으로 조작하지 않고 기간 랭킹에서 제외)
         Map<String, Double> periodReturns = new HashMap<>();
         for (Portfolio p : portfolios) {
+            Double baseReturn = snapshotReturnMap.get(p.getUserId());
+            if (baseReturn == null) continue; // 기준 스냅샷 없음 → 기간 수익률 산출 불가
             double currentReturn = p.getReturnRate().doubleValue();
-            double baseReturn = snapshotReturnMap.getOrDefault(p.getUserId(), 0.0);
             periodReturns.put(p.getUserId(), currentReturn - baseReturn);
         }
         return periodReturns;
     }
 
+    // 대표 항로 수익률 N+1 완화 — getMyPurchasesPerformance(시세조회+상품 findById 루프)는 무거워서,
+    // 리더보드의 각 항로 보유자마다 매 요청 호출하면 동시 폴링 시 증폭된다. (userId,purchaseId)별 30초 캐시로
+    // 동시 사용자/폴링 간 디듀프(랭킹은 일 1회 갱신이라 staleness 무해).
+    private static final long ROUTE_RR_TTL_MS = 30_000;
+    private final Map<String, CachedRouteRr> routeRrCache = new ConcurrentHashMap<>();
+    private record CachedRouteRr(Double rate, long expiresAt) {}
+
     private Double getRouteReturnRate(String userId, String purchaseId) {
+        String key = userId + "|" + purchaseId;
+        CachedRouteRr c = routeRrCache.get(key);
+        if (c != null && System.currentTimeMillis() < c.expiresAt()) return c.rate();
         try {
             List<PurchasePerformanceDto> perfs = quantStoreService.getMyPurchasesPerformance(userId);
-            return perfs.stream()
+            Double rate = perfs.stream()
                     .filter(p -> p.getPurchaseId().equals(purchaseId))
                     .findFirst()
                     .map(PurchasePerformanceDto::getTotalReturnRate)
                     .orElse(null);
+            routeRrCache.put(key, new CachedRouteRr(rate, System.currentTimeMillis() + ROUTE_RR_TTL_MS));
+            return rate;
         } catch (Exception e) {
             return null;
         }
@@ -277,10 +298,12 @@ public class RankingService {
 
     public MyRankingDto getMyRanking(String userId) {
         RankingResponseDto all = getRankings(userId, "all", 0, MAX_RANKING_SIZE);
+        // 100위 밖 유저는 rankings 리스트가 아니라 별도 myRanking 필드에 담기므로 그걸 폴백으로 사용.
+        // (예전엔 못 찾아 가짜값 currentRank=totalCount+1, 0%, 1000만원을 반환하던 버그)
         RankingEntryDto mine = all.getRankings().stream()
                 .filter(RankingEntryDto::isMyRanking)
                 .findFirst()
-                .orElse(null);
+                .orElse(all.getMyRanking());
 
         if (mine == null) {
             portfolioService.getOrCreatePortfolio(userId);
@@ -309,8 +332,7 @@ public class RankingService {
 
         User user = userRepository.findBySupabaseId(portfolio.getUserId()).orElse(null);
         String nickname = (user != null && user.getName() != null) ? user.getName() : "익명";
-        String email = (user != null && user.getEmail() != null) ? user.getEmail() : "";
-        String portfolioName = email.contains("@") ? email.split("@")[0] + "의 포트폴리오" : nickname + "의 포트폴리오";
+        String portfolioName = nickname + "의 포트폴리오"; // 이메일 로컬파트(PII) 노출 금지 — 닉네임만 사용
 
         int rank = calculateRank(portfolio);
         BigDecimal initialCash = portfolio.getInitialCash();

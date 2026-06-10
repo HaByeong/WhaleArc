@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { Provider } from '@supabase/supabase-js';
+import { invalidateTokenCache } from '../utils/api';
 
 // Supabase 에러 메시지 한글화
 const translateAuthError = (message: string): string => {
@@ -30,7 +31,8 @@ export const authService = {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name } },
+      // 이메일 가입은 약관 동의 체크박스를 통과해야 호출되므로 동의 기록을 함께 저장
+      options: { data: { name, terms_agreed: true, terms_agreed_at: new Date().toISOString() } },
     });
     if (error) throw new Error(translateAuthError(error.message));
     return data;
@@ -60,6 +62,7 @@ export const authService = {
   },
 
   logout: async () => {
+    invalidateTokenCache(); // apiClient 인메모리 토큰 캐시 즉시 무효화 (로그아웃 후 옛 토큰 사용 방지)
     try {
       await supabase.auth.signOut({ scope: 'local' });
     } catch {

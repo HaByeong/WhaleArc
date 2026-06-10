@@ -14,7 +14,7 @@ WhaleArc(프론트엔드 + 백엔드)를 서버에 올리는 방법입니다.
 |------|------|
 | **백엔드** | Java 17, Spring Boot, **MongoDB** 필요 |
 | **프론트엔드** | 빌드된 정적 파일만 있으면 됨 (Nginx, Vercel 등으로 서빙) |
-| **환경 변수** | `JWT_SECRET_KEY`(백엔드), `VITE_API_BASE_URL`(프론트 빌드 시) |
+| **환경 변수** | `EXCHANGE_ENCRYPTION_KEY`·`VIRT_ENCRYPTION_KEY`(백엔드 필수), `VITE_API_BASE_URL`(프론트 빌드 시) |
 
 ---
 
@@ -32,15 +32,17 @@ WhaleArc(프론트엔드 + 백엔드)를 서버에 올리는 방법입니다.
    - [Railway](https://railway.app) 가입
    - New Project → Deploy from GitHub → 이 레포 선택 후 **backend** 루트를 선택 (또는 backend 폴더만 배포 가능한 경우 해당 설정)
    - Variables에 추가:
-     - `JWT_SECRET_KEY`: 32자 이상 랜덤 문자열 (예: `openssl rand -base64 32`)
+     - `EXCHANGE_ENCRYPTION_KEY`: **정확히 32자** 문자열 (거래소 자격증명 AES 암호화 키, 필수 — 누락 시 부팅 실패). ⚠️ 한 번 정하면 바꾸지 말 것(기존 저장 자격증명 복호화 깨짐)
+     - `VIRT_ENCRYPTION_KEY`: 32자 이상 랜덤 문자열 (필수)
      - `SPRING_PROFILES_ACTIVE`: `prod`
      - `MONGODB_URI` 또는 `spring.data.mongodb.uri`: Atlas 연결 문자열
+     - (선택) `SUPABASE_JWKS_URI`·`SUPABASE_JWT_ISSUER`: 실제 Supabase 프로젝트 값. `KIS_APPKEY`·`KIS_APPSECRET`: 국내/해외 주식 시세용
    - 배포 후 나오는 URL 확인 (예: `https://whalearc-backend.up.railway.app`)
 
 3. **Render** 사용 시
    - Build Command: `cd backend && ./gradlew bootJar`
    - Start Command: `java -jar backend/build/libs/whalearc-0.0.1-SNAPSHOT.jar`
-   - Environment에 `JWT_SECRET_KEY`, `SPRING_PROFILES_ACTIVE=prod`, MongoDB URI 설정
+   - Environment에 `EXCHANGE_ENCRYPTION_KEY`(32자)·`VIRT_ENCRYPTION_KEY`, `SPRING_PROFILES_ACTIVE=prod`, MongoDB URI 설정
 
 ### 1-2. 프론트엔드 배포 (Vercel / Netlify)
 
@@ -84,8 +86,9 @@ cd /path/to/whaleArc/backend
 ./gradlew bootJar
 # JAR 위치: build/libs/whalearc-0.0.1-SNAPSHOT.jar
 
-# 환경 변수 설정 후 실행
-export JWT_SECRET_KEY="여기에_32자_이상_시크릿"
+# 환경 변수 설정 후 실행 (EXCHANGE_ENCRYPTION_KEY 누락 시 부팅 실패)
+export EXCHANGE_ENCRYPTION_KEY="정확히_32자_거래소_암호화_키"   # 한 번 정하면 변경 금지
+export VIRT_ENCRYPTION_KEY="여기에_32자_이상_시크릿"
 export SPRING_PROFILES_ACTIVE=prod
 # MongoDB가 로컬이 아니면:
 export MONGODB_URI="mongodb+srv://..."
@@ -140,12 +143,16 @@ server {
 
 ### 백엔드 (Spring Boot)
 
-| 변수 | 설명 | 예시 |
-|------|------|------|
-| `SPRING_PROFILES_ACTIVE` | 프로파일 | `prod` |
-| `JWT_SECRET_KEY` | JWT 서명용 시크릿 (32자 이상) | 랜덤 문자열 |
-| `CORS_ALLOWED_ORIGINS` | 프론트엔드 접속 URL (쉼표 구분 복수 가능) | `https://whalearc.vercel.app` |
-| `MONGODB_URI` 또는 `spring.data.mongodb.uri` | MongoDB 연결 문자열 | `mongodb+srv://...` (Atlas) 또는 `mongodb://localhost:27017/whaleArc` |
+| 변수 | 필수 | 설명 | 예시 |
+|------|------|------|------|
+| `SPRING_PROFILES_ACTIVE` | ✅ | 프로파일 | `prod` |
+| `EXCHANGE_ENCRYPTION_KEY` | ✅ | 거래소 자격증명 AES 암호화 키. **정확히 32자**, 한 번 정하면 변경 금지(기존 저장분 복호화 깨짐). 누락 시 부팅 실패 | 32자 랜덤 문자열 |
+| `VIRT_ENCRYPTION_KEY` | ✅ | 모의계좌 연동 암호화 키 (32자 이상) | 랜덤 문자열 |
+| `CORS_ALLOWED_ORIGINS` | ✅ | 프론트엔드 접속 URL (쉼표 구분 복수 가능) | `https://whalearc.vercel.app` |
+| `MONGODB_URI` 또는 `spring.data.mongodb.uri` | ✅ | MongoDB 연결 문자열 | `mongodb+srv://...` (Atlas) 또는 `mongodb://localhost:27017/whaleArc` |
+| `SUPABASE_JWKS_URI` | 선택 | Supabase JWT 공개키 URL (기본=개발 프로젝트). prod는 실제 프로젝트 값 권장 | `https://<ref>.supabase.co/auth/v1/.well-known/jwks.json` |
+| `SUPABASE_JWT_ISSUER` | 선택 | JWT 발급자 검증값 (비우면 검증 생략) | `https://<ref>.supabase.co/auth/v1` |
+| `KIS_APPKEY` · `KIS_APPSECRET` | 선택 | 국내/해외 주식 시세 조회용 (미설정 시 코인만) | 한국투자증권 발급값 |
 
 ### 프론트엔드 (빌드 시 한 번만)
 
@@ -230,20 +237,23 @@ WantedBy=multi-user.target
 
 ```
 # /etc/whalearc/prod.env
-JWT_SECRET_KEY=<랜덤 32자 이상>
+EXCHANGE_ENCRYPTION_KEY=<정확히 32자 — 변경 금지>
 VIRT_ENCRYPTION_KEY=<랜덤 32자 이상>
 MONGODB_URI=mongodb://localhost:27017/whaleArc
 CORS_ALLOWED_ORIGINS=https://whale-arc.com,https://api.whale-arc.com
 SUPABASE_JWKS_URI=https://tkkbawoknwumqdqxypwd.supabase.co/auth/v1/.well-known/jwks.json
+SUPABASE_JWT_ISSUER=https://tkkbawoknwumqdqxypwd.supabase.co/auth/v1
+# (선택) KIS_APPKEY=...  KIS_APPSECRET=...
 ```
 
 ```
 # /etc/whalearc/test.env
-JWT_SECRET_KEY=<prod와 다른 랜덤 값>
+EXCHANGE_ENCRYPTION_KEY=<정확히 32자 — 변경 금지>
 VIRT_ENCRYPTION_KEY=<prod와 다른 랜덤 값>
 MONGODB_URI=mongodb://localhost:27017/whaleArc_test
 CORS_ALLOWED_ORIGINS=https://test.whale-arc.com
 SUPABASE_JWKS_URI=https://ivcentmbrxqebqtjsnsj.supabase.co/auth/v1/.well-known/jwks.json
+SUPABASE_JWT_ISSUER=https://ivcentmbrxqebqtjsnsj.supabase.co/auth/v1
 ```
 
 활성화:

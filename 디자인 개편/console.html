@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>WhaleArc · 내 투자</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="icon" type="image/png" href="brand-whale.png">
+<meta name="theme-color" content="#060b1f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --abyss-0:#060b1f;   /* deepest page bg */
+    --abyss-1:#0a1230;   /* panel surface */
+    --abyss-2:#0e1a3d;   /* raised surface */
+    --abyss-3:#13234d;   /* hover */
+    --hair:rgba(255,255,255,.10);
+    --hair-strong:rgba(255,255,255,.18);
+    --ink-0:#ffffff;
+    --ink-1:rgba(255,255,255,.72);
+    --ink-2:rgba(255,255,255,.48);
+    --ink-3:rgba(255,255,255,.28);
+    --sonar:#5b9dff;          /* primary accent — blue glow */
+    --sonar-glow:rgba(91,157,255,.22);
+    --sonar-dim:rgba(91,157,255,.10);
+    --compass:#f5d061;        /* secondary — amber */
+    --up:#ef4d4d;             /* 상승 (mint) */
+    --down:#4d8aff;           /* 하락 (coral) */
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; background:var(--abyss-0); color:var(--ink-0);
+    font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  ::selection { background:var(--sonar); color:var(--abyss-0); }
+  a { text-decoration:none; color:inherit; }
+  h1,h2,h3 { word-break:keep-all; overflow-wrap:anywhere; margin:0; }
+  .mono { font-family:'JetBrains Mono',ui-monospace,monospace; font-feature-settings:'tnum'; }
+  .disp { font-family:'Pretendard','Noto Sans KR',sans-serif; }
+  .no-scrollbar::-webkit-scrollbar { display:none; }
+  .no-scrollbar { scrollbar-width:none; }
+
+  @keyframes sonar-sweep { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+  @keyframes blip { 0%{opacity:0;} 10%{opacity:1;} 60%{opacity:1;} 100%{opacity:.2;} }
+  @keyframes pulse-ring { 0%{transform:scale(.6);opacity:.6;} 100%{transform:scale(1.4);opacity:0;} }
+  @keyframes dot { 0%,100%{opacity:1;} 50%{opacity:.5;} }
+  @keyframes float-y { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-6px);} }
+  @keyframes ticker { from{transform:translateX(0);} to{transform:translateX(-50%);} }
+
+  /* faint bathymetric contour texture on page bg */
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(120% 90% at 100% 0%, rgba(91,157,255,.07), transparent 55%),
+      radial-gradient(100% 80% at 0% 100%, rgba(44,111,230,.06), transparent 55%);
+  }
+
+  .helm-shell{ margin-left:240px; }
+  @media (max-width: 860px){
+    .helm-aside{ top:auto !important; bottom:0 !important; left:0 !important; right:0 !important; width:auto !important;
+      flex-direction:row !important; align-items:center !important; gap:2px !important;
+      padding:6px 8px !important; border-right:0 !important;
+      border-top:1px solid var(--hair, var(--line)) !important;
+      background:rgba(6,11,31,.94) !important; -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); }
+    .helm-brand, .helm-foot, .navkick { display:none !important; }
+    .helm-nav{ flex-direction:row !important; margin:0 !important; gap:2px !important;
+      width:100% !important; justify-content:space-around !important; overflow-x:auto; }
+    .helm-nav > a{ flex-direction:column !important; gap:3px !important; padding:8px 6px !important;
+      font-size:10px !important; border-radius:10px !important; flex:1; min-width:0; }
+    .navlbl{ display:block !important; font-size:10px !important; }
+    .helm-shell{ margin-left:0 !important; padding-bottom:76px !important; }
+    main{ padding-left:16px !important; padding-right:16px !important; }
+  }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="helm.jsx"></script>
+<script type="text/babel" src="console-home.jsx"></script>
+</head>
+<body><div id="root"></div></body>
+</html>

@@ -34,7 +34,9 @@ public class UserUpdateService implements UserUpdateServiceInterface {
         UserProfileResponseDto.UserProfileResponseDtoBuilder builder = UserProfileResponseDto.builder()
                 .userId(user.getEmail())
                 .name(user.getName())
-                .authProvider(user.getAuthProvider());
+                .authProvider(user.getAuthProvider())
+                .tier(user.getTier())
+                .role(user.getRole());
 
         if (userInfo != null) {
             builder.bio(userInfo.getBio())

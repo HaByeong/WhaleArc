@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>WhaleArc-VIRT · 내 투자</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="icon" type="image/png" href="brand-whale.png">
+<meta name="theme-color" content="#060b1f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* VIRT light theme — playful sandbox feel */
+    --bg-0: #f3f1ea;         /* warm off-white page background */
+    --bg-1: #ffffff;         /* card surface */
+    --bg-2: #faf8f3;         /* alt surface */
+    --ink-0: #0e1936;        /* primary text */
+    --ink-1: #4a5578;        /* secondary text */
+    --ink-2: #8590ad;        /* tertiary */
+    --ink-3: #c2c9d8;        /* faint */
+    --line: rgba(14,25,54,.08);
+    --line-strong: rgba(14,25,54,.14);
+    --accent: #2c6fe6;
+    --accent-glow: #4d8aff;
+    --accent-bg: rgba(91,157,255,.10);
+    --accent-bg-strong: rgba(91,157,255,.18);
+    /* Korean market convention used throughout VIRT */
+    --up:   #ef4d4d;         /* RED = up */
+    --down: #2c6fe6;         /* BLUE = down */
+    --warn-bg: #fff7d6;
+    --warn-fg: #946800;
+    --warn-border: #f0d97a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg-0); color: var(--ink-0);
+    font-family: 'Noto Sans KR', 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  ::selection { background: var(--accent); color: #fff; }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: .55; transform: scale(.9); }
+  }
+  @keyframes whale-float {
+    0%, 100% { transform: translateY(0) rotate(-1deg); }
+    50%      { transform: translateY(-8px) rotate(1deg); }
+  }
+  @keyframes baby-whale-bob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-6px); }
+  }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-feature-settings: 'tnum'; }
+  a { text-decoration: none; color: inherit; }
+  h1, h2, h3 { word-break: keep-all; overflow-wrap: anywhere; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="virt-parts.jsx"></script>
+<script type="text/babel" src="virt-dashboard.jsx"></script>
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html>

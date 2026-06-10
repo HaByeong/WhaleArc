@@ -42,6 +42,9 @@ export interface VirtPortfolio {
   totalPnl: number;
   returnRate: number;
   usdtKrwRate?: number;
+  krwCash?: number;         // 원화 예수금
+  foreignCashKrw?: number;  // 외화 예수금(KRW 환산)
+  foreignCashUsd?: number;  // 외화 예수금(USD/USDT 원금)
   holdings: VirtHolding[];
 }
 

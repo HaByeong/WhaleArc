@@ -61,6 +61,7 @@ public class UsStockPriceProvider {
         POPULAR_US_STOCKS.put("XOM",   new String[]{"엑슨모빌", "NYS"});
         POPULAR_US_STOCKS.put("COIN",  new String[]{"코인베이스", "NAS"});
         POPULAR_US_STOCKS.put("PLTR",  new String[]{"팔란티어", "NAS"});
+        POPULAR_US_STOCKS.put("JOBY",  new String[]{"조비 에비에이션", "NYS"});
     }
 
     @PostConstruct
@@ -96,10 +97,8 @@ public class UsStockPriceProvider {
     }
 
     public List<MarketPriceResponse> getAllUsStockPrices() {
-        if (!kisApiClient.isConfigured()) {
-            return getMockUsStockTickers();
-        }
-        return cachedPrices.isEmpty() ? getMockUsStockTickers() : cachedPrices;
+        // KIS 미설정/캐시없음 → 가짜 가격이 아닌 빈 리스트(지어낸 값으로 주문·평가가 일어나지 않도록).
+        return cachedPrices;
     }
 
     /** 개별 종목 조회 (캐시 우선, 없으면 API 호출) */
@@ -197,35 +196,6 @@ public class UsStockPriceProvider {
         return dto;
     }
 
-    private List<MarketPriceResponse> getMockUsStockTickers() {
-        List<MarketPriceResponse> list = new ArrayList<>();
-
-        MarketPriceResponse apple = new MarketPriceResponse();
-        apple.setAssetType(AssetType.US_STOCK);
-        apple.setSymbol("AAPL");
-        apple.setName("애플");
-        apple.setPrice(195.50);
-        apple.setChange(2.30);
-        apple.setChangeRate(1.19);
-        apple.setVolume(52_000_000L);
-        apple.setMarket("NASDAQ");
-        apple.setCurrency("USD");
-        list.add(apple);
-
-        MarketPriceResponse nvda = new MarketPriceResponse();
-        nvda.setAssetType(AssetType.US_STOCK);
-        nvda.setSymbol("NVDA");
-        nvda.setName("엔비디아");
-        nvda.setPrice(875.30);
-        nvda.setChange(-12.50);
-        nvda.setChangeRate(-1.41);
-        nvda.setVolume(45_000_000L);
-        nvda.setMarket("NASDAQ");
-        nvda.setCurrency("USD");
-        list.add(nvda);
-
-        return list;
-    }
 
     private long parseLong(String value) {
         try { return Long.parseLong(value); } catch (Exception e) { return 0L; }

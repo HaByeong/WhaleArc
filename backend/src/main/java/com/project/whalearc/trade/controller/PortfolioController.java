@@ -7,6 +7,7 @@ import com.project.whalearc.trade.domain.Portfolio;
 import com.project.whalearc.trade.domain.PortfolioSnapshot;
 import com.project.whalearc.trade.repository.PortfolioSnapshotRepository;
 import com.project.whalearc.trade.service.PortfolioService;
+import com.project.whalearc.market.service.ExchangeRateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -25,11 +26,13 @@ public class PortfolioController {
     private final PortfolioService portfolioService;
     private final PortfolioSnapshotRepository snapshotRepository;
     private final ProductPurchaseRepository purchaseRepository;
+    private final ExchangeRateService exchangeRateService;
 
     @GetMapping
     public ApiResponse<Portfolio> getPortfolio(@AuthenticationPrincipal Jwt jwt) {
         String userId = jwt.getSubject();
         Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
+        portfolio.setUsdKrwRate(exchangeRateService.getUsdKrwRate());
         return ApiResponse.ok(portfolio);
     }
 
@@ -49,9 +52,9 @@ public class PortfolioController {
             }
         }
 
-        Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
-        portfolio.setRepresentativePurchaseId(purchaseId);
-        portfolioService.save(portfolio);
+        // 공유 락 안에서 원자적으로 — 동시 주문의 현금 변경을 stale 저장으로 덮어쓰지 않도록
+        final String repId = purchaseId;
+        portfolioService.mutate(userId, p -> p.setRepresentativePurchaseId(repId));
         return ApiResponse.ok(null);
     }
 
@@ -59,6 +62,7 @@ public class PortfolioController {
     public ApiResponse<Portfolio> resetPortfolio(@AuthenticationPrincipal Jwt jwt) {
         String userId = jwt.getSubject();
         Portfolio portfolio = portfolioService.resetPortfolio(userId);
+        portfolio.setUsdKrwRate(exchangeRateService.getUsdKrwRate());
         return ApiResponse.ok(portfolio);
     }
 

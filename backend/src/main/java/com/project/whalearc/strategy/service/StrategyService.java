@@ -108,6 +108,23 @@ public class StrategyService {
         return strategyRepository.save(strategy);
     }
 
+    /** 공유된 항로(전략)를 현재 사용자 라이브러리로 복사 — 커뮤니티 "항로 따라가기". */
+    public Strategy copyStrategy(String userId, String sourceStrategyId) {
+        Strategy src = strategyRepository.findById(sourceStrategyId)
+                .orElseThrow(() -> new IllegalArgumentException("원본 항로를 찾을 수 없습니다. 작성자가 삭제했을 수 있어요."));
+        Strategy copy = new Strategy(
+                userId, src.getName(), src.getDescription(),
+                new java.util.ArrayList<>(src.getIndicators()),
+                new java.util.ArrayList<>(src.getEntryConditions()),
+                new java.util.ArrayList<>(src.getExitConditions()),
+                new java.util.ArrayList<>(src.getTargetAssets()),
+                src.getAssetType(), src.getStrategyLogic());
+        if (src.getTargetAssetNames() != null) {
+            copy.setTargetAssetNames(new java.util.HashMap<>(src.getTargetAssetNames()));
+        }
+        return strategyRepository.save(copy);
+    }
+
     public Strategy updateStrategy(String userId, String strategyId, StrategyRequest request) {
         Strategy strategy = strategyRepository.findById(strategyId)
                 .orElseThrow(() -> new IllegalArgumentException("전략을 찾을 수 없습니다."));
@@ -314,6 +331,39 @@ public class StrategyService {
                 "'" + strategy.getName() + "' 항로가 해제되었습니다."
         );
 
+        return saved;
+    }
+
+    /** VIRT 자동매매 ON/OFF (종목당 매수 금액 설정) */
+    public Strategy setAutoTrading(String userId, String strategyId, boolean enabled, java.math.BigDecimal amount) {
+        Strategy strategy = strategyRepository.findById(strategyId)
+                .orElseThrow(() -> new IllegalArgumentException("전략을 찾을 수 없습니다."));
+        if (!strategy.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("본인의 전략만 수정할 수 있습니다.");
+        }
+        if (enabled) {
+            if (strategy.getTargetAssets() == null || strategy.getTargetAssets().isEmpty()) {
+                throw new IllegalArgumentException("대상 종목이 없는 전략은 자동매매를 켤 수 없습니다.");
+            }
+            if (strategy.getEntryConditions() == null || strategy.getEntryConditions().isEmpty()) {
+                throw new IllegalArgumentException("진입 조건이 없는 전략은 자동매매를 켤 수 없습니다.");
+            }
+            if (amount != null && amount.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                strategy.setAutoTradeAmount(amount);
+            } else if (strategy.getAutoTradeAmount() == null) {
+                strategy.setAutoTradeAmount(java.math.BigDecimal.valueOf(1_000_000)); // 기본 종목당 100만원
+            }
+        }
+        strategy.setAutoTradingEnabled(enabled);
+        strategy.setUpdatedAt(Instant.now());
+        Strategy saved = strategyRepository.save(strategy);
+
+        notificationService.createNotification(
+                userId,
+                Notification.NotificationType.STRATEGY_EXECUTED,
+                enabled ? "자동매매 시작" : "자동매매 중지",
+                "'" + strategy.getName() + "' 전략의 자동매매가 " + (enabled ? "켜졌습니다. 모의 계좌에서 신호 발생 시 자동 매매됩니다." : "꺼졌습니다.")
+        );
         return saved;
     }
 }

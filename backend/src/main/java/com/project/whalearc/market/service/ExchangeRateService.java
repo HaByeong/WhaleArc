@@ -4,7 +4,9 @@ import com.project.whalearc.virt.service.VirtUpbitClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -13,7 +15,7 @@ import java.util.Map;
 
 /**
  * USD/KRW 환율 서비스.
- * Upbit의 KRW-USDT 티커를 프록시로 사용 (30초 캐시).
+ * 1순위: 실제 FX(open.er-api.com, 1시간 캐시) · 2순위: Upbit KRW-USDT 프록시(김프 포함, 30초) · 3순위: 고정 기본값.
  */
 @Slf4j
 @Service
@@ -27,24 +29,66 @@ public class ExchangeRateService {
 
     private volatile double cachedUsdKrw = 0;
     private volatile long usdKrwExpireAt = 0;
+    private volatile boolean usdKrwStale = true; // 권위 FX 조회 성공 전까지 true (프록시/기본값 사용 중)
+
+    // 외부 FX API 호출용 (4초 타임아웃 — 느린 응답이 시세/스냅샷을 막지 않도록)
+    private final RestTemplate fxClient = buildFxClient();
+    private static RestTemplate buildFxClient() {
+        SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
+        f.setConnectTimeout(4000);
+        f.setReadTimeout(4000);
+        return new RestTemplate(f);
+    }
+
+    /** 마지막 반환 환율이 권위 FX(open.er-api)가 아닌(프록시/만료캐시/기본값) 값인지 여부. */
+    public boolean isUsdKrwStale() {
+        return usdKrwStale;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Double fetchRealFx() {
+        Map<String, Object> resp = fxClient.getForObject("https://open.er-api.com/v6/latest/USD", Map.class);
+        if (resp != null && "success".equals(resp.get("result")) && resp.get("rates") instanceof Map<?, ?> rates) {
+            Object krw = rates.get("KRW");
+            if (krw instanceof Number n && n.doubleValue() > 0) return n.doubleValue();
+        }
+        return null;
+    }
 
     public double getUsdKrwRate() {
         long now = System.currentTimeMillis();
         if (cachedUsdKrw > 0 && now < usdKrwExpireAt) {
             return cachedUsdKrw;
         }
+        // 1) 권위 있는 실제 USD/KRW FX (open.er-api.com). FX는 느리게 변하므로 1시간 캐시.
+        try {
+            Double fx = fetchRealFx();
+            if (fx != null && fx > 0) {
+                cachedUsdKrw = fx;
+                usdKrwExpireAt = now + 3_600_000;
+                usdKrwStale = false;
+                return fx;
+            }
+        } catch (Exception e) {
+            log.warn("실 FX 환율 조회 실패, Upbit 프록시로 폴백: {}", e.getMessage());
+        }
+        // 2) Upbit KRW-USDT 프록시 (김프 포함 → 권위 FX 아님). 30초 캐시 + stale 표시.
         try {
             List<Map<String, Object>> ticker = upbitClient.getTicker("KRW-USDT");
             if (!ticker.isEmpty()) {
                 double rate = Double.parseDouble(String.valueOf(ticker.get(0).get("trade_price")));
                 cachedUsdKrw = rate;
                 usdKrwExpireAt = now + 30_000;
+                usdKrwStale = true;
                 return rate;
             }
         } catch (Exception e) {
-            log.warn("USD/KRW 환율 조회 실패, fallback 사용: {}", e.getMessage());
+            log.warn("USD/KRW 프록시 조회 실패, 기본값 사용: {}", e.getMessage());
         }
-        return cachedUsdKrw > 0 ? cachedUsdKrw : defaultUsdKrw;
+        // 3) 직전 캐시(만료) 또는 고정 기본값
+        usdKrwStale = true;
+        if (cachedUsdKrw > 0) return cachedUsdKrw;
+        return defaultUsdKrw;
     }
 
     public BigDecimal usdToKrw(BigDecimal usdAmount) {

@@ -47,6 +47,33 @@ const Tri = ({ up }: { up: boolean }) => (
   <svg width="9" height="9" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 2 }}><path d={up ? 'M5 1l4 7H1z' : 'M5 9L1 2h8z'} fill={up ? UP : DOWN} /></svg>
 );
 
+// 자산 추이 기간 선택 (일/월/년) — 일=일별, 월·년=월별 다운샘플(조회 범위만 다름)
+const RANGE_DAYS = { D: 30, M: 365, Y: 1825 } as const;
+type TrendRange = keyof typeof RANGE_DAYS;
+const RANGE_LABEL: Record<TrendRange, string> = { D: '일', M: '월', Y: '년' };
+const RANGE_CAPTION: Record<TrendRange, string> = { D: '최근 30일 · 일별', M: '최근 1년 · 월별', Y: '전체 · 월별' };
+// 월말(=각 YYYY-MM의 마지막) 스냅샷만 추림. date 오름차순 입력 전제(백엔드 OrderByDateAsc).
+const downsampleByMonth = <T extends { date: string }>(snaps: T[]): T[] => {
+  const m = new Map<string, T>();
+  for (const s of snaps) m.set(s.date.slice(0, 7), s);
+  return [...m.values()];
+};
+// 기간별 표시 시계열. 월/년은 월별 다운샘플하되, 아직 달이 부족하면(2개월 미만) 일별로 폴백해
+// '데이터 모으는 중' 빈 상태가 과하게 뜨지 않게 — 가용 데이터는 항상 보여준다.
+const trendSeries = <T extends { date: string }>(snaps: T[], range: TrendRange): T[] => {
+  if (range === 'D') return snaps;
+  const monthly = downsampleByMonth(snaps);
+  return monthly.length >= 2 ? monthly : snaps;
+};
+const RangeToggle = ({ range, onChange }: { range: TrendRange; onChange: (r: TrendRange) => void }) => (
+  <div className="flex gap-[3px] rounded-lg p-[3px]" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
+    {(Object.keys(RANGE_DAYS) as TrendRange[]).map(r => (
+      <button key={r} onClick={() => onChange(r)} className="rounded-md px-2.5 py-[5px] text-[11.5px] font-semibold"
+        style={{ background: range === r ? 'rgba(91,157,255,.10)' : 'transparent', color: range === r ? SONAR : 'var(--ci-ink2)' }}>{RANGE_LABEL[r]}</button>
+    ))}
+  </div>
+);
+
 const TrendChart = ({ port, kospi, mode, days = 0, real = false }: { port: number[]; kospi: number[] | null; mode: 'value' | 'pct'; days?: number; real?: boolean }) => {
   if (port.length < 2) return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
@@ -229,6 +256,7 @@ const PaperPortfolio = () => {
   const email = session?.user?.email ?? '';
   const userName = email ? email.split('@')[0] : '항해사';
   const [mode, setMode] = useState<'value' | 'pct'>('value');
+  const [range, setRange] = useState<TrendRange>('D');
 
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -256,17 +284,28 @@ const PaperPortfolio = () => {
     Promise.all([
       tradeService.getPortfolio(),
       tradeService.getTrades().catch(() => [] as Trade[]),
-      portfolioService.getHistory(30).catch(() => [] as PortfolioSnapshot[]),
       quantStoreService.getMyPurchasesPerformance().catch(() => [] as PurchasePerformance[]),
-    ]).then(([p, t, h, r]) => {
+    ]).then(([p, t, r]) => {
       setPortfolio(p);
       setTrades([...t].sort((a, b) => new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime()));
-      setHistory(h);
       setRoutes(r);
       setError(null);
     }).catch(() => setError('포트폴리오를 불러오지 못했습니다. 네트워크 상태를 확인해주세요.'))
       .finally(() => setLoading(false));
   }, [isPreview]);
+
+  // 자산 추이는 메인 로딩과 분리(무음) — 기간 토글 시 페이지 깜빡임 없이 차트만 갱신.
+  // 자체 10초 폴링으로 오늘 점은 라이브 유지, range 변경 시 즉시 재조회.
+  const loadHistory = useCallback(() => {
+    if (isPreview) return;
+    portfolioService.getHistory(RANGE_DAYS[range]).then(setHistory).catch(() => {});
+  }, [isPreview, range]);
+  useEffect(() => {
+    loadHistory();
+    if (isPreview) return;
+    const t = setInterval(loadHistory, 10_000);
+    return () => clearInterval(t);
+  }, [loadHistory, isPreview]);
 
   useEffect(() => {
     load();
@@ -275,11 +314,11 @@ const PaperPortfolio = () => {
     return () => clearInterval(t);
   }, [load, isPreview]);
 
-  // KOSPI 벤치마크 (공개 API, 인증 데이터와 분리 — 401에 묶이지 않게)
+  // KOSPI 벤치마크 (공개 API, 인증 데이터와 분리 — 401에 묶이지 않게). 기간 선택에 맞춰 범위 조정.
   useEffect(() => {
-    apiClient.get('/api/market/indices/history', { params: { code: '0001', days: 365 } })
+    apiClient.get('/api/market/indices/history', { params: { code: '0001', days: Math.max(365, RANGE_DAYS[range]) } })
       .then(res => { if (Array.isArray(res.data)) setKospiHistory(res.data); }).catch(() => {});
-  }, []);
+  }, [range]);
 
   const handleStar = useCallback(async (purchaseId: string) => {
     if (!portfolio) return;
@@ -305,9 +344,9 @@ const PaperPortfolio = () => {
     if (!window.confirm('정말 모의투자를 초기화하시겠습니까?\n\n보유 종목·거래 내역·구매한 항로·적용 전략·자산 추이가 모두 삭제되고, 현금이 1,000만원으로 리셋됩니다.')) return;
     if (!window.confirm('이 작업은 되돌릴 수 없습니다. 최종 확인하시겠습니까?')) return;
     if (window.prompt('초기화하려면 "초기화"를 입력하세요.') !== '초기화') { showToast('초기화가 취소되었습니다.', 'error'); return; }
-    try { await tradeService.resetPortfolio(); showToast('새 항해가 시작되었습니다!'); load(); }
+    try { await tradeService.resetPortfolio(); showToast('새 항해가 시작되었습니다!'); load(); loadHistory(); }
     catch { showToast('초기화에 실패했습니다.', 'error'); }
-  }, [showToast, load]);
+  }, [showToast, load, loadHistory]);
 
   const holdings = portfolio?.holdings ?? [];
   const cash = portfolio?.cashBalance ?? 0;
@@ -339,13 +378,14 @@ const PaperPortfolio = () => {
   }, [holdings, cash, turtle, usdKrw]);
   const allocTotal = alloc.reduce((s, a) => s + a.value, 0);
 
-  // 자산추이 시계열 + KOSPI 리베이스(포트폴리오 시작값 기준)
+  // 자산추이 시계열 + KOSPI 리베이스(포트폴리오 시작값 기준). 월·년은 월별 다운샘플.
   const chart = useMemo(() => {
-    if (history.length < 2) return null;
-    const startValue = history[0].totalValue || 1;
-    const startDate = history[0].date;
-    const portValue = history.map(s => s.totalValue);
-    const portPct = history.map(s => ((s.totalValue - startValue) / startValue) * 100);
+    const hist = trendSeries(history, range);
+    if (hist.length < 2) return null;
+    const startValue = hist[0].totalValue || 1;
+    const startDate = hist[0].date;
+    const portValue = hist.map(s => s.totalValue);
+    const portPct = hist.map(s => ((s.totalValue - startValue) / startValue) * 100);
     let kospiValue: number[] | null = null, kospiPct: number[] | null = null;
     if (kospiHistory.length) {
       const sorted = [...kospiHistory].sort((a, b) => a.date.localeCompare(b.date));
@@ -354,7 +394,7 @@ const PaperPortfolio = () => {
       for (const k of sorted) { if (k.date <= startDate) startClose = k.close; }
       if (!startClose) startClose = sorted[0].close;
       if (startClose) {
-        kospiPct = history.map(s => {
+        kospiPct = hist.map(s => {
           let c = kmap.get(s.date);
           if (c == null) { for (const k of sorted) { if (k.date <= s.date) c = k.close; } }
           if (c == null) c = startClose;
@@ -364,7 +404,7 @@ const PaperPortfolio = () => {
       }
     }
     return { portValue, portPct, kospiValue, kospiPct };
-  }, [history, kospiHistory]);
+  }, [history, kospiHistory, range]);
   const port = chart ? (mode === 'pct' ? chart.portPct : chart.portValue) : [];
   const kospi = chart ? (mode === 'pct' ? chart.kospiPct : chart.kospiValue) : null;
 
@@ -469,13 +509,14 @@ const PaperPortfolio = () => {
         {/* 자산 추이 */}
         <Panel>
           <PanelHead kicker="VOYAGE LOG" title="자산 추이" right={
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="flex gap-[3px] rounded-lg p-[3px]" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
                 {([['value', '총 자산'], ['pct', '수익률 %']] as const).map(([k, l]) => (
                   <button key={k} onClick={() => setMode(k)} className="rounded-md px-2.5 py-[5px] text-[11.5px] font-semibold" style={{ background: mode === k ? 'rgba(91,157,255,.10)' : 'transparent', color: mode === k ? SONAR : 'var(--ci-ink2)' }}>{l}</button>
                 ))}
               </div>
-              <span className="hidden text-[11.5px] text-white/48 sm:inline">최근 30일</span>
+              <RangeToggle range={range} onChange={setRange} />
+              <span className="hidden text-[11.5px] text-white/48 lg:inline">{RANGE_CAPTION[range]}</span>
             </div>} />
           <div className="flex justify-end gap-4 px-3.5 pb-2 pt-2.5 text-[11px] text-white/70">
             <span className="inline-flex items-center gap-1.5"><span style={{ width: 14, height: 2, background: SONAR }} />내 포트폴리오</span>
@@ -615,6 +656,7 @@ const RealAccountPortfolio = () => {
   const [accounts, setAccounts] = useState<ExchangeAccount[]>([]);
   const [portfolios, setPortfolios] = useState<Partial<Record<ExchangeType, ExchangePortfolio | null>>>({});
   const [history, setHistory] = useState<ExchangeSnapshot[]>([]);  // 자산 추이(일별 스냅샷)
+  const [range, setRange] = useState<TrendRange>('D');             // 일/월/년 기간 선택
   const [activeTab, setActiveTab] = useState<ExchangeType>('KIS');
   const [splitCcy, setSplitCcy] = useState(false);   // 원화/해외 통화 분리 표시 토글
   const autoPickRef = useRef(false); // 최초 로드 시 첫 연결 거래소 자동 선택(이후 사용자 선택 우선)
@@ -657,11 +699,11 @@ const RealAccountPortfolio = () => {
     return () => clearInterval(t);
   }, [load, isPreview]);
 
-  // 자산 추이 — 일별 스냅샷(매일 자정 기록)은 폴링 불필요, 최초 1회 로드
+  // 자산 추이 — 일별 스냅샷(매일 자정 기록)은 폴링 불필요. 기간 선택 시 범위 맞춰 재조회.
   useEffect(() => {
     if (isPreview) return;
-    exchangeService.getHistory(30).then(setHistory).catch(() => {});
-  }, [isPreview]);
+    exchangeService.getHistory(RANGE_DAYS[range]).then(setHistory).catch(() => {});
+  }, [isPreview, range]);
 
   const isConn = (t: ExchangeType) => accounts.some(a => a.exchangeType === t && a.connected);
   const connectedList = EXCHANGES.filter(e => isConn(e.key));
@@ -735,9 +777,13 @@ const RealAccountPortfolio = () => {
         {/* 자산 추이 (일별 스냅샷 — ExchangeSnapshotScheduler가 매일 자정 KRW 합계 기록) */}
         {hasAny && (
           <Panel style={{ overflow: 'hidden' }}>
-            <PanelHead kicker="VOYAGE LOG" title="자산 추이" right={<span className="text-[11px] text-white/60">매일 자정 1회 기록 · KRW 합계</span>} />
+            <PanelHead kicker="VOYAGE LOG" title="자산 추이" right={
+              <div className="flex items-center gap-2">
+                <RangeToggle range={range} onChange={setRange} />
+                <span className="hidden text-[11px] text-white/50 lg:inline">{RANGE_CAPTION[range]} · KRW</span>
+              </div>} />
             <div className="px-3 pb-[18px] pt-2" style={{ height: 250 }}>
-              <TrendChart port={history.map(s => s.totalValueKrw)} kospi={null} mode="value" days={history.length} real />
+              <TrendChart port={trendSeries(history, range).map(s => s.totalValueKrw)} kospi={null} mode="value" days={history.length} real />
             </div>
           </Panel>
         )}

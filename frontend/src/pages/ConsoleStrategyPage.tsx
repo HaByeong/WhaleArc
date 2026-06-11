@@ -8,6 +8,7 @@ import {
   type BacktestRequest, type BacktestResult, type Indicator, type Condition, type BacktestHistoryItem, type Strategy,
 } from '../services/strategyService';
 import { marketService } from '../services/marketService';
+import { PRESET_STRATEGIES, type PresetStrategy } from '../data/presetStrategies';
 import { tradeService } from '../services/tradeService';
 import { Term } from '../components/GlossaryTerm';
 import GuideTour, { type TourStep } from '../components/GuideTour';
@@ -50,54 +51,46 @@ const toStrat = (s: Strategy): Strat => ({
   short: s.description || s.strategyLogic || '직접 만든 전략', n: (s.entryConditions?.length || 0) + (s.exitConditions?.length || 0), isUser: true,
   applied: s.applied, autoTrading: s.autoTradingEnabled, assetCount: s.targetAssets?.length || 0,
 });
-const STRATEGIES: Strat[] = [
-  { id: 'buyhold', name: 'Buy & Hold (장기 보유)', cat: 'basic', level: 'beginner', short: '시작 시점에 매수 후 종료 시점까지 그대로 보유하는 가장 단순한 전략', n: 2 },
-  { id: 'golden', name: '골든크로스 추종 전략', cat: 'trend', level: 'beginner', short: '20일/60일 이동평균선 골든크로스 발생 시 매수, 데드크로스 시 매도하는 추세추종 전략', n: 2 },
-  { id: 'rsi-rev', name: 'RSI 반전 매매', cat: 'reversal', level: 'beginner', short: 'RSI 과매도 구간(30 이하) 진입 후 반등 시 매수, 과매수 구간(70 이상)에서 매도', n: 2 },
-  { id: 'bollinger', name: '볼린저 밴드 수축 돌파', cat: 'volatility', level: 'intermediate', short: '볼린저 밴드 수축 구간에서 상단 돌파 시 매수, 중심선 하락 시 매도', n: 2 },
-  { id: 'macd', name: 'MACD 크로스오버', cat: 'trend', level: 'intermediate', short: 'MACD 시그널 크로스와 히스토그램 전환을 활용한 추세 전환 포착', n: 2 },
-  { id: 'stoch', name: '스토캐스틱 크로스', cat: 'reversal', level: 'intermediate', short: '스토캐스틱 %K가 %D를 상향 돌파할 때 매수, 하향 돌파할 때 매도', n: 2 },
-  { id: 'larry', name: '래리 코너스 RSI(2)', cat: 'reversal', level: 'advanced', short: '초단기 RSI(2일)를 사용하여 급락 후 반등을 포착하는 단기 매매 전략', n: 3 },
-  { id: 'vol-break', name: '변동성 돌파 전략', cat: 'volatility', level: 'advanced', short: '전일 변동폭(고가–저가)에 K값을 곱한 임계치를 돌파하면 진입하는 단기 전략', n: 2 },
-];
+// 프리셋 Strategy → 라이브러리 표시용 Strat 매핑 (단일 출처: presetStrategies.ts)
+const presetToStrat = (s: PresetStrategy): Strat => ({
+  id: s.id, name: s.name, cat: s.category, level: DIFF_LEVEL[s.difficulty || '초급'] || 'beginner',
+  short: s.description, n: (s.entryConditions?.length || 0) + (s.exitConditions?.length || 0),
+});
+const STRATEGIES: Strat[] = PRESET_STRATEGIES.map(presetToStrat);
 
-/* 프리셋 전략별 초보 교육 — 옛 StrategyPage PRESET_STRATEGIES(beginnerTip/whyUse/strategyLogic) 이식 */
-const PRESET_EDU: Record<string, { tip: string; why: string; logic: string }> = {
-  buyhold: { tip: '쉽게 말하면: "사고 묻어두면 된다". 기술적 분석 없이 그냥 보유하는 가장 직관적인 전략이에요.', why: '장기 우상향 시장에선 매매 비용이 거의 없고, 잦은 매매로 인한 실수도 없어 어떤 트레이딩 전략보다 우수한 결과가 나오는 경우가 많아요. 적립식 투자와 결합하면 시장 타이밍 부담 없이 매월 자동 매수 → 장기 보유 패턴이 됩니다.', logic: '시작일 매수 → 종료일까지 보유 (청산 없음)' },
-  golden: { tip: '쉽게 말하면: 최근 흐름이 장기 흐름을 앞지르면 "오르는 중"이라 판단하고 사는 전략이에요.', why: '가장 기본적인 전략으로, 큰 상승장을 놓치지 않으면서도 하락장에서 빠져나올 수 있어요. 초보자가 처음 배우기에 가장 좋은 전략입니다.', logic: 'MA(20) > MA(60) → 매수 / MA(20) < MA(60) → 매도' },
-  'rsi-rev': { tip: '쉽게 말하면: 가격이 너무 많이 떨어져서 "이제 반등할 때가 됐다" 싶을 때 사고, 너무 올라서 "이제 내려갈 때" 싶으면 파는 전략이에요.', why: '급락 후 반등을 잡아내는 전략이라, 하락장에서도 수익 기회를 만들 수 있어요.', logic: 'RSI < 30 → 매수 / RSI > 70 → 매도' },
-  bollinger: { tip: '쉽게 말하면: 가격이 한동안 조용하다가 갑자기 위로 터지면 "폭발적 상승 시작"이라 보고 올라타는 전략이에요.', why: '횡보장에서 기다리다가 큰 움직임이 시작될 때만 거래해서, 불필요한 매매를 줄여줘요.', logic: '%B > 1 → 매수 (상단 돌파) / %B < 0 → 매도 (하단 이탈)' },
-  macd: { tip: '쉽게 말하면: 두 개의 추세선이 교차하는 순간을 포착해서 "추세가 바뀌고 있다"는 신호를 잡아내는 전략이에요.', why: '상승↔하락 전환 시점을 미리 감지할 수 있어서, 큰 흐름의 시작에 올라탈 수 있어요.', logic: 'MACD 골든크로스 → 매수 / MACD 데드크로스 → 매도' },
-  stoch: { tip: '쉽게 말하면: "지금 가격이 최근 범위에서 어디쯤인지" 보고, 바닥 근처에서 사고 천장 근처에서 파는 전략이에요.', why: '단기 매매에 적합하고, 매수/매도 타이밍을 비교적 명확하게 잡아줘요.', logic: '%K ↑ %D 크로스 → 매수 / %K ↓ %D 크로스 → 매도' },
-  larry: { tip: '쉽게 말하면: 평소 잘 오르던 종목이 갑자기 2~3일 급락했을 때 "일시적 할인"이라 보고 사는 전략이에요.', why: '실제 월가에서 검증된 전략으로, 높은 승률이 특징이에요. 단, 단기 매매라 잦은 거래가 발생해요.', logic: 'RSI(2) < 5 → 매수 (초단기 과매도) / RSI(2) > 60 → 매도 (반등 확인)' },
-  'vol-break': { tip: '쉽게 말하면: 어제 가격이 많이 흔들렸는데, 오늘 그 흔들림의 절반만큼 올라가면 "오늘은 오르는 날"이라 보고 사는 전략이에요.', why: '하루 단위로 매매해서 리스크가 제한적이고, 코인처럼 변동성 큰 자산에 잘 맞아요.', logic: 'CLOSE > OPEN + (전일고가 − 전일저가) × 0.5 → 매수 / 다음날 시가 매도' },
-};
+/* 프리셋 전략별 초보 교육(beginnerTip/whyUse/strategyLogic) — presetStrategies.ts에서 파생 */
+const PRESET_EDU: Record<string, { tip?: string; why?: string; logic?: string }> = Object.fromEntries(
+  PRESET_STRATEGIES.map(s => [s.id, { tip: s.beginnerTip, why: s.whyUse, logic: s.strategyLogic }]),
+);
 /* 프리셋별 시각화 차트(캔버스 애니메이션) — 지연 로딩으로 번들 분리.
    import 실패 시 에러바운더리로 번지지 않도록 폴백 컴포넌트로 강등(graceful). */
 const ChartFallback = () => <div className="flex flex-col items-center justify-center gap-1 text-center text-[13px]" style={{ color: INK3, height: 200 }}><span>차트를 불러올 수 없습니다.</span><span className="text-[12px]">오른쪽 패널에서 백테스트를 바로 실행해보세요.</span></div>;
 const lazyChart = (imp: () => Promise<{ default: React.ComponentType }>) =>
   lazy(() => imp().catch(() => ({ default: ChartFallback as React.ComponentType })));
 const PRESET_CHART: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
-  golden: lazyChart(() => import('../components/GoldenCrossCanvasChart')),
-  'rsi-rev': lazyChart(() => import('../components/RSIChart')),
-  bollinger: lazyChart(() => import('../components/BollingerChart')),
-  macd: lazyChart(() => import('../components/MACDChart')),
-  stoch: lazyChart(() => import('../components/StochasticChart')),
-  larry: lazyChart(() => import('../components/ConnorsRSI2Chart')),
-  'vol-break': lazyChart(() => import('../components/VolatilityBreakoutChart')),
+  'preset-golden-cross': lazyChart(() => import('../components/GoldenCrossCanvasChart')),
+  'preset-rsi-reversal': lazyChart(() => import('../components/RSIChart')),
+  'preset-bollinger-squeeze': lazyChart(() => import('../components/BollingerChart')),
+  'preset-macd-divergence': lazyChart(() => import('../components/MACDChart')),
+  'preset-stochastic': lazyChart(() => import('../components/StochasticChart')),
+  'preset-connors-rsi2': lazyChart(() => import('../components/ConnorsRSI2Chart')),
+  'preset-volatility-breakout': lazyChart(() => import('../components/VolatilityBreakoutChart')),
 };
 
-// 프리셋 → 백테스트 요청용 지표/조건 (옛 StrategyPage PRESET_STRATEGIES 이식)
-const PRESET_DEFS: Record<string, { indicators: Indicator[]; entryConditions: Condition[]; exitConditions: Condition[]; maxPositions?: number }> = {
-  buyhold: { indicators: [], entryConditions: [{ indicator: 'PRICE', operator: 'GT', value: 0, logic: 'AND' }], exitConditions: [{ indicator: 'PRICE', operator: 'LT', value: 0, logic: 'AND' }], maxPositions: 999 },
-  golden: { indicators: [{ type: 'MA', parameters: { period: 20 } }, { type: 'MA', parameters: { period: 60 } }], entryConditions: [{ indicator: 'MA_20_CROSS_MA_60', operator: 'GT', value: 0, logic: 'AND' }], exitConditions: [{ indicator: 'MA_20_CROSSUNDER_MA_60', operator: 'GT', value: 0, logic: 'AND' }] },
-  'rsi-rev': { indicators: [{ type: 'RSI', parameters: { period: 14 } }], entryConditions: [{ indicator: 'RSI', operator: 'LT', value: 30, logic: 'AND' }], exitConditions: [{ indicator: 'RSI', operator: 'GT', value: 70, logic: 'AND' }] },
-  bollinger: { indicators: [{ type: 'BOLLINGER_BANDS', parameters: { period: 20, stdDev: 2 } }], entryConditions: [{ indicator: 'BOLLINGER_PCT_B', operator: 'GT', value: 1, logic: 'AND' }], exitConditions: [{ indicator: 'BOLLINGER_PCT_B', operator: 'LT', value: 0, logic: 'AND' }] },
-  macd: { indicators: [{ type: 'MACD', parameters: { fast: 12, slow: 26, signal: 9 } }], entryConditions: [{ indicator: 'MACD_CROSS_MACD_SIGNAL', operator: 'GT', value: 0, logic: 'AND' }], exitConditions: [{ indicator: 'MACD_CROSSUNDER_MACD_SIGNAL', operator: 'GT', value: 0, logic: 'AND' }] },
-  stoch: { indicators: [{ type: 'STOCHASTIC', parameters: { kPeriod: 14, dPeriod: 3 } }], entryConditions: [{ indicator: 'STOCH_K_CROSS_STOCH_D', operator: 'GT', value: 0, logic: 'AND' }], exitConditions: [{ indicator: 'STOCH_K_CROSSUNDER_STOCH_D', operator: 'GT', value: 0, logic: 'AND' }] },
-  larry: { indicators: [{ type: 'RSI', parameters: { period: 2 } }], entryConditions: [{ indicator: 'RSI', operator: 'LT', value: 5, logic: 'AND' }], exitConditions: [{ indicator: 'RSI', operator: 'GT', value: 60, logic: 'AND' }] },
-  'vol-break': { indicators: [{ type: 'ATR', parameters: { period: 1 } }], entryConditions: [{ indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'OPEN + (PREV_HIGH - PREV_LOW) * 0.5' }], exitConditions: [{ indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'OPEN + (PREV_HIGH - PREV_LOW) * 0.3' }] },
-};
+// 프리셋 → 백테스트 요청용 지표/조건 — presetStrategies.ts에서 파생
+const PRESET_DEFS: Record<string, {
+  indicators: Indicator[]; entryConditions: Condition[]; exitConditions: Condition[];
+  maxPositions?: number; trailingStopPercent?: number; leverage?: number;
+  tradeDirection?: PresetStrategy['tradeDirection']; pyramidMode?: PresetStrategy['pyramidMode'];
+  shortEntryConditions?: Condition[]; shortExitConditions?: Condition[];
+}> = Object.fromEntries(
+  PRESET_STRATEGIES.map(s => [s.id, {
+    indicators: s.indicators, entryConditions: s.entryConditions, exitConditions: s.exitConditions,
+    maxPositions: s.maxPositions, trailingStopPercent: s.trailingStopPercent, leverage: s.leverage,
+    tradeDirection: s.tradeDirection, pyramidMode: s.pyramidMode,
+    shortEntryConditions: s.shortEntryConditions, shortExitConditions: s.shortExitConditions,
+  }]),
+);
 
 const PERIODS: [string, string][] = [['6M', '6개월'], ['1Y', '1년'], ['2Y', '2년'], ['3Y', '3년'], ['5Y', '5년']];
 const CAPS: [number, string][] = [[1_000_000, '100만'], [5_000_000, '500만'], [10_000_000, '1000만'], [50_000_000, '5000만']];
@@ -133,6 +126,8 @@ const INDICATOR_CATALOG: { type: Indicator['type']; label: string; params: Recor
   { type: 'CCI', label: 'CCI', params: { period: 20 } },
   { type: 'WILLIAMS_R', label: 'Williams %R', params: { period: 14 } },
   { type: 'OBV', label: 'OBV', params: {} },
+  { type: 'DONCHIAN', label: '돈치안 채널', params: { period: 20 } },
+  { type: 'ADX', label: 'ADX (추세강도)', params: { period: 14 } },
 ];
 const PARAM_LABEL: Record<string, string> = { period: '기간', fast: '단기 EMA', slow: '장기 EMA', signal: '시그널', stdDev: '표준편차', kPeriod: '%K 기간', dPeriod: '%D 기간' };
 const COND_INDICATORS: [string, string][] = [
@@ -140,6 +135,7 @@ const COND_INDICATORS: [string, string][] = [
   ['MA', '이동평균 (MA)'], ['EMA', '지수이동평균 (EMA)'], ['BOLLINGER_UPPER', '볼린저 상단'], ['BOLLINGER_MIDDLE', '볼린저 중간'],
   ['BOLLINGER_LOWER', '볼린저 하단'], ['BOLLINGER_PCT_B', '볼린저 %B'], ['STOCH_K', '스토캐스틱 %K'], ['STOCH_D', '스토캐스틱 %D'],
   ['ATR', 'ATR'], ['CCI', 'CCI'], ['WILLIAMS_R', 'Williams %R'], ['OBV', 'OBV'],
+  ['ADX', 'ADX (추세강도)'], ['DONCHIAN_HIGH_100', '돈치안 상단(100)'], ['DONCHIAN_LOW_30', '돈치안 하단(30)'],
   ['MACD_CROSS_MACD_SIGNAL', 'MACD 골든크로스'], ['MACD_CROSSUNDER_MACD_SIGNAL', 'MACD 데드크로스'],
   ['STOCH_K_CROSS_STOCH_D', '스토캐스틱 골든크로스'], ['STOCH_K_CROSSUNDER_STOCH_D', '스토캐스틱 데드크로스'],
   ['EMA_CROSS_MA', 'EMA ↑ SMA 크로스'], ['EMA_CROSSUNDER_MA', 'EMA ↓ SMA 크로스'],
@@ -242,7 +238,7 @@ const CONCEPTS: { icon: string; t: string; tk?: string; d: string }[] = [
   { icon: '📉', t: '최대 낙폭(MDD)', tk: 'MDD', d: '전략이 가장 많이 깨졌을 때 얼마나 떨어졌는지를 나타내요. 수익률만 보지 말고, "최악의 순간에 얼마나 버텨야 하나"를 함께 봐야 합니다.' },
 ];
 
-const EmptyHero = ({ onGuide, running, total = 8, userCount = 0 }: { onGuide: () => void; running: boolean; total?: number; userCount?: number }) => (
+const EmptyHero = ({ onGuide, running, total = PRESET_STRATEGIES.length, userCount = 0 }: { onGuide: () => void; running: boolean; total?: number; userCount?: number }) => (
   <section className="flex flex-col gap-[18px]">
     <StationBar title="항로 분석 스테이션" sub="전략을 선택하고 과거 데이터로 검증하세요" />
     <div style={{ ...mkCard, padding: '40px 32px', textAlign: 'center' }}>
@@ -577,15 +573,15 @@ type Target = { symbol: string; name: string; assetType: string };
 type RebalFreq = 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
 type Sizing = 'ALL_IN' | 'PERCENT' | 'FIXED_AMOUNT';
 type AdvOpts = {
-  stopLoss: string; takeProfit: string; trailingStop: string; slippage: string; commission: string;
-  tradeDirection: 'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT'; dividendReinvest: boolean;
+  stopLoss: string; takeProfit: string; trailingStop: string; slippage: string; commission: string; leverage: string;
+  tradeDirection: 'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT' | 'LONG_SHORT_FLAT'; dividendReinvest: boolean;
   positionSizing: Sizing; positionValue: string; maxPositions: string; // maxPositions: 'auto' = 프리셋/기본
   dateMode: 'preset' | 'custom'; customStart: string; customEnd: string;
 };
-const ADV_DEFAULTS: AdvOpts = { stopLoss: '', takeProfit: '', trailingStop: '', slippage: '', commission: '', tradeDirection: 'LONG_ONLY', dividendReinvest: true, positionSizing: 'ALL_IN', positionValue: '', maxPositions: 'auto', dateMode: 'preset', customStart: '', customEnd: '' };
+const ADV_DEFAULTS: AdvOpts = { stopLoss: '', takeProfit: '', trailingStop: '', slippage: '', commission: '', leverage: '', tradeDirection: 'LONG_ONLY', dividendReinvest: true, positionSizing: 'ALL_IN', positionValue: '', maxPositions: 'auto', dateMode: 'preset', customStart: '', customEnd: '' };
 const REBAL: [RebalFreq, string][] = [['MONTHLY', '매월'], ['QUARTERLY', '분기'], ['YEARLY', '매년']];
 const REBAL_LABEL: Record<string, string> = { MONTHLY: '매월', QUARTERLY: '분기', YEARLY: '매년' };
-const TDIR: [AdvOpts['tradeDirection'], string][] = [['LONG_ONLY', '매수만'], ['SHORT_ONLY', '공매도만'], ['LONG_SHORT', '롱·숏']];
+const TDIR: [AdvOpts['tradeDirection'], string][] = [['LONG_ONLY', '매수만'], ['SHORT_ONLY', '공매도만'], ['LONG_SHORT', '롱·숏'], ['LONG_SHORT_FLAT', '롱·숏(독립)']];
 const POS_OPTS: [string, string][] = [['auto', '자동'], ['2', '2회'], ['3', '3회'], ['5', '5회']];
 const SIZING: [Sizing, string][] = [['ALL_IN', '전량'], ['PERCENT', '자본 비율'], ['FIXED_AMOUNT', '고정 금액']];
 type RunnerProps = {
@@ -635,6 +631,7 @@ const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, 
   useEffect(() => { marketService.getPrices('CRYPTO').then(ps => setCryptoList(ps.map(p => ({ code: p.symbol, name: p.name })))).catch(() => {}); }, []);
   const isUsEtf = [target, ...(second ? [second] : [])].some(a => a.assetType === 'US_STOCK' || a.assetType === 'ETF');
   const rebalActive = !!(second && second.symbol !== target.symbol); // 2자산 모드: 손절/익절/트레일링·매매방향 백엔드 미지원
+  const preset = strat ? PRESET_DEFS[strat.id] : null; // 프리셋 권장값(레버리지 등) 표시용
   return (
     <aside style={{ ...mkCard, padding: 0, display: 'flex', flexDirection: 'column' }}>
       <div className="wa-force-dark px-[18px] py-4 text-white" style={{ background: BT_GRAD, borderBottom: '1px solid rgba(255,255,255,.14)' }}>
@@ -691,10 +688,16 @@ const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, 
                 <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}><Term k="수수료" compact>수수료율</Term></span><input type="number" min={0} step="0.05" value={adv.commission} onChange={e => setAdv({ ...adv, commission: e.target.value })} placeholder="0.1" className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
               </div>
             </div>
+            {!rebalActive && <div>
+              <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}>레버리지 (배, 선물 — 비우면 1배/현물)</div>
+              <input type="number" min={1} max={20} step={1} value={adv.leverage} onChange={e => setAdv({ ...adv, leverage: e.target.value })} placeholder={preset?.leverage ? `${preset.leverage} (권장)` : '1'} className="w-full rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} />
+              <div className="mt-1 text-[10.5px]" style={{ color: COMPASS }}>⚠️ 손익이 배수만큼 증폭되고 증거금 소진 시 강제청산됩니다. 백테스트는 일봉 근사이며 실거래 결과와 다를 수 있어요.</div>
+            </div>}
             <div style={rebalActive ? { opacity: .5 } : undefined}>
               <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}>매매 방향</div>
               <div className="flex gap-1">{TDIR.map(([k, l]) => <button key={k} disabled={rebalActive} onClick={() => setAdv({ ...adv, tradeDirection: k })} className="flex-1 rounded-md py-1.5 text-[11px] font-semibold disabled:cursor-not-allowed" style={seg(adv.tradeDirection === k)}>{l}</button>)}</div>
               {rebalActive && <div className="mt-1 text-[10.5px]" style={{ color: COMPASS }}>2자산 리밸런싱은 매수(LONG)만 지원합니다.</div>}
+              {!rebalActive && adv.tradeDirection === 'LONG_SHORT_FLAT' && <div className="mt-1 text-[10.5px]" style={{ color: INK3 }}>독립 롱+숏: 청산 시 현금으로 빠져 다음 돌파를 대기합니다(전환 아님). 숏 조건은 프리셋(터틀)에서 제공됩니다.</div>}
             </div>
             {!rebalActive && <div>
               <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}><Term k="분할매수" compact>분할 매수 (최대 동시 보유)</Term></div>
@@ -1216,9 +1219,12 @@ const ConsoleStrategyPage = () => {
     if (pct(adv.stopLoss) != null) req.stopLossPercent = pct(adv.stopLoss);
     if (pct(adv.takeProfit) != null) req.takeProfitPercent = pct(adv.takeProfit);
     if (pct(adv.trailingStop) != null) req.trailingStopPercent = pct(adv.trailingStop);
-    // 매매방향(숏)·분할매수·포지션 사이징은 단일 종목 모드 전용 (2자산은 롱 배분 전략)
+    else if (preset?.trailingStopPercent) req.trailingStopPercent = preset.trailingStopPercent;
+    // 매매방향(숏)·분할매수·포지션 사이징·레버리지는 단일 종목 모드 전용 (2자산은 롱 배분 전략)
     if (!rebalActive) {
-      if (adv.tradeDirection !== 'LONG_ONLY') req.tradeDirection = adv.tradeDirection;
+      // 매매 방향: 사용자가 고급설정에서 바꿨으면 우선, 아니면 프리셋 권장값(터틀=LONG_SHORT_FLAT)
+      const dir = adv.tradeDirection !== 'LONG_ONLY' ? adv.tradeDirection : preset?.tradeDirection;
+      if (dir && dir !== 'LONG_ONLY') req.tradeDirection = dir;
       if (adv.maxPositions !== 'auto') req.maxPositions = Number(adv.maxPositions);
       else if (preset?.maxPositions) req.maxPositions = preset.maxPositions;
       if (adv.positionSizing !== 'ALL_IN') {
@@ -1226,6 +1232,16 @@ const ConsoleStrategyPage = () => {
         const pv = parseFloat(adv.positionValue);
         if (Number.isFinite(pv) && pv > 0) req.positionValue = pv;
       }
+      // 레버리지: 사용자 입력 우선, 없으면 프리셋 권장값(터틀=2)
+      const advLev = parseInt(adv.leverage, 10);
+      if (Number.isFinite(advLev) && advLev > 1) req.leverage = advLev;
+      else if (preset?.leverage && preset.leverage > 1) req.leverage = preset.leverage;
+      // 독립 양방향(LONG_SHORT_FLAT)이면 숏 조건 + 피라미딩 트리거 전달
+      if (req.tradeDirection === 'LONG_SHORT_FLAT') {
+        if (preset?.shortEntryConditions) req.shortEntryConditions = preset.shortEntryConditions;
+        if (preset?.shortExitConditions) req.shortExitConditions = preset.shortExitConditions;
+      }
+      if (preset?.pyramidMode) req.pyramidMode = preset.pyramidMode;
     }
     // 배당 재투자: 기본/2번째 자산이 미국주식·ETF이고 OFF로 끈 경우에만 false 전송 (기본 ON)
     const hasUsEtf = [target, ...(second ? [second] : [])].some(a => a.assetType === 'US_STOCK' || a.assetType === 'ETF');
@@ -1288,7 +1304,7 @@ const ConsoleStrategyPage = () => {
             {running ? <RunningView onCancel={() => { runIdRef.current++; setRunning(false); }} />
               : result ? <ResultView result={result} strat={strat} onExport={onExport} />
                 : strat ? <StrategyGuidePanel strat={strat} userStrat={userStrats.find(s => s.id === strat.id)} onApply={() => { const st = userStrats.find(s => s.id === strat.id); if (st) setApplyFor(st); }} onCreate={() => setBuilder({ mode: 'create' })} />
-                  : <EmptyHero running={running} total={allStrats.length} userCount={userStrats.length} onGuide={() => { setActiveId('golden'); setTarget({ symbol: 'BTC', name: '비트코인', assetType: 'CRYPTO' }); run('golden'); }} />}
+                  : <EmptyHero running={running} total={allStrats.length} userCount={userStrats.length} onGuide={() => { setActiveId('preset-golden-cross'); setTarget({ symbol: 'BTC', name: '비트코인', assetType: 'CRYPTO' }); run('preset-golden-cross'); }} />}
           </div>
           <div data-tour="runner" className="min-w-0">
           <BacktestRunner strat={strat} target={target} setTarget={setTarget} period={period} setPeriod={setPeriod} capital={capital} setCapital={setCapital} monthly={monthly} setMonthly={setMonthly} editInd={editInd} setEditInd={setEditInd} editEntry={editEntry} setEditEntry={setEditEntry} editExit={editExit} setEditExit={setEditExit} adv={adv} setAdv={setAdv} second={second} setSecond={setSecond} firstWeight={firstWeight} setFirstWeight={setFirstWeight} rebalanceFreq={rebalanceFreq} setRebalanceFreq={setRebalanceFreq} stratAssets={stratAssets} onRun={() => run()} running={running} historyCount={history.length} onShowHistory={() => setHistOpen(true)} />

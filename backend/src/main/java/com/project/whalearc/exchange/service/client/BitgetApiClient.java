@@ -318,15 +318,21 @@ public class BitgetApiClient {
     private static final String FUTURES_MARGIN_COIN = "USDT";
     private static final String FUTURES_MARGIN_MODE = "isolated";
 
-    /** 선물 레버리지 설정(개시 전 호출). 단방향 롱 엔진이라 holdSide=long으로 설정. */
+    /** 선물 레버리지 설정(개시 전 호출). 롱 기본. */
     public void setFuturesLeverage(String apiKey, String secretKey, String passphrase,
                                    String symbol, int leverage) {
+        setFuturesLeverage(apiKey, secretKey, passphrase, symbol, leverage, "long");
+    }
+
+    /** 선물 레버리지 설정(holdSide 지정: long/short). */
+    public void setFuturesLeverage(String apiKey, String secretKey, String passphrase,
+                                   String symbol, int leverage, String holdSide) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("symbol", symbol);
         body.put("productType", FUTURES_PRODUCT_TYPE);
         body.put("marginCoin", FUTURES_MARGIN_COIN);
         body.put("leverage", String.valueOf(leverage));
-        body.put("holdSide", "long");
+        body.put("holdSide", holdSide);
         Map<String, Object> resp = signedRequest(apiKey, secretKey, passphrase, HttpMethod.POST,
                 "/api/v2/mix/account/set-leverage", null, body);
         String code = String.valueOf(resp.get("code"));
@@ -345,11 +351,22 @@ public class BitgetApiClient {
      */
     public String openFuturesLong(String apiKey, String secretKey, String passphrase,
                                   String symbol, BigDecimal size, String clientOid) {
+        return openFutures(apiKey, secretKey, passphrase, symbol, size, clientOid, "buy");
+    }
+
+    /** 선물 시장가 숏 개시(open) 주문. size=코인 수량(base). */
+    public String openFuturesShort(String apiKey, String secretKey, String passphrase,
+                                   String symbol, BigDecimal size, String clientOid) {
+        return openFutures(apiKey, secretKey, passphrase, symbol, size, clientOid, "sell");
+    }
+
+    private String openFutures(String apiKey, String secretKey, String passphrase,
+                               String symbol, BigDecimal size, String clientOid, String side) {
         try {
-            return placeFuturesOpen(apiKey, secretKey, passphrase, symbol, size, clientOid, true);   // hedge
+            return placeFuturesOpen(apiKey, secretKey, passphrase, symbol, size, clientOid, true, side);   // hedge
         } catch (Exception hedgeErr) {
             try {
-                return placeFuturesOpen(apiKey, secretKey, passphrase, symbol, size, clientOid, false);  // one-way
+                return placeFuturesOpen(apiKey, secretKey, passphrase, symbol, size, clientOid, false, side);  // one-way
             } catch (Exception oneWayErr) {
                 throw new IllegalStateException("Bitget 선물 개시 실패 (hedge: " + hedgeErr.getMessage()
                         + " | one-way: " + oneWayErr.getMessage() + ")");
@@ -357,15 +374,15 @@ public class BitgetApiClient {
         }
     }
 
-    /** 선물 롱 개시 1회 시도. hedge=true면 tradeSide=open(헤지), false면 tradeSide 생략(단방향). */
+    /** 선물 개시 1회 시도. side=buy(롱)/sell(숏). hedge=true면 tradeSide=open(헤지), false면 생략(단방향). */
     private String placeFuturesOpen(String apiKey, String secretKey, String passphrase,
-                                    String symbol, BigDecimal size, String clientOid, boolean hedge) {
+                                    String symbol, BigDecimal size, String clientOid, boolean hedge, String side) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("symbol", symbol);
         body.put("productType", FUTURES_PRODUCT_TYPE);
         body.put("marginMode", FUTURES_MARGIN_MODE);
         body.put("marginCoin", FUTURES_MARGIN_COIN);
-        body.put("side", "buy");
+        body.put("side", side);
         if (hedge) body.put("tradeSide", "open");
         body.put("orderType", "market");
         body.put("size", size.toPlainString());
@@ -383,18 +400,68 @@ public class BitgetApiClient {
         throw new IllegalStateException("orderId 없음: " + resp);
     }
 
-    /** 선물 롱 포지션 전량 청산(close-positions 전용 엔드포인트 — 가장 안정적). */
-    public void closeFuturesLong(String apiKey, String secretKey, String passphrase, String symbol) {
+    /**
+     * 선물 롱 포지션을 <b>지정 수량만큼</b> 시장가 청산(reduceOnly). 심볼 전체를 닫는 close-positions와 달리
+     * 배포별 보유분만 닫아, 같은 심볼을 여러 배포가 들고 있어도 서로 영향을 주지 않는다.
+     *
+     * <p>포지션 모드를 모르므로 hedge(tradeSide=close) → one-way(reduceOnly=YES) 순으로 시도한다.
+     * @return 거래소 orderId. 두 모드 모두 실패 시 IllegalStateException.
+     */
+    public String closeFuturesLongSize(String apiKey, String secretKey, String passphrase,
+                                       String symbol, BigDecimal size, String clientOid) {
+        return closeFuturesSize(apiKey, secretKey, passphrase, symbol, size, clientOid, true);
+    }
+
+    /** 선물 숏 포지션을 지정 수량만큼 시장가 청산(reduceOnly). */
+    public String closeFuturesShortSize(String apiKey, String secretKey, String passphrase,
+                                        String symbol, BigDecimal size, String clientOid) {
+        return closeFuturesSize(apiKey, secretKey, passphrase, symbol, size, clientOid, false);
+    }
+
+    private String closeFuturesSize(String apiKey, String secretKey, String passphrase,
+                                    String symbol, BigDecimal size, String clientOid, boolean isLong) {
+        try {
+            return placeFuturesClose(apiKey, secretKey, passphrase, symbol, size, clientOid, true, isLong);   // hedge
+        } catch (Exception hedgeErr) {
+            try {
+                return placeFuturesClose(apiKey, secretKey, passphrase, symbol, size, clientOid, false, isLong);  // one-way
+            } catch (Exception oneWayErr) {
+                throw new IllegalStateException("Bitget 선물 부분청산 실패 (hedge: " + hedgeErr.getMessage()
+                        + " | one-way: " + oneWayErr.getMessage() + ")");
+            }
+        }
+    }
+
+    /** 선물 사이즈 청산 1회 시도. hedge=true면 tradeSide=close, false면 reduceOnly=YES(반대매매). isLong=청산 대상 방향. */
+    private String placeFuturesClose(String apiKey, String secretKey, String passphrase,
+                                     String symbol, BigDecimal size, String clientOid, boolean hedge, boolean isLong) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("symbol", symbol);
         body.put("productType", FUTURES_PRODUCT_TYPE);
-        body.put("holdSide", "long");
+        body.put("marginMode", FUTURES_MARGIN_MODE);
+        body.put("marginCoin", FUTURES_MARGIN_COIN);
+        if (hedge) {
+            // 헤지(양방향) 모드: side는 '포지션 방향'을 뜻한다. 롱 청산=(side=buy,tradeSide=close), 숏 청산=(side=sell,tradeSide=close).
+            body.put("side", isLong ? "buy" : "sell");
+            body.put("tradeSide", "close");
+        } else {
+            // 단방향(one-way) 모드: 반대매매로 닫는다. 롱 청산=(side=sell), 숏 청산=(side=buy) + reduceOnly.
+            body.put("side", isLong ? "sell" : "buy");
+            body.put("reduceOnly", "YES");
+        }
+        body.put("orderType", "market");
+        body.put("size", size.toPlainString());
+        // 개시와 동일하게 두 시도에 같은 clientOid 사용 — 멱등 처리로 이중 청산 방지.
+        if (clientOid != null) body.put("clientOid", clientOid);
         Map<String, Object> resp = signedRequest(apiKey, secretKey, passphrase, HttpMethod.POST,
-                "/api/v2/mix/order/close-positions", null, body);
+                "/api/v2/mix/order/place-order", null, body);
         String code = String.valueOf(resp.get("code"));
         if (!"00000".equals(code)) {
-            throw new IllegalStateException("Bitget 선물 청산 거부: code=" + code + ", msg=" + resp.get("msg"));
+            throw new IllegalStateException("code=" + code + ", msg=" + resp.get("msg"));
         }
+        Object data = resp.get("data");
+        if (data instanceof Map<?, ?> m && m.get("orderId") != null) return String.valueOf(m.get("orderId"));
+        throw new IllegalStateException("orderId 없음: " + resp);
     }
 
     /** 선물 주문 체결 상태/평균가/체결수량 조회(mix order detail). */
@@ -429,6 +496,26 @@ public class BitgetApiClient {
         if (data instanceof List<?> list) {
             for (Object item : list) {
                 if (item instanceof Map<?, ?> p && "long".equalsIgnoreCase(String.valueOf(p.get("holdSide")))) {
+                    return bd(p.get("total"));
+                }
+            }
+        }
+        return BigDecimal.ZERO;
+    }
+
+    /** 선물 숏 포지션의 현재 보유 수량 조회(청산 검증용). 미보유면 0. */
+    @SuppressWarnings("unchecked")
+    public BigDecimal getFuturesShortSize(String apiKey, String secretKey, String passphrase, String symbol) {
+        Map<String, Object> q = new LinkedHashMap<>();
+        q.put("symbol", symbol);
+        q.put("productType", FUTURES_PRODUCT_TYPE);
+        q.put("marginCoin", FUTURES_MARGIN_COIN);
+        Map<String, Object> resp = signedRequest(apiKey, secretKey, passphrase, HttpMethod.GET,
+                "/api/v2/mix/position/single-position", q, null);
+        Object data = resp.get("data");
+        if (data instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> p && "short".equalsIgnoreCase(String.valueOf(p.get("holdSide")))) {
                     return bd(p.get("total"));
                 }
             }

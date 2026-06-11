@@ -27,6 +27,15 @@ public class CreateDeploymentRequest {
     private List<Indicator> indicators;
     private List<Condition> entryConditions;
     private List<Condition> exitConditions;
+    // 독립 양방향(LONG_SHORT_FLAT) 전용 숏 조건 (선택)
+    private List<Condition> shortEntryConditions;
+    private List<Condition> shortExitConditions;
+
+    // 매매 방향: null/LONG_ONLY(롱만) / LONG_SHORT_FLAT(독립 롱+숏+flat)
+    private String tradeDirection;
+    // 피라미딩 최대 유닛 수 (null/1=단일). 트리거: ATR / SIGNAL.
+    private Integer maxUnits;
+    private String pyramidMode;
 
     private List<String> targetAssets;
     private String assetType;

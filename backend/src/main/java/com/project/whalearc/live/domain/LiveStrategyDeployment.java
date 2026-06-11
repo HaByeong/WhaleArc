@@ -42,8 +42,18 @@ public class LiveStrategyDeployment {
 
     // ── 전략 스냅샷 (배포 시점 깊은 복사로 동결) ──
     private List<Indicator> indicators = new ArrayList<>();
-    private List<Condition> entryConditions = new ArrayList<>();
-    private List<Condition> exitConditions = new ArrayList<>();
+    private List<Condition> entryConditions = new ArrayList<>();   // 롱 진입 (LSF에서 롱 entry)
+    private List<Condition> exitConditions = new ArrayList<>();    // 롱 청산
+    // 독립 양방향(LONG_SHORT_FLAT) 전용 숏 조건. 비어있으면 숏 미사용(롱만).
+    private List<Condition> shortEntryConditions = new ArrayList<>();
+    private List<Condition> shortExitConditions = new ArrayList<>();
+
+    // 매매 방향: null/LONG_ONLY(기존, 롱만) / LONG_SHORT_FLAT(독립 롱+숏+flat)
+    private String tradeDirection;
+    // 피라미딩 최대 유닛 수 (null/1이면 단일 진입, 기존 동작). +ATR 또는 진입신호 재충족 시 추가.
+    private Integer maxUnits;
+    // 피라미딩 추가진입 트리거: ATR(직전진입가±ATR 돌파) / SIGNAL(진입신호 재충족). null이면 피라미딩 안 함.
+    private String pyramidMode;
 
     private List<String> targetAssets = new ArrayList<>();
     private String assetType;          // CRYPTO / STOCK / US_STOCK / ETF
@@ -101,6 +111,21 @@ public class LiveStrategyDeployment {
         return marketType == MarketType.FUTURES;
     }
 
+    /** 독립 롱+숏+flat 모드 여부. */
+    public boolean isLongShortFlat() {
+        return "LONG_SHORT_FLAT".equals(tradeDirection);
+    }
+
+    /** 최대 유닛 수(피라미딩). null/<1이면 1(단일 진입). */
+    public int effectiveMaxUnits() {
+        return (maxUnits != null && maxUnits > 1) ? maxUnits : 1;
+    }
+
+    /** 피라미딩 활성(트리거 지정 + maxUnits>1). */
+    public boolean isPyramiding() {
+        return pyramidMode != null && !pyramidMode.isBlank() && effectiveMaxUnits() > 1;
+    }
+
     /**
      * 심볼 1개의 라이브 포지션 상태. (Strategy의 Condition/Indicator처럼 별도 컬렉션이 아닌 임베드 객체)
      * 청산 시 레코드를 지우지 않고 direction=NONE으로 리셋해 재사용한다(터틀 패턴).
@@ -115,8 +140,10 @@ public class LiveStrategyDeployment {
         private BigDecimal avgPrice;        // 평균 진입가
         private BigDecimal quantity = BigDecimal.ZERO;
         private BigDecimal allocatedCash;   // 이 심볼에 배분된 투자금
-        private BigDecimal stopLoss;        // 손절/트레일링 라인
-        private BigDecimal trailRef;        // 트레일링 최고가 기준
+        private BigDecimal stopLoss;        // 손절/트레일링 라인 (롱=하단, 숏=상단)
+        private BigDecimal trailRef;        // 트레일링 기준가 (롱=최고가, 숏=최저가)
+        private int units;                  // 피라미딩 유닛 수 (0=무포지션)
+        private BigDecimal lastEntryPrice;  // 마지막 진입가 (+ATR 피라미딩 트리거 기준)
         private BigDecimal realizedPnl = BigDecimal.ZERO;
         private int tradeCount;
         private int winCount;
@@ -126,6 +153,6 @@ public class LiveStrategyDeployment {
             this.allocatedCash = allocatedCash;
         }
 
-        public enum Direction { NONE, LONG }
+        public enum Direction { NONE, LONG, SHORT }
     }
 }

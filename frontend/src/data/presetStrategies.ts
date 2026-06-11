@@ -1,8 +1,27 @@
-import type { Strategy } from '../services/strategyService';
+import type { Strategy, Condition } from '../services/strategyService';
 
-export const PRESET_STRATEGIES: Strategy[] = [
+/** 프리셋 전략 — 공유 Strategy에 콘솔/필터 전용 메타(category, maxPositions)를 더한 단일 출처.
+ *  전략(ConsoleStrategyPage)·자동매매(AutoTradePage) 두 페이지가 모두 이 배열에서 파생한다. */
+export type PresetCategory = 'basic' | 'trend' | 'reversal' | 'volatility';
+export interface PresetStrategy extends Strategy {
+  category: PresetCategory;
+  maxPositions?: number;
+  /** 프리셋 권장 트레일링 스탑(%) — 사용자가 고급설정에서 직접 입력하지 않으면 이 값이 적용된다. */
+  trailingStopPercent?: number;
+  /** 레버리지(선물 권장 배수). 백테스트에 자동 적용, 라이브는 폼에서 직접 설정. */
+  leverage?: number;
+  /** 매매 방향. LONG_SHORT_FLAT=독립 롱+숏+flat. */
+  tradeDirection?: 'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT' | 'LONG_SHORT_FLAT';
+  /** 피라미딩 추가진입 트리거. */
+  pyramidMode?: 'ATR' | 'SIGNAL';
+  /** 독립 양방향 전용 숏 진입/청산 조건. */
+  shortEntryConditions?: Condition[];
+  shortExitConditions?: Condition[];
+}
+
+export const PRESET_STRATEGIES: PresetStrategy[] = [
     {
-      id: 'preset-buy-hold', name: 'Buy & Hold (장기 보유)', description: '시작 시점에 매수 후 종료 시점까지 그대로 보유하는 가장 단순한 전략입니다. 매매 타이밍을 잡지 않고 시간의 힘에 맡기는 방식이며, 적립식 투자와 결합하면 직장인의 표준 투자법이 됩니다.',
+      id: 'preset-buy-hold', category: 'basic', maxPositions: 999, name: 'Buy & Hold (장기 보유)', description: '시작 시점에 매수 후 종료 시점까지 그대로 보유하는 가장 단순한 전략입니다. 매매 타이밍을 잡지 않고 시간의 힘에 맡기는 방식이며, 적립식 투자와 결합하면 직장인의 표준 투자법이 됩니다.',
       beginnerTip: '쉽게 말하면: "사고 묻어두면 된다". 기술적 분석 없이 그냥 보유하는 가장 직관적인 전략이에요.',
       whyUse: '장기 우상향 시장에선 매매 비용이 거의 없고, 잦은 매매로 인한 실수도 없어 어떤 트레이딩 전략보다 우수한 결과가 나오는 경우가 많아요. 적립식 투자와 결합하면 시장 타이밍 부담 없이 매월 자동 매수 → 장기 보유 패턴이 됩니다.',
       difficulty: '초급',
@@ -14,7 +33,7 @@ export const PRESET_STRATEGIES: Strategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-golden-cross', name: '골든크로스 추종 전략', description: '20일/60일 이동평균선 골든크로스 발생 시 매수, 데드크로스 시 매도하는 추세추종 전략입니다. 중장기 상승 추세에서 안정적인 수익을 추구합니다.',
+      id: 'preset-golden-cross', category: 'trend', name: '골든크로스 추종 전략', description: '20일/60일 이동평균선 골든크로스 발생 시 매수, 데드크로스 시 매도하는 추세추종 전략입니다. 중장기 상승 추세에서 안정적인 수익을 추구합니다.',
       beginnerTip: '쉽게 말하면: 최근 흐름이 장기 흐름을 앞지르면 "오르는 중"이라 판단하고 사는 전략이에요.',
       whyUse: '가장 기본적인 전략으로, 큰 상승장을 놓치지 않으면서도 하락장에서 빠져나올 수 있어요. 초보자가 처음 배우기에 가장 좋은 전략입니다.',
       difficulty: '초급',
@@ -26,7 +45,7 @@ export const PRESET_STRATEGIES: Strategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-rsi-reversal', name: 'RSI 반전 매매', description: 'RSI 과매도 구간(30 이하) 진입 후 반등 시 매수, 과매수 구간(70 이상) 도달 시 매도하는 평균회귀 전략입니다.',
+      id: 'preset-rsi-reversal', category: 'reversal', name: 'RSI 반전 매매', description: 'RSI 과매도 구간(30 이하) 진입 후 반등 시 매수, 과매수 구간(70 이상) 도달 시 매도하는 평균회귀 전략입니다.',
       beginnerTip: '쉽게 말하면: 가격이 너무 많이 떨어져서 "이제 반등할 때가 됐다" 싶을 때 사고, 너무 올라서 "이제 내려갈 때" 싶으면 파는 전략이에요.',
       whyUse: '급락 후 반등을 잡아내는 전략이라, 하락장에서도 수익 기회를 만들 수 있어요.',
       difficulty: '초급',
@@ -38,7 +57,7 @@ export const PRESET_STRATEGIES: Strategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-bollinger-squeeze', name: '볼린저 밴드 수축 돌파', description: '볼린저 밴드 수축 구간에서 상단 돌파 시 매수, 중심선 하락 시 손절. 변동성 확대 구간을 노리는 전략입니다.',
+      id: 'preset-bollinger-squeeze', category: 'volatility', name: '볼린저 밴드 수축 돌파', description: '볼린저 밴드 수축 구간에서 상단 돌파 시 매수, 중심선 하락 시 손절. 변동성 확대 구간을 노리는 전략입니다.',
       beginnerTip: '쉽게 말하면: 가격이 한동안 조용하다가 갑자기 위로 터지면 "폭발적 상승 시작"이라 보고 올라타는 전략이에요.',
       whyUse: '횡보장에서 기다리다가 큰 움직임이 시작될 때만 거래해서, 불필요한 매매를 줄여줘요.',
       difficulty: '중급',
@@ -50,7 +69,7 @@ export const PRESET_STRATEGIES: Strategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-macd-divergence', name: 'MACD 크로스오버', description: 'MACD 시그널 크로스와 히스토그램 전환을 활용한 추세 전환 포착 전략입니다.',
+      id: 'preset-macd-divergence', category: 'trend', name: 'MACD 크로스오버', description: 'MACD 시그널 크로스와 히스토그램 전환을 활용한 추세 전환 포착 전략입니다.',
       beginnerTip: '쉽게 말하면: 두 개의 추세선이 교차하는 순간을 포착해서 "추세가 바뀌고 있다"는 신호를 잡아내는 전략이에요.',
       whyUse: '상승↔하락 전환 시점을 미리 감지할 수 있어서, 큰 흐름의 시작에 올라탈 수 있어요.',
       difficulty: '중급',
@@ -62,7 +81,7 @@ export const PRESET_STRATEGIES: Strategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-stochastic', name: '스토캐스틱 크로스', description: '스토캐스틱 %K가 %D를 상향 돌파할 때 매수, 하향 돌파할 때 매도하는 모멘텀 전략입니다.',
+      id: 'preset-stochastic', category: 'reversal', name: '스토캐스틱 크로스', description: '스토캐스틱 %K가 %D를 상향 돌파할 때 매수, 하향 돌파할 때 매도하는 모멘텀 전략입니다.',
       beginnerTip: '쉽게 말하면: "지금 가격이 최근 범위에서 어디쯤인지" 보고, 바닥 근처에서 사고 천장 근처에서 파는 전략이에요.',
       whyUse: '단기 매매에 적합하고, 매수/매도 타이밍을 비교적 명확하게 잡아줘요.',
       difficulty: '중급',
@@ -74,7 +93,7 @@ export const PRESET_STRATEGIES: Strategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-connors-rsi2', name: '래리 코너스 RSI(2)', description: '초단기 RSI(2일)를 사용하여 급락 후 반등을 포착하는 단기 매매 전략입니다. 래리 코너스가 개발한 전략으로, 상승 추세 종목에서 일시적 과매도 구간을 노립니다.',
+      id: 'preset-connors-rsi2', category: 'reversal', name: '래리 코너스 RSI(2)', description: '초단기 RSI(2일)를 사용하여 급락 후 반등을 포착하는 단기 매매 전략입니다. 래리 코너스가 개발한 전략으로, 상승 추세 종목에서 일시적 과매도 구간을 노립니다.',
       beginnerTip: '쉽게 말하면: 평소 잘 오르던 종목이 갑자기 2~3일 급락했을 때 "일시적 할인"이라 보고 사는 전략이에요.',
       whyUse: '실제 월가에서 검증된 전략으로, 높은 승률이 특징이에요. 단, 단기 매매라 잦은 거래가 발생해요.',
       difficulty: '고급',
@@ -86,7 +105,7 @@ export const PRESET_STRATEGIES: Strategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-volatility-breakout', name: '변동성 돌파 전략', description: '래리 윌리엄스의 변동성 돌파 전략입니다. 전일 변동폭(고가-저가)의 일정 비율만큼 당일 시가에서 상승하면 매수하고, 다음 날 청산합니다.',
+      id: 'preset-volatility-breakout', category: 'volatility', name: '변동성 돌파 전략', description: '래리 윌리엄스의 변동성 돌파 전략입니다. 전일 변동폭(고가-저가)의 일정 비율만큼 당일 시가에서 상승하면 매수하고, 다음 날 청산합니다.',
       beginnerTip: '쉽게 말하면: 어제 가격이 많이 흔들렸는데, 오늘 그 흔들림의 절반만큼 올라가면 "오늘은 오르는 날"이라 보고 사는 전략이에요.',
       whyUse: '하루 단위로 매매해서 리스크가 제한적이고, 코인처럼 변동성 큰 자산에 잘 맞아요.',
       difficulty: '고급',
@@ -98,7 +117,7 @@ export const PRESET_STRATEGIES: Strategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-triple-ema', name: '트리플 EMA 추세 정렬', description: '단기·중기·장기 EMA(20·50·200)가 완전히 정렬된 상태에서만 골든크로스로 진입하는 다중 시간프레임 추세 정렬 전략입니다. 단일 골든크로스의 잦은 속임수 신호를 구조적으로 걸러냅니다.',
+      id: 'preset-triple-ema', category: 'trend', name: '트리플 EMA 추세 정렬', description: '단기·중기·장기 EMA(20·50·200)가 완전히 정렬된 상태에서만 골든크로스로 진입하는 다중 시간프레임 추세 정렬 전략입니다. 단일 골든크로스의 잦은 속임수 신호를 구조적으로 걸러냅니다.',
       beginnerTip: '쉽게 말하면: 짧은 흐름·중간 흐름·긴 흐름이 "모두 같은 방향(위)"일 때만 올라타는 전략이에요. 셋이 줄을 맞춰야 출발합니다.',
       whyUse: '단일 이동평균 교차는 횡보장에서 사고팔기를 반복하며 손실이 쌓여요. 세 EMA가 정렬(20>50>200)된 상태에서만 진입하면 거래 수가 절반 이하로 줄고 진짜 추세에만 올라타 거래당 기대값이 크게 올라갑니다. EMA200은 강세장/약세장을 가르는 업계 표준선이에요.',
       difficulty: '고급',
@@ -116,7 +135,7 @@ export const PRESET_STRATEGIES: Strategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-keltner-breakout', name: '켈트너 채널 변동성 돌파', description: 'EMA20 중심선에 ATR(실제 변동폭) 밴드를 두른 켈트너 채널의 상단을 종가가 돌파할 때 진입하고, 중심선으로 회귀하면 청산하는 변동성 정규화 추세 돌파 전략입니다.',
+      id: 'preset-keltner-breakout', category: 'volatility', name: '켈트너 채널 변동성 돌파', description: 'EMA20 중심선에 ATR(실제 변동폭) 밴드를 두른 켈트너 채널의 상단을 종가가 돌파할 때 진입하고, 중심선으로 회귀하면 청산하는 변동성 정규화 추세 돌파 전략입니다.',
       beginnerTip: '쉽게 말하면: 평소 출렁임(ATR)보다 두 배 이상 세게 위로 치고 나가면 "진짜 강한 상승"이라 보고 올라타는 전략이에요.',
       whyUse: '볼린저 밴드는 표준편차를 쓰지만 켈트너는 ATR(실제 거래폭)을 써서 갑작스러운 갭이나 긴 꼬리에 덜 흔들려요. 변동성으로 정규화된 돌파라 비트코인이든 주식이든 같은 설정을 그대로 적용할 수 있는 게 강점입니다.',
       difficulty: '고급',
@@ -133,7 +152,7 @@ export const PRESET_STRATEGIES: Strategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-bollinger-reversion', name: '볼린저 %b 레짐 평균회귀', description: '200일선 위(상승 체제)에서만 볼린저 밴드 하단 이탈(%b < 0.05)을 과매도로 보고 매수, 중심선 회귀(%b ≥ 0.5) 시 청산하는 추세 필터형 평균회귀 전략입니다.',
+      id: 'preset-bollinger-reversion', category: 'reversal', name: '볼린저 %b 레짐 평균회귀', description: '200일선 위(상승 체제)에서만 볼린저 밴드 하단 이탈(%b < 0.05)을 과매도로 보고 매수, 중심선 회귀(%b ≥ 0.5) 시 청산하는 추세 필터형 평균회귀 전략입니다.',
       beginnerTip: '쉽게 말하면: 장기적으로 잘 오르는 종목이 잠깐 확 빠졌을 때만 "할인 구간"이라 보고 사서, 제자리로 돌아오면 파는 전략이에요.',
       whyUse: '단순 과매도 매수의 최대 약점은 하락장에서 "떨어지는 칼날"을 잡는 거예요. 200일선 위에서만 매수하도록 거르면 손실 거래의 꼬리가 잘려 승률과 손익비가 크게 개선됩니다. 월가에서 검증된 정통 평균회귀 조합이에요.',
       difficulty: '고급',
@@ -151,7 +170,7 @@ export const PRESET_STRATEGIES: Strategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-oscillator-confluence', name: '멀티 오실레이터 컨플루언스 반전', description: 'RSI·스토캐스틱·윌리엄스%R·CCI 네 개의 오실레이터가 모두 과매도이고 200일선 위일 때만 매수하는 고확신 평균회귀 전략입니다. 단일 지표의 거짓 신호를 만장일치로 걸러냅니다.',
+      id: 'preset-oscillator-confluence', category: 'reversal', name: '멀티 오실레이터 컨플루언스 반전', description: 'RSI·스토캐스틱·윌리엄스%R·CCI 네 개의 오실레이터가 모두 과매도이고 200일선 위일 때만 매수하는 고확신 평균회귀 전략입니다. 단일 지표의 거짓 신호를 만장일치로 걸러냅니다.',
       beginnerTip: '쉽게 말하면: 네 명의 심판(지표)이 "지금 너무 많이 빠졌다"고 모두 동의할 때만 사는, 신중함을 극대화한 전략이에요.',
       whyUse: '지표 하나는 자주 속이지만 네 개가 동시에 과매도를 가리키는 일은 드물고, 그만큼 진짜 바닥일 확률이 높아요. 거래 빈도는 낮지만 진입 한 번의 신뢰도가 높아 승률 중심으로 운용하기 좋습니다.',
       difficulty: '고급',
@@ -173,7 +192,7 @@ export const PRESET_STRATEGIES: Strategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-macd-rsi-gate', name: 'MACD·RSI·EMA200 삼중 추세 게이트', description: '200일선 위(상승 체제)이고 RSI가 50을 넘은(모멘텀 확인) 상태에서 MACD 골든크로스가 나올 때만 진입하는 다중 지표 컨플루언스 추세 전략입니다. 세 신호가 동시에 같은 방향일 때만 매수합니다.',
+      id: 'preset-macd-rsi-gate', category: 'trend', name: 'MACD·RSI·EMA200 삼중 추세 게이트', description: '200일선 위(상승 체제)이고 RSI가 50을 넘은(모멘텀 확인) 상태에서 MACD 골든크로스가 나올 때만 진입하는 다중 지표 컨플루언스 추세 전략입니다. 세 신호가 동시에 같은 방향일 때만 매수합니다.',
       beginnerTip: '쉽게 말하면: "추세도 위, 힘도 위, 교차도 위" 세 조건이 한꺼번에 맞을 때만 들어가서 가짜 신호를 거르는 전략이에요.',
       whyUse: 'MACD 단독 교차는 횡보장에서 자주 속아요. 장기 추세(EMA200)와 모멘텀(RSI)을 함께 확인하면 거짓 전환 신호를 크게 줄이고 진짜 추세 초입에만 진입할 수 있습니다.',
       difficulty: '고급',
@@ -188,6 +207,37 @@ export const PRESET_STRATEGIES: Strategy[] = [
       exitConditions: [
         { indicator: 'MACD_CROSSUNDER_MACD_SIGNAL', operator: 'GT', value: 0, logic: 'OR' },
         { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'OR', valueExpression: 'EMA_200' },
+      ],
+      applied: false, createdAt: '', updatedAt: '',
+    },
+    {
+      id: 'preset-turtle', category: 'trend', name: '터틀 트레이딩 (돈치안 돌파)',
+      tradeDirection: 'LONG_SHORT_FLAT', leverage: 2, maxPositions: 4, pyramidMode: 'ATR', trailingStopPercent: 4,
+      description: '전설적인 터틀 트레이더들의 추세추종 시스템입니다. 직전 100봉 신고가(돈치안 채널 상단)를 돌파하면 롱, 직전 100봉 신저가를 하향 돌파하면 숏으로 진입하고, ADX(추세 강도) 필터를 통과한 추세에만 올라탑니다. 청산 채널(30봉)에 닿으면 현금으로 빠져 다음 돌파를 기다립니다. 추세가 이어지면 ATR 간격마다 유닛을 더하는 피라미딩으로 수익을 키웁니다.',
+      beginnerTip: '쉽게 말하면: "한동안의 최고가를 뚫으면 사고(롱), 최저가를 뚫으면 팔아서(숏) 큰 추세를 양방향으로 올라타는" 전략이에요. 추세가 이어지면 조금씩 더 보태고, 꺾이면 현금으로 쉽니다.',
+      whyUse: '추세추종의 교과서로 불리는 검증된 시스템입니다. 롱·숏 양방향이라 상승장과 하락장 모두에서 수익 기회를 노립니다. ADX 필터로 횡보장의 거짓 돌파를 걸러내고, 피라미딩으로 "이익은 길게" 키우며, 청산 채널로 "손실은 짧게" 끊습니다. 변동성이 큰 비트코인·이더리움 선물에서 특히 강점이 있습니다. (레버리지·숏은 라이브 Bitget 선물에서, 백테스트는 일봉 근사입니다.)',
+      difficulty: '고급',
+      strategyLogic: '롱: 종가 > 100봉 신고가 + ADX>15 / 숏: 종가 < 100봉 신저가 + ADX>15 / 청산: 30봉 반대 채널 또는 트레일링 4% / 피라미딩: +ATR마다 최대 4유닛 / 레버리지 2배',
+      assetType: 'CRYPTO', targetAssets: ['BTC', 'ETH'], targetAssetNames: { BTC: '비트코인', ETH: '이더리움' },
+      indicators: [
+        { type: 'DONCHIAN', parameters: { period: 100 } },
+        { type: 'DONCHIAN', parameters: { period: 30 } },
+        { type: 'ADX', parameters: { period: 14 } },
+        { type: 'ATR', parameters: { period: 14 } },
+      ],
+      entryConditions: [
+        { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_HIGH_100' },
+        { indicator: 'ADX', operator: 'GT', value: 15, logic: 'AND' },
+      ],
+      exitConditions: [
+        { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_LOW_30' },
+      ],
+      shortEntryConditions: [
+        { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_LOW_100' },
+        { indicator: 'ADX', operator: 'GT', value: 15, logic: 'AND' },
+      ],
+      shortExitConditions: [
+        { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_HIGH_30' },
       ],
       applied: false, createdAt: '', updatedAt: '',
     },

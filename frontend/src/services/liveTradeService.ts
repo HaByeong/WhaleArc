@@ -55,6 +55,12 @@ export interface CreateDeploymentRequest {
   indicators?: Indicator[];
   entryConditions?: Condition[];
   exitConditions?: Condition[];
+  // 독립 양방향(LONG_SHORT_FLAT) + 피라미딩
+  shortEntryConditions?: Condition[];
+  shortExitConditions?: Condition[];
+  tradeDirection?: string;
+  maxUnits?: number;
+  pyramidMode?: string;
   targetAssets?: string[];
   assetType?: string;
   interval?: string;

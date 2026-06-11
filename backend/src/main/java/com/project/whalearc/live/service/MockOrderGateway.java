@@ -32,8 +32,22 @@ public class MockOrderGateway implements OrderGateway {
     public Order placeMarketOrder(LiveStrategyDeployment deployment, String userId, String stockCode, String stockName,
                                   Order.OrderType side, BigDecimal quantity, BigDecimal price,
                                   String assetType, String clientOrderId) {
-        // 모의는 OrderService 가상 체결(시장가)이라 price(지정가 산출용)는 사용하지 않는다.
-        // limitPrice=null(시장가), memo에 멱등키 기록. 9-arg 오버로드로 assetType 명시.
+        // 숏(SHORT/COVER)은 모의 현물 포트폴리오(OrderService)로 표현할 수 없으므로, 거래소 호출 없이
+        // 요청가에 즉시 체결된 것으로 합성 응답한다. 숏 손익은 배포(LivePosition)가 자체 추적한다.
+        if (side == Order.OrderType.SHORT || side == Order.OrderType.COVER) {
+            Order o = new Order();
+            o.setUserId(userId);
+            o.setStockCode(stockCode);
+            o.setStockName(stockName);
+            o.setOrderType(side);
+            o.setQuantity(quantity);
+            o.setAssetType(assetType);
+            o.setStatus(Order.OrderStatus.FILLED);
+            o.setFilledQuantity(quantity);
+            o.setFilledPrice(price);
+            return o;
+        }
+        // 롱(BUY/SELL)은 OrderService 가상 체결(시장가)로 모의 포트폴리오에 반영. limitPrice=null(시장가), memo에 멱등키 기록.
         return orderService.createOrder(userId, stockCode, stockName,
                 side, Order.OrderMethod.MARKET, quantity, null, assetType, "라이브 자동매매:" + clientOrderId);
     }

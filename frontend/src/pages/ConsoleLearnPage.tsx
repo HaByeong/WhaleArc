@@ -134,23 +134,23 @@ const matchTips = (p: QuantProduct): string[] => {
 };
 
 /* 상품 → 전략 빌더 프리셋 id 매핑 — 학습에서 본 전략을 백테스트 화면에 자동 세팅(?strategy=<id>).
-   id는 ConsoleStrategyPage의 PRESET_DEFS / STRATEGIES 키와 일치해야 함(golden/rsi-rev/bollinger/macd/stoch/larry/vol-break/buyhold). */
+   id는 presetStrategies.ts(PRESET_STRATEGIES)의 키와 일치해야 함(preset-*). */
 // 광범위 어휘(예: 단독 '래리'·'돌파'·'ma(')는 전략 종류가 아닌 텍스트에 오매칭되므로 의미 키워드로 한정.
-// '래리 윌리엄스 변동성 돌파'(변동성)가 larry(RSI2 평균회귀)로 새지 않도록 larry는 '코너스' 계열로만 매칭.
+// '래리 윌리엄스 변동성 돌파'(변동성)가 connors(RSI2 평균회귀)로 새지 않도록 코너스 계열로만 매칭.
 const PRESET_KEYWORDS: [string[], string][] = [
-  [['래리 코너스', '코너스', 'connors', 'rsi(2)', 'rsi 2'], 'larry'],
-  [['변동성 돌파', '변동성돌파', 'volatility breakout'], 'vol-break'],
-  [['골든크로스', '데드크로스', '골든 크로스', '이동평균 교차', '이평 교차', 'golden cross', 'ma 교차'], 'golden'],
-  [['볼린저', 'bollinger', '%b'], 'bollinger'],
-  [['macd'], 'macd'],
-  [['스토캐스틱', 'stochastic'], 'stoch'],
-  [['과매도', '과매수', '평균회귀', 'mean revers', 'rsi'], 'rsi-rev'],
-  [['buy & hold', 'buy and hold', '바이앤홀드', '단순 보유', '장기 보유', 'buyhold'], 'buyhold'],
+  [['래리 코너스', '코너스', 'connors', 'rsi(2)', 'rsi 2'], 'preset-connors-rsi2'],
+  [['변동성 돌파', '변동성돌파', 'volatility breakout'], 'preset-volatility-breakout'],
+  [['골든크로스', '데드크로스', '골든 크로스', '이동평균 교차', '이평 교차', 'golden cross', 'ma 교차'], 'preset-golden-cross'],
+  [['볼린저', 'bollinger', '%b'], 'preset-bollinger-squeeze'],
+  [['macd'], 'preset-macd-divergence'],
+  [['스토캐스틱', 'stochastic'], 'preset-stochastic'],
+  [['과매도', '과매수', '평균회귀', 'mean revers', 'rsi'], 'preset-rsi-reversal'],
+  [['buy & hold', 'buy and hold', '바이앤홀드', '단순 보유', '장기 보유', 'buyhold'], 'preset-buy-hold'],
 ];
 const CATEGORY_PRESET: Record<string, string> = {
-  TREND_FOLLOWING: 'golden',
-  MEAN_REVERSION: 'rsi-rev',
-  VOLATILITY: 'vol-break',
+  TREND_FOLLOWING: 'preset-golden-cross',
+  MEAN_REVERSION: 'preset-rsi-reversal',
+  VOLATILITY: 'preset-volatility-breakout',
   // MOMENTUM / ARBITRAGE / MULTI_FACTOR: 단일자산 프리셋이 없어 매핑하지 않음(빈 빌더로 이동)
 };
 const presetFor = (p: QuantProduct): string | null => {

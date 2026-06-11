@@ -6,7 +6,7 @@ import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { strategyService, type Strategy, type BacktestHistoryItem } from '../services/strategyService';
-import { PRESET_STRATEGIES } from '../data/presetStrategies';
+import { PRESET_STRATEGIES, type PresetStrategy } from '../data/presetStrategies';
 import {
   liveTradeService,
   type Deployment,
@@ -271,6 +271,7 @@ const AutoTradePage = () => {
 
     setCreating(true);
     try {
+      const presetSel = selected as PresetStrategy | undefined;
       await liveTradeService.createDeployment({
         ...(isPreset
           ? {
@@ -278,6 +279,12 @@ const AutoTradePage = () => {
               indicators: selected?.indicators,
               entryConditions: selected?.entryConditions,
               exitConditions: selected?.exitConditions,
+              // 독립 양방향(터틀)·피라미딩 권장값 전달. 숏은 백엔드에서 Bitget 선물/MOCK만 허용.
+              shortEntryConditions: presetSel?.shortEntryConditions,
+              shortExitConditions: presetSel?.shortExitConditions,
+              tradeDirection: presetSel?.tradeDirection,
+              maxUnits: presetSel?.maxPositions,
+              pyramidMode: presetSel?.pyramidMode,
             }
           : { strategyId: form.strategyId }),
         allocatedCash,
@@ -714,8 +721,8 @@ const AutoTradePage = () => {
                         정지
                       </button>
                     )}
-                    {/* 삭제 — 가동 중이 아닐 때만(먼저 정지해야 함) */}
-                    {d.status !== 'RUNNING' && (
+                    {/* 삭제 — 가동 중이 아니고 + 보유 포지션이 없을 때만(있으면 먼저 '지금 청산') */}
+                    {d.status !== 'RUNNING' && !(d.positions || []).some(p => p.direction === 'LONG') && (
                       <button disabled={busyId === d.id} onClick={() => handleDelete(d)}
                         title="자동매매 카드 삭제 (거래소 포지션은 직접 정리 필요)"
                         className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-red-300' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-red-600'}`}>

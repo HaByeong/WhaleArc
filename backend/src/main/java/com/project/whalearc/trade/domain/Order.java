@@ -48,7 +48,9 @@ public class Order {
     private Instant createdAt;
     private Instant updatedAt;
 
-    public enum OrderType { BUY, SELL }
+    // BUY=롱 개시, SELL=롱 청산, SHORT=숏 개시, COVER=숏 청산.
+    // SHORT/COVER는 Bitget 선물(FUTURES)에서만 실거래된다(현물/KIS 미지원). OrderService(모의 현물 장부)는 BUY/SELL만 받는다.
+    public enum OrderType { BUY, SELL, SHORT, COVER }
     public enum OrderMethod { MARKET, LIMIT }
     public enum OrderStatus { PENDING, FILLED, CANCELLED }
 

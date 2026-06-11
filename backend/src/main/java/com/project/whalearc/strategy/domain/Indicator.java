@@ -16,6 +16,6 @@ public class Indicator {
     private Map<String, Number> parameters;
 
     public enum IndicatorType {
-        RSI, MACD, MA, EMA, BOLLINGER_BANDS, STOCHASTIC, ATR, CCI, WILLIAMS_R, OBV
+        RSI, MACD, MA, EMA, BOLLINGER_BANDS, STOCHASTIC, ATR, CCI, WILLIAMS_R, OBV, DONCHIAN, ADX
     }
 }

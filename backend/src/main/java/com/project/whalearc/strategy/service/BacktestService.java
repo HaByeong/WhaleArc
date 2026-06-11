@@ -442,6 +442,21 @@ public class BacktestService {
                 int period = getParam(params, "period", 20);
                 result.put("CCI", IndicatorCalculator.cci(highs, lows, closes, period));
             }
+            case "ADX" -> {
+                int period = getParam(params, "period", 14);
+                double[] adx = IndicatorCalculator.adx(highs, lows, closes, period);
+                result.put("ADX", adx);              // 기본 키
+                result.put("ADX_" + period, adx);    // 기간별 키
+            }
+            case "DONCHIAN" -> {
+                int period = getParam(params, "period", 20);
+                double[] dHigh = IndicatorCalculator.donchianHigh(highs, period);
+                double[] dLow = IndicatorCalculator.donchianLow(lows, period);
+                result.put("DONCHIAN_HIGH", dHigh);            // 기본 키 (마지막 계산 값)
+                result.put("DONCHIAN_LOW", dLow);
+                result.put("DONCHIAN_HIGH_" + period, dHigh);  // 기간별 키 (진입/청산 채널 동시 사용)
+                result.put("DONCHIAN_LOW_" + period, dLow);
+            }
         }
     }
 
@@ -481,6 +496,17 @@ public class BacktestService {
             calculateIndicator("WILLIAMS_R", Map.of(), closes, highs, lows, volumes, result);
         } else if ("CCI".equals(key) && !result.containsKey("CCI")) {
             calculateIndicator("CCI", Map.of(), closes, highs, lows, volumes, result);
+        } else if ("ADX".equals(key) && !result.containsKey("ADX")) {
+            calculateIndicator("ADX", Map.of(), closes, highs, lows, volumes, result);
+        } else if (key.startsWith("ADX_") && key.matches("ADX_\\d+")) {
+            int period = Integer.parseInt(key.substring(4));
+            calculateIndicator("ADX", Map.of("period", (Number) period), closes, highs, lows, volumes, result);
+        } else if ((key.equals("DONCHIAN_HIGH") || key.equals("DONCHIAN_LOW")) && !result.containsKey(key)) {
+            calculateIndicator("DONCHIAN", Map.of(), closes, highs, lows, volumes, result);
+        } else if (key.matches("DONCHIAN_(HIGH|LOW)_\\d+")) {
+            // DONCHIAN_HIGH_100, DONCHIAN_LOW_30 등 기간별 채널 키
+            int period = Integer.parseInt(key.substring(key.lastIndexOf('_') + 1));
+            calculateIndicator("DONCHIAN", Map.of("period", (Number) period), closes, highs, lows, volumes, result);
         }
     }
 

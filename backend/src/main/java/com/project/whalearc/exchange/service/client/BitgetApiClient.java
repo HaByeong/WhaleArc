@@ -383,18 +383,58 @@ public class BitgetApiClient {
         throw new IllegalStateException("orderId 없음: " + resp);
     }
 
-    /** 선물 롱 포지션 전량 청산(close-positions 전용 엔드포인트 — 가장 안정적). */
-    public void closeFuturesLong(String apiKey, String secretKey, String passphrase, String symbol) {
+    /**
+     * 선물 롱 포지션을 <b>지정 수량만큼</b> 시장가 청산(reduceOnly). 심볼 전체를 닫는 close-positions와 달리
+     * 배포별 보유분만 닫아, 같은 심볼을 여러 배포가 들고 있어도 서로 영향을 주지 않는다.
+     *
+     * <p>포지션 모드를 모르므로 hedge(tradeSide=close) → one-way(reduceOnly=YES) 순으로 시도한다.
+     * @return 거래소 orderId. 두 모드 모두 실패 시 IllegalStateException.
+     */
+    public String closeFuturesLongSize(String apiKey, String secretKey, String passphrase,
+                                       String symbol, BigDecimal size, String clientOid) {
+        try {
+            return placeFuturesClose(apiKey, secretKey, passphrase, symbol, size, clientOid, true);   // hedge
+        } catch (Exception hedgeErr) {
+            try {
+                return placeFuturesClose(apiKey, secretKey, passphrase, symbol, size, clientOid, false);  // one-way
+            } catch (Exception oneWayErr) {
+                throw new IllegalStateException("Bitget 선물 부분청산 실패 (hedge: " + hedgeErr.getMessage()
+                        + " | one-way: " + oneWayErr.getMessage() + ")");
+            }
+        }
+    }
+
+    /** 선물 롱 사이즈 청산 1회 시도. hedge=true면 tradeSide=close(헤지), false면 reduceOnly=YES(단방향). */
+    private String placeFuturesClose(String apiKey, String secretKey, String passphrase,
+                                     String symbol, BigDecimal size, String clientOid, boolean hedge) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("symbol", symbol);
         body.put("productType", FUTURES_PRODUCT_TYPE);
-        body.put("holdSide", "long");
+        body.put("marginMode", FUTURES_MARGIN_MODE);
+        body.put("marginCoin", FUTURES_MARGIN_COIN);
+        if (hedge) {
+            // 헤지(양방향) 모드: side는 '포지션 방향'을 뜻한다. 롱 청산 = (side=buy, tradeSide=close).
+            // 개시 (buy, open)와 대칭. side=sell로 보내면 '숏 청산'으로 해석돼 22002(No position to close).
+            body.put("side", "buy");
+            body.put("tradeSide", "close");
+        } else {
+            // 단방향(one-way) 모드: 반대매매로 닫는다. 롱 청산 = (side=sell) + reduceOnly.
+            body.put("side", "sell");
+            body.put("reduceOnly", "YES");
+        }
+        body.put("orderType", "market");
+        body.put("size", size.toPlainString());
+        // 개시와 동일하게 두 시도에 같은 clientOid 사용 — 멱등 처리로 이중 청산 방지.
+        if (clientOid != null) body.put("clientOid", clientOid);
         Map<String, Object> resp = signedRequest(apiKey, secretKey, passphrase, HttpMethod.POST,
-                "/api/v2/mix/order/close-positions", null, body);
+                "/api/v2/mix/order/place-order", null, body);
         String code = String.valueOf(resp.get("code"));
         if (!"00000".equals(code)) {
-            throw new IllegalStateException("Bitget 선물 청산 거부: code=" + code + ", msg=" + resp.get("msg"));
+            throw new IllegalStateException("code=" + code + ", msg=" + resp.get("msg"));
         }
+        Object data = resp.get("data");
+        if (data instanceof Map<?, ?> m && m.get("orderId") != null) return String.valueOf(m.get("orderId"));
+        throw new IllegalStateException("orderId 없음: " + resp);
     }
 
     /** 선물 주문 체결 상태/평균가/체결수량 조회(mix order detail). */

@@ -460,6 +460,88 @@ public final class IndicatorCalculator {
         return new IchimokuResult(tenkan, kijun, senkouA, senkouB, chikou);
     }
 
+    // ── ADX (Average Directional Index) — EWM(alpha=1/n) 스무딩, 터틀 트레이딩 추세 강도 필터 ──
+    // 라이브 터틀(TurtleStrategyService)과 동일한 계산식을 사용해 백테스트/라이브 신호를 일치시킨다.
+
+    public static double[] adx(double[] highs, double[] lows, double[] closes, int period) {
+        int len = closes.length;
+        double[] result = new double[len];
+        Arrays.fill(result, Double.NaN);
+        if (len < 2) return result;
+
+        double alpha = 1.0 / period;
+        double[] plusDM = new double[len];
+        double[] minusDM = new double[len];
+        double[] tr = new double[len];
+
+        tr[0] = highs[0] - lows[0];
+        for (int i = 1; i < len; i++) {
+            double upMove = highs[i] - highs[i - 1];
+            double downMove = lows[i - 1] - lows[i];
+            plusDM[i] = (upMove > downMove && upMove > 0) ? upMove : 0;
+            minusDM[i] = (downMove > upMove && downMove > 0) ? downMove : 0;
+            double hl = highs[i] - lows[i];
+            double hc = Math.abs(highs[i] - closes[i - 1]);
+            double lc = Math.abs(lows[i] - closes[i - 1]);
+            tr[i] = Math.max(hl, Math.max(hc, lc));
+        }
+
+        double[] atrSmooth = ewm(tr, alpha);
+        double[] plusSmooth = ewm(plusDM, alpha);
+        double[] minusSmooth = ewm(minusDM, alpha);
+
+        double[] dx = new double[len];
+        for (int i = 0; i < len; i++) {
+            if (atrSmooth[i] == 0) { dx[i] = 0; continue; }
+            double plusDI = 100 * plusSmooth[i] / atrSmooth[i];
+            double minusDI = 100 * minusSmooth[i] / atrSmooth[i];
+            double sum = plusDI + minusDI;
+            dx[i] = sum == 0 ? 0 : 100 * Math.abs(plusDI - minusDI) / sum;
+        }
+
+        double[] adx = ewm(dx, alpha);
+        // 워밍업 구간(첫 period봉)은 신뢰할 수 없으므로 NaN 처리
+        for (int i = period; i < len; i++) result[i] = adx[i];
+        return result;
+    }
+
+    private static double[] ewm(double[] data, double alpha) {
+        double[] result = new double[data.length];
+        if (data.length == 0) return result;
+        result[0] = data[0];
+        for (int i = 1; i < data.length; i++) {
+            result[i] = alpha * data[i] + (1 - alpha) * result[i - 1];
+        }
+        return result;
+    }
+
+    // ── 돈치안 채널 (Donchian Channel) — 직전 period봉의 최고가/최저가 (현재봉 미포함, shift(1)) ──
+    // 터틀 돌파 진입(상단)·청산(하단) 채널. 현재봉을 제외하므로 미래참조(look-ahead)가 없다.
+
+    public static double[] donchianHigh(double[] highs, int period) {
+        int len = highs.length;
+        double[] result = new double[len];
+        Arrays.fill(result, Double.NaN);
+        for (int i = period; i < len; i++) {
+            double max = Double.NEGATIVE_INFINITY;
+            for (int j = i - period; j < i; j++) max = Math.max(max, highs[j]);
+            result[i] = max;
+        }
+        return result;
+    }
+
+    public static double[] donchianLow(double[] lows, int period) {
+        int len = lows.length;
+        double[] result = new double[len];
+        Arrays.fill(result, Double.NaN);
+        for (int i = period; i < len; i++) {
+            double min = Double.POSITIVE_INFINITY;
+            for (int j = i - period; j < i; j++) min = Math.min(min, lows[j]);
+            result[i] = min;
+        }
+        return result;
+    }
+
     // ── 결과 DTO ──
 
     @Getter

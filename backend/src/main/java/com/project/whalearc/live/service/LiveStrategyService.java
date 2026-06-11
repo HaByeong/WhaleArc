@@ -296,6 +296,14 @@ public class LiveStrategyService {
             if (d.getStatus() == LiveStrategyDeployment.Status.RUNNING) {
                 throw new IllegalArgumentException("가동 중인 자동매매는 삭제할 수 없습니다. 먼저 정지(또는 일시정지)하세요.");
             }
+            // 보유 포지션이 있으면 삭제 거부 — 그냥 지우면 거래소 포지션이 추적 불가한 고아로 남는다.
+            // '지금 청산'으로 닫은 뒤 삭제하게 한다(스테일 LONG도 지금청산이 상태 동기화로 풀어줌).
+            boolean hasOpenPosition = d.getPositions() != null && d.getPositions().stream()
+                    .anyMatch(p -> p.getDirection() == LivePosition.Direction.LONG);
+            if (hasOpenPosition) {
+                throw new IllegalArgumentException(
+                        "보유 중인 포지션이 있어 삭제할 수 없습니다. 먼저 '지금 청산'으로 포지션을 닫은 뒤 삭제하세요.");
+            }
             deploymentRepository.delete(d);
             try {
                 orderLogRepository.deleteByDeploymentId(deploymentId);

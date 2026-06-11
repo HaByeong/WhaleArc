@@ -714,8 +714,8 @@ const AutoTradePage = () => {
                         정지
                       </button>
                     )}
-                    {/* 삭제 — 가동 중이 아닐 때만(먼저 정지해야 함) */}
-                    {d.status !== 'RUNNING' && (
+                    {/* 삭제 — 가동 중이 아니고 + 보유 포지션이 없을 때만(있으면 먼저 '지금 청산') */}
+                    {d.status !== 'RUNNING' && !(d.positions || []).some(p => p.direction === 'LONG') && (
                       <button disabled={busyId === d.id} onClick={() => handleDelete(d)}
                         title="자동매매 카드 삭제 (거래소 포지션은 직접 정리 필요)"
                         className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-red-300' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-red-600'}`}>

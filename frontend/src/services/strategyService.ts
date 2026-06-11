@@ -25,7 +25,7 @@ export interface Strategy {
 }
 
 export interface Indicator {
-  type: 'RSI' | 'MACD' | 'MA' | 'EMA' | 'BOLLINGER_BANDS' | 'STOCHASTIC' | 'ATR' | 'CCI' | 'WILLIAMS_R' | 'OBV';
+  type: 'RSI' | 'MACD' | 'MA' | 'EMA' | 'BOLLINGER_BANDS' | 'STOCHASTIC' | 'ATR' | 'CCI' | 'WILLIAMS_R' | 'OBV' | 'DONCHIAN' | 'ADX';
   parameters: Record<string, number>;
 }
 

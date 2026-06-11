@@ -96,17 +96,28 @@ public class BitgetOrderGateway implements OrderGateway {
                                String assetType, String clientOrderId) {
         boolean isOpen = side == Order.OrderType.BUY;   // 단방향 롱: BUY=개시, SELL=청산
         if (!isOpen) {
-            // 청산: 보유 수량 재확인 후 close-positions(holdSide=long). 미보유면 무동작 처리.
+            // 청산: 이 배포의 보유분(quantity)만 reduceOnly로 부분청산. 같은 심볼 다른 배포에 영향 없음.
             BigDecimal held = safeLongSize(cred, symbol);
             if (held.signum() <= 0) {
-                log.info("Bitget 선물 청산 스킵(보유 없음): symbol={}", symbol);
-            } else {
-                log.info("Bitget 선물 청산 시도: userId={}, symbol={}, held={}", userId, symbol, held);
-                bitgetApiClient.closeFuturesLong(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol);
+                // 거래소엔 보유 없음(외부/합산 청산됨) — 주문 없이 앱 상태만 동기화(현재가로 근사 정산).
+                log.info("Bitget 선물 청산 스킵(거래소 보유 없음, 앱 동기화): symbol={}", symbol);
+                return buildOrder(userId, stockCode, stockName, side, quantity, assetType, clientOrderId, null, price, quantity);
             }
-            // 청산가는 시장가라 평가 현재가로 근사(체결 상세는 별도 조회 보강 가능). 체결수량=청산 직전 보유/요청 수량.
-            BigDecimal closedQty = held.signum() > 0 ? held : quantity;
-            return buildOrder(userId, stockCode, stockName, side, quantity, assetType, clientOrderId, null, price, closedQty);
+            BitgetSymbolInfo info = bitgetApiClient.getFuturesSymbolInfo(symbol);
+            BigDecimal closeSize = quantity.min(held).setScale(info.quantityPrecision(), RoundingMode.DOWN);
+            if (closeSize.signum() <= 0) {
+                log.info("Bitget 선물 청산 스킵(청산 수량 0): symbol={}, quantity={}, held={}", symbol, quantity, held);
+                return buildOrder(userId, stockCode, stockName, side, quantity, assetType, clientOrderId, null, price, quantity);
+            }
+            String closeOid = sanitizeClientOid(clientOrderId);
+            log.info("Bitget 선물 부분청산 시도: userId={}, symbol={}, closeSize={}코인(held={}), clientOid={}",
+                    userId, symbol, closeSize, held, closeOid);
+            String orderId = bitgetApiClient.closeFuturesLongSize(
+                    cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol, closeSize, closeOid);
+            BitgetFill fill = pollFuturesFill(cred, symbol, orderId);
+            BigDecimal avgPrice = fill.avgPrice().signum() > 0 ? fill.avgPrice() : price;
+            BigDecimal closedQty = fill.filledBase().signum() > 0 ? fill.filledBase() : closeSize;
+            return buildOrder(userId, stockCode, stockName, side, quantity, assetType, clientOrderId, orderId, avgPrice, closedQty);
         }
 
         // 개시: 레버리지 설정 → 시장가 롱 개시. size=코인 수량(base, 이미 레버리지 반영됨).

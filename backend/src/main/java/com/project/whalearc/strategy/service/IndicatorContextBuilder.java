@@ -154,6 +154,21 @@ public class IndicatorContextBuilder {
                 int period = getParam(params, "period", 20);
                 result.put("CCI", IndicatorCalculator.cci(highs, lows, closes, period));
             }
+            case "ADX" -> {
+                int period = getParam(params, "period", 14);
+                double[] adx = IndicatorCalculator.adx(highs, lows, closes, period);
+                result.put("ADX", adx);
+                result.put("ADX_" + period, adx);
+            }
+            case "DONCHIAN" -> {
+                int period = getParam(params, "period", 20);
+                double[] dHigh = IndicatorCalculator.donchianHigh(highs, period);
+                double[] dLow = IndicatorCalculator.donchianLow(lows, period);
+                result.put("DONCHIAN_HIGH", dHigh);
+                result.put("DONCHIAN_LOW", dLow);
+                result.put("DONCHIAN_HIGH_" + period, dHigh);
+                result.put("DONCHIAN_LOW_" + period, dLow);
+            }
         }
     }
 
@@ -193,6 +208,16 @@ public class IndicatorContextBuilder {
             calculateIndicator("WILLIAMS_R", Map.of(), closes, highs, lows, volumes, result);
         } else if ("CCI".equals(key) && !result.containsKey("CCI")) {
             calculateIndicator("CCI", Map.of(), closes, highs, lows, volumes, result);
+        } else if ("ADX".equals(key) && !result.containsKey("ADX")) {
+            calculateIndicator("ADX", Map.of(), closes, highs, lows, volumes, result);
+        } else if (key.startsWith("ADX_") && key.matches("ADX_\\d+")) {
+            int period = Integer.parseInt(key.substring(4));
+            calculateIndicator("ADX", Map.of("period", (Number) period), closes, highs, lows, volumes, result);
+        } else if ((key.equals("DONCHIAN_HIGH") || key.equals("DONCHIAN_LOW")) && !result.containsKey(key)) {
+            calculateIndicator("DONCHIAN", Map.of(), closes, highs, lows, volumes, result);
+        } else if (key.matches("DONCHIAN_(HIGH|LOW)_\\d+")) {
+            int period = Integer.parseInt(key.substring(key.lastIndexOf('_') + 1));
+            calculateIndicator("DONCHIAN", Map.of("period", (Number) period), closes, highs, lows, volumes, result);
         }
     }
 

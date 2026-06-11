@@ -1129,6 +1129,14 @@ const ConsoleStrategyPage = () => {
   const [editEntry, setEditEntry] = useState<Condition[]>([]);
   const [editExit, setEditExit] = useState<Condition[]>([]);
   const [editForId, setEditForId] = useState<string | null>(null);
+  // 활성 전략의 '정의 시그니처' — 다른 전략 선택 또는 (이 전략의) 정의 변경 시에만 바뀜.
+  // 무관한 userStrats 갱신(타 전략 삭제·생성 등)엔 시그니처가 그대로라 편집값을 보존한다.
+  const activeDefSig = useMemo(() => {
+    const preset = activeId ? PRESET_DEFS[activeId] : null;
+    const us = activeId ? userStrats.find(s => s.id === activeId) : null;
+    const d = preset || (us ? { indicators: us.indicators, entryConditions: us.entryConditions, exitConditions: us.exitConditions } : null);
+    return JSON.stringify({ id: activeId, d });
+  }, [activeId, userStrats]);
   useEffect(() => {
     const preset = activeId ? PRESET_DEFS[activeId] : null;
     const us = activeId ? userStrats.find(s => s.id === activeId) : null;
@@ -1137,7 +1145,9 @@ const ConsoleStrategyPage = () => {
     setEditEntry((d?.entryConditions || []).map(c => ({ ...c })));
     setEditExit((d?.exitConditions || []).map(c => ({ ...c })));
     setEditForId(activeId);
-  }, [activeId, userStrats]);
+    // 의존성은 시그니처만 — activeId/userStrats 직접 의존하면 무관한 갱신에도 편집이 초기화됨
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDefSig]);
   // 선택 전략의 종목 바로가기 (사용자 전략의 targetAssets)
   const stratAssets = useMemo(() => {
     const us = activeId ? userStrats.find(s => s.id === activeId) : null;

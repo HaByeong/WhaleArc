@@ -136,8 +136,9 @@ public class ExchangeAccountController {
             @RequestParam(defaultValue = "30") int days) {
 
         String userId = jwt.getSubject();
+        int safeDays = Math.min(Math.max(days, 1), 2000);   // 음수(역범위)·과다 입력 방어
         LocalDate to = LocalDate.now(ZoneId.of("Asia/Seoul"));
-        LocalDate from = to.minusDays(days);
+        LocalDate from = to.minusDays(safeDays);
         List<ExchangePortfolioSnapshot> snapshots =
                 snapshotRepository.findByUserIdAndDateBetweenOrderByDateAsc(userId, from, to);
 

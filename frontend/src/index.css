@@ -1085,6 +1085,24 @@ body.whalearc-dark .wa-force-dark .text-slate-600 {
   100% { background-position: -100% 50%; }
 }
 
+/* 히어로 "유영하듯" — 물결처럼 흐르는 소나블루 그라데이션 (워드마크보다 느린 ease 왕복) */
+.hero-swim {
+  background: linear-gradient(100deg, #5b9dff 0%, #a8d4ff 30%, #e8f2ff 50%, #a8d4ff 70%, #5b9dff 100%);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: hero-swim 9s ease-in-out infinite;
+  filter: drop-shadow(0 0 14px rgba(91, 157, 255, 0.25));
+}
+@keyframes hero-swim {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-swim { animation: none; }
+}
+
 /* 사이드바 활성 nav 항목: 대각선 빛이 흐르는 sheen 효과 (목업 nav-active) */
 .nav-active { position: relative; overflow: hidden; }
 .nav-active::after {

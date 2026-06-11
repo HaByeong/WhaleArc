@@ -225,7 +225,7 @@ const LandingPage = () => {
             <Eyebrow>실전 데이터로, 잃을 걱정 없이</Eyebrow>
             <h1 className="mt-6 font-extrabold" style={{ fontSize: 'clamp(40px,7vw,72px)', lineHeight: 1.06, letterSpacing: '-.025em' }}>
               고래처럼,<br />
-              <span style={{ fontWeight: 700, color: 'rgba(255,255,255,.55)' }}>시장을 유영하듯</span>
+              <span style={{ fontWeight: 700, color: 'rgba(255,255,255,.55)' }}>시장을 <span className="hero-swim">유영하듯</span></span>
             </h1>
             <p className="mt-6 text-white/70" style={{ fontSize: 18, lineHeight: 1.6, maxWidth: 480 }}>
               실시간 시세와 포트폴리오 분석으로<br />

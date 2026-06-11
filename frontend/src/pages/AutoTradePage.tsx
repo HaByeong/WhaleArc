@@ -6,7 +6,7 @@ import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { strategyService, type Strategy, type BacktestHistoryItem } from '../services/strategyService';
-import { PRESET_STRATEGIES } from '../data/presetStrategies';
+import { PRESET_STRATEGIES, type PresetStrategy } from '../data/presetStrategies';
 import {
   liveTradeService,
   type Deployment,
@@ -271,6 +271,7 @@ const AutoTradePage = () => {
 
     setCreating(true);
     try {
+      const presetSel = selected as PresetStrategy | undefined;
       await liveTradeService.createDeployment({
         ...(isPreset
           ? {
@@ -278,6 +279,12 @@ const AutoTradePage = () => {
               indicators: selected?.indicators,
               entryConditions: selected?.entryConditions,
               exitConditions: selected?.exitConditions,
+              // 독립 양방향(터틀)·피라미딩 권장값 전달. 숏은 백엔드에서 Bitget 선물/MOCK만 허용.
+              shortEntryConditions: presetSel?.shortEntryConditions,
+              shortExitConditions: presetSel?.shortExitConditions,
+              tradeDirection: presetSel?.tradeDirection,
+              maxUnits: presetSel?.maxPositions,
+              pyramidMode: presetSel?.pyramidMode,
             }
           : { strategyId: form.strategyId }),
         allocatedCash,

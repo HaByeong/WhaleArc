@@ -78,8 +78,18 @@ const PRESET_CHART: Record<string, React.LazyExoticComponent<React.ComponentType
 };
 
 // 프리셋 → 백테스트 요청용 지표/조건 — presetStrategies.ts에서 파생
-const PRESET_DEFS: Record<string, { indicators: Indicator[]; entryConditions: Condition[]; exitConditions: Condition[]; maxPositions?: number; trailingStopPercent?: number }> = Object.fromEntries(
-  PRESET_STRATEGIES.map(s => [s.id, { indicators: s.indicators, entryConditions: s.entryConditions, exitConditions: s.exitConditions, maxPositions: s.maxPositions, trailingStopPercent: s.trailingStopPercent }]),
+const PRESET_DEFS: Record<string, {
+  indicators: Indicator[]; entryConditions: Condition[]; exitConditions: Condition[];
+  maxPositions?: number; trailingStopPercent?: number; leverage?: number;
+  tradeDirection?: PresetStrategy['tradeDirection']; pyramidMode?: PresetStrategy['pyramidMode'];
+  shortEntryConditions?: Condition[]; shortExitConditions?: Condition[];
+}> = Object.fromEntries(
+  PRESET_STRATEGIES.map(s => [s.id, {
+    indicators: s.indicators, entryConditions: s.entryConditions, exitConditions: s.exitConditions,
+    maxPositions: s.maxPositions, trailingStopPercent: s.trailingStopPercent, leverage: s.leverage,
+    tradeDirection: s.tradeDirection, pyramidMode: s.pyramidMode,
+    shortEntryConditions: s.shortEntryConditions, shortExitConditions: s.shortExitConditions,
+  }]),
 );
 
 const PERIODS: [string, string][] = [['6M', '6개월'], ['1Y', '1년'], ['2Y', '2년'], ['3Y', '3년'], ['5Y', '5년']];
@@ -563,15 +573,15 @@ type Target = { symbol: string; name: string; assetType: string };
 type RebalFreq = 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
 type Sizing = 'ALL_IN' | 'PERCENT' | 'FIXED_AMOUNT';
 type AdvOpts = {
-  stopLoss: string; takeProfit: string; trailingStop: string; slippage: string; commission: string;
-  tradeDirection: 'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT'; dividendReinvest: boolean;
+  stopLoss: string; takeProfit: string; trailingStop: string; slippage: string; commission: string; leverage: string;
+  tradeDirection: 'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT' | 'LONG_SHORT_FLAT'; dividendReinvest: boolean;
   positionSizing: Sizing; positionValue: string; maxPositions: string; // maxPositions: 'auto' = 프리셋/기본
   dateMode: 'preset' | 'custom'; customStart: string; customEnd: string;
 };
-const ADV_DEFAULTS: AdvOpts = { stopLoss: '', takeProfit: '', trailingStop: '', slippage: '', commission: '', tradeDirection: 'LONG_ONLY', dividendReinvest: true, positionSizing: 'ALL_IN', positionValue: '', maxPositions: 'auto', dateMode: 'preset', customStart: '', customEnd: '' };
+const ADV_DEFAULTS: AdvOpts = { stopLoss: '', takeProfit: '', trailingStop: '', slippage: '', commission: '', leverage: '', tradeDirection: 'LONG_ONLY', dividendReinvest: true, positionSizing: 'ALL_IN', positionValue: '', maxPositions: 'auto', dateMode: 'preset', customStart: '', customEnd: '' };
 const REBAL: [RebalFreq, string][] = [['MONTHLY', '매월'], ['QUARTERLY', '분기'], ['YEARLY', '매년']];
 const REBAL_LABEL: Record<string, string> = { MONTHLY: '매월', QUARTERLY: '분기', YEARLY: '매년' };
-const TDIR: [AdvOpts['tradeDirection'], string][] = [['LONG_ONLY', '매수만'], ['SHORT_ONLY', '공매도만'], ['LONG_SHORT', '롱·숏']];
+const TDIR: [AdvOpts['tradeDirection'], string][] = [['LONG_ONLY', '매수만'], ['SHORT_ONLY', '공매도만'], ['LONG_SHORT', '롱·숏'], ['LONG_SHORT_FLAT', '롱·숏(독립)']];
 const POS_OPTS: [string, string][] = [['auto', '자동'], ['2', '2회'], ['3', '3회'], ['5', '5회']];
 const SIZING: [Sizing, string][] = [['ALL_IN', '전량'], ['PERCENT', '자본 비율'], ['FIXED_AMOUNT', '고정 금액']];
 type RunnerProps = {
@@ -621,6 +631,7 @@ const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, 
   useEffect(() => { marketService.getPrices('CRYPTO').then(ps => setCryptoList(ps.map(p => ({ code: p.symbol, name: p.name })))).catch(() => {}); }, []);
   const isUsEtf = [target, ...(second ? [second] : [])].some(a => a.assetType === 'US_STOCK' || a.assetType === 'ETF');
   const rebalActive = !!(second && second.symbol !== target.symbol); // 2자산 모드: 손절/익절/트레일링·매매방향 백엔드 미지원
+  const preset = strat ? PRESET_DEFS[strat.id] : null; // 프리셋 권장값(레버리지 등) 표시용
   return (
     <aside style={{ ...mkCard, padding: 0, display: 'flex', flexDirection: 'column' }}>
       <div className="wa-force-dark px-[18px] py-4 text-white" style={{ background: BT_GRAD, borderBottom: '1px solid rgba(255,255,255,.14)' }}>
@@ -677,10 +688,16 @@ const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, 
                 <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}><Term k="수수료" compact>수수료율</Term></span><input type="number" min={0} step="0.05" value={adv.commission} onChange={e => setAdv({ ...adv, commission: e.target.value })} placeholder="0.1" className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
               </div>
             </div>
+            {!rebalActive && <div>
+              <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}>레버리지 (배, 선물 — 비우면 1배/현물)</div>
+              <input type="number" min={1} max={20} step={1} value={adv.leverage} onChange={e => setAdv({ ...adv, leverage: e.target.value })} placeholder={preset?.leverage ? `${preset.leverage} (권장)` : '1'} className="w-full rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} />
+              <div className="mt-1 text-[10.5px]" style={{ color: COMPASS }}>⚠️ 손익이 배수만큼 증폭되고 증거금 소진 시 강제청산됩니다. 백테스트는 일봉 근사이며 실거래 결과와 다를 수 있어요.</div>
+            </div>}
             <div style={rebalActive ? { opacity: .5 } : undefined}>
               <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}>매매 방향</div>
               <div className="flex gap-1">{TDIR.map(([k, l]) => <button key={k} disabled={rebalActive} onClick={() => setAdv({ ...adv, tradeDirection: k })} className="flex-1 rounded-md py-1.5 text-[11px] font-semibold disabled:cursor-not-allowed" style={seg(adv.tradeDirection === k)}>{l}</button>)}</div>
               {rebalActive && <div className="mt-1 text-[10.5px]" style={{ color: COMPASS }}>2자산 리밸런싱은 매수(LONG)만 지원합니다.</div>}
+              {!rebalActive && adv.tradeDirection === 'LONG_SHORT_FLAT' && <div className="mt-1 text-[10.5px]" style={{ color: INK3 }}>독립 롱+숏: 청산 시 현금으로 빠져 다음 돌파를 대기합니다(전환 아님). 숏 조건은 프리셋(터틀)에서 제공됩니다.</div>}
             </div>
             {!rebalActive && <div>
               <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}><Term k="분할매수" compact>분할 매수 (최대 동시 보유)</Term></div>
@@ -1203,9 +1220,11 @@ const ConsoleStrategyPage = () => {
     if (pct(adv.takeProfit) != null) req.takeProfitPercent = pct(adv.takeProfit);
     if (pct(adv.trailingStop) != null) req.trailingStopPercent = pct(adv.trailingStop);
     else if (preset?.trailingStopPercent) req.trailingStopPercent = preset.trailingStopPercent;
-    // 매매방향(숏)·분할매수·포지션 사이징은 단일 종목 모드 전용 (2자산은 롱 배분 전략)
+    // 매매방향(숏)·분할매수·포지션 사이징·레버리지는 단일 종목 모드 전용 (2자산은 롱 배분 전략)
     if (!rebalActive) {
-      if (adv.tradeDirection !== 'LONG_ONLY') req.tradeDirection = adv.tradeDirection;
+      // 매매 방향: 사용자가 고급설정에서 바꿨으면 우선, 아니면 프리셋 권장값(터틀=LONG_SHORT_FLAT)
+      const dir = adv.tradeDirection !== 'LONG_ONLY' ? adv.tradeDirection : preset?.tradeDirection;
+      if (dir && dir !== 'LONG_ONLY') req.tradeDirection = dir;
       if (adv.maxPositions !== 'auto') req.maxPositions = Number(adv.maxPositions);
       else if (preset?.maxPositions) req.maxPositions = preset.maxPositions;
       if (adv.positionSizing !== 'ALL_IN') {
@@ -1213,6 +1232,16 @@ const ConsoleStrategyPage = () => {
         const pv = parseFloat(adv.positionValue);
         if (Number.isFinite(pv) && pv > 0) req.positionValue = pv;
       }
+      // 레버리지: 사용자 입력 우선, 없으면 프리셋 권장값(터틀=2)
+      const advLev = parseInt(adv.leverage, 10);
+      if (Number.isFinite(advLev) && advLev > 1) req.leverage = advLev;
+      else if (preset?.leverage && preset.leverage > 1) req.leverage = preset.leverage;
+      // 독립 양방향(LONG_SHORT_FLAT)이면 숏 조건 + 피라미딩 트리거 전달
+      if (req.tradeDirection === 'LONG_SHORT_FLAT') {
+        if (preset?.shortEntryConditions) req.shortEntryConditions = preset.shortEntryConditions;
+        if (preset?.shortExitConditions) req.shortExitConditions = preset.shortExitConditions;
+      }
+      if (preset?.pyramidMode) req.pyramidMode = preset.pyramidMode;
     }
     // 배당 재투자: 기본/2번째 자산이 미국주식·ETF이고 OFF로 끈 경우에만 false 전송 (기본 ON)
     const hasUsEtf = [target, ...(second ? [second] : [])].some(a => a.assetType === 'US_STOCK' || a.assetType === 'ETF');

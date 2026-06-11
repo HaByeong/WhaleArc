@@ -54,8 +54,15 @@ export interface BacktestRequest {
   commissionRate?: number;
   assetType?: string;
   // 매매 방향 & 다중 포지션
-  tradeDirection?: 'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT';
+  tradeDirection?: 'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT' | 'LONG_SHORT_FLAT';
   maxPositions?: number;
+  // 레버리지(선물). 1/undefined=현물. 손익·청산 증폭.
+  leverage?: number;
+  // 피라미딩 추가진입 트리거: 'ATR'(직전진입가±ATR 돌파) / 'SIGNAL'(진입신호 재충족)
+  pyramidMode?: 'ATR' | 'SIGNAL';
+  // 독립 양방향(LONG_SHORT_FLAT) 전용 숏 조건
+  shortEntryConditions?: Condition[];
+  shortExitConditions?: Condition[];
   // 적립식 투자: 매월 첫 거래일에 추가 납입할 금액 (KRW). 0/undefined 면 off
   monthlyContribution?: number;
   // 2자산 리밸런싱 (둘 다 채워졌을 때만 활성)

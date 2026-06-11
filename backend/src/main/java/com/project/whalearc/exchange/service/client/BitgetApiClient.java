@@ -318,15 +318,21 @@ public class BitgetApiClient {
     private static final String FUTURES_MARGIN_COIN = "USDT";
     private static final String FUTURES_MARGIN_MODE = "isolated";
 
-    /** 선물 레버리지 설정(개시 전 호출). 단방향 롱 엔진이라 holdSide=long으로 설정. */
+    /** 선물 레버리지 설정(개시 전 호출). 롱 기본. */
     public void setFuturesLeverage(String apiKey, String secretKey, String passphrase,
                                    String symbol, int leverage) {
+        setFuturesLeverage(apiKey, secretKey, passphrase, symbol, leverage, "long");
+    }
+
+    /** 선물 레버리지 설정(holdSide 지정: long/short). */
+    public void setFuturesLeverage(String apiKey, String secretKey, String passphrase,
+                                   String symbol, int leverage, String holdSide) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("symbol", symbol);
         body.put("productType", FUTURES_PRODUCT_TYPE);
         body.put("marginCoin", FUTURES_MARGIN_COIN);
         body.put("leverage", String.valueOf(leverage));
-        body.put("holdSide", "long");
+        body.put("holdSide", holdSide);
         Map<String, Object> resp = signedRequest(apiKey, secretKey, passphrase, HttpMethod.POST,
                 "/api/v2/mix/account/set-leverage", null, body);
         String code = String.valueOf(resp.get("code"));
@@ -345,11 +351,22 @@ public class BitgetApiClient {
      */
     public String openFuturesLong(String apiKey, String secretKey, String passphrase,
                                   String symbol, BigDecimal size, String clientOid) {
+        return openFutures(apiKey, secretKey, passphrase, symbol, size, clientOid, "buy");
+    }
+
+    /** 선물 시장가 숏 개시(open) 주문. size=코인 수량(base). */
+    public String openFuturesShort(String apiKey, String secretKey, String passphrase,
+                                   String symbol, BigDecimal size, String clientOid) {
+        return openFutures(apiKey, secretKey, passphrase, symbol, size, clientOid, "sell");
+    }
+
+    private String openFutures(String apiKey, String secretKey, String passphrase,
+                               String symbol, BigDecimal size, String clientOid, String side) {
         try {
-            return placeFuturesOpen(apiKey, secretKey, passphrase, symbol, size, clientOid, true);   // hedge
+            return placeFuturesOpen(apiKey, secretKey, passphrase, symbol, size, clientOid, true, side);   // hedge
         } catch (Exception hedgeErr) {
             try {
-                return placeFuturesOpen(apiKey, secretKey, passphrase, symbol, size, clientOid, false);  // one-way
+                return placeFuturesOpen(apiKey, secretKey, passphrase, symbol, size, clientOid, false, side);  // one-way
             } catch (Exception oneWayErr) {
                 throw new IllegalStateException("Bitget 선물 개시 실패 (hedge: " + hedgeErr.getMessage()
                         + " | one-way: " + oneWayErr.getMessage() + ")");
@@ -357,15 +374,15 @@ public class BitgetApiClient {
         }
     }
 
-    /** 선물 롱 개시 1회 시도. hedge=true면 tradeSide=open(헤지), false면 tradeSide 생략(단방향). */
+    /** 선물 개시 1회 시도. side=buy(롱)/sell(숏). hedge=true면 tradeSide=open(헤지), false면 생략(단방향). */
     private String placeFuturesOpen(String apiKey, String secretKey, String passphrase,
-                                    String symbol, BigDecimal size, String clientOid, boolean hedge) {
+                                    String symbol, BigDecimal size, String clientOid, boolean hedge, String side) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("symbol", symbol);
         body.put("productType", FUTURES_PRODUCT_TYPE);
         body.put("marginMode", FUTURES_MARGIN_MODE);
         body.put("marginCoin", FUTURES_MARGIN_COIN);
-        body.put("side", "buy");
+        body.put("side", side);
         if (hedge) body.put("tradeSide", "open");
         body.put("orderType", "market");
         body.put("size", size.toPlainString());
@@ -392,11 +409,22 @@ public class BitgetApiClient {
      */
     public String closeFuturesLongSize(String apiKey, String secretKey, String passphrase,
                                        String symbol, BigDecimal size, String clientOid) {
+        return closeFuturesSize(apiKey, secretKey, passphrase, symbol, size, clientOid, true);
+    }
+
+    /** 선물 숏 포지션을 지정 수량만큼 시장가 청산(reduceOnly). */
+    public String closeFuturesShortSize(String apiKey, String secretKey, String passphrase,
+                                        String symbol, BigDecimal size, String clientOid) {
+        return closeFuturesSize(apiKey, secretKey, passphrase, symbol, size, clientOid, false);
+    }
+
+    private String closeFuturesSize(String apiKey, String secretKey, String passphrase,
+                                    String symbol, BigDecimal size, String clientOid, boolean isLong) {
         try {
-            return placeFuturesClose(apiKey, secretKey, passphrase, symbol, size, clientOid, true);   // hedge
+            return placeFuturesClose(apiKey, secretKey, passphrase, symbol, size, clientOid, true, isLong);   // hedge
         } catch (Exception hedgeErr) {
             try {
-                return placeFuturesClose(apiKey, secretKey, passphrase, symbol, size, clientOid, false);  // one-way
+                return placeFuturesClose(apiKey, secretKey, passphrase, symbol, size, clientOid, false, isLong);  // one-way
             } catch (Exception oneWayErr) {
                 throw new IllegalStateException("Bitget 선물 부분청산 실패 (hedge: " + hedgeErr.getMessage()
                         + " | one-way: " + oneWayErr.getMessage() + ")");
@@ -404,22 +432,21 @@ public class BitgetApiClient {
         }
     }
 
-    /** 선물 롱 사이즈 청산 1회 시도. hedge=true면 tradeSide=close(헤지), false면 reduceOnly=YES(단방향). */
+    /** 선물 사이즈 청산 1회 시도. hedge=true면 tradeSide=close, false면 reduceOnly=YES(반대매매). isLong=청산 대상 방향. */
     private String placeFuturesClose(String apiKey, String secretKey, String passphrase,
-                                     String symbol, BigDecimal size, String clientOid, boolean hedge) {
+                                     String symbol, BigDecimal size, String clientOid, boolean hedge, boolean isLong) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("symbol", symbol);
         body.put("productType", FUTURES_PRODUCT_TYPE);
         body.put("marginMode", FUTURES_MARGIN_MODE);
         body.put("marginCoin", FUTURES_MARGIN_COIN);
         if (hedge) {
-            // 헤지(양방향) 모드: side는 '포지션 방향'을 뜻한다. 롱 청산 = (side=buy, tradeSide=close).
-            // 개시 (buy, open)와 대칭. side=sell로 보내면 '숏 청산'으로 해석돼 22002(No position to close).
-            body.put("side", "buy");
+            // 헤지(양방향) 모드: side는 '포지션 방향'을 뜻한다. 롱 청산=(side=buy,tradeSide=close), 숏 청산=(side=sell,tradeSide=close).
+            body.put("side", isLong ? "buy" : "sell");
             body.put("tradeSide", "close");
         } else {
-            // 단방향(one-way) 모드: 반대매매로 닫는다. 롱 청산 = (side=sell) + reduceOnly.
-            body.put("side", "sell");
+            // 단방향(one-way) 모드: 반대매매로 닫는다. 롱 청산=(side=sell), 숏 청산=(side=buy) + reduceOnly.
+            body.put("side", isLong ? "sell" : "buy");
             body.put("reduceOnly", "YES");
         }
         body.put("orderType", "market");
@@ -469,6 +496,26 @@ public class BitgetApiClient {
         if (data instanceof List<?> list) {
             for (Object item : list) {
                 if (item instanceof Map<?, ?> p && "long".equalsIgnoreCase(String.valueOf(p.get("holdSide")))) {
+                    return bd(p.get("total"));
+                }
+            }
+        }
+        return BigDecimal.ZERO;
+    }
+
+    /** 선물 숏 포지션의 현재 보유 수량 조회(청산 검증용). 미보유면 0. */
+    @SuppressWarnings("unchecked")
+    public BigDecimal getFuturesShortSize(String apiKey, String secretKey, String passphrase, String symbol) {
+        Map<String, Object> q = new LinkedHashMap<>();
+        q.put("symbol", symbol);
+        q.put("productType", FUTURES_PRODUCT_TYPE);
+        q.put("marginCoin", FUTURES_MARGIN_COIN);
+        Map<String, Object> resp = signedRequest(apiKey, secretKey, passphrase, HttpMethod.GET,
+                "/api/v2/mix/position/single-position", q, null);
+        Object data = resp.get("data");
+        if (data instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> p && "short".equalsIgnoreCase(String.valueOf(p.get("holdSide")))) {
                     return bd(p.get("total"));
                 }
             }

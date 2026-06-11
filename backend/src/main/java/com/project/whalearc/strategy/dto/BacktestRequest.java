@@ -44,10 +44,21 @@ public class BacktestRequest {
     private Double commissionRate;      // 수수료율 % (예: 0.1 → 0.1%, 기본값 0.1%)
 
     // 매매 방향
-    private String tradeDirection;      // LONG_ONLY(기본), SHORT_ONLY, LONG_SHORT
+    private String tradeDirection;      // LONG_ONLY(기본), SHORT_ONLY, LONG_SHORT, LONG_SHORT_FLAT(독립 롱+숏+flat)
+
+    // 독립 양방향(LONG_SHORT_FLAT) 전용 — 숏 진입/청산 조건. null이면 숏 미평가(롱만 동작).
+    // entryConditions/exitConditions 는 롱 진입/청산으로 해석된다.
+    private List<Condition> shortEntryConditions;
+    private List<Condition> shortExitConditions;
 
     // 다중 포지션 (분할매수)
     private Integer maxPositions;       // 최대 동시 포지션 수 (기본: 1)
+
+    // 피라미딩(분할 진입) 추가 트리거: null/SIGNAL=진입신호 재충족 시 추가, ATR=직전진입가+ATR 돌파 시 추가(터틀)
+    private String pyramidMode;
+
+    // 레버리지 (선물). null/1 = 현물 동일(무회귀). >1이면 명목가=증거금×leverage, 손익·청산 증폭.
+    private Integer leverage;
 
     // 적립식 투자: 매월 첫 거래일에 추가 납입할 금액 (KRW)
     // null 또는 0 이면 적립식 off (기존 동작). 양수면 시뮬레이션 중 매월 첫 거래일마다 cash 에 가산.

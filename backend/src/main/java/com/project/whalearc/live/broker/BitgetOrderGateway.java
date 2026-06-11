@@ -51,6 +51,9 @@ public class BitgetOrderGateway implements OrderGateway {
                                   String assetType, String clientOrderId) {
         BitgetCredential cred = credentialResolver.resolve(userId);
         String symbol = BitgetApiClient.toSpotSymbol(stockCode);   // BTCUSDT (현물·선물 공통)
+        if ((side == Order.OrderType.SHORT || side == Order.OrderType.COVER) && !deployment.isFutures()) {
+            throw new IllegalStateException("공매도(숏)는 Bitget 선물(FUTURES)에서만 가능합니다. 현물은 롱만 지원합니다.");
+        }
         return deployment.isFutures()
                 ? futuresOrder(deployment, cred, userId, stockCode, stockName, symbol, side, quantity, price, assetType, clientOrderId)
                 : spotOrder(cred, userId, stockCode, stockName, symbol, side, quantity, price, assetType, clientOrderId);
@@ -94,47 +97,52 @@ public class BitgetOrderGateway implements OrderGateway {
     private Order futuresOrder(LiveStrategyDeployment d, BitgetCredential cred, String userId, String stockCode, String stockName,
                                String symbol, Order.OrderType side, BigDecimal quantity, BigDecimal price,
                                String assetType, String clientOrderId) {
-        boolean isOpen = side == Order.OrderType.BUY;   // 단방향 롱: BUY=개시, SELL=청산
+        // BUY=롱개시, SELL=롱청산, SHORT=숏개시, COVER=숏청산
+        boolean isOpen = side == Order.OrderType.BUY || side == Order.OrderType.SHORT;
+        boolean isLong = side == Order.OrderType.BUY || side == Order.OrderType.SELL;
+        BitgetSymbolInfo info = bitgetApiClient.getFuturesSymbolInfo(symbol);
+
         if (!isOpen) {
             // 청산: 이 배포의 보유분(quantity)만 reduceOnly로 부분청산. 같은 심볼 다른 배포에 영향 없음.
-            BigDecimal held = safeLongSize(cred, symbol);
+            BigDecimal held = isLong ? safeLongSize(cred, symbol) : safeShortSize(cred, symbol);
             if (held.signum() <= 0) {
                 // 거래소엔 보유 없음(외부/합산 청산됨) — 주문 없이 앱 상태만 동기화(현재가로 근사 정산).
-                log.info("Bitget 선물 청산 스킵(거래소 보유 없음, 앱 동기화): symbol={}", symbol);
+                log.info("Bitget 선물 청산 스킵(거래소 보유 없음, 앱 동기화): symbol={}, dir={}", symbol, isLong ? "long" : "short");
                 return buildOrder(userId, stockCode, stockName, side, quantity, assetType, clientOrderId, null, price, quantity);
             }
-            BitgetSymbolInfo info = bitgetApiClient.getFuturesSymbolInfo(symbol);
             BigDecimal closeSize = quantity.min(held).setScale(info.quantityPrecision(), RoundingMode.DOWN);
             if (closeSize.signum() <= 0) {
                 log.info("Bitget 선물 청산 스킵(청산 수량 0): symbol={}, quantity={}, held={}", symbol, quantity, held);
                 return buildOrder(userId, stockCode, stockName, side, quantity, assetType, clientOrderId, null, price, quantity);
             }
             String closeOid = sanitizeClientOid(clientOrderId);
-            log.info("Bitget 선물 부분청산 시도: userId={}, symbol={}, closeSize={}코인(held={}), clientOid={}",
-                    userId, symbol, closeSize, held, closeOid);
-            String orderId = bitgetApiClient.closeFuturesLongSize(
-                    cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol, closeSize, closeOid);
+            log.info("Bitget 선물 부분청산 시도: userId={}, symbol={}, dir={}, closeSize={}코인(held={}), clientOid={}",
+                    userId, symbol, isLong ? "long" : "short", closeSize, held, closeOid);
+            String orderId = isLong
+                    ? bitgetApiClient.closeFuturesLongSize(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol, closeSize, closeOid)
+                    : bitgetApiClient.closeFuturesShortSize(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol, closeSize, closeOid);
             BitgetFill fill = pollFuturesFill(cred, symbol, orderId);
             BigDecimal avgPrice = fill.avgPrice().signum() > 0 ? fill.avgPrice() : price;
             BigDecimal closedQty = fill.filledBase().signum() > 0 ? fill.filledBase() : closeSize;
             return buildOrder(userId, stockCode, stockName, side, quantity, assetType, clientOrderId, orderId, avgPrice, closedQty);
         }
 
-        // 개시: 레버리지 설정 → 시장가 롱 개시. size=코인 수량(base, 이미 레버리지 반영됨).
-        BitgetSymbolInfo info = bitgetApiClient.getFuturesSymbolInfo(symbol);
+        // 개시: 레버리지 설정 → 시장가 개시(롱/숏). size=코인 수량(base, 이미 레버리지 반영됨).
         BigDecimal size = quantity.setScale(info.quantityPrecision(), RoundingMode.DOWN);
         if (size.compareTo(BigDecimal.ZERO) <= 0
                 || (info.minTradeUsdt().signum() > 0 && size.compareTo(info.minTradeUsdt()) < 0)) {
             throw new IllegalStateException("Bitget 선물 주문 수량이 최소 단위 미만입니다: " + size
                     + " (최소 " + info.minTradeUsdt() + ")");
         }
-        bitgetApiClient.setFuturesLeverage(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol, d.effectiveLeverage());
+        bitgetApiClient.setFuturesLeverage(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol,
+                d.effectiveLeverage(), isLong ? "long" : "short");
 
         String clientOid = sanitizeClientOid(clientOrderId);
-        log.info("Bitget 선물 개시 시도: userId={}, symbol={}, size={}코인, leverage={}x, clientOid={}",
-                userId, symbol, size, d.effectiveLeverage(), clientOid);
-        String orderId = bitgetApiClient.openFuturesLong(
-                cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol, size, clientOid);
+        log.info("Bitget 선물 개시 시도: userId={}, symbol={}, dir={}, size={}코인, leverage={}x, clientOid={}",
+                userId, symbol, isLong ? "long" : "short", size, d.effectiveLeverage(), clientOid);
+        String orderId = isLong
+                ? bitgetApiClient.openFuturesLong(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol, size, clientOid)
+                : bitgetApiClient.openFuturesShort(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol, size, clientOid);
 
         BitgetFill fill = pollFuturesFill(cred, symbol, orderId);
         BigDecimal avgPrice = fill.avgPrice().signum() > 0 ? fill.avgPrice() : price;
@@ -146,7 +154,16 @@ public class BitgetOrderGateway implements OrderGateway {
         try {
             return bitgetApiClient.getFuturesLongSize(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol);
         } catch (Exception e) {
-            log.warn("Bitget 선물 보유수량 조회 실패(청산 진행): symbol={}, error={}", symbol, e.getMessage());
+            log.warn("Bitget 선물 롱 보유수량 조회 실패(청산 진행): symbol={}, error={}", symbol, e.getMessage());
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private BigDecimal safeShortSize(BitgetCredential cred, String symbol) {
+        try {
+            return bitgetApiClient.getFuturesShortSize(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol);
+        } catch (Exception e) {
+            log.warn("Bitget 선물 숏 보유수량 조회 실패(청산 진행): symbol={}, error={}", symbol, e.getMessage());
             return BigDecimal.ZERO;
         }
     }

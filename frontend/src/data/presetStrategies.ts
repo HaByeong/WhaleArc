@@ -1,4 +1,4 @@
-import type { Strategy } from '../services/strategyService';
+import type { Strategy, Condition } from '../services/strategyService';
 
 /** 프리셋 전략 — 공유 Strategy에 콘솔/필터 전용 메타(category, maxPositions)를 더한 단일 출처.
  *  전략(ConsoleStrategyPage)·자동매매(AutoTradePage) 두 페이지가 모두 이 배열에서 파생한다. */
@@ -8,6 +8,15 @@ export interface PresetStrategy extends Strategy {
   maxPositions?: number;
   /** 프리셋 권장 트레일링 스탑(%) — 사용자가 고급설정에서 직접 입력하지 않으면 이 값이 적용된다. */
   trailingStopPercent?: number;
+  /** 레버리지(선물 권장 배수). 백테스트에 자동 적용, 라이브는 폼에서 직접 설정. */
+  leverage?: number;
+  /** 매매 방향. LONG_SHORT_FLAT=독립 롱+숏+flat. */
+  tradeDirection?: 'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT' | 'LONG_SHORT_FLAT';
+  /** 피라미딩 추가진입 트리거. */
+  pyramidMode?: 'ATR' | 'SIGNAL';
+  /** 독립 양방향 전용 숏 진입/청산 조건. */
+  shortEntryConditions?: Condition[];
+  shortExitConditions?: Condition[];
 }
 
 export const PRESET_STRATEGIES: PresetStrategy[] = [
@@ -202,11 +211,13 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-turtle', category: 'trend', trailingStopPercent: 4, name: '터틀 트레이딩 (돈치안 돌파)', description: '전설적인 터틀 트레이더들의 추세추종 시스템입니다. 직전 100봉 신고가(돈치안 채널 상단)를 종가가 돌파하고 ADX(추세 강도)가 충분할 때만 진입하고, 직전 30봉 신저가(청산 채널)로 떨어지거나 트레일링 스탑에 닿으면 빠져나옵니다.',
-      beginnerTip: '쉽게 말하면: "한동안의 최고가를 뚫고 올라가면 큰 추세의 시작"이라 보고 올라타서, 추세가 꺾일 때까지 따라가는 전략이에요.',
-      whyUse: '추세추종의 교과서로 불리는 검증된 시스템입니다. 큰 상승 추세 한 번으로 다수의 작은 손실을 만회하는 "손실은 짧게, 이익은 길게" 구조예요. ADX 필터로 횡보장의 잦은 거짓 돌파를 걸러 거래 품질을 높입니다. 변동성이 큰 비트코인·이더리움에서 특히 강점이 있습니다.',
+      id: 'preset-turtle', category: 'trend', name: '터틀 트레이딩 (돈치안 돌파)',
+      tradeDirection: 'LONG_SHORT_FLAT', leverage: 2, maxPositions: 4, pyramidMode: 'ATR', trailingStopPercent: 4,
+      description: '전설적인 터틀 트레이더들의 추세추종 시스템입니다. 직전 100봉 신고가(돈치안 채널 상단)를 돌파하면 롱, 직전 100봉 신저가를 하향 돌파하면 숏으로 진입하고, ADX(추세 강도) 필터를 통과한 추세에만 올라탑니다. 청산 채널(30봉)에 닿으면 현금으로 빠져 다음 돌파를 기다립니다. 추세가 이어지면 ATR 간격마다 유닛을 더하는 피라미딩으로 수익을 키웁니다.',
+      beginnerTip: '쉽게 말하면: "한동안의 최고가를 뚫으면 사고(롱), 최저가를 뚫으면 팔아서(숏) 큰 추세를 양방향으로 올라타는" 전략이에요. 추세가 이어지면 조금씩 더 보태고, 꺾이면 현금으로 쉽니다.',
+      whyUse: '추세추종의 교과서로 불리는 검증된 시스템입니다. 롱·숏 양방향이라 상승장과 하락장 모두에서 수익 기회를 노립니다. ADX 필터로 횡보장의 거짓 돌파를 걸러내고, 피라미딩으로 "이익은 길게" 키우며, 청산 채널로 "손실은 짧게" 끊습니다. 변동성이 큰 비트코인·이더리움 선물에서 특히 강점이 있습니다. (레버리지·숏은 라이브 Bitget 선물에서, 백테스트는 일봉 근사입니다.)',
       difficulty: '고급',
-      strategyLogic: '종가 > 직전 100봉 신고가(돈치안 상단) + ADX(14) > 15 → 매수 / 종가 < 직전 30봉 신저가(청산 채널) 또는 트레일링 -4% → 매도',
+      strategyLogic: '롱: 종가 > 100봉 신고가 + ADX>15 / 숏: 종가 < 100봉 신저가 + ADX>15 / 청산: 30봉 반대 채널 또는 트레일링 4% / 피라미딩: +ATR마다 최대 4유닛 / 레버리지 2배',
       assetType: 'CRYPTO', targetAssets: ['BTC', 'ETH'], targetAssetNames: { BTC: '비트코인', ETH: '이더리움' },
       indicators: [
         { type: 'DONCHIAN', parameters: { period: 100 } },
@@ -220,6 +231,13 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       ],
       exitConditions: [
         { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_LOW_30' },
+      ],
+      shortEntryConditions: [
+        { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_LOW_100' },
+        { indicator: 'ADX', operator: 'GT', value: 15, logic: 'AND' },
+      ],
+      shortExitConditions: [
+        { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_HIGH_30' },
       ],
       applied: false, createdAt: '', updatedAt: '',
     },

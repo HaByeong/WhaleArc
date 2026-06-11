@@ -4,6 +4,7 @@ import com.project.whalearc.exchange.service.client.BitgetApiClient;
 import com.project.whalearc.live.domain.LiveStrategyDeployment;
 import com.project.whalearc.live.domain.LiveStrategyDeployment.LivePosition;
 import com.project.whalearc.live.dto.CreateDeploymentRequest;
+import com.project.whalearc.live.repository.LiveDeploymentEquitySnapshotRepository;
 import com.project.whalearc.live.repository.LiveOrderLogRepository;
 import com.project.whalearc.live.repository.LiveStrategyDeploymentRepository;
 import com.project.whalearc.market.dto.CandlestickResponse;
@@ -88,6 +89,7 @@ class LiveStrategyServiceTest {
         UsEtfCatalog usEtfCatalog = mock(UsEtfCatalog.class);
         UsStockPriceProvider usStockPriceProvider = mock(UsStockPriceProvider.class);
         LiveOrderLogRepository orderLogRepo = mock(LiveOrderLogRepository.class);
+        LiveDeploymentEquitySnapshotRepository equitySnapshotRepo = mock(LiveDeploymentEquitySnapshotRepository.class);
         BitgetApiClient bitgetApiClient = mock(BitgetApiClient.class);
         gateway = new RecordingGateway();
         store = new java.util.HashMap<>();
@@ -118,7 +120,7 @@ class LiveStrategyServiceTest {
                 notificationService, portfolioService,
                 exchangeRateService, usEtfCatalog, usStockPriceProvider,
                 bitgetApiClient, List.of(gateway), orderLogRepo,
-                new UserLockRegistry());
+                equitySnapshotRepo, new UserLockRegistry());
     }
 
     private void stubCashBalance(BigDecimal cash) {
@@ -216,6 +218,28 @@ class LiveStrategyServiceTest {
         assertEquals(Order.OrderType.SELL, gateway.placed.get(0).getOrderType());
         assertEquals(0, p.getQuantity().compareTo(BigDecimal.ZERO), "청산 후 수량 0");
         assertEquals(1, d.getTradeCount());
+    }
+
+    @Test
+    void closeNowCoversShortPosition() {
+        // 회귀 방지: '지금 청산'이 숏 포지션도 COVER(환매)로 청산해야 한다(이전엔 롱만 청산).
+        when(candlestickService.getCandlesticks(anyString(), anyString(), anyString()))
+                .thenReturn(flatCandles(130, 100));
+        when(deploymentRepo.findByIdAndUserId("dep1", "u1"))
+                .thenAnswer(inv -> java.util.Optional.ofNullable(store.get("dep1")));
+
+        LiveStrategyDeployment d = baseDeployment();
+        LivePosition p = d.getPositions().get(0);
+        p.setDirection(LivePosition.Direction.SHORT);
+        p.setAvgPrice(BigDecimal.valueOf(100));
+        p.setQuantity(BigDecimal.valueOf(5000));
+
+        svc.closeNow("u1", "dep1");
+
+        assertEquals(LivePosition.Direction.NONE, p.getDirection(), "숏 청산 후 NONE 리셋");
+        assertEquals(1, gateway.placed.size(), "환매 주문 1건 발주");
+        assertEquals(Order.OrderType.COVER, gateway.placed.get(0).getOrderType(), "숏 청산은 COVER(매수 환매)");
+        assertEquals(0, p.getQuantity().compareTo(BigDecimal.ZERO), "청산 후 수량 0");
     }
 
     @Test

@@ -7,7 +7,15 @@ export type AccountMode = 'PAPER' | 'LIVE';
 export type BrokerType = 'MOCK' | 'KIS' | 'UPBIT' | 'BITGET';
 export type MarketType = 'SPOT' | 'FUTURES';
 export type DeploymentStatus = 'RUNNING' | 'PAUSED' | 'STOPPED' | 'ERROR';
-export type PositionDirection = 'NONE' | 'LONG';
+export type PositionDirection = 'NONE' | 'LONG' | 'SHORT';
+
+/** 카드 '최근 신호' 표시용 최근 주문 요약. */
+export interface LastOrderSummary {
+  side: 'BUY' | 'SELL';
+  status: 'FILLED' | 'REJECTED' | 'SUBMITTED';
+  reason: string;
+  createdAt: string;
+}
 
 export interface LivePosition {
   symbol: string;
@@ -46,6 +54,10 @@ export interface Deployment {
   positions: LivePosition[];
   lastEvaluatedAt?: string;
   createdAt?: string;
+  // ── 카드 표시용 확장 필드 ──
+  todayFilledCount?: number;        // 오늘(KST) 체결 수
+  lastOrder?: LastOrderSummary | null;  // 가장 최근 주문(최근 신호)
+  equitySpark?: number[];           // 일별 평가손익률(%) 시계열 — 스파크라인
 }
 
 export interface CreateDeploymentRequest {

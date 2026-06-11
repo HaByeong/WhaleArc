@@ -38,7 +38,7 @@ public class LiveStrategyController {
         }
         try {
             LiveStrategyDeployment d = liveStrategyService.createDeployment(userId, request);
-            return ResponseEntity.ok(ApiResponse.ok(DeploymentResponse.from(d)));
+            return ResponseEntity.ok(ApiResponse.ok(liveStrategyService.toResponse(d)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
@@ -50,9 +50,7 @@ public class LiveStrategyController {
     @GetMapping("/deployments")
     public ResponseEntity<ApiResponse<List<DeploymentResponse>>> getDeployments(@AuthenticationPrincipal Jwt jwt) {
         String userId = jwt.getSubject();
-        List<DeploymentResponse> deployments = liveStrategyService.getUserDeployments(userId).stream()
-                .map(DeploymentResponse::from)
-                .toList();
+        List<DeploymentResponse> deployments = liveStrategyService.getUserDeploymentResponses(userId);
         return ResponseEntity.ok(ApiResponse.ok(deployments));
     }
 
@@ -73,7 +71,7 @@ public class LiveStrategyController {
         String userId = jwt.getSubject();
         try {
             LiveStrategyDeployment d = liveStrategyService.evaluateNow(userId, deploymentId);
-            return ResponseEntity.ok(ApiResponse.ok(DeploymentResponse.from(d)));
+            return ResponseEntity.ok(ApiResponse.ok(liveStrategyService.toResponse(d)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
@@ -87,7 +85,7 @@ public class LiveStrategyController {
             @AuthenticationPrincipal Jwt jwt, @PathVariable String deploymentId) {
         try {
             LiveStrategyDeployment d = liveStrategyService.closeNow(jwt.getSubject(), deploymentId);
-            return ResponseEntity.ok(ApiResponse.ok(DeploymentResponse.from(d)));
+            return ResponseEntity.ok(ApiResponse.ok(liveStrategyService.toResponse(d)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
@@ -130,7 +128,7 @@ public class LiveStrategyController {
                 case "pause" -> liveStrategyService.pause(userId, deploymentId);
                 default -> liveStrategyService.stop(userId, deploymentId);
             };
-            return ResponseEntity.ok(ApiResponse.ok(DeploymentResponse.from(d)));
+            return ResponseEntity.ok(ApiResponse.ok(liveStrategyService.toResponse(d)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }

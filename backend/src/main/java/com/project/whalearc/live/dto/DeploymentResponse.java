@@ -1,5 +1,6 @@
 package com.project.whalearc.live.dto;
 
+import com.project.whalearc.live.domain.LiveOrderLog;
 import com.project.whalearc.live.domain.LiveStrategyDeployment;
 import lombok.Getter;
 
@@ -37,8 +38,13 @@ public class DeploymentResponse {
     private final List<PositionDto> positions;
     private final Instant lastEvaluatedAt;
     private final Instant createdAt;
+    // ── 카드 표시용 확장 필드 ──
+    private final int todayFilledCount;       // 오늘(KST) 체결 수
+    private final LastOrderDto lastOrder;     // 가장 최근 주문(최근 신호), 없으면 null
+    private final List<Double> equitySpark;   // 일별 평가손익률(%) 시계열, 스파크라인용
 
-    private DeploymentResponse(LiveStrategyDeployment d) {
+    private DeploymentResponse(LiveStrategyDeployment d, int todayFilledCount,
+                               LiveOrderLog lastOrder, List<Double> equitySpark) {
         this.id = d.getId();
         this.strategyId = d.getStrategyId();
         this.strategyName = d.getStrategyName();
@@ -63,10 +69,36 @@ public class DeploymentResponse {
                 : d.getPositions().stream().map(PositionDto::new).toList();
         this.lastEvaluatedAt = d.getLastEvaluatedAt();
         this.createdAt = d.getCreatedAt();
+        this.todayFilledCount = todayFilledCount;
+        this.lastOrder = lastOrder != null ? new LastOrderDto(lastOrder) : null;
+        this.equitySpark = equitySpark != null ? equitySpark : List.of();
     }
 
+    /** 변이 응답 등 확장 데이터 없이 매핑(체결수 0·최근주문 null·스파크 빈 목록). */
     public static DeploymentResponse from(LiveStrategyDeployment d) {
-        return new DeploymentResponse(d);
+        return new DeploymentResponse(d, 0, null, List.of());
+    }
+
+    /** 카드 표시용 확장 데이터 포함 매핑(목록·변이 응답 공용). */
+    public static DeploymentResponse from(LiveStrategyDeployment d, int todayFilledCount,
+                                          LiveOrderLog lastOrder, List<Double> equitySpark) {
+        return new DeploymentResponse(d, todayFilledCount, lastOrder, equitySpark);
+    }
+
+    /** 최근 주문 요약 — 카드 '최근 신호' 표시용. */
+    @Getter
+    public static class LastOrderDto {
+        private final String side;        // BUY / SELL
+        private final String status;      // FILLED / REJECTED / SUBMITTED
+        private final String reason;      // ENTRY / STOP / TAKE_PROFIT / EXIT_SIGNAL ...
+        private final Instant createdAt;
+
+        private LastOrderDto(LiveOrderLog o) {
+            this.side = o.getSide();
+            this.status = o.getStatus();
+            this.reason = o.getReason();
+            this.createdAt = o.getCreatedAt();
+        }
     }
 
     @Getter

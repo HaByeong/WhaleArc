@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import HelmShell from '../components/HelmShell';
 import Toast, { type ToastItem } from '../components/Toast';
@@ -21,14 +21,6 @@ const formatKRW = (n?: number) =>
 const formatNum = (n?: number, digits = 4) =>
   n === undefined || n === null ? '-' : new Intl.NumberFormat('ko-KR', { maximumFractionDigits: digits }).format(n);
 
-const formatTime = (iso?: string) => {
-  if (!iso) return '평가 전';
-  try {
-    return new Date(iso).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return '-';
-  }
-};
 
 const INTERVAL_LABELS: Record<string, string> = {
   '1m': '1분봉', '5m': '5분봉', '15m': '15분봉', '30m': '30분봉',
@@ -68,11 +60,106 @@ const errMsg = (e: unknown, fallback = '오류가 발생했습니다.') => {
   return anyErr?.response?.data?.message || fallback;
 };
 
-const STATUS_META: Record<DeploymentStatus, { label: string; dark: string; light: string }> = {
-  RUNNING: { label: '가동 중', dark: 'bg-emerald-500/15 text-emerald-400', light: 'bg-emerald-50 text-emerald-600' },
-  PAUSED: { label: '일시정지', dark: 'bg-amber-500/15 text-amber-400', light: 'bg-amber-50 text-amber-600' },
-  STOPPED: { label: '정지됨', dark: 'bg-slate-500/15 text-slate-400', light: 'bg-gray-100 text-gray-500' },
-  ERROR: { label: '오류', dark: 'bg-red-500/15 text-red-400', light: 'bg-red-50 text-red-600' },
+/* ── 디자인 개편: 시안(auto-app.jsx) 비주얼 프리미티브 ── */
+const GREEN = '#3fd6a0';   // 가동 중(상승 아님) 표시용 청록
+const UP = '#ef4d4d';      // 수익(한국식 빨강)
+const DOWN = '#4d8aff';    // 손실(파랑)
+
+// 종목 심볼 배지 (코인=풀심볼, 주식=앞 2자)
+const SymBadge = ({ sym }: { sym: string }) => {
+  const isCrypto = /^[A-Z]{2,5}$/.test(sym) && !/^\d/.test(sym);
+  return (
+    <span style={{ width: 40, height: 40, borderRadius: 11, flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: sym.length > 4 ? 11 : 13, fontWeight: 700, letterSpacing: '.02em',
+      fontFamily: "'JetBrains Mono',ui-monospace,monospace",
+      background: 'linear-gradient(135deg, rgba(91,157,255,.22), rgba(44,111,230,.10))',
+      border: '1px solid rgba(91,157,255,.28)', color: 'var(--ci-sonar)' }}>
+      {isCrypto ? sym : sym.slice(0, 2)}
+    </span>
+  );
+};
+
+// 상태 pill (가동 중·일시정지·정지됨·오류)
+const STATUS_PILL: Record<DeploymentStatus, { t: string; c: string; bg: string; bd: string; pulse: boolean }> = {
+  RUNNING: { t: '가동 중', c: GREEN, bg: 'rgba(63,214,160,.12)', bd: 'rgba(63,214,160,.30)', pulse: true },
+  PAUSED: { t: '일시정지', c: '#f5d061', bg: 'rgba(245,208,97,.12)', bd: 'rgba(245,208,97,.32)', pulse: false },
+  STOPPED: { t: '정지됨', c: 'var(--ci-ink2)', bg: 'rgba(255,255,255,.05)', bd: 'var(--ci-line)', pulse: false },
+  ERROR: { t: '오류', c: '#ff8a8a', bg: 'rgba(239,77,77,.12)', bd: 'rgba(239,77,77,.32)', pulse: false },
+};
+const StatusPill = ({ status }: { status: DeploymentStatus }) => {
+  const m = STATUS_PILL[status];
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 11px', borderRadius: 999,
+      fontSize: 11.5, fontWeight: 700, color: m.c, background: m.bg, border: `1px solid ${m.bd}`, whiteSpace: 'nowrap' }}>
+      <span className={m.pulse ? 'animate-pulse-dot' : ''} style={{ width: 6, height: 6, borderRadius: '50%', background: m.c, boxShadow: `0 0 8px ${m.c}` }} />
+      {m.t}
+    </span>
+  );
+};
+
+// 메타 칩
+const Chip = ({ children }: { children: ReactNode }) => (
+  <span style={{ padding: '4px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, color: 'var(--ci-ink1)',
+    background: 'var(--ci-chip)', border: '1px solid var(--ci-line)' }}>{children}</span>
+);
+
+// 관제 덱 통계 셀
+const DeckStat = ({ label, value, color, mono }: { label: string; value: string; color?: string; mono?: boolean }) => (
+  <div style={{ padding: '13px 14px', borderRadius: 12, background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
+    <div style={{ fontSize: 10.5, letterSpacing: '.1em', color: 'var(--ci-ink3)', fontWeight: 600 }}>{label}</div>
+    <div className={mono ? 'font-mono' : ''} style={{ marginTop: 6, fontSize: 18, fontWeight: 700, letterSpacing: '-.01em', color: color || 'var(--ci-ink0)' }}>{value}</div>
+  </div>
+);
+
+// 그라데이션 프라이머리 버튼 (＋ 새 자동매매)
+const PrimaryBtn = ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
+  <button onClick={onClick} style={{ position: 'relative', padding: '12px 18px', borderRadius: 13, cursor: 'pointer',
+    fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, letterSpacing: '-.01em',
+    border: '1px solid rgba(165,200,255,.6)', color: 'rgba(255,255,255,.98)',
+    background: 'linear-gradient(180deg, #5690f2 0%, #3673e2 100%)',
+    boxShadow: '0 14px 26px -14px rgba(43,110,230,.6), inset 0 1px 0 rgba(255,255,255,.4)',
+    display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+    <span style={{ fontSize: 16, lineHeight: 0, marginTop: -1 }}>＋</span>{children}
+  </button>
+);
+
+// 손익 스파크라인 (시안 auto-app.jsx의 Spark) — equitySpark(%) 시계열을 SVG 라인+영역으로
+const Spark = ({ data, up, idKey }: { data: number[]; up: boolean; idKey: string }) => {
+  const w = 100, h = 34;
+  const min = Math.min(...data), max = Math.max(...data), rng = (max - min) || 1;
+  const pts = data.map((v, i) => [(i / (data.length - 1)) * w, h - 3 - ((v - min) / rng) * (h - 6)] as const);
+  const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const area = `${line} L${w} ${h} L0 ${h} Z`;
+  const col = up ? UP : DOWN;
+  const gid = `spark-${idKey}`;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" style={{ display: 'block' }}>
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={col} stopOpacity={0.26} />
+          <stop offset="100%" stopColor={col} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gid})`} />
+      <path d={line} fill="none" stroke={col} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+};
+
+// '최근 신호' 포맷 헬퍼
+const sideKr = (s?: string) => (s === 'BUY' ? '매수' : s === 'SELL' ? '매도' : '');
+const orderStatusKr = (s?: string) => (s === 'FILLED' ? '체결' : s === 'REJECTED' ? '거부' : s === 'SUBMITTED' ? '접수' : '');
+const relTime = (iso?: string) => {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return '';
+  const m = Math.floor((Date.now() - t) / 60_000);
+  if (m < 1) return '방금';
+  if (m < 60) return `${m}분 전`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}시간 전`;
+  return `${Math.floor(h / 24)}일 전`;
 };
 
 const REASON_LABEL: Record<string, string> = {
@@ -359,7 +446,7 @@ const AutoTradePage = () => {
   };
 
   const closeNow = async (d: Deployment) => {
-    const hasPosition = (d.positions || []).some(p => p.direction === 'LONG');
+    const hasPosition = (d.positions || []).some(p => p.direction !== 'NONE');   // 롱·숏 모두
     if (!hasPosition) { pushToast('error', '청산 불가', '보유 중인 포지션이 없습니다.'); return; }
     if (!window.confirm(`'${d.strategyName}'의 보유 포지션을 지금 시장가로 청산할까요?`)) return;
     setBusyId(d.id);
@@ -398,6 +485,12 @@ const AutoTradePage = () => {
   const divideY = isDark ? 'divide-white/[0.06]' : 'divide-gray-100';
   // 이 섹션의 배포만 표시 (일반=실거래 LIVE, /virt=모의 PAPER) — 두 모드 섞임 방지
   const sectionDeployments = deployments.filter(d => (isLive ? d.accountMode === 'LIVE' : d.accountMode === 'PAPER'));
+  // AUTOPILOT 관제 덱 집계 (이 섹션 기준)
+  const runningCount = sectionDeployments.filter(d => d.status === 'RUNNING').length;
+  const totalAlloc = sectionDeployments.reduce((a, d) => a + (d.allocatedCash || 0), 0) || 1;
+  const totalPnl = sectionDeployments.reduce((a, d) => a + (d.realizedPnl || 0), 0);
+  const aggPct = (totalPnl / totalAlloc) * 100;          // 할당금 가중 평가손익률
+  const todayFills = sectionDeployments.reduce((a, d) => a + (d.todayFilledCount || 0), 0);  // 오늘(KST) 체결 수 합
 
   if (pageLoading) {
     return (
@@ -448,39 +541,69 @@ const AutoTradePage = () => {
       <Toast toasts={toasts} onDismiss={dismissToast} />
       <div className="mx-auto max-w-6xl">
         {/* 헤더 */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-5">
           <div>
-            <h1 className={`text-2xl sm:text-3xl font-bold ${isDark ? 'text-white' : 'text-whale-dark'}`}>{modeLabel} 자동매매{isLive && <span className="ml-2 align-middle text-sm font-bold text-amber-500">⚠️ 실제 자금</span>}</h1>
-            <p className={`mt-1 text-sm ${subText}`}>{`백테스트한 전략을 ${isLive ? '실제 자금으로' : '모의(가상) 자금으로'} 자동 매매합니다. 봉 단위(시간/일)로 신호를 평가해 주문합니다.`}</p>
+            <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-.02em', color: 'var(--ci-ink0)' }}>
+              {modeLabel} 자동매매{isLive && <span className="ml-2 align-middle text-sm font-bold text-amber-500">⚠️ 실제 자금</span>}
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--ci-ink1)', maxWidth: 620 }}>
+              {`백테스트한 전략을 ${isLive ? '실제 자금으로' : '모의(가상) 자금으로'} 자동 매매합니다. 봉 단위(시간·일)로 신호를 평가해 주문합니다.`}
+            </p>
           </div>
-          <button onClick={openCreate} className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${primaryBtn}`}>
-            + 새 자동매매 시작
-          </button>
+          <PrimaryBtn onClick={openCreate}>새 자동매매 시작</PrimaryBtn>
         </div>
 
-        {/* 킬스위치 배너 */}
-        <div className={`mb-6 rounded-xl border px-4 py-3 flex items-center justify-between gap-3 ${
-          killSwitch
-            ? (isDark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200')
-            : (isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-white border-gray-200')
-        }`}>
-          <div className="flex items-center gap-2 min-w-0">
-            <span className={`text-lg ${killSwitch ? 'text-red-500' : (isDark ? 'text-slate-400' : 'text-gray-400')}`}>🛑</span>
-            <div className="min-w-0">
-              <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>전역 킬스위치 {killSwitch ? '(작동 중)' : ''}</p>
-              <p className={`text-xs ${subText}`}>{killSwitch ? '모든 자동매매가 정지되어 신호 평가를 건너뜁니다.' : '비상 시 모든 자동매매를 한 번에 멈춥니다.'}</p>
+        {/* AUTOPILOT 관제 덱 (좌: 상태·요약 / 우: 전역 킬스위치) */}
+        <section style={{ position: 'relative', overflow: 'hidden', background: 'var(--ci-panel)', border: '1px solid var(--ci-line)', borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)', marginBottom: 20 }}>
+          <span aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: killSwitch ? 0.25 : 0.6, background: 'radial-gradient(120% 140% at 88% -20%, rgba(91,157,255,.16), transparent 55%)' }} />
+          <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr]" style={{ position: 'relative' }}>
+            {/* 좌 — 상태 + 요약 */}
+            <div className="border-b md:border-b-0 md:border-r" style={{ padding: '24px 26px', borderColor: 'var(--ci-line)' }}>
+              <div className="mb-3 flex items-center gap-2.5">
+                <span className={killSwitch ? '' : 'animate-pulse-dot'} style={{ width: 8, height: 8, borderRadius: '50%', background: killSwitch ? 'var(--ci-ink3)' : GREEN, boxShadow: killSwitch ? 'none' : `0 0 10px ${GREEN}` }} />
+                <span style={{ fontSize: 10.5, letterSpacing: '.2em', fontWeight: 700, color: killSwitch ? 'var(--ci-ink2)' : GREEN }}>AUTOPILOT · 자동 항해 관제</span>
+              </div>
+              <h2 style={{ fontSize: 23, fontWeight: 700, letterSpacing: '-.02em', color: 'var(--ci-ink0)' }}>
+                {killSwitch ? '전체 정지됨' : (runningCount ? `${runningCount}개 전략 가동 중` : '대기 중')}
+              </h2>
+              <p style={{ margin: '7px 0 20px', fontSize: 13, color: 'var(--ci-ink2)' }}>
+                {killSwitch ? '킬스위치가 작동했습니다. 모든 자동매매가 멈췄습니다.' : `${isLive ? '실제' : '모의'} 자금으로 신호를 자동 평가·주문하고 있습니다.`}
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+                <DeckStat label="가동 중" value={`${runningCount}개`} />
+                <DeckStat label={isLive ? '실현손익' : '모의 실현손익'} value={`${aggPct >= 0 ? '+' : ''}${aggPct.toFixed(2)}%`} color={killSwitch ? undefined : (aggPct > 0 ? UP : aggPct < 0 ? DOWN : undefined)} mono />
+                <DeckStat label="오늘 체결" value={`${todayFills}회`} mono />
+              </div>
+            </div>
+            {/* 우 — 전역 킬스위치 */}
+            <div style={{ padding: '24px 26px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14 }}>
+              <div className="flex items-center gap-2.5">
+                <span style={{ fontSize: 15 }}>🛑</span>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ci-ink0)' }}>전역 킬스위치 {killSwitch ? '(작동 중)' : ''}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--ci-ink2)', marginTop: 1 }}>{killSwitch ? '모든 자동매매가 정지되어 신호 평가를 건너뜁니다.' : '비상 시 모든 자동매매를 한 번에 멈춥니다.'}</div>
+                </div>
+              </div>
+              {!killSwitch ? (
+                <button onClick={toggleKillSwitch} className="flex items-center justify-center gap-2.5" style={{ padding: '15px 18px', borderRadius: 14, fontFamily: 'inherit', fontSize: 15, fontWeight: 700, letterSpacing: '-.01em', cursor: 'pointer', color: '#ff8a8a', background: 'rgba(239,77,77,.10)', border: '1px solid rgba(239,77,77,.45)', boxShadow: '0 14px 30px -16px rgba(239,77,77,.6), inset 0 1px 0 rgba(255,255,255,.06)' }}>
+                  <span className="animate-pulse-dot" style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4d4d', boxShadow: '0 0 10px #ef4d4d' }} />
+                  전체 정지
+                </button>
+              ) : (
+                <button onClick={toggleKillSwitch} className="flex items-center justify-center gap-2.5" style={{ padding: '15px 18px', borderRadius: 14, fontFamily: 'inherit', fontSize: 15, fontWeight: 700, letterSpacing: '-.01em', cursor: 'pointer', color: 'rgba(255,255,255,.98)', border: '1px solid rgba(165,200,255,.6)', background: 'linear-gradient(180deg, #5690f2, #3673e2)', boxShadow: '0 14px 30px -16px rgba(43,110,230,.6), inset 0 1px 0 rgba(255,255,255,.4)' }}>
+                  ↻ 전체 재가동
+                </button>
+              )}
             </div>
           </div>
-          <button
-            onClick={toggleKillSwitch}
-            className={`shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
-              killSwitch
-                ? (isDark ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30' : 'bg-emerald-500 text-white hover:bg-emerald-600')
-                : (isDark ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30' : 'bg-red-500 text-white hover:bg-red-600')
-            }`}
-          >
-            {killSwitch ? '해제' : '전체 정지'}
-          </button>
+        </section>
+
+        {/* 가동 중인 자동매매 목록 헤더 */}
+        <div className="mb-3 flex items-center justify-between" style={{ marginTop: 4 }}>
+          <h2 className="flex items-center gap-2.5" style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-.01em', color: 'var(--ci-ink0)' }}>
+            가동 중인 자동매매
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ci-sonar)', padding: '2px 9px', borderRadius: 999, background: 'var(--ci-sonar-dim)', border: '1px solid rgba(91,157,255,.28)' }}>{sectionDeployments.length}</span>
+          </h2>
         </div>
 
         {/* 배포 목록 */}
@@ -493,11 +616,9 @@ const AutoTradePage = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid gap-[18px]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
             {sectionDeployments.map(d => {
-              const sm = STATUS_META[d.status];
               const pnlPositive = (d.realizedPnl ?? 0) > 0;
-              const pnlNegative = (d.realizedPnl ?? 0) < 0;
               const liveReturn = (d.allocatedCash ?? 0) > 0
                 ? ((d.realizedPnl ?? 0) / (d.allocatedCash ?? 1)) * 100 : 0;
               const liveWinRate = (d.tradeCount ?? 0) > 0
@@ -508,53 +629,77 @@ const AutoTradePage = () => {
                 .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
               const logsOpen = expandedLogId === d.id;
               const logsData = orderLogs[d.id];
+              const firstSym = (d.targetAssets || [])[0] || d.strategyName.slice(0, 3);
+              const dim = killSwitch || d.status === 'STOPPED';
+              const nextLbl = nextEvalLabel(d);
+              const hasSpark = (d.equitySpark?.length ?? 0) >= 2;
+              const lo = d.lastOrder;
+              const signalText = dim ? '정지됨'
+                : (lo ? `${sideKr(lo.side)} ${orderStatusKr(lo.status)} · ${relTime(lo.createdAt)}` : '관망 · 신호 대기');
+              const modeBadge = d.accountMode === 'LIVE'
+                ? (d.brokerType === 'BITGET'
+                    ? `Bitget ${d.marketType === 'FUTURES' ? `선물 ${d.leverage ?? ''}x` : '현물'}`
+                    : 'KIS 실거래')
+                : '모의';
               return (
-                <div key={d.id} className={`rounded-2xl border p-5 ${card}`}>
-                  {/* 카드 헤더 */}
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className={`text-base font-bold truncate ${isDark ? 'text-white' : 'text-gray-800'}`}>{d.strategyName}</h3>
-                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                          d.accountMode === 'LIVE'
-                            ? (isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-600')
-                            : (isDark ? 'bg-blue-500/15 text-blue-300' : 'bg-blue-50 text-blue-600')
-                        }`}>
-                          {d.accountMode === 'LIVE'
-                            ? d.brokerType === 'BITGET'
-                              ? `Bitget ${d.marketType === 'FUTURES' ? `선물 ${d.leverage ?? ''}x` : '현물'}`
-                              : 'KIS 실거래'
-                            : '모의'}
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${isDark ? sm.dark : sm.light}`}>{sm.label}</span>
+                <div key={d.id} style={{ background: 'var(--ci-panel)', border: '1px solid var(--ci-line)', borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)', display: 'flex', flexDirection: 'column', opacity: dim ? 0.66 : 1, transition: 'opacity .25s' }}>
+                  <div style={{ padding: '18px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
+                    {/* 헤더: 심볼 배지 + 전략명 + 상태 pill */}
+                    <div className="flex items-center gap-3">
+                      <SymBadge sym={firstSym} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate" style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-.01em', color: 'var(--ci-ink0)' }}>{d.strategyName}</div>
+                        <div className="mt-0.5 truncate" style={{ fontSize: 12, color: 'var(--ci-ink2)' }}>
+                          {(d.targetAssets || []).join(', ') || '기본 종목'}
+                        </div>
                       </div>
-                      <p className={`mt-1 text-xs ${subText}`}>
-                        {(d.targetAssets || []).join(', ')} · {d.assetType || '-'} · {INTERVAL_LABELS[d.interval] ?? d.interval}
-                        {nextEvalLabel(d) && (
-                          <span className="ml-2 font-semibold" style={{ color: '#3fd6a0' }}>{nextEvalLabel(d)}</span>
-                        )}
-                        <span className={`ml-1.5 ${isDark ? 'text-white/30' : 'text-gray-400'}`}>· 마지막 {formatTime(d.lastEvaluatedAt)}</span>
-                      </p>
+                      <StatusPill status={d.status} />
                     </div>
-                  </div>
 
-                  {/* 지표 요약 */}
-                  <div className="grid grid-cols-3 gap-2 mb-3">
-                    <div>
-                      <p className={`text-[11px] ${subText}`}>할당금</p>
-                      <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>{formatKRW(d.allocatedCash)}</p>
+                    {/* 메타 칩 */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <Chip>{INTERVAL_LABELS[d.interval] ?? d.interval}</Chip>
+                      <Chip>{isLive ? '실거래' : '모의'} {formatKRW(d.allocatedCash)}</Chip>
+                      {isLive && <Chip>{modeBadge}</Chip>}
+                      {d.assetType && <Chip>{d.assetType}</Chip>}
                     </div>
-                    <div>
-                      <p className={`text-[11px] ${subText}`}>실현손익</p>
-                      <p className={`text-sm font-semibold ${pnlPositive ? 'text-red-500' : pnlNegative ? 'text-blue-500' : (isDark ? 'text-white' : 'text-gray-800')}`}>
-                        {pnlPositive ? '+' : ''}{formatKRW(d.realizedPnl)}
-                      </p>
+
+                    {/* 평가손익 + 손익 스파크라인 */}
+                    <div style={{ display: 'grid', gridTemplateColumns: hasSpark ? '1fr 116px' : '1fr', gap: 14, alignItems: 'flex-end' }}>
+                      <div>
+                        <div style={{ fontSize: 10.5, letterSpacing: '.14em', color: 'var(--ci-ink3)', fontWeight: 600, marginBottom: 4 }}>{isLive ? '실현손익' : '모의 실현손익'}</div>
+                        <div className="font-mono" style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-.02em', color: dim ? 'var(--ci-ink2)' : (liveReturn > 0 ? UP : liveReturn < 0 ? DOWN : 'var(--ci-ink0)') }}>
+                          {liveReturn >= 0 ? '+' : ''}{liveReturn.toFixed(2)}%
+                        </div>
+                        <div className="font-mono" style={{ fontSize: 12, color: 'var(--ci-ink2)', marginTop: 2 }}>
+                          {pnlPositive ? '+' : ''}{formatKRW(d.realizedPnl)}
+                        </div>
+                      </div>
+                      {hasSpark && (
+                        <div style={{ paddingBottom: 4, opacity: dim ? 0.5 : 1 }}>
+                          <Spark data={d.equitySpark as number[]} up={liveReturn >= 0} idKey={d.id} />
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <p className={`text-[11px] ${subText}`}>거래수 / 승</p>
-                      <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>{d.tradeCount} / {d.winCount}</p>
+
+                    {/* 신호 행: 최근 평가 / 다음 평가 */}
+                    <div className="flex items-center justify-between gap-3" style={{ padding: '11px 13px', borderRadius: 11, background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
+                      <div className="min-w-0">
+                        <div style={{ fontSize: 10.5, letterSpacing: '.12em', color: 'var(--ci-ink3)', fontWeight: 600 }}>최근 신호</div>
+                        <div className="truncate" style={{ fontSize: 12.5, color: 'var(--ci-ink1)', marginTop: 3 }}>{signalText}</div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div style={{ fontSize: 10.5, letterSpacing: '.12em', color: 'var(--ci-ink3)', fontWeight: 600 }}>다음 평가</div>
+                        <div className="font-mono" style={{ fontSize: 12.5, color: dim ? 'var(--ci-ink2)' : GREEN, marginTop: 3 }}>{dim ? '—' : (nextLbl || '대기')}</div>
+                      </div>
                     </div>
-                  </div>
+
+                    {/* 체결 / 승 */}
+                    <div className="flex items-center gap-4" style={{ fontSize: 12, color: 'var(--ci-ink2)' }}>
+                      <span>거래 <b className="font-mono" style={{ color: 'var(--ci-ink0)', fontWeight: 700 }}>{d.tradeCount}</b>회</span>
+                      <span style={{ width: 1, height: 11, background: 'var(--ci-line-strong)' }} />
+                      <span>승 <b className="font-mono" style={{ color: 'var(--ci-ink0)', fontWeight: 700 }}>{d.winCount}</b>회{liveWinRate != null ? ` · 승률 ${liveWinRate.toFixed(0)}%` : ''}</span>
+                    </div>
 
                   {/* 일일 손실한도 */}
                   {d.dailyLossLimit != null && d.dailyLossLimit > 0 && (() => {
@@ -562,7 +707,7 @@ const AutoTradePage = () => {
                     const ratio = Math.min(1, Math.max(0, -today) / d.dailyLossLimit);
                     const near = ratio >= 0.8;
                     return (
-                      <div className="mb-3">
+                      <div>
                         <div className="flex items-center justify-between text-[11px] mb-1">
                           <span className={subText}>오늘 손익 / 일일 손실한도</span>
                           <span className={`font-semibold ${today < 0 ? 'text-blue-500' : today > 0 ? 'text-red-500' : (isDark ? 'text-slate-300' : 'text-gray-600')}`}>
@@ -576,28 +721,34 @@ const AutoTradePage = () => {
                     );
                   })()}
 
-                  {/* 포지션 */}
-                  <div className={`rounded-lg border divide-y ${divBorder} ${divideY} mb-3`}>
+                  {/* 포지션 (감시 중인 종목 — 보유/대기) */}
+                  {(d.positions || []).length > 0 && (
+                  <div className={`rounded-lg border divide-y ${divBorder} ${divideY}`}>
                     {(d.positions || []).map(p => (
                       <div key={p.symbol} className="flex items-center justify-between px-3 py-2 text-xs">
                         <span className={`font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>{p.symbol}</span>
                         <span className="flex items-center gap-2">
-                          {p.direction === 'LONG' ? (
+                          {p.direction === 'NONE' ? (
+                            <span className={subText}>대기</span>
+                          ) : (
                             <>
-                              <span className={`px-1.5 py-0.5 rounded ${isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-600'} font-bold`}>보유</span>
+                              <span className={`px-1.5 py-0.5 rounded font-bold ${
+                                p.direction === 'SHORT'
+                                  ? (isDark ? 'bg-blue-500/15 text-blue-400' : 'bg-blue-50 text-blue-600')
+                                  : (isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-600')
+                              }`}>{p.direction === 'SHORT' ? '숏 보유' : '보유'}</span>
                               <span className={subText}>{formatNum(p.quantity)}주 @ {formatNum(p.avgPrice, 2)}</span>
                             </>
-                          ) : (
-                            <span className={subText}>대기</span>
                           )}
                         </span>
                       </div>
                     ))}
                   </div>
+                  )}
 
                   {/* ── 백테스트 vs 실전 비교 ── */}
                   {matchedBt && (
-                    <div className={`mb-3 rounded-xl border overflow-hidden ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
+                    <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
                       <div className={`px-3 py-2 flex items-center gap-2 ${isDark ? 'bg-white/[0.03]' : 'bg-gray-50'}`}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                           <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
@@ -641,7 +792,7 @@ const AutoTradePage = () => {
                   )}
 
                   {/* ── 실행 로그 ── */}
-                  <div className={`mb-3 rounded-xl border overflow-hidden ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
+                  <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
                     <button
                       onClick={() => loadOrders(d.id)}
                       className={`w-full flex items-center justify-between px-3 py-2 text-[11px] font-semibold transition-colors ${isDark ? 'text-slate-300 hover:bg-white/[0.03]' : 'text-gray-600 hover:bg-gray-50'}`}
@@ -687,8 +838,10 @@ const AutoTradePage = () => {
                     )}
                   </div>
 
-                  {/* 액션 버튼 */}
-                  <div className="flex items-center gap-2">
+                  </div>
+
+                  {/* 액션 버튼 (카드 푸터) */}
+                  <div className="flex flex-wrap items-center gap-2" style={{ padding: '12px 14px', borderTop: '1px solid var(--ci-line)' }}>
                     {d.status === 'RUNNING' && (
                       <button disabled={busyId === d.id || killSwitch} onClick={() => evaluateNow(d)}
                         title={killSwitch ? '전역 킬스위치가 켜져 있어 평가할 수 없습니다.' : undefined}
@@ -696,8 +849,8 @@ const AutoTradePage = () => {
                         지금 평가
                       </button>
                     )}
-                    {/* 지금 청산 — 보유 포지션이 있을 때(신호/익절손절 안 기다리고 즉시 시장가 청산) */}
-                    {(d.positions || []).some(p => p.direction === 'LONG') && (
+                    {/* 지금 청산 — 보유 포지션(롱·숏)이 있을 때(신호/익절손절 안 기다리고 즉시 시장가 청산) */}
+                    {(d.positions || []).some(p => p.direction !== 'NONE') && (
                       <button disabled={busyId === d.id} onClick={() => closeNow(d)}
                         title="보유 포지션 전부 시장가 청산"
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-orange-500/15 text-orange-300 hover:bg-orange-500/25' : 'bg-orange-50 text-orange-700 hover:bg-orange-100'}`}>
@@ -721,8 +874,8 @@ const AutoTradePage = () => {
                         정지
                       </button>
                     )}
-                    {/* 삭제 — 가동 중이 아니고 + 보유 포지션이 없을 때만(있으면 먼저 '지금 청산') */}
-                    {d.status !== 'RUNNING' && !(d.positions || []).some(p => p.direction === 'LONG') && (
+                    {/* 삭제 — 가동 중이 아니고 + 열린 포지션(롱·숏)이 없을 때만(있으면 먼저 '지금 청산') */}
+                    {d.status !== 'RUNNING' && !(d.positions || []).some(p => p.direction !== 'NONE') && (
                       <button disabled={busyId === d.id} onClick={() => handleDelete(d)}
                         title="자동매매 카드 삭제 (거래소 포지션은 직접 정리 필요)"
                         className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-red-300' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-red-600'}`}>
@@ -820,9 +973,13 @@ const AutoTradePage = () => {
             className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--wa-card-bg,#0f1b2d)] border border-white/10' : 'bg-white'}`}
             onClick={e => e.stopPropagation()}
           >
-            <div className={`px-5 py-4 border-b ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
-              <h2 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-800'}`}>새 {modeLabel} 자동매매 시작</h2>
-              <p className={`text-xs mt-0.5 ${subText}`}>{isLive ? '실전 계좌(KIS·Bitget)에 직접 주문하는 실거래입니다 (실제 자금 ⚠️).' : '가상자금으로 안전하게 연습하는 모의 자동매매입니다. 실제 돈은 나가지 않습니다.'}</p>
+            <div style={{ position: 'relative', overflow: 'hidden', padding: '20px 24px', background: 'linear-gradient(105deg, #142647 0%, #1d3c7a 52%, #2c6fe6 100%)', borderBottom: '1px solid rgba(255,255,255,.14)' }}>
+              <span aria-hidden style={{ position: 'absolute', right: -30, top: -40, width: 150, height: 150, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,.14), transparent 70%)' }} />
+              <div style={{ position: 'relative' }}>
+                <div style={{ fontSize: 10.5, letterSpacing: '.2em', color: 'rgba(255,255,255,.8)', fontWeight: 700 }}>NEW AUTOPILOT</div>
+                <h2 style={{ margin: '5px 0 0', fontSize: 18, fontWeight: 700, color: 'rgba(255,255,255,.97)' }}>새 {modeLabel} 자동매매 시작</h2>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(255,255,255,.75)' }}>{isLive ? '실전 계좌(KIS·Bitget)에 직접 주문하는 실거래입니다 (실제 자금 ⚠️).' : '가상자금으로 안전하게 연습하는 모의 자동매매입니다. 실제 돈은 나가지 않습니다.'}</p>
+              </div>
             </div>
 
             <div className="px-5 py-4 space-y-4">
@@ -1022,8 +1179,12 @@ const AutoTradePage = () => {
                 취소
               </button>
               <button onClick={handleCreate} disabled={creating || !form.strategyId}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50 transition-colors ${primaryBtn}`}>
-                {creating ? '시작 중...' : '자동매매 시작'}
+                style={{ padding: '12px 22px', borderRadius: 13, fontFamily: 'inherit', fontSize: 14, fontWeight: 700, letterSpacing: '-.01em',
+                  cursor: creating || !form.strategyId ? 'default' : 'pointer', opacity: creating || !form.strategyId ? 0.5 : 1,
+                  color: 'rgba(255,255,255,.98)', border: '1px solid rgba(165,200,255,.6)',
+                  background: 'linear-gradient(180deg, #5690f2 0%, #3673e2 100%)',
+                  boxShadow: '0 14px 26px -14px rgba(43,110,230,.6), inset 0 1px 0 rgba(255,255,255,.4)' }}>
+                {creating ? '시작 중...' : '자동 항해 시작 →'}
               </button>
             </div>
           </div>

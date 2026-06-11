@@ -3,8 +3,11 @@ package com.project.whalearc.live.service;
 import com.project.whalearc.live.domain.LiveStrategyDeployment;
 import com.project.whalearc.live.domain.LiveStrategyDeployment.LivePosition;
 import com.project.whalearc.live.domain.LiveOrderLog;
+import com.project.whalearc.live.domain.LiveDeploymentEquitySnapshot;
 import com.project.whalearc.live.dto.CreateDeploymentRequest;
+import com.project.whalearc.live.dto.DeploymentResponse;
 import com.project.whalearc.live.repository.LiveOrderLogRepository;
+import com.project.whalearc.live.repository.LiveDeploymentEquitySnapshotRepository;
 import com.project.whalearc.live.repository.LiveStrategyDeploymentRepository;
 import com.project.whalearc.exchange.service.client.BitgetApiClient;
 import com.project.whalearc.market.dto.CandlestickResponse;
@@ -71,6 +74,7 @@ public class LiveStrategyService {
     private final BitgetApiClient bitgetApiClient;
     private final List<OrderGateway> orderGateways;
     private final LiveOrderLogRepository orderLogRepository;
+    private final LiveDeploymentEquitySnapshotRepository equitySnapshotRepository;
     private final UserLockRegistry userLockRegistry;
 
     /** 전역 킬스위치 — 켜지면 스케줄러가 모든 평가를 건너뛴다. */
@@ -285,6 +289,59 @@ public class LiveStrategyService {
         return deploymentRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
+    /** 유저의 배포 목록을 카드 표시용 확장 DTO(오늘 체결·최근 신호·스파크라인 포함)로 반환. */
+    public List<DeploymentResponse> getUserDeploymentResponses(String userId) {
+        return getUserDeployments(userId).stream().map(this::toResponse).toList();
+    }
+
+    /**
+     * 배포 1건을 카드 표시용 확장 DTO로 변환.
+     * 오늘 체결 수 + 최근 주문 + 일별 손익 스파크라인을 함께 채운다(모두 가벼운 DB 조회).
+     */
+    public DeploymentResponse toResponse(LiveStrategyDeployment d) {
+        int todayFills = (int) orderLogRepository
+                .countByDeploymentIdAndStatusAndCreatedAtGreaterThanEqual(d.getId(), "FILLED", startOfTodayKst());
+        LiveOrderLog last = orderLogRepository.findFirstByDeploymentIdOrderByCreatedAtDesc(d.getId()).orElse(null);
+        // 최신순 최근 N건을 받아 과거→현재로 뒤집어 스파크라인 y값으로
+        List<LiveDeploymentEquitySnapshot> recent = equitySnapshotRepository.findTop24ByDeploymentIdOrderByDateDesc(d.getId());
+        List<Double> spark = new ArrayList<>(recent.size());
+        for (int i = recent.size() - 1; i >= 0; i--) spark.add(recent.get(i).getPnlPct());
+        return DeploymentResponse.from(d, todayFills, last, spark);
+    }
+
+    /** 오늘(KST) 자정의 Instant — '오늘 체결' 집계 경계. */
+    private Instant startOfTodayKst() {
+        return LocalDate.now(KST).atStartOfDay(KST).toInstant();
+    }
+
+    /**
+     * 배포의 현재 평가손익률(%) = (실현 + 미실현) / 할당금 × 100.
+     * 미실현은 보유 포지션의 현재가로 산정(롱: 현재가−평균가, 숏: 평균가−현재가). FX는 KRW 환산.
+     * 현재가 조회가 발생하므로 일별 스냅샷 산정용으로만 쓰고 핫패스(목록 조회)에서는 호출하지 않는다.
+     */
+    public double currentPnlPct(LiveStrategyDeployment d) {
+        BigDecimal alloc = nz(d.getAllocatedCash());
+        if (alloc.compareTo(BigDecimal.ZERO) <= 0) return 0;
+        BigDecimal unreal = BigDecimal.ZERO;
+        for (LivePosition pos : d.getPositions()) {
+            LivePosition.Direction dir = pos.getDirection();
+            if (dir == null || dir == LivePosition.Direction.NONE) continue;
+            if (pos.getAvgPrice() == null || nz(pos.getQuantity()).compareTo(BigDecimal.ZERO) == 0) continue;
+            double price = latestPrice(d, pos);
+            if (price <= 0) continue;
+            BigDecimal cur = BigDecimal.valueOf(price);
+            BigDecimal pnlNative = dir == LivePosition.Direction.SHORT
+                    ? pos.getAvgPrice().subtract(cur).multiply(pos.getQuantity())
+                    : cur.subtract(pos.getAvgPrice()).multiply(pos.getQuantity());
+            BigDecimal pnlKrw = priceInForeign(d, pos.getAssetType())
+                    ? pnlNative.multiply(BigDecimal.valueOf(nativeKrwRate(d, pos.getAssetType())))
+                    : pnlNative;
+            unreal = unreal.add(pnlKrw);
+        }
+        BigDecimal total = nz(d.getRealizedPnl()).add(unreal);
+        return total.doubleValue() / alloc.doubleValue() * 100.0;
+    }
+
     public List<LiveStrategyDeployment> getRunningDeployments() {
         return deploymentRepository.findByStatus(LiveStrategyDeployment.Status.RUNNING);
     }
@@ -323,7 +380,7 @@ public class LiveStrategyService {
             // 보유 포지션이 있으면 삭제 거부 — 그냥 지우면 거래소 포지션이 추적 불가한 고아로 남는다.
             // '지금 청산'으로 닫은 뒤 삭제하게 한다(스테일 LONG도 지금청산이 상태 동기화로 풀어줌).
             boolean hasOpenPosition = d.getPositions() != null && d.getPositions().stream()
-                    .anyMatch(p -> p.getDirection() == LivePosition.Direction.LONG);
+                    .anyMatch(p -> p.getDirection() != LivePosition.Direction.NONE);   // 롱·숏 모두 — 열린 포지션 있으면 삭제 거부
             if (hasOpenPosition) {
                 throw new IllegalArgumentException(
                         "보유 중인 포지션이 있어 삭제할 수 없습니다. 먼저 '지금 청산'으로 포지션을 닫은 뒤 삭제하세요.");
@@ -331,8 +388,9 @@ public class LiveStrategyService {
             deploymentRepository.delete(d);
             try {
                 orderLogRepository.deleteByDeploymentId(deploymentId);
+                equitySnapshotRepository.deleteByDeploymentId(deploymentId);
             } catch (Exception e) {
-                log.warn("배포 삭제 시 주문 로그 정리 실패: deploymentId={}, error={}", deploymentId, e.getMessage());
+                log.warn("배포 삭제 시 주문 로그/스냅샷 정리 실패: deploymentId={}, error={}", deploymentId, e.getMessage());
             }
             log.info("라이브 배포 삭제: userId={}, deploymentId={}", userId, deploymentId);
         });
@@ -396,7 +454,7 @@ public class LiveStrategyService {
         OrderGateway gateway = resolveGateway(d.getBrokerType());
         boolean closedAny = false;
         for (LivePosition pos : d.getPositions()) {
-            if (pos.getDirection() != LivePosition.Direction.LONG) continue;
+            if (pos.getDirection() == LivePosition.Direction.NONE) continue;   // 롱·숏 모두 청산(무포지션만 스킵)
             try {
                 double price = latestPrice(d, pos);
                 if (price <= 0) {
@@ -404,7 +462,12 @@ public class LiveStrategyService {
                     continue;
                 }
                 // 멱등 barTime은 현재 초 — 같은 초 더블클릭은 디듀프, 청산 후 direction=NONE이라 재청산도 방지.
-                closePosition(d, pos, gateway, price, "MANUAL", Instant.now().getEpochSecond());
+                long barTime = Instant.now().getEpochSecond();
+                if (pos.getDirection() == LivePosition.Direction.SHORT) {
+                    closeShort(d, pos, gateway, price, "MANUAL", barTime);     // 숏=COVER(매수 환매)
+                } else {
+                    closePosition(d, pos, gateway, price, "MANUAL", barTime);  // 롱=SELL
+                }
                 closedAny = true;
             } catch (Exception e) {
                 log.error("지금 청산 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());

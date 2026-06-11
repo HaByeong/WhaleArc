@@ -1101,6 +1101,13 @@ body.whalearc-dark .wa-force-dark .text-slate-600 {
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-swim { animation: none; }
+  /* 멀미 민감 사용자 보호: 전역 애니메이션/트랜지션 최소화 (티커·셔머·부유·펄스 등) */
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* 사이드바 활성 nav 항목: 대각선 빛이 흐르는 sheen 효과 (목업 nav-active) */

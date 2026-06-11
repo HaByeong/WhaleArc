@@ -232,7 +232,7 @@ const LandingPage = () => {
               나만의 투자 전략을 잃을 걱정 없이 검증해보세요.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3.5">
-              <PrimaryBtn onClick={() => go('/dashboard')}>대시보드로 이동 →</PrimaryBtn>
+              <PrimaryBtn onClick={() => go('/dashboard')}>항해 시작하기 →</PrimaryBtn>
               <GhostBtn onClick={() => go('/virt/dashboard')}>처음이라면 모의투자부터 <VirtBadge /></GhostBtn>
             </div>
             <div className="mt-12 flex flex-wrap gap-6 text-white/50" style={{ fontSize: 12.5, letterSpacing: '.02em' }}>
@@ -353,7 +353,7 @@ const LandingPage = () => {
                   <div className="rounded-xl p-4" style={cardStyle}>
                     <div className="flex items-center justify-between">
                       <span className="text-[13px] font-semibold">골든크로스 추종 전략</span>
-                      <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ color: UP, background: 'rgba(239,77,77,.14)' }}>운항중</span>
+                      <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ color: '#3fd6a0', background: 'rgba(63,214,160,.14)' }}>운항중</span>
                     </div>
                     <p className="mt-2 font-mono text-[11px] text-white/45">투자 ₩2,997,002 · BTC·ETH·SOL</p>
                   </div>

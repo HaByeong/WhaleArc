@@ -12,4 +12,7 @@ public interface LiveOrderLogRepository extends MongoRepository<LiveOrderLog, St
 
     /** 배포의 체결 로그(최신순) — 상세 화면/감사용. */
     List<LiveOrderLog> findByDeploymentIdOrderByCreatedAtDesc(String deploymentId);
+
+    /** 배포 삭제 시 해당 배포의 주문 로그를 함께 정리. */
+    void deleteByDeploymentId(String deploymentId);
 }

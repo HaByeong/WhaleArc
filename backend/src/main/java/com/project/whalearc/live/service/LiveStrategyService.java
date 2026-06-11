@@ -6,6 +6,7 @@ import com.project.whalearc.live.domain.LiveOrderLog;
 import com.project.whalearc.live.dto.CreateDeploymentRequest;
 import com.project.whalearc.live.repository.LiveOrderLogRepository;
 import com.project.whalearc.live.repository.LiveStrategyDeploymentRepository;
+import com.project.whalearc.exchange.service.client.BitgetApiClient;
 import com.project.whalearc.market.dto.CandlestickResponse;
 import com.project.whalearc.market.service.CandlestickService;
 import com.project.whalearc.market.service.ExchangeRateService;
@@ -67,6 +68,7 @@ public class LiveStrategyService {
     private final ExchangeRateService exchangeRateService;
     private final UsEtfCatalog usEtfCatalog;
     private final UsStockPriceProvider usStockPriceProvider;
+    private final BitgetApiClient bitgetApiClient;
     private final List<OrderGateway> orderGateways;
     private final LiveOrderLogRepository orderLogRepository;
     private final UserLockRegistry userLockRegistry;
@@ -77,6 +79,14 @@ public class LiveStrategyService {
     /** 실거래(KIS) 1건당 할당 상한(KRW) — 팻핑거 방지 가드. 소액 검증 후 config로 상향. (null=미설정 시 무제한) */
     @org.springframework.beans.factory.annotation.Value("${live.broker.kis.max-allocated-krw:100000}")
     private BigDecimal kisMaxAllocatedKrw;
+
+    /** 실거래(Bitget) 1건당 할당 상한(KRW) — KIS와 동일한 팻핑거 방지 가드. */
+    @org.springframework.beans.factory.annotation.Value("${live.broker.bitget.max-allocated-krw:100000}")
+    private BigDecimal bitgetMaxAllocatedKrw;
+
+    /** 선물 레버리지 허용 상한 — 과도한 레버리지 방지(소액 검증 단계). config로 상향. */
+    @org.springframework.beans.factory.annotation.Value("${live.broker.bitget.max-leverage:10}")
+    private int bitgetMaxLeverage;
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -154,6 +164,49 @@ public class LiveStrategyService {
             throw new IllegalArgumentException(
                     "실거래(KIS) 1건당 할당 한도(" + kisMaxAllocatedKrw + "원)를 초과했습니다. 소액으로 먼저 검증한 뒤 한도를 올리세요.");
         }
+        // 실거래(Bitget) 1건당 할당 상한 가드 — KIS와 동일
+        if (brokerType == LiveStrategyDeployment.BrokerType.BITGET
+                && bitgetMaxAllocatedKrw != null
+                && allocatedCash.compareTo(bitgetMaxAllocatedKrw) > 0) {
+            throw new IllegalArgumentException(
+                    "실거래(Bitget) 1건당 할당 한도(" + bitgetMaxAllocatedKrw + "원)를 초과했습니다. 소액으로 먼저 검증한 뒤 한도를 올리세요.");
+        }
+
+        // 시장 종류/레버리지 — 선물(FUTURES)은 현재 Bitget만 지원. 레버리지는 [1, 상한] 범위.
+        LiveStrategyDeployment.MarketType marketType =
+                req.getMarketType() != null ? req.getMarketType() : LiveStrategyDeployment.MarketType.SPOT;
+        Integer leverage = req.getLeverage();
+        if (marketType == LiveStrategyDeployment.MarketType.FUTURES) {
+            if (brokerType != LiveStrategyDeployment.BrokerType.BITGET) {
+                throw new IllegalArgumentException("선물(FUTURES) 자동매매는 현재 Bitget만 지원합니다.");
+            }
+            int lev = leverage != null ? leverage : 1;
+            if (lev < 1 || lev > bitgetMaxLeverage) {
+                throw new IllegalArgumentException("레버리지는 1배 이상 " + bitgetMaxLeverage + "배 이하여야 합니다.");
+            }
+            leverage = lev;
+        } else {
+            leverage = null;   // 현물은 레버리지 무의미 — 저장하지 않음
+        }
+
+        // 독립 양방향/피라미딩 스냅샷 (숏 조건은 프리셋/직접 입력 모드에서만 전달됨)
+        List<Condition> shortEntryConditions = copyConditions(req.getShortEntryConditions());
+        List<Condition> shortExitConditions = copyConditions(req.getShortExitConditions());
+        boolean isLsf = "LONG_SHORT_FLAT".equals(req.getTradeDirection());
+        boolean hasShort = !shortEntryConditions.isEmpty();
+        if (hasShort) {
+            if (brokerType == LiveStrategyDeployment.BrokerType.KIS) {
+                throw new IllegalArgumentException("공매도(숏)는 주식(KIS)에서 지원하지 않습니다. 롱 전용으로 가동하세요.");
+            }
+            if (brokerType == LiveStrategyDeployment.BrokerType.BITGET
+                    && marketType != LiveStrategyDeployment.MarketType.FUTURES) {
+                throw new IllegalArgumentException("공매도(숏)는 Bitget 선물(FUTURES)에서만 가능합니다. 현물은 롱만 지원합니다.");
+            }
+        }
+        Integer maxUnits = req.getMaxUnits();
+        if (maxUnits != null && (maxUnits < 1 || maxUnits > 10)) {
+            throw new IllegalArgumentException("피라미딩 최대 유닛 수는 1~10 사이여야 합니다.");
+        }
 
         LiveStrategyDeployment d = new LiveStrategyDeployment();
         d.setUserId(userId);
@@ -162,10 +215,17 @@ public class LiveStrategyService {
         d.setIndicators(indicators);
         d.setEntryConditions(entryConditions);
         d.setExitConditions(exitConditions);
+        d.setShortEntryConditions(shortEntryConditions);
+        d.setShortExitConditions(shortExitConditions);
+        d.setTradeDirection(isLsf ? "LONG_SHORT_FLAT" : "LONG_ONLY");
+        d.setMaxUnits(maxUnits);
+        d.setPyramidMode(req.getPyramidMode());
         d.setTargetAssets(targetAssets);
         d.setInterval(req.getInterval() != null && !req.getInterval().isBlank() ? req.getInterval() : "1h");
         d.setAccountMode(accountMode);
         d.setBrokerType(brokerType);
+        d.setMarketType(marketType);
+        d.setLeverage(leverage);
         d.setStatus(LiveStrategyDeployment.Status.RUNNING);
         d.setAllocatedCash(allocatedCash);
         d.setStopLossPct(req.getStopLossPct());
@@ -248,6 +308,36 @@ public class LiveStrategyService {
         return transition(userId, deploymentId, LiveStrategyDeployment.Status.STOPPED);
     }
 
+    /**
+     * 배포 삭제. 가동 중(RUNNING)인 배포는 삭제 불가 — 먼저 정지/일시정지해야 한다(실행 중 평가와의 경합 방지).
+     * 주의: 정지된 배포라도 거래소에 열린 포지션은 청산되지 않으므로(앱은 추적만 중단), 잔여 포지션은
+     * 거래소에서 직접 정리해야 한다. 유저 락 안에서 평가와 직렬화한다.
+     */
+    public void deleteDeployment(String userId, String deploymentId) {
+        userLockRegistry.withLock(userId, () -> {
+            LiveStrategyDeployment d = deploymentRepository.findByIdAndUserId(deploymentId, userId)
+                    .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+            if (d.getStatus() == LiveStrategyDeployment.Status.RUNNING) {
+                throw new IllegalArgumentException("가동 중인 자동매매는 삭제할 수 없습니다. 먼저 정지(또는 일시정지)하세요.");
+            }
+            // 보유 포지션이 있으면 삭제 거부 — 그냥 지우면 거래소 포지션이 추적 불가한 고아로 남는다.
+            // '지금 청산'으로 닫은 뒤 삭제하게 한다(스테일 LONG도 지금청산이 상태 동기화로 풀어줌).
+            boolean hasOpenPosition = d.getPositions() != null && d.getPositions().stream()
+                    .anyMatch(p -> p.getDirection() == LivePosition.Direction.LONG);
+            if (hasOpenPosition) {
+                throw new IllegalArgumentException(
+                        "보유 중인 포지션이 있어 삭제할 수 없습니다. 먼저 '지금 청산'으로 포지션을 닫은 뒤 삭제하세요.");
+            }
+            deploymentRepository.delete(d);
+            try {
+                orderLogRepository.deleteByDeploymentId(deploymentId);
+            } catch (Exception e) {
+                log.warn("배포 삭제 시 주문 로그 정리 실패: deploymentId={}, error={}", deploymentId, e.getMessage());
+            }
+            log.info("라이브 배포 삭제: userId={}, deploymentId={}", userId, deploymentId);
+        });
+    }
+
     private LiveStrategyDeployment transition(String userId, String deploymentId, LiveStrategyDeployment.Status target) {
         // 유저 락 안에서 상태 전이 — 평가(evaluateDeployment)와 직렬화해 사용자의 stop/pause가
         // 동시 평가의 전체문서 save에 덮어써지지 않게 한다(lost-update 방지).
@@ -285,6 +375,65 @@ public class LiveStrategyService {
         }
         evaluateDeployment(d);
         return deploymentRepository.findById(deploymentId).orElse(d);
+    }
+
+    /**
+     * 수동 "지금 청산" — 배포의 모든 보유(LONG) 포지션을 즉시 시장가 청산한다. 신호/익절·손절을 기다리지
+     * 않고 사용자가 직접 닫는다. 유저 락 안에서 평가와 직렬화하고, DB 최신본을 읽어 처리한다.
+     * @return 청산 후 최신 배포. 보유 포지션이 없으면 예외.
+     */
+    public LiveStrategyDeployment closeNow(String userId, String deploymentId) {
+        deploymentRepository.findByIdAndUserId(deploymentId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+        userLockRegistry.withLock(userId, () -> doCloseNowLocked(deploymentId));
+        return deploymentRepository.findById(deploymentId)
+                .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+    }
+
+    private void doCloseNowLocked(String deploymentId) {
+        LiveStrategyDeployment d = deploymentRepository.findById(deploymentId).orElse(null);
+        if (d == null) return;
+        OrderGateway gateway = resolveGateway(d.getBrokerType());
+        boolean closedAny = false;
+        for (LivePosition pos : d.getPositions()) {
+            if (pos.getDirection() != LivePosition.Direction.LONG) continue;
+            try {
+                double price = latestPrice(d, pos);
+                if (price <= 0) {
+                    log.warn("지금 청산 스킵(현재가 0 이하): deploymentId={}, symbol={}", d.getId(), pos.getSymbol());
+                    continue;
+                }
+                // 멱등 barTime은 현재 초 — 같은 초 더블클릭은 디듀프, 청산 후 direction=NONE이라 재청산도 방지.
+                closePosition(d, pos, gateway, price, "MANUAL", Instant.now().getEpochSecond());
+                closedAny = true;
+            } catch (Exception e) {
+                log.error("지금 청산 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
+            }
+        }
+        if (!closedAny) {
+            throw new IllegalArgumentException("청산할 보유 포지션이 없습니다.");
+        }
+        d.setUpdatedAt(Instant.now());
+        deploymentRepository.save(d);
+    }
+
+    /** 포지션의 최신 현재가(네이티브 통화) — 브로커별 캔들 출처에서 마지막 종가. 청산가 산정용. */
+    private double latestPrice(LiveStrategyDeployment d, LivePosition pos) {
+        String assetType = pos.getAssetType();
+        List<CandlestickResponse> candles;
+        if (d.getBrokerType() == LiveStrategyDeployment.BrokerType.BITGET) {
+            String sym = BitgetApiClient.toSpotSymbol(pos.getSymbol());
+            candles = d.isFutures()
+                    ? bitgetApiClient.getFuturesCandles(sym, d.getInterval(), 2)
+                    : bitgetApiClient.getSpotCandles(sym, d.getInterval(), 2);
+        } else {
+            String interval = isStockLike(assetType) ? "1d" : d.getInterval();
+            candles = candlestickService.getCandlesticks(pos.getSymbol(), interval, assetType);
+        }
+        if (candles == null || candles.isEmpty()) return 0;
+        candles = new ArrayList<>(candles);
+        candles.sort(Comparator.comparingLong(CandlestickResponse::getTime));
+        return candles.get(candles.size() - 1).getClose();
     }
 
     /**
@@ -339,27 +488,50 @@ public class LiveStrategyService {
 
     private void evaluatePosition(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway) {
         String assetType = pos.getAssetType();
-        // 주식류(국내/미국/ETF)는 KIS가 일봉만 제공하므로 인터벌을 1d로 고정, 코인은 배포 인터벌 사용
+        // 시세 출처: Bitget 브로커면 Bitget 현물 캔들(USDT 기준), 그 외엔 기존 경로(주식=KIS 일봉, 코인=빗썸 KRW).
+        // 거래소와 신호 평가 시세를 일치시켜 가격 괴리를 막는다.
         String interval = isStockLike(assetType) ? "1d" : d.getInterval();
-        List<CandlestickResponse> candles = candlestickService.getCandlesticks(pos.getSymbol(), interval, assetType);
-        if (candles == null || candles.isEmpty()) return;
+        List<CandlestickResponse> candles;
+        if (d.getBrokerType() == LiveStrategyDeployment.BrokerType.BITGET) {
+            String bgSymbol = BitgetApiClient.toSpotSymbol(pos.getSymbol());   // BTCUSDT (현물·선물 공통)
+            candles = d.isFutures()
+                    ? bitgetApiClient.getFuturesCandles(bgSymbol, d.getInterval(), 200)
+                    : bitgetApiClient.getSpotCandles(bgSymbol, d.getInterval(), 200);
+        } else {
+            candles = candlestickService.getCandlesticks(pos.getSymbol(), interval, assetType);
+        }
+        if (candles == null || candles.isEmpty()) {
+            log.warn("라이브 평가 스킵(캔들 비어있음): deploymentId={}, symbol={}, assetType={}, interval={}, broker={} — 캔들조회 실패/한도 가능",
+                    d.getId(), pos.getSymbol(), assetType, interval, d.getBrokerType());
+            return;
+        }
         // 시간순(과거→현재) 정렬 보장 (코인 빗썸 응답은 정렬 미보장)
         candles = new ArrayList<>(candles);
         candles.sort(Comparator.comparingLong(CandlestickResponse::getTime));
 
         int idx = candles.size() - 1;
         double currentPrice = candles.get(idx).getClose();
-        if (currentPrice <= 0) return;
+        if (currentPrice <= 0) {
+            log.warn("라이브 평가 스킵(현재가 0 이하): deploymentId={}, symbol={}, close={}", d.getId(), pos.getSymbol(), currentPrice);
+            return;
+        }
+        log.info("라이브 평가: deploymentId={}, symbol={}, assetType={}, dir={}, price={}({})",
+                d.getId(), pos.getSymbol(), assetType, pos.getDirection(), currentPrice, priceInForeign(d, assetType) ? "FX" : "KRW");
 
         Map<String, double[]> iv = indicatorContextBuilder.calculateIndicators(
                 candles, d.getIndicators(), d.getEntryConditions(), d.getExitConditions());
 
         long barTime = candles.get(idx).getTime();   // 멱등키용 봉 타임스탬프
         if (pos.getDirection() == LivePosition.Direction.NONE) {
-            boolean entrySignal = signalEvaluator.evaluateConditions(
+            boolean longEntry = signalEvaluator.evaluateConditions(
                     d.getEntryConditions(), iv, idx, currentPrice, candles, 0, idx);
-            if (!entrySignal) return;
-            openPosition(d, pos, gateway, currentPrice, barTime);
+            if (longEntry) { openPosition(d, pos, gateway, currentPrice, barTime); return; }
+            // 독립 양방향: 롱 진입이 없을 때만 숏 진입 평가(롱 우선). 숏 조건 미설정이면 롱 전용으로 동작.
+            if (d.isLongShortFlat() && d.getShortEntryConditions() != null && !d.getShortEntryConditions().isEmpty()) {
+                boolean shortEntry = signalEvaluator.evaluateConditions(
+                        d.getShortEntryConditions(), iv, idx, currentPrice, candles, 0, idx);
+                if (shortEntry) openShort(d, pos, gateway, currentPrice, barTime);
+            }
         } else {
             managePosition(d, pos, gateway, iv, candles, idx, currentPrice, barTime);
         }
@@ -374,17 +546,21 @@ public class LiveStrategyService {
         if (orderLogRepository.existsByClientOrderId(clientOrderId)) return;
 
         String assetType = pos.getAssetType();
-        BigDecimal price = BigDecimal.valueOf(currentPrice);   // 네이티브 통화(미국주식/ETF는 USD, 그 외 KRW)
-        // allocatedCash는 KRW 기준. 미국주식/ETF는 가격이 USD이므로 KRW 환산 단가로 나눠 수량을 산정한다.
-        BigDecimal krwPerUnit = isUsd(assetType)
-                ? price.multiply(BigDecimal.valueOf(exchangeRateService.getUsdKrwRate()))
+        BigDecimal price = BigDecimal.valueOf(currentPrice);   // 네이티브 통화(미국주식/ETF=USD, Bitget 코인=USDT, 그 외 KRW)
+        // allocatedCash는 KRW 기준. 외화 표시 자산(미국주식/ETF=USD, Bitget=USDT)은 KRW 환산 단가로 나눠 수량을 산정한다.
+        BigDecimal krwPerUnit = priceInForeign(d, assetType)
+                ? price.multiply(BigDecimal.valueOf(nativeKrwRate(d, assetType)))
                 : price;
         if (krwPerUnit.compareTo(BigDecimal.ZERO) <= 0) {
             log.warn("라이브 매수 불가(환산 단가 0 이하): deploymentId={}, symbol={}, price={}", d.getId(), pos.getSymbol(), price);
             return;
         }
         int scale = isStockLike(assetType) ? 0 : 8;   // 주식류는 정수 수량, 코인은 소수 8자리
-        BigDecimal quantity = alloc.divide(krwPerUnit, scale, RoundingMode.DOWN);
+        // 1유닛 증거금 = 할당금 / 최대유닛(피라미딩). maxUnits=1이면 전액(기존과 동일).
+        // 선물은 레버리지만큼 노출(수량)을 키운다: 수량 = (1유닛증거금 × 레버리지) / 단가. 현물은 레버리지=1.
+        BigDecimal unitAlloc = alloc.divide(BigDecimal.valueOf(d.effectiveMaxUnits()), 10, RoundingMode.HALF_UP);
+        BigDecimal exposure = unitAlloc.multiply(BigDecimal.valueOf(d.effectiveLeverage()));
+        BigDecimal quantity = exposure.divide(krwPerUnit, scale, RoundingMode.DOWN);
         if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
             // 분배 금액이 1주(또는 최소 단위) 가격보다 작아 수량이 0이 됨 — 조용한 무동작 방지용 경고
             log.warn("라이브 매수 불가(분배 자금으로 수량 0): deploymentId={}, symbol={}, alloc={}, krwPerUnit={}",
@@ -392,9 +568,11 @@ public class LiveStrategyService {
             return;
         }
 
+        log.info("라이브 매수 시도: deploymentId={}, symbol={}, assetType={}, qty={}, price={}({}), broker={}",
+                d.getId(), pos.getSymbol(), assetType, quantity, price, priceInForeign(d, assetType) ? "FX" : "KRW", d.getBrokerType());
         Order order;
         try {
-            order = gateway.placeMarketOrder(d.getUserId(), pos.getSymbol(), pos.getSymbol(),
+            order = gateway.placeMarketOrder(d, d.getUserId(), pos.getSymbol(), pos.getSymbol(),
                     Order.OrderType.BUY, quantity, price, assetType, clientOrderId);
         } catch (Exception e) {
             log.warn("라이브 매수 주문 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
@@ -403,20 +581,134 @@ public class LiveStrategyService {
         if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return;
 
         BigDecimal fill = order.getFilledPrice() != null ? order.getFilledPrice() : price;
-        recordOrder(d, pos, "BUY", quantity, fill, clientOrderId, order.getId(), "ENTRY");
+        // 실제 체결수량이 있으면 그 값을 장부에 반영(Bitget 시장가 매수는 USDT 금액 주문이라 체결 base 수량이 산정값과 다를 수 있음)
+        BigDecimal filledQty = order.getFilledQuantity() != null && order.getFilledQuantity().compareTo(BigDecimal.ZERO) > 0
+                ? order.getFilledQuantity() : quantity;
+        recordOrder(d, pos, "BUY", filledQty, fill, clientOrderId, order.getId(), "ENTRY");
         pos.setDirection(LivePosition.Direction.LONG);
         pos.setAvgPrice(fill);
-        pos.setQuantity(quantity);
+        pos.setQuantity(filledQty);
         pos.setTrailRef(fill);
         pos.setStopLoss(d.getStopLossPct() != null ? pctBelow(fill, d.getStopLossPct()) : null);
+        pos.setUnits(1);
+        pos.setLastEntryPrice(fill);
         pos.setTradeCount(pos.getTradeCount() + 1);
         d.setTradeCount(d.getTradeCount() + 1);
 
         notifyTrade(d, "자동매매 매수 진입", pos.getSymbol(), fill, "ENTRY", null);
     }
 
+    /** 숏 개시(독립 양방향 전용). openPosition의 거울상 — side=SHORT, 손절선=상단(pctAbove). */
+    private void openShort(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway, double currentPrice, long barTime) {
+        BigDecimal alloc = pos.getAllocatedCash();
+        if (alloc == null || alloc.compareTo(BigDecimal.ZERO) <= 0) return;
+        String clientOrderId = clientOrderId(d, pos, "SHORT", barTime);
+        if (orderLogRepository.existsByClientOrderId(clientOrderId)) return;
+
+        String assetType = pos.getAssetType();
+        BigDecimal price = BigDecimal.valueOf(currentPrice);
+        BigDecimal krwPerUnit = priceInForeign(d, assetType) ? price.multiply(BigDecimal.valueOf(nativeKrwRate(d, assetType))) : price;
+        if (krwPerUnit.compareTo(BigDecimal.ZERO) <= 0) return;
+        int scale = isStockLike(assetType) ? 0 : 8;
+        BigDecimal unitAlloc = alloc.divide(BigDecimal.valueOf(d.effectiveMaxUnits()), 10, RoundingMode.HALF_UP);
+        BigDecimal exposure = unitAlloc.multiply(BigDecimal.valueOf(d.effectiveLeverage()));
+        BigDecimal quantity = exposure.divide(krwPerUnit, scale, RoundingMode.DOWN);
+        if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("라이브 숏 불가(분배 자금으로 수량 0): deploymentId={}, symbol={}", d.getId(), pos.getSymbol());
+            return;
+        }
+        log.info("라이브 숏 진입 시도: deploymentId={}, symbol={}, qty={}, price={}, broker={}",
+                d.getId(), pos.getSymbol(), quantity, price, d.getBrokerType());
+        Order order;
+        try {
+            order = gateway.placeMarketOrder(d, d.getUserId(), pos.getSymbol(), pos.getSymbol(),
+                    Order.OrderType.SHORT, quantity, price, assetType, clientOrderId);
+        } catch (Exception e) {
+            log.warn("라이브 숏 주문 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
+            return;
+        }
+        if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return;
+
+        BigDecimal fill = order.getFilledPrice() != null ? order.getFilledPrice() : price;
+        BigDecimal filledQty = order.getFilledQuantity() != null && order.getFilledQuantity().compareTo(BigDecimal.ZERO) > 0
+                ? order.getFilledQuantity() : quantity;
+        recordOrder(d, pos, "SHORT", filledQty, fill, clientOrderId, order.getId(), "ENTRY");
+        pos.setDirection(LivePosition.Direction.SHORT);
+        pos.setAvgPrice(fill);
+        pos.setQuantity(filledQty);
+        pos.setTrailRef(fill);
+        pos.setStopLoss(d.getStopLossPct() != null ? pctAbove(fill, d.getStopLossPct()) : null);
+        pos.setUnits(1);
+        pos.setLastEntryPrice(fill);
+        pos.setTradeCount(pos.getTradeCount() + 1);
+        d.setTradeCount(d.getTradeCount() + 1);
+        notifyTrade(d, "자동매매 숏 진입", pos.getSymbol(), fill, "ENTRY", null);
+    }
+
+    /** 추가 진입(피라미딩) — 롱/숏 공통. 가중평균가·수량·유닛·lastEntryPrice 갱신. */
+    private void addUnit(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway, double currentPrice, long barTime, boolean isLong) {
+        BigDecimal alloc = pos.getAllocatedCash();
+        if (alloc == null || alloc.compareTo(BigDecimal.ZERO) <= 0) return;
+        String side = isLong ? "BUY" : "SHORT";
+        String clientOrderId = clientOrderId(d, pos, side + "_ADD" + pos.getUnits(), barTime);
+        if (orderLogRepository.existsByClientOrderId(clientOrderId)) return;
+
+        String assetType = pos.getAssetType();
+        BigDecimal price = BigDecimal.valueOf(currentPrice);
+        BigDecimal krwPerUnit = priceInForeign(d, assetType) ? price.multiply(BigDecimal.valueOf(nativeKrwRate(d, assetType))) : price;
+        if (krwPerUnit.compareTo(BigDecimal.ZERO) <= 0) return;
+        int scale = isStockLike(assetType) ? 0 : 8;
+        BigDecimal unitAlloc = alloc.divide(BigDecimal.valueOf(d.effectiveMaxUnits()), 10, RoundingMode.HALF_UP);
+        BigDecimal exposure = unitAlloc.multiply(BigDecimal.valueOf(d.effectiveLeverage()));
+        BigDecimal quantity = exposure.divide(krwPerUnit, scale, RoundingMode.DOWN);
+        if (quantity.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        Order order;
+        try {
+            order = gateway.placeMarketOrder(d, d.getUserId(), pos.getSymbol(), pos.getSymbol(),
+                    isLong ? Order.OrderType.BUY : Order.OrderType.SHORT, quantity, price, assetType, clientOrderId);
+        } catch (Exception e) {
+            log.warn("라이브 피라미딩 주문 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
+            return;
+        }
+        if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return;
+
+        BigDecimal fill = order.getFilledPrice() != null ? order.getFilledPrice() : price;
+        BigDecimal filledQty = order.getFilledQuantity() != null && order.getFilledQuantity().compareTo(BigDecimal.ZERO) > 0
+                ? order.getFilledQuantity() : quantity;
+        recordOrder(d, pos, side, filledQty, fill, clientOrderId, order.getId(), "PYRAMID");
+        BigDecimal oldQty = nz(pos.getQuantity());
+        BigDecimal newQty = oldQty.add(filledQty);
+        BigDecimal oldAvg = pos.getAvgPrice() != null ? pos.getAvgPrice() : fill;
+        BigDecimal newAvg = newQty.compareTo(BigDecimal.ZERO) > 0
+                ? oldAvg.multiply(oldQty).add(fill.multiply(filledQty)).divide(newQty, 10, RoundingMode.HALF_UP)
+                : fill;
+        pos.setQuantity(newQty);
+        pos.setAvgPrice(newAvg);
+        pos.setUnits(pos.getUnits() + 1);
+        pos.setLastEntryPrice(fill);
+        pos.setTradeCount(pos.getTradeCount() + 1);
+        d.setTradeCount(d.getTradeCount() + 1);
+        notifyTrade(d, "자동매매 추가 진입 (피라미딩 " + pos.getUnits() + "유닛)", pos.getSymbol(), fill, "ENTRY", null);
+    }
+
+    /** +ATR 피라미딩 트리거: 직전 진입가 대비 ATR 이상 유리하게 움직였는지. */
+    private boolean atrTrigger(Map<String, double[]> iv, int idx, BigDecimal lastEntryPrice, double currentPrice, boolean isLong) {
+        if (lastEntryPrice == null) return false;
+        double[] atrArr = iv.get("ATR");
+        if (atrArr == null || idx < 0 || idx >= atrArr.length) return false;
+        double atr = atrArr[idx];
+        if (Double.isNaN(atr) || atr <= 0) return false;
+        double last = lastEntryPrice.doubleValue();
+        return isLong ? currentPrice >= last + atr : currentPrice <= last - atr;
+    }
+
     private void managePosition(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
                                 Map<String, double[]> iv, List<CandlestickResponse> candles, int idx, double currentPrice, long barTime) {
+        if (pos.getDirection() == LivePosition.Direction.SHORT) {
+            manageShort(d, pos, gateway, iv, candles, idx, currentPrice, barTime);
+            return;
+        }
         // 트레일링 스탑 갱신
         if (d.getTrailingStopPct() != null) {
             BigDecimal price = BigDecimal.valueOf(currentPrice);
@@ -436,10 +728,99 @@ public class LiveStrategyService {
         boolean exitSignal = signalEvaluator.evaluateConditions(
                 d.getExitConditions(), iv, idx, currentPrice, candles, 0, idx);
 
-        if (!(stopHit || takeProfitHit || exitSignal)) return;
+        if (!(stopHit || takeProfitHit || exitSignal)) {
+            // 청산 신호가 없으면 피라미딩(추가 진입) 검토
+            if (d.isPyramiding() && pos.getUnits() < d.effectiveMaxUnits()) {
+                boolean trigger = "ATR".equalsIgnoreCase(d.getPyramidMode())
+                        ? atrTrigger(iv, idx, pos.getLastEntryPrice(), currentPrice, true)
+                        : signalEvaluator.evaluateConditions(d.getEntryConditions(), iv, idx, currentPrice, candles, 0, idx);
+                if (trigger) addUnit(d, pos, gateway, currentPrice, barTime, true);
+            }
+            return;
+        }
 
         String reason = stopHit ? "STOP" : takeProfitHit ? "TAKE_PROFIT" : "EXIT_SIGNAL";
         closePosition(d, pos, gateway, currentPrice, reason, barTime);
+    }
+
+    /** 숏 포지션 관리(독립 양방향). managePosition의 거울상: 손절선=상단, 트레일링=최저가 추적, 익절=하락. */
+    private void manageShort(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
+                             Map<String, double[]> iv, List<CandlestickResponse> candles, int idx, double currentPrice, long barTime) {
+        if (d.getTrailingStopPct() != null) {
+            BigDecimal price = BigDecimal.valueOf(currentPrice);
+            if (pos.getTrailRef() == null || price.compareTo(pos.getTrailRef()) < 0) {
+                pos.setTrailRef(price);   // 숏은 최저가를 추적
+            }
+            BigDecimal trailStop = pctAbove(pos.getTrailRef(), d.getTrailingStopPct());
+            if (pos.getStopLoss() == null || trailStop.compareTo(pos.getStopLoss()) < 0) {
+                pos.setStopLoss(trailStop);   // 상단으로 내려오는 손절선
+            }
+        }
+
+        double avg = pos.getAvgPrice() != null ? pos.getAvgPrice().doubleValue() : currentPrice;
+        boolean stopHit = pos.getStopLoss() != null && currentPrice >= pos.getStopLoss().doubleValue();
+        boolean takeProfitHit = d.getTakeProfitPct() != null
+                && currentPrice <= avg * (1 - d.getTakeProfitPct().doubleValue() / 100.0);
+        boolean exitSignal = d.getShortExitConditions() != null && !d.getShortExitConditions().isEmpty()
+                && signalEvaluator.evaluateConditions(d.getShortExitConditions(), iv, idx, currentPrice, candles, 0, idx);
+
+        if (!(stopHit || takeProfitHit || exitSignal)) {
+            if (d.isPyramiding() && pos.getUnits() < d.effectiveMaxUnits()) {
+                boolean trigger = "ATR".equalsIgnoreCase(d.getPyramidMode())
+                        ? atrTrigger(iv, idx, pos.getLastEntryPrice(), currentPrice, false)
+                        : (d.getShortEntryConditions() != null && !d.getShortEntryConditions().isEmpty()
+                            && signalEvaluator.evaluateConditions(d.getShortEntryConditions(), iv, idx, currentPrice, candles, 0, idx));
+                if (trigger) addUnit(d, pos, gateway, currentPrice, barTime, false);
+            }
+            return;
+        }
+
+        String reason = stopHit ? "STOP" : takeProfitHit ? "TAKE_PROFIT" : "EXIT_SIGNAL";
+        closeShort(d, pos, gateway, currentPrice, reason, barTime);
+    }
+
+    /** 숏 청산(COVER). closePosition의 거울상 — PnL = (평균진입가 - 청산가) × 수량. */
+    private void closeShort(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
+                            double currentPrice, String reason, long barTime) {
+        BigDecimal quantity = pos.getQuantity();
+        if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
+            resetPosition(pos);
+            return;
+        }
+        String clientOrderId = clientOrderId(d, pos, "COVER", barTime);
+        if (orderLogRepository.existsByClientOrderId(clientOrderId)) return;
+
+        Order order;
+        try {
+            order = gateway.placeMarketOrder(d, d.getUserId(), pos.getSymbol(), pos.getSymbol(),
+                    Order.OrderType.COVER, quantity, BigDecimal.valueOf(currentPrice), pos.getAssetType(), clientOrderId);
+        } catch (Exception e) {
+            log.warn("라이브 숏 청산(COVER) 주문 실패: deploymentId={}, symbol={}, reason={}, error={}",
+                    d.getId(), pos.getSymbol(), reason, e.getMessage());
+            return;
+        }
+        if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return;
+
+        BigDecimal fill = order.getFilledPrice() != null ? order.getFilledPrice() : BigDecimal.valueOf(currentPrice);
+        recordOrder(d, pos, "COVER", quantity, fill, clientOrderId, order.getId(), reason);
+        // 숏 손익 = (진입가 - 청산가) × 수량 (가격 하락 시 이익)
+        BigDecimal pnlNative = pos.getAvgPrice() != null
+                ? pos.getAvgPrice().subtract(fill).multiply(quantity)
+                : BigDecimal.ZERO;
+        BigDecimal pnl = priceInForeign(d, pos.getAssetType())
+                ? pnlNative.multiply(BigDecimal.valueOf(nativeKrwRate(d, pos.getAssetType())))
+                : pnlNative;
+
+        pos.setRealizedPnl(nz(pos.getRealizedPnl()).add(pnl));
+        pos.setTradeCount(pos.getTradeCount() + 1);
+        if (pnl.compareTo(BigDecimal.ZERO) > 0) pos.setWinCount(pos.getWinCount() + 1);
+        d.setRealizedPnl(nz(d.getRealizedPnl()).add(pnl));
+        d.setTodayRealizedPnl(nz(d.getTodayRealizedPnl()).add(pnl));
+        d.setTradeCount(d.getTradeCount() + 1);
+        if (pnl.compareTo(BigDecimal.ZERO) > 0) d.setWinCount(d.getWinCount() + 1);
+
+        resetPosition(pos);
+        notifyTrade(d, "자동매매 숏 청산 (" + reason + ")", pos.getSymbol(), fill, "EXIT", pnl);
     }
 
     private void closePosition(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
@@ -456,7 +837,7 @@ public class LiveStrategyService {
 
         Order order;
         try {
-            order = gateway.placeMarketOrder(d.getUserId(), pos.getSymbol(), pos.getSymbol(),
+            order = gateway.placeMarketOrder(d, d.getUserId(), pos.getSymbol(), pos.getSymbol(),
                     Order.OrderType.SELL, quantity, BigDecimal.valueOf(currentPrice), pos.getAssetType(), clientOrderId);
         } catch (Exception e) {
             log.warn("라이브 매도 주문 실패: deploymentId={}, symbol={}, reason={}, error={}",
@@ -470,9 +851,9 @@ public class LiveStrategyService {
         BigDecimal pnlNative = pos.getAvgPrice() != null
                 ? fill.subtract(pos.getAvgPrice()).multiply(quantity)
                 : BigDecimal.ZERO;
-        // 손익은 KRW로 통일(미국주식/ETF는 USD→KRW 환산). avgPrice/fill은 네이티브 통화.
-        BigDecimal pnl = isUsd(pos.getAssetType())
-                ? pnlNative.multiply(BigDecimal.valueOf(exchangeRateService.getUsdKrwRate()))
+        // 손익은 KRW로 통일(외화 표시 자산은 환산). avgPrice/fill은 네이티브 통화(미국=USD, Bitget=USDT).
+        BigDecimal pnl = priceInForeign(d, pos.getAssetType())
+                ? pnlNative.multiply(BigDecimal.valueOf(nativeKrwRate(d, pos.getAssetType())))
                 : pnlNative;
 
         pos.setRealizedPnl(nz(pos.getRealizedPnl()).add(pnl));
@@ -494,6 +875,8 @@ public class LiveStrategyService {
         pos.setQuantity(BigDecimal.ZERO);
         pos.setStopLoss(null);
         pos.setTrailRef(null);
+        pos.setUnits(0);
+        pos.setLastEntryPrice(null);
     }
 
     // ── 헬퍼 ──────────────────────────────────────────────────────────
@@ -582,6 +965,22 @@ public class LiveStrategyService {
     }
 
     /**
+     * 현재가가 외화 표시(KRW 환산 필요)인지. 미국주식/ETF=USD, Bitget 코인=USDT 캔들이라 외화.
+     * MOCK 코인(빗썸 KRW 캔들)은 외화가 아니다 — 브로커까지 봐야 통화를 정확히 판별할 수 있다.
+     */
+    private boolean priceInForeign(LiveStrategyDeployment d, String assetType) {
+        return isUsd(assetType) || d.getBrokerType() == LiveStrategyDeployment.BrokerType.BITGET;
+    }
+
+    /** 네이티브(외화)→KRW 환율. 미국주식/ETF=USD/KRW, Bitget 코인=USDT/KRW. */
+    private double nativeKrwRate(LiveStrategyDeployment d, String assetType) {
+        if (d.getBrokerType() == LiveStrategyDeployment.BrokerType.BITGET) {
+            return bitgetApiClient.getUsdtKrwRate();
+        }
+        return exchangeRateService.getUsdKrwRate();
+    }
+
+    /**
      * 심볼 1개의 자산군을 판별한다 (백테스트 BacktestService와 동일 규칙):
      * 6자리 숫자→국내주식, ETF 카탈로그 등록→ETF, 미국주식 목록 존재→미국주식, 그 외→코인.
      */
@@ -596,6 +995,11 @@ public class LiveStrategyService {
     private static BigDecimal pctBelow(BigDecimal base, BigDecimal pct) {
         // base * (1 - pct/100)
         return base.multiply(BigDecimal.ONE.subtract(pct.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP)));
+    }
+
+    private static BigDecimal pctAbove(BigDecimal base, BigDecimal pct) {
+        // base * (1 + pct/100) — 숏 손절선(상단)
+        return base.multiply(BigDecimal.ONE.add(pct.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP)));
     }
 
     private static BigDecimal nz(BigDecimal v) {

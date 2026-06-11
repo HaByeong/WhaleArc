@@ -45,9 +45,12 @@ public class KisOrderGateway implements OrderGateway {
     }
 
     @Override
-    public Order placeMarketOrder(String userId, String stockCode, String stockName,
+    public Order placeMarketOrder(LiveStrategyDeployment deployment, String userId, String stockCode, String stockName,
                                   Order.OrderType side, BigDecimal quantity, BigDecimal price,
                                   String assetType, String clientOrderId) {
+        if (side == Order.OrderType.SHORT || side == Order.OrderType.COVER) {
+            throw new IllegalStateException("KIS(주식)는 공매도(숏)를 지원하지 않습니다. 롱 전용 전략만 가동하세요.");
+        }
         KisPaperCredential cred = credentialResolver.resolve(userId);
         KisOrderResult result;
         if (isUsd(assetType)) {

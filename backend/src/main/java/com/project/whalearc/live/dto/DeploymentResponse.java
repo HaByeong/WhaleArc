@@ -22,6 +22,8 @@ public class DeploymentResponse {
     private final String interval;
     private final String accountMode;
     private final String brokerType;
+    private final String marketType;
+    private final Integer leverage;
     private final String status;
     private final BigDecimal allocatedCash;
     private final BigDecimal stopLossPct;
@@ -45,6 +47,8 @@ public class DeploymentResponse {
         this.interval = d.getInterval();
         this.accountMode = d.getAccountMode() != null ? d.getAccountMode().name() : null;
         this.brokerType = d.getBrokerType() != null ? d.getBrokerType().name() : null;
+        this.marketType = d.getMarketType() != null ? d.getMarketType().name() : null;
+        this.leverage = d.getLeverage();
         this.status = d.getStatus() != null ? d.getStatus().name() : null;
         this.allocatedCash = d.getAllocatedCash();
         this.stopLossPct = d.getStopLossPct();

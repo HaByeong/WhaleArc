@@ -146,4 +146,57 @@ class IndicatorCalculatorTest {
         assertEquals(1.25, atr[1], EPS);
         for (int i = 1; i < atr.length; i++) assertTrue(atr[i] > 0, "ATR은 양수");
     }
+
+    // ── 돈치안 채널 (터틀 진입/청산) ──
+    @Test
+    void donchian_excludesCurrentBar_shiftedHighLow() {
+        double[] highs = {10, 12, 11, 15, 13};
+        double[] lows = {8, 9, 7, 10, 6};
+        double[] dHigh = IndicatorCalculator.donchianHigh(highs, 2);
+        double[] dLow = IndicatorCalculator.donchianLow(lows, 2);
+        // 앞 period개는 NaN (현재봉 미포함, shift(1))
+        assertTrue(Double.isNaN(dHigh[0]) && Double.isNaN(dHigh[1]), "워밍업 NaN");
+        // idx2: 직전 2봉(idx0,1) 최고가 max(10,12)=12 / 최저가 min(8,9)=8
+        assertEquals(12.0, dHigh[2], EPS);
+        assertEquals(8.0, dLow[2], EPS);
+        // idx3: 직전 2봉(idx1,2) max(12,11)=12 / min(9,7)=7
+        assertEquals(12.0, dHigh[3], EPS);
+        assertEquals(7.0, dLow[3], EPS);
+        // idx4: 직전 2봉(idx2,3) max(11,15)=15 / min(7,10)=7
+        assertEquals(15.0, dHigh[4], EPS);
+        assertEquals(7.0, dLow[4], EPS);
+    }
+
+    @Test
+    void donchian_breakout_currentCloseCanExceedChannel() {
+        // 현재봉을 제외하므로, 신고가 돌파 봉의 종가가 채널 상단보다 클 수 있어야 한다(돌파 신호 성립)
+        double[] highs = {10, 10, 10, 20};
+        double[] dHigh = IndicatorCalculator.donchianHigh(highs, 3);
+        assertEquals(10.0, dHigh[3], EPS); // 직전 3봉 최고가 10 → 종가 20이면 돌파
+    }
+
+    // ── ADX (터틀 추세 강도 필터) ──
+    @Test
+    void adx_warmupNaN_andBounded0to100() {
+        // 강한 단일 추세 데이터
+        int n = 40;
+        double[] highs = new double[n], lows = new double[n], closes = new double[n];
+        for (int i = 0; i < n; i++) { highs[i] = 10 + i; lows[i] = 9 + i; closes[i] = 9.5 + i; }
+        double[] adx = IndicatorCalculator.adx(highs, lows, closes, 14);
+        for (int i = 0; i < 14; i++) assertTrue(Double.isNaN(adx[i]), "첫 period개는 NaN (idx " + i + ")");
+        for (int i = 14; i < n; i++) {
+            assertFalse(Double.isNaN(adx[i]), "period 이후 값 존재 (idx " + i + ")");
+            assertTrue(adx[i] >= 0 && adx[i] <= 100, "ADX는 0~100 (idx " + i + " = " + adx[i] + ")");
+        }
+    }
+
+    @Test
+    void adx_strongTrend_isHigh() {
+        // 일관된 상승 추세 → ADX가 추세 강도 임계(15)를 충분히 넘겨야 함
+        int n = 60;
+        double[] highs = new double[n], lows = new double[n], closes = new double[n];
+        for (int i = 0; i < n; i++) { highs[i] = 10 + 2.0 * i; lows[i] = 9 + 2.0 * i; closes[i] = 9.5 + 2.0 * i; }
+        double[] adx = IndicatorCalculator.adx(highs, lows, closes, 14);
+        assertTrue(adx[n - 1] > 15, "강한 추세에서 ADX > 15 (= " + adx[n - 1] + ")");
+    }
 }

@@ -27,6 +27,15 @@ public class CreateDeploymentRequest {
     private List<Indicator> indicators;
     private List<Condition> entryConditions;
     private List<Condition> exitConditions;
+    // 독립 양방향(LONG_SHORT_FLAT) 전용 숏 조건 (선택)
+    private List<Condition> shortEntryConditions;
+    private List<Condition> shortExitConditions;
+
+    // 매매 방향: null/LONG_ONLY(롱만) / LONG_SHORT_FLAT(독립 롱+숏+flat)
+    private String tradeDirection;
+    // 피라미딩 최대 유닛 수 (null/1=단일). 트리거: ATR / SIGNAL.
+    private Integer maxUnits;
+    private String pyramidMode;
 
     private List<String> targetAssets;
     private String assetType;
@@ -36,6 +45,10 @@ public class CreateDeploymentRequest {
 
     private LiveStrategyDeployment.AccountMode accountMode;  // null이면 PAPER
     private LiveStrategyDeployment.BrokerType brokerType;    // null이면 MOCK
+
+    // 거래 시장/레버리지 (Bitget 전용) — null이면 SPOT, leverage는 선물에서만 사용
+    private LiveStrategyDeployment.MarketType marketType;
+    private Integer leverage;
 
     // 리스크 파라미터 (퍼센트, 선택)
     private BigDecimal stopLossPct;

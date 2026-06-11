@@ -82,6 +82,17 @@ public class LiveStrategyController {
         }
     }
 
+    @PostMapping("/deployments/{deploymentId}/close")
+    public ResponseEntity<ApiResponse<DeploymentResponse>> closeNow(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable String deploymentId) {
+        try {
+            LiveStrategyDeployment d = liveStrategyService.closeNow(jwt.getSubject(), deploymentId);
+            return ResponseEntity.ok(ApiResponse.ok(DeploymentResponse.from(d)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
     @PostMapping("/deployments/{deploymentId}/start")
     public ResponseEntity<ApiResponse<DeploymentResponse>> start(
             @AuthenticationPrincipal Jwt jwt, @PathVariable String deploymentId) {
@@ -98,6 +109,17 @@ public class LiveStrategyController {
     public ResponseEntity<ApiResponse<DeploymentResponse>> stop(
             @AuthenticationPrincipal Jwt jwt, @PathVariable String deploymentId) {
         return changeStatus(jwt, deploymentId, "stop");
+    }
+
+    @DeleteMapping("/deployments/{deploymentId}")
+    public ResponseEntity<ApiResponse<Void>> deleteDeployment(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable String deploymentId) {
+        try {
+            liveStrategyService.deleteDeployment(jwt.getSubject(), deploymentId);
+            return ResponseEntity.ok(ApiResponse.<Void>ok(null));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
     }
 
     private ResponseEntity<ApiResponse<DeploymentResponse>> changeStatus(Jwt jwt, String deploymentId, String action) {

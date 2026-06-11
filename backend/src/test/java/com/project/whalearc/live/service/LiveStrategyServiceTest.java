@@ -1,5 +1,6 @@
 package com.project.whalearc.live.service;
 
+import com.project.whalearc.exchange.service.client.BitgetApiClient;
 import com.project.whalearc.live.domain.LiveStrategyDeployment;
 import com.project.whalearc.live.domain.LiveStrategyDeployment.LivePosition;
 import com.project.whalearc.live.dto.CreateDeploymentRequest;
@@ -59,7 +60,7 @@ class LiveStrategyServiceTest {
         @Override public boolean supports(LiveStrategyDeployment.BrokerType b) {
             return b == LiveStrategyDeployment.BrokerType.MOCK;
         }
-        @Override public Order placeMarketOrder(String userId, String code, String name,
+        @Override public Order placeMarketOrder(LiveStrategyDeployment deployment, String userId, String code, String name,
                                                 Order.OrderType side, BigDecimal quantity, BigDecimal price,
                                                 String assetType, String clientOrderId) {
             Order o = new Order();
@@ -87,6 +88,7 @@ class LiveStrategyServiceTest {
         UsEtfCatalog usEtfCatalog = mock(UsEtfCatalog.class);
         UsStockPriceProvider usStockPriceProvider = mock(UsStockPriceProvider.class);
         LiveOrderLogRepository orderLogRepo = mock(LiveOrderLogRepository.class);
+        BitgetApiClient bitgetApiClient = mock(BitgetApiClient.class);
         gateway = new RecordingGateway();
         store = new java.util.HashMap<>();
 
@@ -114,7 +116,8 @@ class LiveStrategyServiceTest {
                 deploymentRepo, strategyRepo, candlestickService,
                 new IndicatorContextBuilder(), new SignalEvaluator(),
                 notificationService, portfolioService,
-                exchangeRateService, usEtfCatalog, usStockPriceProvider, List.of(gateway), orderLogRepo,
+                exchangeRateService, usEtfCatalog, usStockPriceProvider,
+                bitgetApiClient, List.of(gateway), orderLogRepo,
                 new UserLockRegistry());
     }
 

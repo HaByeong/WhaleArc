@@ -484,7 +484,7 @@ const VirtDashboard = () => {
   const [hasDeployment, setHasDeployment] = useState(false);
   const dismissOnboard = () => {
     setOnboardDismissed(true);
-    try { localStorage.setItem('wa_onboarding', '1'); } catch {}
+    try { localStorage.setItem('wa_onboarding', '1'); } catch { /* localStorage 미지원 시 무시 */ }
   };
   const isPreview = import.meta.env.DEV && window.location.pathname.startsWith('/preview');
 

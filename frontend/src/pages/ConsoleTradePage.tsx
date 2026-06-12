@@ -12,7 +12,8 @@ import { Term } from '../components/GlossaryTerm';
 import EmotionMirrorModal from '../components/EmotionMirrorModal';
 import { mirrorService, type UserChoice } from '../services/mirrorService';
 
-const PANIC_THRESHOLD = -5;   // 당일 등락률 ≤ −5%면 급락 공포 매도 인터셉트(감정 거울)
+const PANIC_THRESHOLD = -5;   // 당일 등락률 ≤ −5%면 급락 공포 매도 인터셉트(마음 거울)
+const FOMO_THRESHOLD = 15;    // 미보유 자산 당일 +15%↑ 매수면 급등 탐욕(FOMO) 인터셉트
 
 /* ────────────────────────────────────────────────────────────
    ConsoleTradePage — 거래(trade) 실데이터 배선
@@ -157,7 +158,8 @@ const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, o
   const [qty, setQty] = useState(0);
   const [memo, setMemo] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [mirror, setMirror] = useState(false);          // 감정 거울 인터셉트 모달
+  const [mirror, setMirror] = useState(false);          // 마음 거울 인터셉트 모달
+  const [mirrorKind, setMirrorKind] = useState<'PANIC' | 'FOMO'>('PANIC');
   const [mirrorBusy, setMirrorBusy] = useState(false);
   // 종목 변경 시에만 초기화 (가격 틱마다 리셋 금지 — 입력 중 수량/지정가 보존)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -197,8 +199,9 @@ const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, o
     if (orderMethod === 'LIMIT' && (!price || price <= 0)) { notify('지정가는 0보다 큰 값을 입력해주세요.', 'error'); return; }
     if (isBuy && portfolio && totalKRW > cash) { notify('잔고가 부족합니다.', 'error'); return; }
     if (!isBuy && qty > heldQty) { notify('보유 수량이 부족합니다.', 'error'); return; }
-    // 급락 공포 매도 인터셉트 — 막지 않고, 묻고 봉인한다(감정 거울)
-    if (!isBuy && heldQty > 0 && sel.changeRate <= PANIC_THRESHOLD) { setMirror(true); return; }
+    // 마음 거울 인터셉트 — 막지 않고, 묻고 봉인한다
+    if (!isBuy && heldQty > 0 && sel.changeRate <= PANIC_THRESHOLD) { setMirrorKind('PANIC'); setMirror(true); return; }   // 급락 공포 매도
+    if (isBuy && heldQty <= 0 && sel.changeRate >= FOMO_THRESHOLD) { setMirrorKind('FOMO'); setMirror(true); return; }     // 급등 탐욕(FOMO) 매수
     placeOrder();
   };
 
@@ -223,12 +226,13 @@ const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, o
     } finally { setSubmitting(false); }
   };
 
-  // 감정 거울 — 봉인 후, 충동(판다)이면 주문 진행 / 항로(지킨다)면 주문 중단
+  // 마음 거울 — 봉인 후, 충동(판다/산다)이면 주문 진행 / 항로(지킨다/관망)면 주문 중단
   const onMirrorChoice = async (choice: UserChoice, note: string, intensity: number) => {
     setMirrorBusy(true);
     try {
       await mirrorService.capture({
-        assetSymbol: sel.symbol, assetName: sel.name, assetType: at, triggerType: 'PANIC_DROP',
+        assetSymbol: sel.symbol, assetName: sel.name, assetType: at,
+        triggerType: mirrorKind === 'FOMO' ? 'FOMO_SPIKE' : 'PANIC_DROP',
         userChoice: choice, emotionNote: note || undefined, emotionIntensity: intensity,
         priceAtEvent: cur, changeRate: sel.changeRate, amountKrw: Math.round(calcPrice * qty * fx),
       });
@@ -238,7 +242,7 @@ const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, o
       placeOrder();
     } else {
       setQty(0);
-      notify('항로를 지켰어요 — 7일 뒤 감정 거울이 열려요 🐋', 'success');
+      notify(mirrorKind === 'FOMO' ? '잘 참았어요 — 며칠 뒤 마음 거울이 열려요 🐋' : '항로를 지켰어요 — 며칠 뒤 마음 거울이 열려요 🐋', 'success');
     }
   };
 
@@ -292,7 +296,7 @@ const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, o
         <span className="mr-2 rounded px-1.5 py-0.5 text-[10px] font-bold tracking-[.06em]" style={{ background: 'rgba(10,18,48,.18)', color: '#0a1230' }}>VIRT</span>{submitting ? '주문 처리 중…' : `${fmtQty(qty, stockLike)} ${isBuy ? '매수' : '매도'} 주문`}
       </button>
       {mirror && (
-        <EmotionMirrorModal name={sel.name} changeRate={sel.changeRate} busy={mirrorBusy}
+        <EmotionMirrorModal kind={mirrorKind} name={sel.name} changeRate={sel.changeRate} busy={mirrorBusy}
           onClose={() => setMirror(false)} onChoice={onMirrorChoice} />
       )}
     </div>

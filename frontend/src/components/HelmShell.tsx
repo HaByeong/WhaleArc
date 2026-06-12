@@ -72,7 +72,7 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
         // VIRT 전용 회고 도구: 학습 노트(거래 복기) + 감정 거울(충동 복기)
         c.splice(i + 1, 0,
           { label: '학습 노트', icon: 'note', path: '/learn', key: 'edu' },
-          { label: '감정 거울', icon: 'sonar', path: '/mirror', key: 'mirror' });
+          { label: '마음 거울', icon: 'sonar', path: '/mirror', key: 'mirror' });
         return c;
       })()
     : NAV;

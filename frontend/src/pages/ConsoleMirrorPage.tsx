@@ -154,11 +154,30 @@ const ConsoleMirrorPage = () => {
     return { shaken: list.length, ruleWins, impulseWins: revealed.length - ruleWins, totalCost };
   }, [list, revealed]);
 
+  // 감정 패턴 — 트리거별 '충동 실행률'(선택은 봉인 즉시 알 수 있어 미개봉도 포함)
+  const patterns = useMemo(() => {
+    const defs = [
+      { key: 'PANIC_DROP', label: '급락 공포', sub: '하락에 팔고 싶은 충동' },
+      { key: 'FOMO_SPIKE', label: '급등 FOMO', sub: '상승에 사고 싶은 충동' },
+    ];
+    return defs
+      .map(d => {
+        const items = list.filter(c => c.triggerType === d.key);
+        const impulse = items.filter(c => c.userChoice === 'FOLLOW_IMPULSE').length;
+        return { ...d, total: items.length, impulse, rate: items.length ? impulse / items.length : 0 };
+      })
+      .filter(p => p.total > 0);
+  }, [list]);
+  const weakest = useMemo(() => {
+    const sorted = [...patterns].sort((a, b) => b.rate - a.rate);
+    return sorted[0] && sorted[0].rate >= 0.5 ? sorted[0] : null;
+  }, [patterns]);
+
   return (
-    <HelmShell active="mirror" virt={isVirt} userName={userName} session="감정 거울">
+    <HelmShell active="mirror" virt={isVirt} userName={userName} session="마음 거울">
       <div className="mx-auto flex max-w-[760px] flex-col gap-5 px-5 py-6">
         <div>
-          <h1 className="text-[26px] font-bold tracking-tight" style={{ color: INK0 }}>감정 거울 🐋</h1>
+          <h1 className="text-[26px] font-bold tracking-tight" style={{ color: INK0 }}>마음 거울 🐋</h1>
           <p className="mt-1.5 text-[13.5px]" style={{ color: INK1 }}>
             투기를 투자로, 감정을 데이터로. 흔들린 순간을 봉인하고, 며칠 뒤 <b style={{ color: INK0 }}>충동대로 vs 항로대로</b>의 결과를 나란히 비춥니다.
           </p>
@@ -180,6 +199,43 @@ const ConsoleMirrorPage = () => {
           </div>
         )}
 
+        {/* 감정 패턴 — "당신은 ○○에 약하다" */}
+        {list.length >= 2 && patterns.length > 0 && (
+          <div style={{ ...panel, padding: '18px 20px' }} className="flex flex-col gap-3.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold tracking-[.16em]" style={{ color: SONAR }}>나의 감정 패턴</span>
+            </div>
+            {weakest && (
+              <p className="text-[13.5px] leading-relaxed" style={{ color: INK0 }}>
+                🐋 당신은 <b style={{ color: UP }}>{weakest.label}</b>에 더 약해요 —
+                <b> {weakest.total}번 중 {weakest.impulse}번</b> 충동을 따랐어요.
+              </p>
+            )}
+            <div className="flex flex-col gap-3">
+              {patterns.map(p => {
+                const weak = p.rate >= 0.5;
+                return (
+                  <div key={p.key}>
+                    <div className="mb-1 flex items-center justify-between text-[12px]">
+                      <span style={{ color: INK1 }}>
+                        <b style={{ color: INK0 }}>{p.label}</b>
+                        <span style={{ color: INK3 }}> · {p.total}번 중 {p.impulse}번 충동</span>
+                      </span>
+                      <span className="font-mono font-semibold" style={{ color: weak ? UP : GREEN }}>
+                        {Math.round(p.rate * 100)}% {weak ? '약함' : '강함'}
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--ci-chip)' }}>
+                      <div className="h-full rounded-full" style={{ width: `${Math.max(4, p.rate * 100)}%`, background: weak ? UP : GREEN }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[10.5px]" style={{ color: INK3 }}>충동 실행률이 높을수록 그 감정에 약한 거예요. 약점을 알면 다음엔 한 박자 쉴 수 있어요.</p>
+          </div>
+        )}
+
         {loading ? (
           <div style={{ ...panel, padding: 48 }} className="text-center text-[13px]" >
             <span style={{ color: INK3 }}>거울을 불러오는 중…</span>
@@ -189,7 +245,7 @@ const ConsoleMirrorPage = () => {
             <div className="text-[34px]">🪞</div>
             <div className="mt-2 text-[15px] font-bold" style={{ color: INK0 }}>아직 봉인된 순간이 없어요</div>
             <div className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>
-              감정 거울은 <b style={{ color: INK1 }}>흔들린 순간</b>을 잠깐 잠가뒀다가, 며칠 뒤 결과를 비춰주는 거울이에요.<br />
+              마음 거울은 <b style={{ color: INK1 }}>흔들린 순간</b>을 잠깐 잠가뒀다가, 며칠 뒤 결과를 비춰주는 거울이에요.<br />
               충동대로 했을 때 vs 참았을 때를 <b style={{ color: INK1 }}>실제 숫자</b>로 보여줘요.
             </div>
             <div className="mx-auto mt-4 grid max-w-[460px] grid-cols-3 gap-2.5 text-left">

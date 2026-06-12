@@ -363,7 +363,7 @@ const ConsoleLearnPage = () => {
 
   const loadMine = useCallback(() => {
     quantStoreService.getMyPurchases().then(r => { setPurchasedIds(new Set(r.purchasedProductIds)); setPurchases(r.purchases || []); }).catch(() => {});
-    quantStoreService.getMyPurchasesPerformance().then(setPerf).catch(() => {});
+    quantStoreService.getMyPurchasesPerformance().then(list => setPerf(list.filter(pp => pp.strategyType === 'TURTLE'))).catch(() => {});
   }, []);
   useEffect(() => { loadMine(); }, [loadMine]);
 
@@ -401,6 +401,10 @@ const ConsoleLearnPage = () => {
 
   // 노출: 관리형(터틀) + DIY 신호전략(프리셋 매핑). 비신호 일회성매수형은 숨김.
   const shown = products.filter(p => isManaged(p) || presetFor(p) != null);
+  if (import.meta.env.DEV) {
+    const dropped = products.filter(p => !isManaged(p) && presetFor(p) == null);
+    if (dropped.length) console.warn('[store] 프리셋 매칭 실패로 숨김:', dropped.map(p => p.name));
+  }
   const managedList = shown.filter(isManaged);              // 사면 알아서 굴러가는 관리형 상품
   const diyList = shown.filter(p => !isManaged(p));          // 백테스트로 검증해 내가 굴리는 DIY 전략
   const open = shown.find(p => p.id === openId) || null;

@@ -172,7 +172,7 @@ const ProductModal = ({ p, purchased, onClose, onRun, onBuy, onCancel }: { p: Qu
   return (
     <div onClick={onClose} className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto px-6 py-12" style={{ background: 'rgba(6,11,31,.72)', backdropFilter: 'blur(6px)', animation: 'backdrop-in .2s ease' }}>
       <div onClick={e => e.stopPropagation()} className="relative w-full max-w-[680px] rounded-[18px]" style={{ background: 'var(--ci-overlay)', border: `1px solid ${HAIR_S}`, boxShadow: 'var(--ci-panel-shadow)', animation: 'modal-in .25s cubic-bezier(.2,.8,.2,1)' }}>
-        <button onClick={onClose} className="absolute right-[18px] top-[18px] z-[2] flex h-8 w-8 items-center justify-center rounded-lg" style={{ border: `1px solid ${HAIR}`, background: CARD, color: INK1 }}><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg></button>
+        <button onClick={onClose} aria-label="닫기" className="absolute right-[18px] top-[18px] z-[2] flex h-8 w-8 items-center justify-center rounded-lg" style={{ border: `1px solid ${HAIR}`, background: CARD, color: INK1 }}><svg aria-hidden width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg></button>
         <header className="px-7 pb-[18px] pt-7" style={{ borderBottom: `1px solid ${HAIR}` }}>
           <div className="mb-3 flex flex-wrap gap-1.5"><TagL color={SONAR} bg={SONAR_DIM} border="rgba(91,157,255,.24)">{CATEGORY_LABELS[p.category]}</TagL><TagL color={rt.color} bg={rt.bg} border={rt.border}>{RISK_LABELS[p.riskLevel]} 리스크</TagL>{p.assetType && <TagL color={INK1} bg={CARD} border={HAIR}>{p.assetType === 'CRYPTO' ? '가상화폐' : '주식'}</TagL>}</div>
           <h2 className="text-[22px] font-bold">{p.name}</h2>
@@ -441,7 +441,7 @@ const ConsoleLearnPage = () => {
         </div>
         {/* 카드 — 관리형(구매·자동운용) vs DIY(백테스트→자동매매) 두 갈래 */}
         {loading ? (
-          <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+          <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="animate-pulse" style={{ ...panel, padding: 18 }}>
                 <div className="flex items-center gap-2">
@@ -468,7 +468,7 @@ const ConsoleLearnPage = () => {
                         <h2 className="mt-1 text-[16px] font-bold">사면 알아서 굴러가는 전문가 전략</h2>
                         <p className="mt-1 text-[12.5px]" style={{ color: INK2 }}>구매하면 전략 규칙대로 <b style={{ color: INK1 }}>자동 운용</b>돼요. 운용 손익은 위 ‘자동 운용 중’에서 확인합니다. (모의)</p>
                       </div>
-                      <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+                      <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                         {managedList.map(p => <Card key={p.id} p={p} purchased={purchasedIds.has(p.id)} onOpen={() => setOpenId(p.id)} onRun={() => runBacktest(p)} onBuy={() => startInvest(p)} />)}
                       </div>
                     </div>
@@ -480,7 +480,7 @@ const ConsoleLearnPage = () => {
                         <h2 className="mt-1 text-[16px] font-bold">백테스트로 검증하고 내가 굴리는 전략</h2>
                         <p className="mt-1 text-[12.5px]" style={{ color: INK2 }}><b style={{ color: INK1 }}>돌려보기</b>로 과거 성과를 확인한 뒤 자동매매로 이어가요.</p>
                       </div>
-                      <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+                      <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                         {diyList.map(p => <Card key={p.id} p={p} purchased={purchasedIds.has(p.id)} onOpen={() => setOpenId(p.id)} onRun={() => runBacktest(p)} onBuy={() => startInvest(p)} />)}
                       </div>
                     </div>

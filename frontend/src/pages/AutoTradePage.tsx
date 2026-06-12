@@ -579,7 +579,7 @@ const AutoTradePage = () => {
         {/* 헤더 */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-5">
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-.02em', color: 'var(--ci-ink0)' }}>
+            <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-.02em', color: 'var(--ci-ink0)' }}>
               {modeLabel} 자동매매{isLive && <span className="ml-2 align-middle text-sm font-bold text-amber-500">⚠️ 실제 자금</span>}
             </h1>
             <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--ci-ink1)', maxWidth: 620 }}>
@@ -616,19 +616,19 @@ const AutoTradePage = () => {
             {/* 우 — 전역 킬스위치 */}
             <div style={{ padding: '24px 26px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14 }}>
               <div className="flex items-center gap-2.5">
-                <span style={{ fontSize: 15 }}>🛑</span>
+                <span aria-hidden style={{ fontSize: 15 }}>🛑</span>
                 <div>
                   <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ci-ink0)' }}>전역 킬스위치 {killSwitch ? '(작동 중)' : ''}</div>
                   <div style={{ fontSize: 11.5, color: 'var(--ci-ink2)', marginTop: 1 }}>{killSwitch ? '모든 자동매매가 정지되어 신호 평가를 건너뜁니다.' : '비상 시 모든 자동매매를 한 번에 멈춥니다.'}</div>
                 </div>
               </div>
               {!killSwitch ? (
-                <button onClick={toggleKillSwitch} className="flex items-center justify-center gap-2.5" style={{ padding: '15px 18px', borderRadius: 14, fontFamily: 'inherit', fontSize: 15, fontWeight: 700, letterSpacing: '-.01em', cursor: 'pointer', color: '#ff8a8a', background: 'rgba(239,77,77,.10)', border: '1px solid rgba(239,77,77,.45)', boxShadow: '0 14px 30px -16px rgba(239,77,77,.6), inset 0 1px 0 rgba(255,255,255,.06)' }}>
-                  <span className="animate-pulse-dot" style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4d4d', boxShadow: '0 0 10px #ef4d4d' }} />
+                <button onClick={toggleKillSwitch} aria-label="모든 자동매매 즉시 정지 (전역 킬스위치)" className="flex items-center justify-center gap-2.5" style={{ padding: '15px 18px', borderRadius: 14, fontFamily: 'inherit', fontSize: 15, fontWeight: 700, letterSpacing: '-.01em', cursor: 'pointer', color: '#ff8a8a', background: 'rgba(239,77,77,.10)', border: '1px solid rgba(239,77,77,.45)', boxShadow: '0 14px 30px -16px rgba(239,77,77,.6), inset 0 1px 0 rgba(255,255,255,.06)' }}>
+                  <span aria-hidden className="animate-pulse-dot" style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4d4d', boxShadow: '0 0 10px #ef4d4d' }} />
                   전체 정지
                 </button>
               ) : (
-                <button onClick={toggleKillSwitch} className="flex items-center justify-center gap-2.5" style={{ padding: '15px 18px', borderRadius: 14, fontFamily: 'inherit', fontSize: 15, fontWeight: 700, letterSpacing: '-.01em', cursor: 'pointer', color: 'rgba(255,255,255,.98)', border: '1px solid rgba(165,200,255,.6)', background: 'linear-gradient(180deg, #5690f2, #3673e2)', boxShadow: '0 14px 30px -16px rgba(43,110,230,.6), inset 0 1px 0 rgba(255,255,255,.4)' }}>
+                <button onClick={toggleKillSwitch} aria-label="킬스위치 해제 — 모든 자동매매 재가동" className="flex items-center justify-center gap-2.5" style={{ padding: '15px 18px', borderRadius: 14, fontFamily: 'inherit', fontSize: 15, fontWeight: 700, letterSpacing: '-.01em', cursor: 'pointer', color: '#3fd6a0', background: 'rgba(63,214,160,.10)', border: '1px solid rgba(63,214,160,.5)', boxShadow: '0 14px 30px -16px rgba(63,214,160,.5), inset 0 1px 0 rgba(255,255,255,.06)' }}>
                   ↻ 전체 재가동
                 </button>
               )}
@@ -654,7 +654,7 @@ const AutoTradePage = () => {
             </button>
           </div>
         ) : (
-          <div className="grid gap-[18px]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+          <div className="grid gap-[18px]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
             {sectionDeployments.map(d => {
               const pnlPositive = (d.realizedPnl ?? 0) > 0;
               const liveReturn = (d.allocatedCash ?? 0) > 0
@@ -669,6 +669,7 @@ const AutoTradePage = () => {
               const logsData = orderLogs[d.id];
               const firstSym = (d.targetAssets || [])[0] || d.strategyName.slice(0, 3);
               const dim = killSwitch || d.status === 'STOPPED';
+              const firstRun = !dim && d.status === 'RUNNING' && (d.tradeCount ?? 0) === 0;   // 가동 직후·첫 신호 대기
               const nextLbl = nextEvalLabel(d);
               const hasSpark = (d.equitySpark?.length ?? 0) >= 2;
               const lo = d.lastOrder;
@@ -704,6 +705,15 @@ const AutoTradePage = () => {
 
                     {/* 평가손익 + 손익 스파크라인 */}
                     <div style={{ display: 'grid', gridTemplateColumns: hasSpark ? '1fr 116px' : '1fr', gap: 14, alignItems: 'flex-end' }}>
+                      {firstRun ? (
+                        <div>
+                          <div style={{ fontSize: 10.5, letterSpacing: '.14em', color: 'var(--ci-ink3)', fontWeight: 600, marginBottom: 6 }}>{isLive ? '실현손익' : '모의 실현손익'}</div>
+                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-bold" style={{ background: 'var(--ci-sonar-dim)', color: 'var(--ci-sonar)', border: '1px solid rgba(91,157,255,.32)' }}>
+                            <span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: 'var(--ci-sonar)' }} />가동 중 · 첫 신호 대기
+                          </span>
+                          <div className="text-[11px] leading-snug" style={{ color: 'var(--ci-ink3)', marginTop: 7 }}>첫 거래가 체결되면 손익이 여기 표시됩니다.</div>
+                        </div>
+                      ) : (
                       <div>
                         <div style={{ fontSize: 10.5, letterSpacing: '.14em', color: 'var(--ci-ink3)', fontWeight: 600, marginBottom: 4 }}>{isLive ? '실현손익' : '모의 실현손익'}</div>
                         <div className="font-mono" style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-.02em', color: dim ? 'var(--ci-ink2)' : (liveReturn > 0 ? UP : liveReturn < 0 ? DOWN : 'var(--ci-ink0)') }}>
@@ -713,6 +723,7 @@ const AutoTradePage = () => {
                           {pnlPositive ? '+' : ''}{formatKRW(d.realizedPnl)}
                         </div>
                       </div>
+                      )}
                       {hasSpark && (
                         <div style={{ paddingBottom: 4, opacity: dim ? 0.5 : 1 }}>
                           <Spark data={d.equitySpark as number[]} up={liveReturn >= 0} idKey={d.id} />
@@ -732,12 +743,14 @@ const AutoTradePage = () => {
                       </div>
                     </div>
 
-                    {/* 체결 / 승 */}
+                    {/* 체결 / 승 — 첫 실행(거래 0)엔 숨김 */}
+                    {!firstRun && (
                     <div className="flex items-center gap-4" style={{ fontSize: 12, color: 'var(--ci-ink2)' }}>
                       <span>거래 <b className="font-mono" style={{ color: 'var(--ci-ink0)', fontWeight: 700 }}>{d.tradeCount}</b>회</span>
                       <span style={{ width: 1, height: 11, background: 'var(--ci-line-strong)' }} />
                       <span>승 <b className="font-mono" style={{ color: 'var(--ci-ink0)', fontWeight: 700 }}>{d.winCount}</b>회{liveWinRate != null ? ` · 승률 ${liveWinRate.toFixed(0)}%` : ''}</span>
                     </div>
+                    )}
 
                   {/* 일일 손실한도 */}
                   {d.dailyLossLimit != null && d.dailyLossLimit > 0 && (() => {
@@ -767,7 +780,10 @@ const AutoTradePage = () => {
                         <span className={`font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>{p.symbol}</span>
                         <span className="flex items-center gap-2">
                           {p.direction === 'NONE' ? (
-                            <span className={subText}>대기</span>
+                            <span className={`inline-flex items-center gap-1.5 ${subText}`}>
+                              {!dim && <span className="h-1 w-1 rounded-full animate-pulse-dot" style={{ background: 'var(--ci-ink3)' }} />}
+                              {dim ? '대기' : '감시 중'}
+                            </span>
                           ) : (
                             <>
                               <span className={`px-1.5 py-0.5 rounded font-bold ${
@@ -815,14 +831,18 @@ const AutoTradePage = () => {
                             liveColor: liveWinRate != null && liveWinRate >= 50 ? 'text-red-500' : liveWinRate != null ? 'text-blue-500' : (isDark ? 'text-slate-400' : 'text-gray-400'),
                           },
                         ].map(col => (
-                          <div key={col.label} className="px-3 py-2.5 text-center">
-                            <p className={`text-[10px] mb-1 ${subText}`}>{col.label}</p>
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span className={`text-[11px] line-through ${subText}`}>{col.bt}</span>
-                              <span className="text-[10px] text-gray-400">→</span>
-                              <span className={`text-[12px] font-bold ${col.liveColor}`}>{col.live}</span>
+                          <div key={col.label} className="px-3 py-2.5">
+                            <p className={`text-[10px] mb-2 text-center ${subText}`}>{col.label}</p>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-baseline justify-between gap-1.5">
+                                <span className={`text-[9px] ${subText}`}>백테스트</span>
+                                <span className={`text-[11px] font-medium tabular-nums ${subText}`}>{col.bt}</span>
+                              </div>
+                              <div className="flex items-baseline justify-between gap-1.5">
+                                <span className={`text-[9px] font-medium ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>실전</span>
+                                <span className={`text-[13.5px] font-bold tabular-nums ${col.liveColor}`}>{col.live}</span>
+                              </div>
                             </div>
-                            <p className={`text-[9px] mt-0.5 ${subText}`}>백테스트 → 배포 후</p>
                           </div>
                         ))}
                       </div>
@@ -836,10 +856,12 @@ const AutoTradePage = () => {
                   <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-white/[0.08]' : 'border-gray-100'}`}>
                     <button
                       onClick={() => loadOrders(d.id)}
+                      aria-expanded={logsOpen}
+                      aria-label={`실행 로그 ${logsOpen ? '접기' : '펼치기'}`}
                       className={`w-full flex items-center justify-between px-3 py-2 text-[11px] font-semibold transition-colors ${isDark ? 'text-slate-300 hover:bg-white/[0.03]' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
                       <span className="flex items-center gap-1.5">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
                         </svg>
                         실행 로그
@@ -886,7 +908,7 @@ const AutoTradePage = () => {
                     {d.status === 'RUNNING' && (
                       <button disabled={busyId === d.id || killSwitch} onClick={() => evaluateNow(d)}
                         title={killSwitch ? '전역 킬스위치가 켜져 있어 평가할 수 없습니다.' : undefined}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed ${isDark ? 'bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>
+                        className={`px-3.5 py-2 rounded-lg text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed ${isDark ? 'bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>
                         지금 평가
                       </button>
                     )}
@@ -894,24 +916,24 @@ const AutoTradePage = () => {
                     {(d.positions || []).some(p => p.direction !== 'NONE') && (
                       <button disabled={busyId === d.id} onClick={() => closeNow(d)}
                         title="보유 포지션 전부 시장가 청산"
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-orange-500/15 text-orange-300 hover:bg-orange-500/25' : 'bg-orange-50 text-orange-700 hover:bg-orange-100'}`}>
+                        className={`px-3.5 py-2 rounded-lg text-xs font-semibold ${isDark ? 'bg-orange-500/15 text-orange-300 hover:bg-orange-500/25' : 'bg-orange-50 text-orange-700 hover:bg-orange-100'}`}>
                         지금 청산
                       </button>
                     )}
                     {d.status === 'RUNNING' ? (
                       <button disabled={busyId === d.id} onClick={() => changeStatus(d, 'pause')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>
+                        className={`px-3.5 py-2 rounded-lg text-xs font-semibold ${isDark ? 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>
                         일시정지
                       </button>
                     ) : (d.status === 'PAUSED' || d.status === 'STOPPED') ? (
                       <button disabled={busyId === d.id} onClick={() => changeStatus(d, 'start')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>
+                        className={`px-3.5 py-2 rounded-lg text-xs font-semibold ${isDark ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>
                         {d.status === 'STOPPED' ? '재가동' : '가동'}
                       </button>
                     ) : null}
                     {d.status !== 'STOPPED' && (
                       <button disabled={busyId === d.id} onClick={() => changeStatus(d, 'stop')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-red-500/15 text-red-300 hover:bg-red-500/25' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}>
+                        className={`px-3.5 py-2 rounded-lg text-xs font-semibold ${isDark ? 'bg-red-500/15 text-red-300 hover:bg-red-500/25' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}>
                         정지
                       </button>
                     )}
@@ -919,7 +941,7 @@ const AutoTradePage = () => {
                     {d.status !== 'RUNNING' && !(d.positions || []).some(p => p.direction !== 'NONE') && (
                       <button disabled={busyId === d.id} onClick={() => handleDelete(d)}
                         title="자동매매 카드 삭제 (거래소 포지션은 직접 정리 필요)"
-                        className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-semibold ${isDark ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-red-300' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-red-600'}`}>
+                        className={`ml-auto px-3.5 py-2 rounded-lg text-xs font-semibold ${isDark ? 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-red-300' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-red-600'}`}>
                         삭제
                       </button>
                     )}
@@ -983,13 +1005,13 @@ const AutoTradePage = () => {
               ))}
             </div>
             <div className={`px-6 py-4 border-t ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
-              <label className="flex items-center gap-2.5 cursor-pointer mb-2.5">
+              <label className="flex items-center gap-2.5 cursor-pointer mb-1.5">
                 <input type="checkbox" checked={guideChecked} onChange={e => setGuideChecked(e.target.checked)} className="w-4 h-4 rounded accent-blue-500" />
                 <span className={`text-[13px] ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>위 내용을 읽고 이해했습니다</span>
               </label>
-              <button onClick={() => navigate('/virt/learn?tab=mistakes')} className={`mb-4 text-[12px] font-semibold transition-opacity hover:opacity-80 ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>
-                📚 자동매매가 처음이면 — 학습 노트 '흔한 실수'에서 손절·리스크 더 보기 →
-              </button>
+              {!guideChecked && (
+                <p className={`mb-3 ml-[26px] text-[11.5px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>시작하려면 위 항목에 체크해 주세요.</p>
+              )}
               <div className="flex gap-2.5">
                 <button onClick={() => setShowGuide(false)} className={`flex-1 rounded-lg py-2.5 text-[13px] font-semibold ${isDark ? 'text-slate-300 border border-white/10 hover:bg-white/5' : 'text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
                   나중에
@@ -997,12 +1019,15 @@ const AutoTradePage = () => {
                 <button
                   onClick={() => confirmGuide(guideChecked)}
                   disabled={!guideChecked}
-                  className="flex-[2] rounded-lg py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
+                  className="flex-[2] rounded-lg py-2.5 text-[13px] font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ background: guideChecked ? 'linear-gradient(135deg,#3b82f6,#2563eb)' : undefined, border: guideChecked ? 'none' : '1px solid var(--ci-line)' }}
                 >
-                  {guideChecked ? '이해했어요 — 자동매매 시작 →' : '체크 후 진행할 수 있어요'}
+                  자동매매 시작 →
                 </button>
               </div>
+              <button onClick={() => navigate('/virt/learn?tab=mistakes')} className={`mt-3.5 text-[12px] font-semibold transition-opacity hover:opacity-80 ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>
+                📚 자동매매가 처음이면 — 학습 노트 '흔한 실수'에서 손절·리스크 더 보기 →
+              </button>
             </div>
           </div>
         </div>

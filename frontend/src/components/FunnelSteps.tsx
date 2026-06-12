@@ -21,6 +21,8 @@ const FunnelSteps = ({ current }: { current: 1 | 2 | 3 }) => {
             <button
               onClick={() => navigate(s.path)}
               title={`${s.label}로 이동`}
+              aria-current={active ? 'step' : undefined}
+              aria-label={`${s.label}${done ? ' (완료)' : active ? ' (현재 단계)' : ''}로 이동`}
               className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 font-semibold transition-colors"
               style={active
                 ? { background: 'var(--ci-sonar-dim)', color: 'var(--ci-sonar)', border: '1px solid rgba(91,157,255,.4)' }
@@ -34,7 +36,7 @@ const FunnelSteps = ({ current }: { current: 1 | 2 | 3 }) => {
               </span>
               {s.label}
             </button>
-            {i < FUNNEL.length - 1 && <span className="shrink-0" style={{ color: 'var(--ci-ink3)' }}>→</span>}
+            {i < FUNNEL.length - 1 && <span aria-hidden className="shrink-0" style={{ color: 'var(--ci-ink3)' }}>→</span>}
           </Fragment>
         );
       })}

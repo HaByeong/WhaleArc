@@ -177,9 +177,17 @@ public class KisApiClient {
 
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
             Map<String, Object> b = response.getBody();
-            if (b == null) break;
+            if (b == null) {
+                if (page == 0) throw new IllegalStateException("KIS 국내잔고 응답 없음");
+                break;
+            }
             if (!"0".equals(String.valueOf(b.get("rt_cd")))) {
                 log.warn("[KIS 국내잔고] 비정상 rt_cd={} msg={} (CANO={}-{})", b.get("rt_cd"), b.get("msg1"), cano, acntPrdtCd);
+                // 첫 페이지부터 에러(레이트리밋 EGW00201 등)면 빈 잔고(0원)를 진짜 잔고로 오인하지 않도록 예외로 전파한다.
+                // → getPortfolio가 fetchOk=false로 표시 → ExchangeAccountService가 마지막 정상 스냅샷 유지(0원 깜빡임 방지).
+                if (page == 0) {
+                    throw new IllegalStateException("KIS 국내잔고 조회 실패: rt_cd=" + b.get("rt_cd") + " msg=" + b.get("msg1"));
+                }
                 break;
             }
 

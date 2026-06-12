@@ -1,9 +1,13 @@
 import type { ReactNode } from 'react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
+import { mirrorService } from '../services/mirrorService';
+
+/** '흔들린 순간' 개봉 대기 배지 — 마지막 방문 이후 새로 열린 봉인 수(되돌아오는 넛지). */
+const MIRROR_SEEN_KEY = 'mirror_seen_revealed_count';
 
 /* ────────────────────────────────────────────────────────────
    HelmShell — 「디자인 개편」 mockup의 다크 사이드바 콘솔 셸 (공용)
@@ -72,13 +76,34 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
         // VIRT 전용 회고 도구: 학습 노트(거래 복기) + 감정 거울(충동 복기)
         c.splice(i + 1, 0,
           { label: '학습 노트', icon: 'note', path: '/learn', key: 'edu' },
-          { label: '마음 거울', icon: 'sonar', path: '/mirror', key: 'mirror' });
+          { label: '흔들린 순간', icon: 'sonar', path: '/mirror', key: 'mirror' });
         return c;
       })()
     : NAV;
   // 모바일 하단바: 항목이 많아 가로 스크롤 → 선택된 항목을 화면 안으로
   const mobileNavRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => { mobileNavRef.current?.scrollIntoView({ inline: 'center', block: 'nearest' }); }, [active]);
+
+  // '흔들린 순간' 개봉 넛지 — 마지막 방문 이후 새로 열린 봉인 수를 배지로. 거울 페이지에 들어가면 0으로 리셋.
+  const [mirrorBadge, setMirrorBadge] = useState(0);
+  useEffect(() => {
+    if (!virt) return;
+    let alive = true;
+    mirrorService.list()
+      .then(list => {
+        if (!alive) return;
+        const revealed = list.filter(c => c.revealed).length;
+        if (active === 'mirror') {
+          localStorage.setItem(MIRROR_SEEN_KEY, String(revealed));   // 페이지 진입 = 다 봄
+          setMirrorBadge(0);
+        } else {
+          const seen = Number(localStorage.getItem(MIRROR_SEEN_KEY) || 0);
+          setMirrorBadge(Math.max(0, revealed - seen));
+        }
+      })
+      .catch(() => { /* 조용히 무시 */ });
+    return () => { alive = false; };
+  }, [virt, active]);
 
   const handleLogout = async () => {
     try { await authService.logout(); } catch { /* ignore */ }
@@ -118,6 +143,9 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
                 : { color: locked ? 'rgba(255,255,255,.42)' : 'rgba(255,255,255,.72)', fontWeight: 500, border: '1px solid transparent' }}>
               <NavIcon kind={it.icon} />
               <span className="helm-label">{it.label}</span>
+              {it.key === 'mirror' && mirrorBadge > 0 && (
+                <span className="helm-label" style={{ marginLeft: 'auto', minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: '#ef4d4d', color: '#fff', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} aria-label={`개봉 대기 ${mirrorBadge}건`}>{mirrorBadge}</span>
+              )}
               {locked && (
                 <svg className="helm-label" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: 'auto', opacity: .55 }} aria-label="잠김">
                   <rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" />
@@ -219,8 +247,11 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
         {navItems.map((it) => {
           const on = it.key === active;
           return (
-            <button key={it.key} ref={on ? mobileNavRef : null} onClick={() => goNav(it.path)} className="flex min-w-[68px] shrink-0 flex-col items-center gap-1 py-2 text-[10px]"
+            <button key={it.key} ref={on ? mobileNavRef : null} onClick={() => goNav(it.path)} className="relative flex min-w-[68px] shrink-0 flex-col items-center gap-1 py-2 text-[10px]"
               style={{ color: on ? '#cfe1ff' : 'rgba(255,255,255,.55)' }}>
+              {it.key === 'mirror' && mirrorBadge > 0 && (
+                <span style={{ position: 'absolute', top: 4, right: 14, minWidth: 15, height: 15, padding: '0 4px', borderRadius: 999, background: '#ef4d4d', color: '#fff', fontSize: 9, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{mirrorBadge}</span>
+              )}
               <NavIcon kind={it.icon} />{it.label}
             </button>
           );

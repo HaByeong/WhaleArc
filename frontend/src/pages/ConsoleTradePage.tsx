@@ -242,7 +242,7 @@ const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, o
       placeOrder();
     } else {
       setQty(0);
-      notify(mirrorKind === 'FOMO' ? '잘 참았어요 — 며칠 뒤 마음 거울이 열려요 🐋' : '항로를 지켰어요 — 며칠 뒤 마음 거울이 열려요 🐋', 'success');
+      notify(mirrorKind === 'FOMO' ? '잘 참았어요 — 며칠 뒤 그 선택이 열려요 🐋' : '항로를 지켰어요 — 며칠 뒤 그 선택이 열려요 🐋', 'success');
     }
   };
 

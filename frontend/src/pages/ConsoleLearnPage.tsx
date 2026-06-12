@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
@@ -439,9 +440,9 @@ const ConsoleLearnPage = () => {
                   {shown.map(p => <Card key={p.id} p={p} purchased={purchasedIds.has(p.id)} onOpen={() => setOpenId(p.id)} onRun={() => runBacktest(p)} onBuy={() => startInvest(p)} />)}
                 </div>}
       </div>
-      {open && <ProductModal p={open} purchased={purchasedIds.has(open.id)} onClose={() => setOpenId(null)} onRun={() => runBacktest(open)} onBuy={() => startInvest(open)} onCancel={() => cancelByProduct(open.id)} />}
-      {invest && <InvestModal p={invest} cash={cash} busy={busy} onClose={() => setInvest(null)} onConfirm={confirmInvest} />}
-      {confirmCancel && (
+      {open && createPortal(<ProductModal p={open} purchased={purchasedIds.has(open.id)} onClose={() => setOpenId(null)} onRun={() => runBacktest(open)} onBuy={() => startInvest(open)} onCancel={() => cancelByProduct(open.id)} />, document.body)}
+      {invest && createPortal(<InvestModal p={invest} cash={cash} busy={busy} onClose={() => setInvest(null)} onConfirm={confirmInvest} />, document.body)}
+      {confirmCancel && createPortal(
         <div onClick={() => setConfirmCancel(null)} className="fixed inset-0 z-[120] flex items-center justify-center px-6" style={{ background: 'rgba(6,11,31,.78)', backdropFilter: 'blur(6px)', animation: 'backdrop-in .2s ease' }}>
           <div onClick={e => e.stopPropagation()} className="w-full max-w-[380px] rounded-[18px] p-6" style={{ background: 'var(--ci-overlay)', border: `1px solid ${HAIR_S}`, boxShadow: 'var(--ci-panel-shadow)', animation: 'modal-in .25s cubic-bezier(.2,.8,.2,1)' }}>
             <h3 className="text-[16px] font-bold">운용을 종료할까요?</h3>
@@ -452,8 +453,8 @@ const ConsoleLearnPage = () => {
             </div>
           </div>
         </div>
-      )}
-      {toast && <Toast msg={toast} />}
+      , document.body)}
+      {toast && createPortal(<Toast msg={toast} />, document.body)}
     </HelmShell>
   );
 };

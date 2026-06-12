@@ -19,6 +19,50 @@ export interface PresetStrategy extends Strategy {
   shortExitConditions?: Condition[];
 }
 
+// ── 터틀 트레이딩 파라미터화 ──
+// 백엔드는 임의 기간 DONCHIAN_HIGH_<n>/DONCHIAN_LOW_<n> 와 ADX 임계값을 그대로 지원하므로,
+// 사용자가 설정한 파라미터로 지표·조건을 즉석 생성한다(종목별로 다른 채널/필터를 쓸 수 있게).
+export const TURTLE_PRESET_ID = 'preset-turtle';
+export interface TurtleParams {
+  entryPeriod: number;   // 진입 채널(돈치안) 기간 — 신고가/신저가 돌파 기준
+  exitPeriod: number;    // 청산 채널 기간 — 반대 채널 닿으면 flat
+  adxThreshold: number;  // 추세 강도 필터 (ADX > 이 값일 때만 진입)
+  maxUnits: number;      // 피라미딩 최대 유닛
+  leverage: number;      // 선물 레버리지 배수
+  trailingStopPercent: number; // 트레일링 스탑 %
+}
+export const TURTLE_DEFAULTS: TurtleParams = { entryPeriod: 100, exitPeriod: 30, adxThreshold: 15, maxUnits: 4, leverage: 2, trailingStopPercent: 4 };
+
+/** 터틀 파라미터 → 지표 + 롱/숏 진입·청산 조건. */
+export function buildTurtleConditions(p: TurtleParams): Pick<PresetStrategy,
+  'indicators' | 'entryConditions' | 'exitConditions' | 'shortEntryConditions' | 'shortExitConditions'> {
+  const e = Math.max(2, Math.round(p.entryPeriod));
+  const x = Math.max(2, Math.round(p.exitPeriod));
+  const adx = p.adxThreshold;
+  return {
+    indicators: [
+      { type: 'DONCHIAN', parameters: { period: e } },
+      { type: 'DONCHIAN', parameters: { period: x } },
+      { type: 'ADX', parameters: { period: 14 } },
+      { type: 'ATR', parameters: { period: 14 } },
+    ],
+    entryConditions: [
+      { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: `DONCHIAN_HIGH_${e}` },
+      { indicator: 'ADX', operator: 'GT', value: adx, logic: 'AND' },
+    ],
+    exitConditions: [
+      { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: `DONCHIAN_LOW_${x}` },
+    ],
+    shortEntryConditions: [
+      { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: `DONCHIAN_LOW_${e}` },
+      { indicator: 'ADX', operator: 'GT', value: adx, logic: 'AND' },
+    ],
+    shortExitConditions: [
+      { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: `DONCHIAN_HIGH_${x}` },
+    ],
+  };
+}
+
 export const PRESET_STRATEGIES: PresetStrategy[] = [
     {
       id: 'preset-buy-hold', category: 'basic', maxPositions: 999, name: 'Buy & Hold (장기 보유)', description: '시작 시점에 매수 후 종료 시점까지 그대로 보유하는 가장 단순한 전략입니다. 매매 타이밍을 잡지 않고 시간의 힘에 맡기는 방식이며, 적립식 투자와 결합하면 직장인의 표준 투자법이 됩니다.',
@@ -217,28 +261,9 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       beginnerTip: '쉽게 말하면: "한동안의 최고가를 뚫으면 사고(롱), 최저가를 뚫으면 팔아서(숏) 큰 추세를 양방향으로 올라타는" 전략이에요. 추세가 이어지면 조금씩 더 보태고, 꺾이면 현금으로 쉽니다.',
       whyUse: '추세추종의 교과서로 불리는 검증된 시스템입니다. 롱·숏 양방향이라 상승장과 하락장 모두에서 수익 기회를 노립니다. ADX 필터로 횡보장의 거짓 돌파를 걸러내고, 피라미딩으로 "이익은 길게" 키우며, 청산 채널로 "손실은 짧게" 끊습니다. 변동성이 큰 비트코인·이더리움 선물에서 특히 강점이 있습니다. (레버리지·숏은 라이브 Bitget 선물에서, 백테스트는 일봉 근사입니다.)',
       difficulty: '고급',
-      strategyLogic: '롱: 종가 > 100봉 신고가 + ADX>15 / 숏: 종가 < 100봉 신저가 + ADX>15 / 청산: 30봉 반대 채널 또는 트레일링 4% / 피라미딩: +ATR마다 최대 4유닛 / 레버리지 2배',
+      strategyLogic: '롱: 종가 > 진입채널 신고가 + ADX>임계 / 숏: 종가 < 진입채널 신저가 + ADX>임계 / 청산: 청산채널 반대 또는 트레일링 / 피라미딩: +ATR마다 유닛 추가 (전략 선택 시 채널 기간·ADX·유닛·레버리지를 직접 설정)',
       assetType: 'CRYPTO', targetAssets: ['BTC', 'ETH'], targetAssetNames: { BTC: '비트코인', ETH: '이더리움' },
-      indicators: [
-        { type: 'DONCHIAN', parameters: { period: 100 } },
-        { type: 'DONCHIAN', parameters: { period: 30 } },
-        { type: 'ADX', parameters: { period: 14 } },
-        { type: 'ATR', parameters: { period: 14 } },
-      ],
-      entryConditions: [
-        { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_HIGH_100' },
-        { indicator: 'ADX', operator: 'GT', value: 15, logic: 'AND' },
-      ],
-      exitConditions: [
-        { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_LOW_30' },
-      ],
-      shortEntryConditions: [
-        { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_LOW_100' },
-        { indicator: 'ADX', operator: 'GT', value: 15, logic: 'AND' },
-      ],
-      shortExitConditions: [
-        { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_HIGH_30' },
-      ],
+      ...buildTurtleConditions(TURTLE_DEFAULTS),   // 기본값(100/30/ADX15) — UI에서 종목별로 변경 가능
       applied: false, createdAt: '', updatedAt: '',
     },
   ];

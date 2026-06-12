@@ -9,7 +9,7 @@ import {
   type BacktestRequest, type BacktestResult, type Indicator, type Condition, type BacktestHistoryItem, type Strategy,
 } from '../services/strategyService';
 import { marketService } from '../services/marketService';
-import { PRESET_STRATEGIES, type PresetStrategy } from '../data/presetStrategies';
+import { PRESET_STRATEGIES, type PresetStrategy, TURTLE_PRESET_ID, TURTLE_DEFAULTS, buildTurtleConditions, type TurtleParams } from '../data/presetStrategies';
 import { tradeService } from '../services/tradeService';
 import { Term } from '../components/GlossaryTerm';
 import GuideTour, { type TourStep } from '../components/GuideTour';
@@ -590,7 +590,7 @@ type RunnerProps = {
   strat: Strat | null; target: Target; setTarget: (t: Target) => void; period: string; setPeriod: (p: string) => void;
   capital: number; setCapital: (n: number) => void; monthly: number; setMonthly: (n: number) => void;
   editInd: Indicator[]; setEditInd: (v: Indicator[]) => void; editEntry: Condition[]; setEditEntry: (v: Condition[]) => void; editExit: Condition[]; setEditExit: (v: Condition[]) => void;
-  adv: AdvOpts; setAdv: (v: AdvOpts) => void;
+  adv: AdvOpts; setAdv: (v: AdvOpts) => void; turtle: TurtleParams; setTurtle: (v: TurtleParams) => void;
   second: Target | null; setSecond: (v: Target | null) => void; firstWeight: number; setFirstWeight: (n: number) => void; rebalanceFreq: RebalFreq; setRebalanceFreq: (v: RebalFreq) => void;
   stratAssets: Target[]; onRun: () => void; running: boolean; historyCount: number; onShowHistory: () => void;
 };
@@ -626,7 +626,7 @@ const AssetSearchBox = ({ cryptoList, onPick }: { cryptoList: { code: string; na
     </>
   );
 };
-const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, setCapital, monthly, setMonthly, editInd, setEditInd, editEntry, setEditEntry, editExit, setEditExit, adv, setAdv, second, setSecond, firstWeight, setFirstWeight, rebalanceFreq, setRebalanceFreq, stratAssets, onRun, running, historyCount, onShowHistory }: RunnerProps) => {
+const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, setCapital, monthly, setMonthly, editInd, setEditInd, editEntry, setEditEntry, editExit, setEditExit, adv, setAdv, turtle, setTurtle, second, setSecond, firstWeight, setFirstWeight, rebalanceFreq, setRebalanceFreq, stratAssets, onRun, running, historyCount, onShowHistory }: RunnerProps) => {
   const range = adv.dateMode === 'custom' && adv.customStart && adv.customEnd ? { startDate: adv.customStart, endDate: adv.customEnd } : periodDates(period);
   const today = periodDates('1Y').endDate;
   const [cryptoList, setCryptoList] = useState<{ code: string; name: string }[]>([]);
@@ -671,6 +671,25 @@ const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, 
           <label className="mt-3 flex items-center gap-2 text-[12.5px]" style={{ color: INK1 }}><input type="checkbox" className="accent-[#5b9dff]" checked={monthly > 0} onChange={e => setMonthly(e.target.checked ? Math.max(100_000, Math.round(capital / 12)) : 0)} /><Term k="적립식" compact>적립식 투자</Term> (매월 {monthly > 0 ? `₩${fmtNum(monthly)}` : '첫 거래일'})</label>
           {monthly > 0 && <div className="mt-2"><input type="number" value={monthly} onChange={e => setMonthly(Math.max(0, Number(e.target.value) || 0))} className="w-full rounded-lg px-3 py-2 text-right font-mono text-[13px] outline-none" style={fieldStyle} /><div className="mt-1.5 grid grid-cols-4 gap-1.5">{[100_000, 300_000, 500_000, 1_000_000].map(v => <button key={v} onClick={() => setMonthly(v)} className="rounded-md py-1 text-[10.5px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>{fmtNum(v / 10000)}만</button>)}</div></div>}
         </div>
+        {/* 터틀 전용 설정 — 채널 기간·ADX·유닛·레버리지 (종목별로 다르게) */}
+        {strat?.id === TURTLE_PRESET_ID && (
+          <div className="rounded-lg p-3" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.06)' }}>
+            <div className="mb-2 text-[12.5px] font-bold" style={{ color: GLOW }}>🐢 터틀 설정 (종목별로 조정 가능)</div>
+            <div className="grid grid-cols-3 gap-2">
+              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>진입 채널</span><input type="number" min={5} step={1} value={turtle.entryPeriod} onChange={e => setTurtle({ ...turtle, entryPeriod: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>청산 채널</span><input type="number" min={2} step={1} value={turtle.exitPeriod} onChange={e => setTurtle({ ...turtle, exitPeriod: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>ADX 임계</span><input type="number" min={0} step={1} value={turtle.adxThreshold} onChange={e => setTurtle({ ...turtle, adxThreshold: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>최대 유닛</span><input type="number" min={1} max={10} step={1} value={turtle.maxUnits} onChange={e => setTurtle({ ...turtle, maxUnits: Number(e.target.value) || 1 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>레버리지</span><input type="number" min={1} max={20} step={1} value={turtle.leverage} onChange={e => setTurtle({ ...turtle, leverage: Number(e.target.value) || 1 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>트레일링 %</span><input type="number" min={0} step={0.5} value={turtle.trailingStopPercent} onChange={e => setTurtle({ ...turtle, trailingStopPercent: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button onClick={() => setTurtle({ entryPeriod: 100, exitPeriod: 30, adxThreshold: 15, maxUnits: 5, leverage: 7, trailingStopPercent: 4 })} className="rounded-md px-2 py-1 text-[11px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>BTC 프리셋 (100/30·ADX15·7배·5유닛)</button>
+              <button onClick={() => setTurtle({ entryPeriod: 80, exitPeriod: 40, adxThreshold: 25, maxUnits: 4, leverage: 4, trailingStopPercent: 5 })} className="rounded-md px-2 py-1 text-[11px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>ETH 프리셋 (80/40·ADX25·4배·4유닛)</button>
+            </div>
+            <div className="mt-1.5 text-[10.5px]" style={{ color: INK3 }}>롱·숏 양방향 + 피라미딩으로 자동 구성됩니다. 백테스트는 일봉, 라이브(Bitget 선물)는 선택한 봉 기준.</div>
+          </div>
+        )}
         {/* 고급 설정 — 리스크·비용·방향·배당·지표 */}
         {strat && <details className="rounded-lg" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)' }}>
           <summary className="cursor-pointer list-none px-3 py-2.5 text-[12.5px] font-semibold" style={{ color: INK1 }}>고급 설정 — 리스크·비용·지표</summary>
@@ -1096,6 +1115,7 @@ const ConsoleStrategyPage = () => {
   const [monthly, setMonthly] = useState(0);
   // 고급 백테스트 옵션 (리스크·비용·방향·배당·커스텀 기간) + 2자산 리밸런싱
   const [adv, setAdv] = useState<AdvOpts>(ADV_DEFAULTS);
+  const [turtle, setTurtle] = useState<TurtleParams>(TURTLE_DEFAULTS); // 터틀 전용 설정(채널 기간·ADX·유닛·레버리지)
   const [second, setSecond] = useState<Target | null>(null);
   const [firstWeight, setFirstWeight] = useState(50);
   const [rebalanceFreq, setRebalanceFreq] = useState<RebalFreq>('MONTHLY');
@@ -1193,9 +1213,14 @@ const ConsoleStrategyPage = () => {
   const run = async (id: string | null = activeId) => {
     const s = allStrats.find(x => x.id === id);
     if (!s) { setError('전략을 선택해주세요.'); return; }
-    const preset = PRESET_DEFS[s.id];
+    const isTurtle = s.id === TURTLE_PRESET_ID;
+    // 터틀은 설정 패널 파라미터로 지표·조건을 즉석 생성(채널 기간·ADX·유닛·레버리지·트레일링 반영)
+    const preset = isTurtle
+      ? { ...PRESET_DEFS[s.id], ...buildTurtleConditions(turtle), maxPositions: turtle.maxUnits, leverage: turtle.leverage,
+          trailingStopPercent: turtle.trailingStopPercent, tradeDirection: 'LONG_SHORT_FLAT' as const, pyramidMode: 'ATR' as const }
+      : PRESET_DEFS[s.id];
     const us = userStrats.find(x => x.id === s.id);
-    const useEdit = s.id === editForId; // 고급 설정 편집값 적용 (현재 전략 로드 완료 시)
+    const useEdit = !isTurtle && s.id === editForId; // 터틀은 동적 생성 조건을 쓰므로 수동 편집값 무시
     if (!(capital > 0)) { setError('초기 투자금은 0보다 커야 합니다.'); return; }
     if (adv.dateMode === 'custom') {
       if (!adv.customStart || !adv.customEnd) { setError('직접지정 기간의 시작일과 종료일을 모두 선택해주세요.'); return; }
@@ -1308,7 +1333,7 @@ const ConsoleStrategyPage = () => {
                   : <EmptyHero running={running} total={allStrats.length} userCount={userStrats.length} onGuide={() => { setActiveId('preset-golden-cross'); setTarget({ symbol: 'BTC', name: '비트코인', assetType: 'CRYPTO' }); run('preset-golden-cross'); }} />}
           </div>
           <div data-tour="runner" className="min-w-0">
-          <BacktestRunner strat={strat} target={target} setTarget={setTarget} period={period} setPeriod={setPeriod} capital={capital} setCapital={setCapital} monthly={monthly} setMonthly={setMonthly} editInd={editInd} setEditInd={setEditInd} editEntry={editEntry} setEditEntry={setEditEntry} editExit={editExit} setEditExit={setEditExit} adv={adv} setAdv={setAdv} second={second} setSecond={setSecond} firstWeight={firstWeight} setFirstWeight={setFirstWeight} rebalanceFreq={rebalanceFreq} setRebalanceFreq={setRebalanceFreq} stratAssets={stratAssets} onRun={() => run()} running={running} historyCount={history.length} onShowHistory={() => setHistOpen(true)} />
+          <BacktestRunner strat={strat} target={target} setTarget={setTarget} period={period} setPeriod={setPeriod} capital={capital} setCapital={setCapital} monthly={monthly} setMonthly={setMonthly} editInd={editInd} setEditInd={setEditInd} editEntry={editEntry} setEditEntry={setEditEntry} editExit={editExit} setEditExit={setEditExit} adv={adv} setAdv={setAdv} turtle={turtle} setTurtle={setTurtle} second={second} setSecond={setSecond} firstWeight={firstWeight} setFirstWeight={setFirstWeight} rebalanceFreq={rebalanceFreq} setRebalanceFreq={setRebalanceFreq} stratAssets={stratAssets} onRun={() => run()} running={running} historyCount={history.length} onShowHistory={() => setHistOpen(true)} />
           </div>
         </div>
         <footer className="flex flex-wrap items-center justify-between gap-3.5 pt-6" style={{ borderTop: `1px solid ${LINE}` }}>

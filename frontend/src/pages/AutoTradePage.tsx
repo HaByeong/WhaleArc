@@ -6,7 +6,7 @@ import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { strategyService, type Strategy, type BacktestHistoryItem } from '../services/strategyService';
-import { PRESET_STRATEGIES, type PresetStrategy } from '../data/presetStrategies';
+import { PRESET_STRATEGIES, type PresetStrategy, TURTLE_PRESET_ID, TURTLE_DEFAULTS, buildTurtleConditions, type TurtleParams } from '../data/presetStrategies';
 import {
   liveTradeService,
   type Deployment,
@@ -216,6 +216,7 @@ const AutoTradePage = () => {
     trailingStopPct: '',
     dailyLossLimit: '',
   });
+  const [turtle, setTurtle] = useState<TurtleParams>(TURTLE_DEFAULTS); // 터틀 전용 설정(채널 기간·ADX·유닛)
 
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
@@ -383,18 +384,21 @@ const AutoTradePage = () => {
     setCreating(true);
     try {
       const presetSel = selected as PresetStrategy | undefined;
+      // 터틀이면 설정 패널 파라미터로 지표·조건을 즉석 생성(채널 기간·ADX). 그 외 프리셋은 정의값 그대로.
+      const isTurtle = isPreset && form.strategyId === TURTLE_PRESET_ID;
+      const turtleCond = isTurtle ? buildTurtleConditions(turtle) : null;
       await liveTradeService.createDeployment({
         ...(isPreset
           ? {
               strategyName: selected?.name,
-              indicators: selected?.indicators,
-              entryConditions: selected?.entryConditions,
-              exitConditions: selected?.exitConditions,
+              indicators: turtleCond?.indicators ?? selected?.indicators,
+              entryConditions: turtleCond?.entryConditions ?? selected?.entryConditions,
+              exitConditions: turtleCond?.exitConditions ?? selected?.exitConditions,
               // 독립 양방향(터틀)·피라미딩 권장값 전달. 숏은 백엔드에서 Bitget 선물/MOCK만 허용.
-              shortEntryConditions: presetSel?.shortEntryConditions,
-              shortExitConditions: presetSel?.shortExitConditions,
+              shortEntryConditions: turtleCond?.shortEntryConditions ?? presetSel?.shortEntryConditions,
+              shortExitConditions: turtleCond?.shortExitConditions ?? presetSel?.shortExitConditions,
               tradeDirection: presetSel?.tradeDirection,
-              maxUnits: presetSel?.maxPositions,
+              maxUnits: isTurtle ? turtle.maxUnits : presetSel?.maxPositions,
               pyramidMode: presetSel?.pyramidMode,
             }
           : { strategyId: form.strategyId }),
@@ -1032,6 +1036,28 @@ const AutoTradePage = () => {
                 </select>
                 <p className={`text-[11px] mt-1 ${subText}`}>기본 제공 전략은 바로 가동할 수 있고, '전략' 페이지에서 만든 내 전략도 선택할 수 있어요.</p>
               </div>
+
+              {/* 터틀 전용 설정 — 채널 기간·ADX·유닛 (종목별로 조정) */}
+              {form.strategyId === TURTLE_PRESET_ID && (
+                <div className={`rounded-lg border p-3 ${isDark ? 'border-sky-400/30 bg-sky-400/[0.06]' : 'border-sky-300 bg-sky-50'}`}>
+                  <div className={`text-xs font-bold mb-2 ${isDark ? 'text-sky-300' : 'text-sky-700'}`}>🐢 터틀 설정 (종목별로 조정)</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([['entryPeriod', '진입 채널', 5], ['exitPeriod', '청산 채널', 2], ['adxThreshold', 'ADX 임계', 0], ['maxUnits', '최대 유닛', 1]] as const).map(([k, label, min]) => (
+                      <label key={k} className="flex flex-col gap-1">
+                        <span className={`text-[10.5px] ${subText}`}>{label}</span>
+                        <input type="number" min={min} step={1} value={turtle[k]}
+                          onChange={e => setTurtle({ ...turtle, [k]: Number(e.target.value) || min })}
+                          className={`rounded-lg border px-2 py-1.5 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`} />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <button type="button" onClick={() => setTurtle({ ...turtle, entryPeriod: 100, exitPeriod: 30, adxThreshold: 15, maxUnits: 5 })} className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${isDark ? 'border-white/10 text-slate-200' : 'border-gray-300 text-gray-700'}`}>BTC (100/30·ADX15·5유닛)</button>
+                    <button type="button" onClick={() => setTurtle({ ...turtle, entryPeriod: 80, exitPeriod: 40, adxThreshold: 25, maxUnits: 4 })} className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${isDark ? 'border-white/10 text-slate-200' : 'border-gray-300 text-gray-700'}`}>ETH (80/40·ADX25·4유닛)</button>
+                  </div>
+                  <p className={`text-[10.5px] mt-1.5 ${subText}`}>롱·숏 양방향 + 피라미딩 자동 구성. 레버리지·트레일링·손절은 아래 항목에서 설정하세요. 숏은 Bitget 선물(FUTURES)에서만 동작합니다.</p>
+                </div>
+              )}
 
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>{isLive ? '거래소 (브로커)' : '계좌'}</label>

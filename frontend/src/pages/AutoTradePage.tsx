@@ -200,6 +200,7 @@ const AutoTradePage = () => {
 
   // 생성 모달
   const [showCreate, setShowCreate] = useState(false);
+  const [fromBacktest, setFromBacktest] = useState<string | null>(null);   // 백테스트 딥링크로 가져온 전략명(도착 안내용)
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
@@ -274,12 +275,16 @@ const AutoTradePage = () => {
       }
       const s = [...PRESET_STRATEGIES, ...strats].find(st => st.id === deployId);
       // 전략을 찾았을 때만 선택 세팅(없으면 빈 모달 — 잘못된 id로 배포 시도 방지)
-      if (s) setForm(prev => ({
-        ...prev,
-        strategyId: deployId,
-        targetAssetsText: s.targetAssets.join(', '),
-        assetType: s.assetType === 'MIXED' ? '' : s.assetType,
-      }));
+      if (s) {
+        setForm(prev => ({
+          ...prev,
+          strategyId: deployId,
+          targetAssetsText: s.targetAssets.join(', '),
+          assetType: s.assetType === 'MIXED' ? '' : s.assetType,
+        }));
+        setFromBacktest(s.name);
+        pushToast('success', '전략 불러옴', `'${s.name}' 전략으로 자동매매를 준비했어요. 금액·리스크만 확인하고 시작하세요.`);
+      }
       setShowCreate(true);
       window.history.replaceState({}, '', window.location.pathname);   // 새로고침 시 재오픈 방지
     })();
@@ -318,6 +323,7 @@ const AutoTradePage = () => {
   };
 
   const _doOpenCreate = async () => {
+    setFromBacktest(null);   // 수동 오픈은 백테스트 도착 안내 없음
     setShowCreate(true);
     if (strategies.length === 0) {
       try {
@@ -1014,6 +1020,15 @@ const AutoTradePage = () => {
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(255,255,255,.75)' }}>{isLive ? '실전 계좌(KIS·Bitget)에 직접 주문하는 실거래입니다 (실제 자금 ⚠️).' : '가상자금으로 안전하게 연습하는 모의 자동매매입니다. 실제 돈은 나가지 않습니다.'}</p>
               </div>
             </div>
+
+            {fromBacktest && (
+              <div className="mx-5 mt-4 flex items-start gap-2.5 rounded-xl px-3.5 py-3" style={{ background: 'rgba(63,214,160,.10)', border: '1px solid rgba(63,214,160,.30)' }}>
+                <span style={{ fontSize: 15, lineHeight: '20px' }}>✓</span>
+                <p className="m-0 text-[12.5px] leading-relaxed" style={{ color: isDark ? 'rgba(255,255,255,.85)' : '#0f5132' }}>
+                  백테스트에서 <b style={{ color: '#3fd6a0' }}>‘{fromBacktest}’</b> 전략을 가져왔어요. 종목·금액·리스크만 확인하고 바로 시작하세요.
+                </p>
+              </div>
+            )}
 
             <div className="px-5 py-4 space-y-4">
               <div>

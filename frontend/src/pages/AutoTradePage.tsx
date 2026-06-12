@@ -271,11 +271,12 @@ const AutoTradePage = () => {
         try { strats = await strategyService.getStrategies(); setStrategies(strats); } catch { /* 전략 로드 실패 시 빈 선택으로라도 모달은 연다 */ }
       }
       const s = [...PRESET_STRATEGIES, ...strats].find(st => st.id === deployId);
-      setForm(prev => ({
+      // 전략을 찾았을 때만 선택 세팅(없으면 빈 모달 — 잘못된 id로 배포 시도 방지)
+      if (s) setForm(prev => ({
         ...prev,
         strategyId: deployId,
-        targetAssetsText: s ? s.targetAssets.join(', ') : prev.targetAssetsText,
-        assetType: s ? (s.assetType === 'MIXED' ? '' : s.assetType) : prev.assetType,
+        targetAssetsText: s.targetAssets.join(', '),
+        assetType: s.assetType === 'MIXED' ? '' : s.assetType,
       }));
       setShowCreate(true);
       window.history.replaceState({}, '', window.location.pathname);   // 새로고침 시 재오픈 방지

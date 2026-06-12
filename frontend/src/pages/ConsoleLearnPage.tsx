@@ -400,6 +400,8 @@ const ConsoleLearnPage = () => {
 
   // 노출: 관리형(터틀) + DIY 신호전략(프리셋 매핑). 비신호 일회성매수형은 숨김.
   const shown = products.filter(p => isManaged(p) || presetFor(p) != null);
+  const managedList = shown.filter(isManaged);              // 사면 알아서 굴러가는 관리형 상품
+  const diyList = shown.filter(p => !isManaged(p));          // 백테스트로 검증해 내가 굴리는 DIY 전략
   const open = shown.find(p => p.id === openId) || null;
 
   return (
@@ -431,12 +433,35 @@ const ConsoleLearnPage = () => {
         <div className="flex flex-wrap gap-1.5">
           {CATS.map(([k, l]) => { const on = k === cat; return <button key={k} onClick={() => setCat(k)} className="whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : `1px solid ${HAIR}`, background: on ? SONAR_DIM : CARD, color: on ? SONAR : INK1 }}>{l}</button>; })}
         </div>
-        {/* 카드 그리드 — 백테스트 가능한 신호형 전략만 */}
+        {/* 카드 — 관리형(구매·자동운용) vs DIY(백테스트→자동매매) 두 갈래 */}
         {loading ? <div style={{ ...panel, padding: 48, textAlign: 'center' }}><span className="text-[13px]" style={{ color: INK3 }}>전략을 불러오는 중…</span></div>
           : error ? <div style={{ ...panel, padding: 36, textAlign: 'center' }}><div className="text-[13px]" style={{ color: INK2 }}>{error}</div><button onClick={() => setCat(c => c)} className="mt-3 rounded-lg px-4 py-2 text-[12.5px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: SONAR }}>다시 시도</button></div>
             : shown.length === 0 ? <div style={{ ...panel, padding: 48, textAlign: 'center' }}><div className="text-[28px]">🧭</div><div className="mt-2 text-[14px] font-semibold">해당 카테고리의 전략이 아직 없어요.</div></div>
-              : <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-                  {shown.map(p => <Card key={p.id} p={p} purchased={purchasedIds.has(p.id)} onOpen={() => setOpenId(p.id)} onRun={() => runBacktest(p)} onBuy={() => startInvest(p)} />)}
+              : <div className="flex flex-col gap-9">
+                  {managedList.length > 0 && (
+                    <div className="flex flex-col gap-3.5">
+                      <div>
+                        <div className="text-[10.5px] font-semibold tracking-[.18em]" style={{ color: '#3fd6a0' }}>MANAGED · 관리형 퀀트 상품</div>
+                        <h2 className="mt-1 text-[16px] font-bold">사면 알아서 굴러가는 전문가 전략</h2>
+                        <p className="mt-1 text-[12.5px]" style={{ color: INK2 }}>구매하면 전략 규칙대로 <b style={{ color: INK1 }}>자동 운용</b>돼요. 운용 손익은 위 ‘자동 운용 중’에서 확인합니다. (모의)</p>
+                      </div>
+                      <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+                        {managedList.map(p => <Card key={p.id} p={p} purchased={purchasedIds.has(p.id)} onOpen={() => setOpenId(p.id)} onRun={() => runBacktest(p)} onBuy={() => startInvest(p)} />)}
+                      </div>
+                    </div>
+                  )}
+                  {diyList.length > 0 && (
+                    <div className="flex flex-col gap-3.5">
+                      <div>
+                        <div className="text-[10.5px] font-semibold tracking-[.18em]" style={{ color: SONAR }}>DIY · 직접 운용 전략</div>
+                        <h2 className="mt-1 text-[16px] font-bold">백테스트로 검증하고 내가 굴리는 전략</h2>
+                        <p className="mt-1 text-[12.5px]" style={{ color: INK2 }}><b style={{ color: INK1 }}>돌려보기</b>로 과거 성과를 확인한 뒤 자동매매로 이어가요.</p>
+                      </div>
+                      <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+                        {diyList.map(p => <Card key={p.id} p={p} purchased={purchasedIds.has(p.id)} onOpen={() => setOpenId(p.id)} onRun={() => runBacktest(p)} onBuy={() => startInvest(p)} />)}
+                      </div>
+                    </div>
+                  )}
                 </div>}
       </div>
       {open && <ProductModal p={open} purchased={purchasedIds.has(open.id)} onClose={() => setOpenId(null)} onRun={() => runBacktest(open)} onBuy={() => startInvest(open)} onCancel={() => cancelByProduct(open.id)} />}

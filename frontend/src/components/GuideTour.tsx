@@ -41,16 +41,37 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
     if (!el) return;
 
     const rect = el.getBoundingClientRect();
+    // 콘솔 본문(.wa-console-dense)의 zoom 보정 — 타깃은 zoom 안, 스포트라이트는 body 포털(시각 뷰포트)이라
+    // 좌표계를 맞춰야 정렬된다. Chrome 버전마다 getBoundingClientRect가 zoom을 반영(시각좌표)하거나 안 함(CSS좌표)이라,
+    // 프로브로 판별 → CSS좌표면 zoom 원점(zoomEl 좌상단) 기준으로 시각좌표로 변환한다.
+    let sp = { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
+    const zoomEl = (el as HTMLElement).closest('.wa-console-dense') as HTMLElement | null;
+    if (zoomEl) {
+      const zoom = parseFloat(getComputedStyle(zoomEl).zoom) || 1;
+      if (zoom && zoom !== 1) {
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;left:0;top:0;width:1000px;height:0;visibility:hidden;pointer-events:none;';
+        zoomEl.appendChild(probe);
+        const grcFactor = (probe.getBoundingClientRect().width || 1000) / 1000; // ≈zoom이면 grc=시각좌표, ≈1이면 grc=CSS좌표
+        zoomEl.removeChild(probe);
+        if (Math.abs(grcFactor - 1) < 0.02) {
+          const base = zoomEl.getBoundingClientRect(); // 같은 CSS좌표계의 zoom 원점
+          sp = {
+            left: base.left + (rect.left - base.left) * zoom,
+            top: base.top + (rect.top - base.top) * zoom,
+            width: rect.width * zoom,
+            height: rect.height * zoom,
+          };
+        }
+        // grcFactor≈zoom이면 grc가 이미 시각좌표 → 변환 불필요
+      }
+    }
+
     const pad = 8;
-    setSpotlight({
-      top: rect.top - pad,
-      left: rect.left - pad,
-      width: rect.width + pad * 2,
-      height: rect.height + pad * 2,
-    });
+    setSpotlight({ top: sp.top - pad, left: sp.left - pad, width: sp.width + pad * 2, height: sp.height + pad * 2 });
 
     // 툴팁은 강조 영역을 가리지 않게 화면 상/하단 중앙에 크게 고정 (항상 잘 보이게)
-    const spotCenterY = rect.top + rect.height / 2;
+    const spotCenterY = sp.top + sp.height / 2;
     setPlacement(spotCenterY < window.innerHeight * 0.52 ? 'bottom' : 'top');
   }, [step, currentStep]);
 

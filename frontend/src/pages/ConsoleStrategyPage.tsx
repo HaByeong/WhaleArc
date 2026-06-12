@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useMemo, useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
@@ -190,14 +191,13 @@ const StrategyLibrary = ({ strats, activeId, onPick, onCreate, onEditUser, onDel
                 <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={s.isUser ? { background: 'rgba(91,157,255,.16)', color: GLOW } : { background: 'var(--ci-card)', color: INK2 }}>{s.isUser ? '내 전략' : '기본'}</span>
                 <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: lv.bg, color: lv.color }}>{lv.label}</span>
                 {s.applied && <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(63,214,160,.14)', color: '#3fd6a0', border: '1px solid rgba(63,214,160,.3)' }}>● 적용중</span>}
-                {s.autoTrading && <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(245,208,97,.16)', color: '#f5d061', border: '1px solid rgba(245,208,97,.32)' }}>⚡ 자동매매</span>}
               </div>
               <p className="mt-2 line-clamp-2 text-[12px] leading-snug text-white/55">{s.short}</p>
               <div className="mt-2 text-[10.5px]" style={{ color: INK3 }}>조건 {s.n}개{s.isUser && s.assetCount ? ` · 대상 ${s.assetCount}종목` : ''}</div>
               {s.isUser && (
                 <button type="button" onClick={(e) => { e.stopPropagation(); onApply(s.id); }} className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[12px] font-bold transition-colors"
-                  style={s.autoTrading ? { background: 'rgba(245,208,97,.14)', color: '#f5d061', border: '1px solid rgba(245,208,97,.32)' } : s.applied ? { background: 'rgba(63,214,160,.12)', color: '#3fd6a0', border: '1px solid rgba(63,214,160,.3)' } : { background: 'rgba(91,157,255,.14)', color: GLOW, border: '1px solid rgba(91,157,255,.28)' }}>
-                  {s.autoTrading ? '⚡ 자동매매 중 · 관리' : s.applied ? '⚙ 관리 · ⚡ 자동매매' : '⚓ 적용 · ⚡ 자동매매'}
+                  style={s.applied ? { background: 'rgba(63,214,160,.12)', color: '#3fd6a0', border: '1px solid rgba(63,214,160,.3)' } : { background: 'rgba(91,157,255,.14)', color: GLOW, border: '1px solid rgba(91,157,255,.28)' }}>
+                  {s.applied ? '⚙ 적용 관리 · 자동매매 →' : '⚓ 적용 · 자동매매 →'}
                 </button>
               )}
             </div>
@@ -327,7 +327,7 @@ const StrategyGuidePanel = ({ strat, userStrat, onApply, onCreate }: { strat: St
         <div style={{ ...mkCard, padding: '18px 22px', border: '1px solid rgba(91,157,255,.28)', background: 'linear-gradient(135deg, rgba(91,157,255,.10), transparent 60%)' }}>
           <div className="text-[14px] font-bold">⚓ 모의 적용 · ⚡ 자동매매</div>
           <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>이 전략의 대상 종목을 모의 계좌에 한 번에 매수(적용)하거나, 신호가 뜰 때마다 자동으로 매매(자동매매)하도록 켤 수 있어요. <b style={{ color: 'var(--ci-ink0)' }}>모의투자 전용</b>입니다.</p>
-          <button onClick={() => onApply?.()} className="mt-3 w-full rounded-[10px] py-2.5 text-[13.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})` }}>{userStrat.autoTradingEnabled ? '⚡ 자동매매 관리' : '적용 · 자동매매 설정 →'}</button>
+          <button onClick={() => onApply?.()} className="mt-3 w-full rounded-[10px] py-2.5 text-[13.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})` }}>적용 · 자동매매 →</button>
         </div>
       ) : (
         <div style={{ ...mkCard, padding: '18px 22px', border: '1px solid rgba(245,208,97,.26)', background: 'linear-gradient(135deg, rgba(245,208,97,.08), transparent 60%)' }}>
@@ -817,6 +817,7 @@ const Toast = ({ msg, type }: { msg: string; type: 'success' | 'error' }) => (
 /* 포트폴리오 적용 모달 — 사용자 전략의 대상 종목을 모의투자 계좌에 균등 시장가 매수 */
 const QUICK_AMOUNTS = [1_000_000, 5_000_000, 10_000_000, 30_000_000, 50_000_000];
 const ApplyModal = ({ strategy, cash, onClose, onDone }: { strategy: Strategy; cash: number | null; onClose: () => void; onDone: (msg: string, type: 'success' | 'error') => void }) => {
+  const navigate = useNavigate();
   const [amount, setAmount] = useState('1000000');
   const [busy, setBusy] = useState(false);
   const assets = strategy.targetAssets || [];
@@ -844,18 +845,6 @@ const ApplyModal = ({ strategy, cash, onClose, onDone }: { strategy: Strategy; c
     setBusy(true);
     try { await strategyService.unapplyStrategy(strategy.id); onDone(`"${strategy.name}" 적용을 해제했습니다. (이미 매수된 자산은 유지됩니다)`, 'success'); }
     catch (e: any) { onDone(e?.response?.data?.error || '적용 해제에 실패했습니다.', 'error'); }
-    finally { setBusy(false); }
-  };
-  const toggleAuto = async () => {
-    if (busy) return;
-    const turnOn = !strategy.autoTradingEnabled;
-    if (turnOn && !(amt > 0)) { onDone('자동매매 금액(종목당)을 입력해주세요.', 'error'); return; }
-    if (turnOn && !(strategy.entryConditions?.length)) { onDone('진입 조건이 없는 전략은 자동매매를 켤 수 없습니다. 전략 수정에서 조건을 추가하세요.', 'error'); return; }
-    setBusy(true);
-    try {
-      await strategyService.setAutoTrade(strategy.id, turnOn, turnOn ? amt : undefined);
-      onDone(turnOn ? `"${strategy.name}" 자동매매를 켰습니다. 신호 발생 시 모의 계좌에서 자동 매매됩니다.` : `"${strategy.name}" 자동매매를 껐습니다.`, 'success');
-    } catch (e: any) { onDone(e?.response?.data?.error || e?.response?.data?.message || '자동매매 설정에 실패했습니다.', 'error'); }
     finally { setBusy(false); }
   };
 
@@ -888,14 +877,14 @@ const ApplyModal = ({ strategy, cash, onClose, onDone }: { strategy: Strategy; c
               {assets.slice(0, 8).map(code => <span key={code} className="rounded-md px-2 py-1 font-mono text-[11px]" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: INK1 }}>{strategy.targetAssetNames?.[code] || code}</span>)}
               {assets.length > 8 && <span className="px-2 py-1 text-[11px]" style={{ color: INK3 }}>+{assets.length - 8}</span>}
             </div>
-            {/* 자동매매 */}
-            <div className="mt-4 rounded-xl p-3.5" style={{ background: strategy.autoTradingEnabled ? 'rgba(63,214,160,.08)' : 'var(--ci-card)', border: `1px solid ${strategy.autoTradingEnabled ? 'rgba(63,214,160,.3)' : LINE}` }}>
+            {/* 자동매매 — ②(자동매매 페이지)로 통일. 여기선 안내·이동만 */}
+            <div className="mt-4 rounded-xl p-3.5" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 text-[13px] font-bold">⚡ 자동매매{strategy.autoTradingEnabled && <span className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: 'rgba(63,214,160,.16)', color: '#3fd6a0' }}>ON</span>}</div>
-                  <p className="mt-1 text-[11.5px] leading-relaxed" style={{ color: INK2 }}>전략 신호가 발생하면 모의 계좌에서 자동으로 매수·매도합니다. {strategy.autoTradingEnabled ? `종목당 ₩${fmtNum(strategy.autoTradeAmount || amt)}로 매매 중.` : `현재 입력 금액(종목당 ₩${fmtNum(amt)})으로 켭니다.`}</p>
+                  <div className="flex items-center gap-1.5 text-[13px] font-bold">⚡ 자동매매</div>
+                  <p className="mt-1 text-[11.5px] leading-relaxed" style={{ color: INK2 }}>신호가 뜰 때마다 자동으로 사고파는 <b style={{ color: 'var(--ci-ink0)' }}>모의 자동매매</b>는 전용 화면에서 시작해요. 손절·익절·실행로그까지 한곳에서 관리합니다.</p>
                 </div>
-                <button onClick={toggleAuto} disabled={busy} className="shrink-0 rounded-lg px-3.5 py-2 text-[12.5px] font-bold disabled:opacity-50" style={strategy.autoTradingEnabled ? { border: '1px solid rgba(239,77,77,.4)', background: 'rgba(239,77,77,.1)', color: '#fca5a5' } : { background: 'linear-gradient(180deg,#3fd6a0,#2f9e6e)', color: '#06231a' }}>{busy ? '…' : strategy.autoTradingEnabled ? '끄기' : '켜기'}</button>
+                <button onClick={() => navigate('/virt/auto-trade')} className="shrink-0 rounded-lg px-3.5 py-2 text-[12.5px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}>자동매매 시작 →</button>
               </div>
             </div>
           </>

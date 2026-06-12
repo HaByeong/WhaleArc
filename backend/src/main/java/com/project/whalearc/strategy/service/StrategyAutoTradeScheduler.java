@@ -49,8 +49,14 @@ public class StrategyAutoTradeScheduler {
     private static final long COOLDOWN_MS = 30 * 60 * 1000L; // 동일 전략·종목 재매매 최소 간격(과도한 churn 방지)
     private final ConcurrentHashMap<String, Long> lastTradeAt = new ConcurrentHashMap<>();
 
+    /** 구버전(전략 페이지 토글) 자동매매 — 자동매매는 ②(LiveStrategyDeployment/자동매매 페이지)로 통일되어 기본 OFF.
+     *  두 엔진이 같은 전략을 동시에 매매하는 이중매매를 막기 위해 기본 비활성(config로만 임시 재활성). */
+    @org.springframework.beans.factory.annotation.Value("${live.legacy-strategy-autotrade.enabled:false}")
+    private boolean legacyEnabled;
+
     @Scheduled(fixedRate = 60_000, initialDelay = 30_000) // 1분마다, 부팅 30초 후 시작
     public void run() {
+        if (!legacyEnabled) return;   // ②로 통일 — 구버전 전략-토글 자동매매 비활성(이중매매 차단)
         List<Strategy> strategies;
         try {
             strategies = strategyRepository.findByAutoTradingEnabledTrue();

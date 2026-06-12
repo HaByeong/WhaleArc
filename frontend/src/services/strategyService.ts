@@ -387,6 +387,7 @@ export interface BacktestHistoryItem {
   sharpeRatio: number;
   maxDrawdown: number;
   totalTrades: number;
+  winRate?: number;   // 구 레코드는 미보관(undefined)
   createdAt: number;
 }
 

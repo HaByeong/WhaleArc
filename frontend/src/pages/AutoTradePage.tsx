@@ -792,7 +792,7 @@ const AutoTradePage = () => {
                           <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
                         </svg>
                         <span className={`text-[11px] font-semibold ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>백테스트 예상 vs 실전 성과</span>
-                        <span className={`ml-auto text-[10px] ${subText}`}>{matchedBt.stockCode} 기준</span>
+                        <span className={`ml-auto text-[10px] ${subText}`}>백테스트 {matchedBt.stockCode}</span>
                       </div>
                       <div className={`grid grid-cols-3 divide-x ${divBorder}`}>
                         {[
@@ -810,7 +810,7 @@ const AutoTradePage = () => {
                           },
                           {
                             label: '승률',
-                            bt: '—',
+                            bt: matchedBt.winRate != null ? `${matchedBt.winRate.toFixed(1)}%` : '—',
                             live: liveWinRate != null ? `${liveWinRate.toFixed(1)}%` : '—',
                             liveColor: liveWinRate != null && liveWinRate >= 50 ? 'text-red-500' : liveWinRate != null ? 'text-blue-500' : (isDark ? 'text-slate-400' : 'text-gray-400'),
                           },
@@ -822,10 +822,13 @@ const AutoTradePage = () => {
                               <span className="text-[10px] text-gray-400">→</span>
                               <span className={`text-[12px] font-bold ${col.liveColor}`}>{col.live}</span>
                             </div>
-                            <p className={`text-[9px] mt-0.5 ${subText}`}>예상 → 실전</p>
+                            <p className={`text-[9px] mt-0.5 ${subText}`}>백테스트 → 배포 후</p>
                           </div>
                         ))}
                       </div>
+                      <p className={`px-3 py-1.5 text-[9px] leading-snug ${subText}`} style={{ borderTop: '1px solid var(--ci-line)' }}>
+                        백테스트는 전체 기간 누적, 실전은 배포 후 누적이라 기간이 달라 직접 비교가 아닙니다.
+                      </p>
                     </div>
                   )}
 
@@ -852,14 +855,14 @@ const AutoTradePage = () => {
                           <p className={`py-6 text-center text-xs ${subText}`}>아직 실행된 주문이 없습니다.</p>
                         ) : (
                           [...logsData].reverse().map(log => {
-                            const isBuy = log.side === 'BUY';
+                            const isBuySide = log.side === 'BUY' || log.side === 'COVER';   // 매수 방향(롱 진입·숏 청산)
                             const isFilled = log.status === 'FILLED';
                             return (
                               <div key={log.id} className={`grid grid-cols-[auto_1fr_auto] items-center gap-2 px-3 py-2.5 border-b last:border-b-0 ${divBorder}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isFilled ? 'bg-emerald-400' : 'bg-red-400'}`} />
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className={`text-[11px] font-bold ${isBuy ? 'text-red-500' : 'text-blue-500'}`}>{isBuy ? '매수' : '매도'}</span>
+                                    <span className={`text-[11px] font-bold ${isBuySide ? 'text-red-500' : 'text-blue-500'}`}>{sideKr(log.side) || (isBuySide ? '매수' : '매도')}</span>
                                     <span className={`text-[11px] font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>{log.symbol}</span>
                                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDark ? 'bg-white/[0.06] text-slate-400' : 'bg-gray-100 text-gray-500'}`}>{REASON_LABEL[log.reason] ?? log.reason}</span>
                                   </div>

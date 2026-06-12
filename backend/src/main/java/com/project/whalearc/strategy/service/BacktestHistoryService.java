@@ -41,6 +41,7 @@ public class BacktestHistoryService {
             s.setSharpeRatio(result.getSharpeRatio());
             s.setMaxDrawdown(result.getMaxDrawdown());
             s.setTotalTrades(result.getTotalTrades());
+            s.setWinRate(result.getWinRate());
             s.setResultJson(objectMapper.writeValueAsString(result));
             s.setCreatedAt(Instant.now());
             repository.save(s);

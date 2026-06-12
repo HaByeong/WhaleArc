@@ -11,7 +11,7 @@ export type PositionDirection = 'NONE' | 'LONG' | 'SHORT';
 
 /** 카드 '최근 신호' 표시용 최근 주문 요약. */
 export interface LastOrderSummary {
-  side: 'BUY' | 'SELL';
+  side: 'BUY' | 'SELL' | 'SHORT' | 'COVER';
   status: 'FILLED' | 'REJECTED' | 'SUBMITTED';
   reason: string;
   createdAt: string;
@@ -94,7 +94,7 @@ export interface LiveOrderLog {
   deploymentId: string;
   symbol: string;
   assetType?: string;
-  side: 'BUY' | 'SELL';
+  side: 'BUY' | 'SELL' | 'SHORT' | 'COVER';
   quantity: number;
   price: number;
   clientOrderId: string;

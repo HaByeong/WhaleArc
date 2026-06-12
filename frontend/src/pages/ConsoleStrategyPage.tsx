@@ -13,6 +13,7 @@ import { PRESET_STRATEGIES, type PresetStrategy, TURTLE_PRESET_ID, TURTLE_DEFAUL
 import { tradeService } from '../services/tradeService';
 import { Term } from '../components/GlossaryTerm';
 import GuideTour, { type TourStep } from '../components/GuideTour';
+import FunnelSteps from '../components/FunnelSteps';
 
 const STRAT_TOUR: TourStep[] = [
   { target: 'library', title: '① 전략 고르기', description: '기본 전략(골든크로스·RSI 등)을 고르거나 "새 항로 만들기"로 직접 만들 수 있어요.\n\n내 전략 카드 아래의 버튼으로 ⚓ 모의 적용·⚡ 자동매매도 켤 수 있습니다.', position: 'right' },
@@ -1314,7 +1315,8 @@ const ConsoleStrategyPage = () => {
   return (
     <HelmShell active="strategy" virt={isVirt} userName={userName} session="전략 백테스트">
       <div className="flex flex-col gap-5">
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          {isVirt ? <FunnelSteps current={2} /> : <span />}
           <button onClick={() => setTour(true)} className="inline-flex items-center gap-1.5 rounded-[10px] px-3.5 py-2 text-[13px] font-bold" style={{ border: '1px solid rgba(91,157,255,.4)', background: 'rgba(91,157,255,.14)', color: GLOW }} title="사용법 가이드 투어 다시 보기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="10" /><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .8-1 1.7" strokeLinecap="round" /><circle cx="12" cy="17" r=".6" fill="currentColor" /></svg>가이드 투어 다시 보기</button>
         </div>
         {error && <div className="rounded-xl px-4 py-3 text-[13px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{error}</div>}

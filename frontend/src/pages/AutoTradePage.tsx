@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import HelmShell from '../components/HelmShell';
+import FunnelSteps from '../components/FunnelSteps';
 import Toast, { type ToastItem } from '../components/Toast';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import { useTheme } from '../contexts/ThemeContext';
@@ -580,6 +581,8 @@ const AutoTradePage = () => {
           </div>
           <PrimaryBtn onClick={openCreate}>새 자동매매 시작</PrimaryBtn>
         </div>
+
+        {isVirt && <div className="mb-5"><FunnelSteps current={3} /></div>}
 
         {/* AUTOPILOT 관제 덱 (좌: 상태·요약 / 우: 전역 킬스위치) */}
         <section style={{ position: 'relative', overflow: 'hidden', background: 'var(--ci-panel)', border: '1px solid var(--ci-line)', borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)', marginBottom: 20 }}>

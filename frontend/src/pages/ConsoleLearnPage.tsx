@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
+import FunnelSteps from '../components/FunnelSteps';
 import {
   quantStoreService, CATEGORY_LABELS, RISK_LABELS, assetDisplayName,
   type QuantProduct, type PurchasePerformance, type ProductPurchase,
@@ -411,6 +412,7 @@ const ConsoleLearnPage = () => {
           <WhaleAvatar size={40} animated />
           <div><h1 className="text-[26px] font-bold tracking-tight">전략 가이드</h1><p className="mt-1.5 text-[13.5px]" style={{ color: INK1 }}>고래 튜터가 전략을 쉽게 설명해드려요. 마음에 들면 <b style={{ color: INK0 }}>VIRT로 돌려보기</b>로 백테스트해 검증하고, 자동매매까지 이어가보세요.</p></div>
         </div>
+        {isVirt && <FunnelSteps current={1} />}
         {/* 자동 운용 중(관리형 상품 보유) */}
         {perf.length > 0 && (
           <div className="flex flex-col gap-3" style={{ ...panel, background: 'linear-gradient(135deg, rgba(91,157,255,.12), rgba(91,157,255,.02) 60%, transparent)', border: '1px solid rgba(91,157,255,.28)', padding: '20px 24px' }}>

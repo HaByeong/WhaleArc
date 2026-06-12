@@ -256,7 +256,7 @@ const Card = ({ p, purchased, onOpen, onRun, onBuy }: { p: QuantProduct; purchas
           ? (purchased
               ? <span className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-bold" style={{ background: 'rgba(63,214,160,.16)', border: '1px solid rgba(63,214,160,.32)', color: '#3fd6a0' }}><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: '#3fd6a0' }} />운용 중 ⛵</span>
               : <button onClick={onBuy} className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}><span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}>VIRT</span>구매 →</button>)
-          : <button onClick={onRun} className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}><span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}>VIRT</span>돌려보기 →</button>}
+          : <button onClick={onRun} className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}><span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}>VIRT</span>백테스트 →</button>}
       </div>
     </div>
   );

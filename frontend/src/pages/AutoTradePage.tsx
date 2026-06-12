@@ -996,7 +996,7 @@ const AutoTradePage = () => {
                   className="flex-[2] rounded-lg py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
                   style={{ background: guideChecked ? 'linear-gradient(135deg,#3b82f6,#2563eb)' : undefined, border: guideChecked ? 'none' : '1px solid var(--ci-line)' }}
                 >
-                  {guideChecked ? '이해했어요 — 자동매매 만들기 →' : '체크 후 진행할 수 있어요'}
+                  {guideChecked ? '이해했어요 — 자동매매 시작 →' : '체크 후 진행할 수 있어요'}
                 </button>
               </div>
             </div>

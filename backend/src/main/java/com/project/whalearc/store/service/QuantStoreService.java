@@ -370,6 +370,12 @@ public class QuantStoreService {
     private ProductPurchase purchaseProductLocked(String userId, String productId, BigDecimal investmentAmount) {
         QuantProduct product = getProduct(productId);
 
+        // 투트랙 정책: 관리형(TURTLE)만 구매 가능. SIMPLE 신호전략은 백테스트→자동매매 경로(구매 없음).
+        // UI는 이미 SIMPLE 구매 버튼을 노출하지 않지만, 서버단에서도 즉시-시장가-매수 경로를 차단한다(방어).
+        if (product.getStrategyType() != QuantProduct.StrategyType.TURTLE) {
+            throw new IllegalArgumentException("이 전략은 구매 상품이 아닙니다. 백테스트로 검증한 뒤 자동매매로 운용하세요.");
+        }
+
         if (purchaseRepository.existsByUserIdAndProductIdAndStatus(
                 userId, productId, ProductPurchase.Status.ACTIVE)) {
             throw new IllegalArgumentException("이미 구매한 상품입니다.");

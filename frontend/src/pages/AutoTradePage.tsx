@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import HelmShell from '../components/HelmShell';
 import Toast, { type ToastItem } from '../components/Toast';
@@ -892,10 +891,11 @@ const AutoTradePage = () => {
       </div>
 
       {/* 자동매매 시작 전 교육 게이트 모달 */}
-      {showGuide && createPortal(
+      {showGuide && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowGuide(false)}>
           <div
-            className={`w-full max-w-md rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--wa-card-bg,#0f1b2d)] border border-white/10' : 'bg-white'}`}
+            className={`w-full max-w-md rounded-2xl shadow-2xl border ${isDark ? 'border-white/10' : 'border-gray-200'}`}
+            style={{ background: 'var(--ci-overlay)' }}
             onClick={e => e.stopPropagation()}
           >
             <div className={`px-6 py-5 border-b ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
@@ -965,13 +965,14 @@ const AutoTradePage = () => {
             </div>
           </div>
         </div>
-      , document.body)}
+      )}
 
       {/* 생성 모달 */}
-      {showCreate && createPortal(
+      {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !creating && setShowCreate(false)}>
           <div
-            className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--wa-card-bg,#0f1b2d)] border border-white/10' : 'bg-white'}`}
+            className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl border ${isDark ? 'border-white/10' : 'border-gray-200'}`}
+            style={{ background: 'var(--ci-overlay)' }}
             onClick={e => e.stopPropagation()}
           >
             <div style={{ position: 'relative', overflow: 'hidden', padding: '20px 24px', background: 'linear-gradient(105deg, #142647 0%, #1d3c7a 52%, #2c6fe6 100%)', borderBottom: '1px solid rgba(255,255,255,.14)' }}>
@@ -1190,7 +1191,7 @@ const AutoTradePage = () => {
             </div>
           </div>
         </div>
-      , document.body)}
+      )}
     </HelmShell>
   );
 };

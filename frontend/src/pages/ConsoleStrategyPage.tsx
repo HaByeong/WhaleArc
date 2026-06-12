@@ -44,13 +44,13 @@ const StationBar = ({ title, sub, badge }: { title: string; sub: string; badge?:
 );
 const Label = ({ children }: { children: ReactNode }) => <span className="text-[11.5px] font-semibold tracking-[.06em]" style={{ color: INK2 }}>{children}</span>;
 
-type Strat = { id: string; name: string; cat: string; level: 'beginner' | 'intermediate' | 'advanced'; short: string; n: number; isUser?: boolean; applied?: boolean; autoTrading?: boolean; assetCount?: number };
+type Strat = { id: string; name: string; cat: string; level: 'beginner' | 'intermediate' | 'advanced'; short: string; n: number; isUser?: boolean; applied?: boolean; assetCount?: number };
 const DIFF_LEVEL: Record<string, 'beginner' | 'intermediate' | 'advanced'> = { '초급': 'beginner', '중급': 'intermediate', '고급': 'advanced' };
 // 사용자 생성 전략 → 라이브러리 표시용 매핑
 const toStrat = (s: Strategy): Strat => ({
   id: s.id, name: s.name, cat: 'custom', level: DIFF_LEVEL[s.difficulty || '초급'] || 'beginner',
   short: s.description || s.strategyLogic || '직접 만든 전략', n: (s.entryConditions?.length || 0) + (s.exitConditions?.length || 0), isUser: true,
-  applied: s.applied, autoTrading: s.autoTradingEnabled, assetCount: s.targetAssets?.length || 0,
+  applied: s.applied, assetCount: s.targetAssets?.length || 0,
 });
 // 프리셋 Strategy → 라이브러리 표시용 Strat 매핑 (단일 출처: presetStrategies.ts)
 const presetToStrat = (s: PresetStrategy): Strat => ({

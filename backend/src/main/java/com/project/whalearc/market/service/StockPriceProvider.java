@@ -123,11 +123,14 @@ public class StockPriceProvider {
                 Map<String, String> output = kisApiClient.getStockPrice(code);
                 if (output == null) continue;
 
+                long price = parseLong(output.get("stck_prpr"));            // 현재가
+                if (price <= 0) continue;   // 시세 0(레이트리밋/부분응답)은 캐시에 넣지 않음 — 직전 정상 캐시 유지
+
                 MarketPriceResponse dto = new MarketPriceResponse();
                 dto.setAssetType(AssetType.STOCK);
                 dto.setSymbol(code);
                 dto.setName(name);
-                dto.setPrice(parseLong(output.get("stck_prpr")));           // 현재가
+                dto.setPrice(price);
                 dto.setChange(parseLong(output.get("prdy_vrss")));          // 전일 대비
                 dto.setChangeRate(parseDouble(output.get("prdy_ctrt")));    // 전일 대비율
                 dto.setVolume(parseLong(output.get("acml_vol")));           // 누적 거래량

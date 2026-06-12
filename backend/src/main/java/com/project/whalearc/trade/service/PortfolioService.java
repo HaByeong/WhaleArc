@@ -131,13 +131,15 @@ public class PortfolioService {
                 }
             }
 
+            // 시세 갱신 시 0 이하(시세 조회 실패/레이트리밋)는 직전 정상가를 유지한다.
+            // KIS 레이트리밋(EGW00201)으로 일시적 0이 들어와 평가액이 0원으로 깜빡이던 문제 방지.
             for (Holding holding : portfolio.getHoldings()) {
                 if (holding.isStock()) {
                     BigDecimal price = stockPriceMap.get(holding.getStockCode());
-                    if (price != null) {
+                    if (price != null && price.signum() > 0) {
                         holding.setCurrentPrice(price);
                     } else {
-                        // 캐시에 없는 주식은 개별 조회
+                        // 캐시에 없는(또는 0인) 주식은 개별 조회
                         try {
                             Map<String, String> output = kisApiClient.getStockPrice(holding.getStockCode());
                             if (output != null) {
@@ -150,12 +152,12 @@ public class PortfolioService {
                     }
                 } else if (holding.isUsStock()) {
                     BigDecimal price = usStockPriceMap.get(holding.getStockCode());
-                    if (price != null) {
+                    if (price != null && price.signum() > 0) {
                         holding.setCurrentPrice(price); // USD 단위
                     }
                 } else {
                     BigDecimal price = cryptoPriceMap.get(holding.getStockCode());
-                    if (price != null) {
+                    if (price != null && price.signum() > 0) {
                         holding.setCurrentPrice(price);
                     }
                 }

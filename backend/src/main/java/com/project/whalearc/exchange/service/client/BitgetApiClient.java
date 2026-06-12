@@ -100,6 +100,51 @@ public class BitgetApiClient {
                 }
             }
 
+            // ── 선물(USDT-M) 계좌 자산 합산 (best-effort: 선물 조회 실패해도 현물 표시는 유지) ──
+            //   선물 지갑 equity(=가용+증거금+미실현손익)를 총자산에, 가용 USDT를 현금에, 보유 포지션을 종목으로 추가한다.
+            try {
+                Map<String, Object> facct = signedRequest(apiKey, secretKey, passphrase, HttpMethod.GET,
+                        "/api/v2/mix/account/accounts", futuresQuery(false), null);
+                if (facct.get("data") instanceof List<?> accts) {
+                    for (Object a : accts) {
+                        if (!(a instanceof Map<?, ?> m)) continue;
+                        if (!"USDT".equalsIgnoreCase(String.valueOf(m.get("marginCoin")))) continue;
+                        double equity = parseDouble(m.get("accountEquity") != null ? m.get("accountEquity") : m.get("usdtEquity"));
+                        double available = parseDouble(m.get("available"));
+                        double uPnl = parseDouble(m.get("unrealizedPL"));
+                        cashBalance += available * usdtToKrw;                  // 선물 가용 USDT → 현금
+                        totalValue += (equity - available) * usdtToKrw;        // 포지션에 묶인 증거금+미실현손익
+                        totalProfitLoss += uPnl * usdtToKrw;
+                    }
+                }
+                // 보유 선물 포지션을 종목 행으로 추가(표시용; 총자산은 위 equity로 이미 반영됨)
+                Map<String, Object> fpos = signedRequest(apiKey, secretKey, passphrase, HttpMethod.GET,
+                        "/api/v2/mix/position/all-position", futuresQuery(true), null);
+                if (fpos.get("data") instanceof List<?> poss) {
+                    for (Object p : poss) {
+                        if (!(p instanceof Map<?, ?> m)) continue;
+                        double size = parseDouble(m.get("total"));
+                        if (size <= 0) continue;
+                        String sym = String.valueOf(m.get("symbol"));
+                        String coin = sym.replace("USDT", "");
+                        boolean isLong = "long".equalsIgnoreCase(String.valueOf(m.get("holdSide")));
+                        double openAvg = parseDouble(m.get("openPriceAvg"));
+                        double mark = parseDouble(m.get("markPrice"));
+                        double uPnl = parseDouble(m.get("unrealizedPL"));
+                        double levNum = parseDouble(m.get("leverage"));
+                        String levStr = (levNum > 0) ? " ×" + (long) levNum : "";
+                        double priceMovePct = openAvg > 0 ? (isLong ? (mark - openAvg) : (openAvg - mark)) / openAvg * 100 : 0;
+                        double returnRate = priceMovePct * (levNum > 0 ? levNum : 1);   // 레버리지 반영 증거금 수익률
+                        holdings.add(new ExchangeHoldingDto(sym,
+                                getCoinName(coin) + " 무기한(" + (isLong ? "롱" : "숏") + levStr + ")",
+                                size, openAvg * usdtToKrw, mark * usdtToKrw,
+                                size * mark * usdtToKrw, uPnl * usdtToKrw, returnRate));
+                    }
+                }
+            } catch (Exception fe) {
+                System.err.println("비트겟 선물 자산 조회 실패(현물만 표시): " + fe.getMessage());
+            }
+
             totalValue += cashBalance;
             ExchangePortfolioDto dto = new ExchangePortfolioDto("BITGET", true, totalValue, totalProfitLoss,
                     0, cashBalance, holdings);
@@ -176,6 +221,14 @@ public class BitgetApiClient {
         } catch (NumberFormatException e) {
             return 0;
         }
+    }
+
+    /** 선물 조회용 쿼리(productType=USDT-FUTURES, 필요 시 marginCoin=USDT). */
+    private Map<String, Object> futuresQuery(boolean withMarginCoin) {
+        Map<String, Object> q = new LinkedHashMap<>();
+        q.put("productType", FUTURES_PRODUCT_TYPE);
+        if (withMarginCoin) q.put("marginCoin", FUTURES_MARGIN_COIN);
+        return q;
     }
 
     // ── 라이브 자동매매: 인증 요청 + 현물 주문/체결/캔들/규격 ──────────────

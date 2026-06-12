@@ -284,6 +284,7 @@ const EmptyHero = ({ onGuide, running, total = PRESET_STRATEGIES.length, userCou
 
 /* 전략 선택 시 — 이 전략 이해하기(초보 교육 + 시각화 차트) */
 const StrategyGuidePanel = ({ strat, userStrat, onApply, onCreate }: { strat: Strat; userStrat?: Strategy; onApply?: () => void; onCreate?: () => void }) => {
+  const navigate = useNavigate();
   const edu = PRESET_EDU[strat.id];
   const tip = edu?.tip || userStrat?.beginnerTip;
   const why = edu?.why || userStrat?.whyUse;
@@ -330,10 +331,11 @@ const StrategyGuidePanel = ({ strat, userStrat, onApply, onCreate }: { strat: St
           <button onClick={() => onApply?.()} className="mt-3 w-full rounded-[10px] py-2.5 text-[13.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})` }}>적용 · 자동매매 →</button>
         </div>
       ) : (
-        <div style={{ ...mkCard, padding: '18px 22px', border: '1px solid rgba(245,208,97,.26)', background: 'linear-gradient(135deg, rgba(245,208,97,.08), transparent 60%)' }}>
-          <div className="text-[14px] font-bold">⚡ 이 전략으로 자동매매하고 싶다면?</div>
-          <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>적용·자동매매는 <b style={{ color: 'var(--ci-ink0)' }}>내 전략</b>에서만 켤 수 있어요. "새 항로 만들기"로 이 전략을 내 것으로 저장한 뒤, 카드의 버튼으로 ⚓적용·⚡자동매매를 켜보세요. (모의투자 전용)</p>
-          <button onClick={() => onCreate?.()} className="mt-3 w-full rounded-[10px] py-2.5 text-[13.5px] font-bold" style={{ border: '1px solid rgba(245,208,97,.4)', background: 'rgba(245,208,97,.12)', color: COMPASS }}>+ 새 항로(내 전략) 만들기</button>
+        <div style={{ ...mkCard, padding: '18px 22px', border: '1px solid rgba(91,157,255,.28)', background: 'linear-gradient(135deg, rgba(91,157,255,.10), transparent 60%)' }}>
+          <div className="text-[14px] font-bold">⚡ 이 전략으로 자동매매</div>
+          <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>백테스트로 검증한 이 전략을 <b style={{ color: 'var(--ci-ink0)' }}>모의 자동매매</b>로 바로 시작할 수 있어요. 신호가 뜰 때마다 자동으로 매매합니다. (모의투자 전용)</p>
+          <button onClick={() => navigate(`/virt/auto-trade?deploy=${strat.id}`)} className="mt-3 w-full rounded-[10px] py-2.5 text-[13.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})` }}>이 전략으로 자동매매 시작 →</button>
+          <button onClick={() => onCreate?.()} className="mt-2 w-full rounded-[10px] py-2 text-[12px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>조건을 수정해서 쓰려면 — 새 항로(내 전략)로 저장</button>
         </div>
       )}
     </section>

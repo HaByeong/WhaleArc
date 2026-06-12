@@ -230,6 +230,7 @@ const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, o
       await mirrorService.capture({
         assetSymbol: sel.symbol, assetName: sel.name, assetType: at, triggerType: 'PANIC_DROP',
         userChoice: choice, emotionNote: note || undefined, emotionIntensity: intensity,
+        priceAtEvent: cur, changeRate: sel.changeRate, amountKrw: Math.round(calcPrice * qty * fx),
       });
     } catch { /* 봉인 실패해도 주문 흐름은 막지 않는다 */ }
     setMirror(false); setMirrorBusy(false);

@@ -20,4 +20,9 @@ public class CaptureRequest {
     private String emotionNote;
     @Min(1) @Max(5)
     private int emotionIntensity;
+
+    // 클라이언트 fallback — 서버가 시세를 못 구할 때 사용자가 본 값으로 봉인(죽은 봉인 방지)
+    private Double priceAtEvent;       // 사용자가 본 현재가
+    private Double changeRate;         // 사용자가 본 당일 등락률(%)
+    private Double amountKrw;          // 이 결정에 걸린 금액(원) — 결과 금액 환산용
 }

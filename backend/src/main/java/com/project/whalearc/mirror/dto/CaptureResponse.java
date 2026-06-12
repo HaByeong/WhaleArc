@@ -17,6 +17,7 @@ public class CaptureResponse {
     private final String assetType;
     private final double priceAtEvent;
     private final double changeRateAtEvent;
+    private final double amountKrwAtEvent;
     private final String userChoice;
     private final String emotionNote;
     private final int emotionIntensity;
@@ -41,6 +42,7 @@ public class CaptureResponse {
         this.assetType = c.getAssetType();
         this.priceAtEvent = c.getPriceAtEvent();
         this.changeRateAtEvent = c.getChangeRateAtEvent();
+        this.amountKrwAtEvent = c.getAmountKrwAtEvent();
         this.userChoice = c.getUserChoice();
         this.emotionNote = c.getEmotionNote();
         this.emotionIntensity = c.getEmotionIntensity();

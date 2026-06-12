@@ -40,6 +40,7 @@ public class EmotionCapture {
     private String assetType;          // CRYPTO / STOCK / US_STOCK / ETF
     private double priceAtEvent;       // 봉인 시점 가격
     private double changeRateAtEvent;  // 봉인 시점 당일 등락률(%)
+    private double amountKrwAtEvent;    // 그 결정에 걸린 금액(원) — 결과를 실제 금액으로 보여주기 위함
     private String userChoice;         // FOLLOW_RULE(항로 지킴) / FOLLOW_IMPULSE(충동 실행)
     private String emotionNote;        // 감정 메모
     private int emotionIntensity;      // 강도 1~5
@@ -56,7 +57,7 @@ public class EmotionCapture {
 
     public EmotionCapture(String userId, String triggerType, String impulseSide,
                           String assetSymbol, String assetName, String assetType,
-                          double priceAtEvent, double changeRateAtEvent, String userChoice,
+                          double priceAtEvent, double changeRateAtEvent, double amountKrwAtEvent, String userChoice,
                           String emotionNote, int emotionIntensity, Instant capturedAt, Instant revealAt) {
         this.userId = userId;
         this.triggerType = triggerType;
@@ -66,6 +67,7 @@ public class EmotionCapture {
         this.assetType = assetType;
         this.priceAtEvent = priceAtEvent;
         this.changeRateAtEvent = changeRateAtEvent;
+        this.amountKrwAtEvent = amountKrwAtEvent;
         this.userChoice = userChoice;
         this.emotionNote = emotionNote;
         this.emotionIntensity = emotionIntensity;

@@ -45,7 +45,7 @@ class EmotionMirrorServiceTest {
 
     private EmotionCapture sellCapture(double priceAtEvent) {
         return new EmotionCapture("u1", "PANIC_DROP", "SELL", "BTC", "비트코인", "CRYPTO",
-                priceAtEvent, -6.2, "FOLLOW_RULE", "무서워서 팔고 싶었다", 4, Instant.now(), Instant.now());
+                priceAtEvent, -6.2, 1_000_000.0, "FOLLOW_RULE", "무서워서 팔고 싶었다", 4, Instant.now(), Instant.now());
     }
 
     @Test
@@ -76,7 +76,7 @@ class EmotionMirrorServiceTest {
     void fomoBuy_priceFell_notBuyingWasBetter() {
         priceNow(90.0);                        // 이벤트가 100 → 개봉가 90 (−10%)
         EmotionCapture c = new EmotionCapture("u1", "FOMO_SPIKE", "BUY", "BTC", "비트코인", "CRYPTO",
-                100.0, 15.0, "FOLLOW_RULE", "놓칠까 무섭다", 3, Instant.now(), Instant.now());
+                100.0, 15.0, 500_000.0, "FOLLOW_RULE", "놓칠까 무섭다", 3, Instant.now(), Instant.now());
 
         assertTrue(service.reveal(c));
         assertEquals(-10.0, c.getImpulseOutcomePct(), 1e-9, "충동(매수) = −10%");

@@ -14,6 +14,7 @@ export interface MirrorCapture {
   assetType: string;
   priceAtEvent: number;
   changeRateAtEvent: number;
+  amountKrwAtEvent: number;     // 그 결정에 걸린 금액(원)
   userChoice: UserChoice;
   emotionNote?: string;
   emotionIntensity: number;
@@ -37,6 +38,9 @@ export interface CapturePayload {
   userChoice: UserChoice;
   emotionNote?: string;
   emotionIntensity: number;     // 1~5
+  priceAtEvent?: number;        // 클라이언트 fallback(서버가 시세 못 구할 때)
+  changeRate?: number;
+  amountKrw?: number;           // 이 결정에 걸린 금액(원)
 }
 
 export const mirrorService = {

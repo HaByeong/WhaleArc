@@ -13,6 +13,19 @@ const LINE = 'var(--ci-line)', CARD = 'var(--ci-card)', SONAR = 'var(--ci-sonar)
 const panel: React.CSSProperties = { background: 'var(--ci-panel)', border: `1px solid ${LINE}`, borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)' };
 const pct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 const clr = (v: number) => (v > 0 ? UP : v < 0 ? DOWN : INK2);
+/** 수익률(%) × 걸린 금액 → 실제 원화 임팩트(초보 친화: 숫자보다 '돈'이 와닿음). */
+const wonOf = (pctVal: number, base: number) => {
+  const v = (base * pctVal) / 100;
+  const sign = v > 0 ? '+' : v < 0 ? '−' : '';
+  const abs = Math.abs(v);
+  const s = abs >= 10000 ? `${(abs / 10000).toFixed(1)}만원` : `${Math.round(abs).toLocaleString('ko-KR')}원`;
+  return `${sign}${s}`;
+};
+/** 부호 없는 금액 크기(원). '손해/아껴' 같은 단어가 방향을 담을 때. */
+const wonMag = (krw: number) => {
+  const abs = Math.abs(krw);
+  return abs >= 10000 ? `${(abs / 10000).toFixed(1)}만원` : `${Math.round(abs).toLocaleString('ko-KR')}원`;
+};
 
 /** 이벤트→개봉 경로 스파크라인. 고정 horizon 체리피킹 방지용. */
 const PathSpark = ({ data, w = 220, h = 44 }: { data: number[]; w?: number; h?: number }) => {
@@ -47,6 +60,7 @@ const RevealCard = ({ c }: { c: MirrorCapture }) => {
   const impulse = c.impulseOutcomePct ?? 0, rule = c.ruleOutcomePct ?? 0;
   const cost = c.emotionCostPct ?? (rule - impulse);
   const ruleChosen = c.userChoice === 'FOLLOW_RULE';
+  const base = c.amountKrwAtEvent || 0;
 
   const Box = ({ label, val, chosen }: { label: string; val: number; chosen: boolean }) => (
     <div className="flex-1 rounded-xl px-3.5 py-3 text-center"
@@ -55,6 +69,7 @@ const RevealCard = ({ c }: { c: MirrorCapture }) => {
         {chosen && <span style={{ color: GREEN }}>✓</span>}{label}
       </div>
       <div className="mt-1 font-mono text-[22px] font-bold tabular-nums" style={{ color: clr(val) }}>{pct(val)}</div>
+      {base > 0 && <div className="mt-0.5 font-mono text-[11.5px]" style={{ color: clr(val) }}>약 {wonOf(val, base)}</div>}
     </div>
   );
 
@@ -85,14 +100,15 @@ const RevealCard = ({ c }: { c: MirrorCapture }) => {
         )}
 
         <p className="mt-3 text-center text-[13px] font-semibold" style={{ color: INK0 }}>{toneMessage(c)}</p>
-        <p className="mt-1.5 text-center text-[12px]" style={{ color: cost >= 0 ? INK2 : GREEN }}>
+        <p className="mt-1.5 text-center text-[12.5px]" style={{ color: cost >= 0 ? INK1 : GREEN }}>
           {cost >= 0
-            ? <>감정이 당신에게 청구한 비용: <b style={{ color: UP }}>{cost.toFixed(1)}%p</b></>
-            : <>이번엔 충동이 아껴준 비용: <b style={{ color: GREEN }}>{Math.abs(cost).toFixed(1)}%p</b></>}
+            ? <>충동을 따랐다면 <b style={{ color: UP }}>{base > 0 ? `약 ${wonMag(base * cost / 100)}` : `${cost.toFixed(1)}%p`}</b> 손해였어요</>
+            : <>이번엔 충동이 <b style={{ color: GREEN }}>{base > 0 ? `약 ${wonMag(base * cost / 100)}` : `${Math.abs(cost).toFixed(1)}%p`}</b> 아껴줬어요</>}
+          <span className="ml-1 text-[10.5px]" style={{ color: INK3 }}>(두 선택의 차이 {Math.abs(cost).toFixed(1)}%p)</span>
         </p>
 
         <p className="mt-2.5 text-[10.5px] leading-snug" style={{ color: INK3 }}>
-          충동=전량 현금화(0%) 기준 · 수수료·세금 제외(모의) · 한 번의 결과일 뿐, 같은 선택의 기대값이 진짜 교훈이에요.
+          ℹ️ '충동=전량 현금화(가격 변동 0%)' 기준이에요 · 수수료·세금은 뺐어요(모의) · <b>한 번의 결과일 뿐</b>, 같은 선택을 여러 번 했을 때가 진짜 교훈이에요.
         </p>
       </div>
     </div>
@@ -169,10 +185,29 @@ const ConsoleMirrorPage = () => {
             <span style={{ color: INK3 }}>거울을 불러오는 중…</span>
           </div>
         ) : list.length === 0 ? (
-          <div style={{ ...panel, padding: 48 }} className="text-center">
-            <div className="text-[30px]">🪞</div>
-            <div className="mt-2 text-[14px] font-semibold" style={{ color: INK0 }}>아직 봉인된 순간이 없어요.</div>
-            <div className="mt-1 text-[12.5px]" style={{ color: INK3 }}>급락에 팔고 싶어 흔들릴 때, 거울이 먼저 물어볼게요.</div>
+          <div style={{ ...panel, padding: '32px 28px' }} className="text-center">
+            <div className="text-[34px]">🪞</div>
+            <div className="mt-2 text-[15px] font-bold" style={{ color: INK0 }}>아직 봉인된 순간이 없어요</div>
+            <div className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>
+              감정 거울은 <b style={{ color: INK1 }}>흔들린 순간</b>을 잠깐 잠가뒀다가, 며칠 뒤 결과를 비춰주는 거울이에요.<br />
+              충동대로 했을 때 vs 참았을 때를 <b style={{ color: INK1 }}>실제 숫자</b>로 보여줘요.
+            </div>
+            <div className="mx-auto mt-4 grid max-w-[460px] grid-cols-3 gap-2.5 text-left">
+              {[
+                { n: '1', t: '포착', d: '급락에 팔고 싶을 때 거울이 먼저 물어봐요' },
+                { n: '2', t: '봉인', d: '판다 / 참는다, 그 선택을 잠가둬요' },
+                { n: '3', t: '개봉', d: '며칠 뒤 "안 한 쪽 결과"를 나란히 비춰요' },
+              ].map(s => (
+                <div key={s.n} style={{ background: CARD, border: `1px solid ${LINE}`, borderRadius: 12 }} className="px-3 py-3">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: 'var(--ci-sonar-dim)', color: SONAR }}>{s.n}</div>
+                  <div className="mt-1.5 text-[12px] font-bold" style={{ color: INK0 }}>{s.t}</div>
+                  <div className="mt-0.5 text-[11px] leading-snug" style={{ color: INK3 }}>{s.d}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 text-[11.5px]" style={{ color: INK3 }}>
+              👉 <b style={{ color: INK2 }}>거래</b> 화면에서 급락 중인 보유 종목을 팔아보려 하면 거울이 나타나요.
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-5">

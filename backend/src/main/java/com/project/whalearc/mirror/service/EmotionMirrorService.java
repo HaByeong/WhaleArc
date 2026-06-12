@@ -48,17 +48,18 @@ public class EmotionMirrorService {
                 ? "PANIC_DROP" : req.getTriggerType();
         String impulseSide = "FOMO_SPIKE".equals(trigger) ? "BUY" : "SELL";
 
-        // 가격·등락률은 서버가 권위있게 stamp (클라이언트 값 신뢰 안 함)
+        // 가격·등락률은 서버가 권위있게 stamp. 못 구하면 사용자가 본 값으로 fallback(죽은 봉인 방지).
         MarketPriceResponse m = currentMarket(req.getAssetSymbol(), assetType);
-        double priceAtEvent = m != null ? m.getPrice() : 0.0;
-        double changeRate = m != null ? m.getChangeRate() : 0.0;
+        double priceAtEvent = (m != null && m.getPrice() > 0) ? m.getPrice() : nz(req.getPriceAtEvent());
+        double changeRate = (m != null && m.getPrice() > 0) ? m.getChangeRate() : nz(req.getChangeRate());
+        double amountKrw = nz(req.getAmountKrw());
 
         Instant now = Instant.now();
         Instant revealAt = now.plus(Math.max(0, revealMinutes), ChronoUnit.MINUTES);
 
         EmotionCapture c = new EmotionCapture(userId, trigger, impulseSide,
                 req.getAssetSymbol(), req.getAssetName(), assetType,
-                priceAtEvent, changeRate, req.getUserChoice(),
+                priceAtEvent, changeRate, amountKrw, req.getUserChoice(),
                 req.getEmotionNote(), req.getEmotionIntensity(), now, revealAt);
 
         // 개봉일이 0이면 즉시 개봉(데모) — 가격이 이미 stamp 됐으니 같은 가격 기준이라도 정직하게 0%로 열림
@@ -152,5 +153,9 @@ public class EmotionMirrorService {
 
     private static double round2(double v) {
         return Math.round(v * 100.0) / 100.0;
+    }
+
+    private static double nz(Double v) {
+        return v != null ? v : 0.0;
     }
 }

@@ -42,8 +42,11 @@ const EmotionMirrorModal = ({ name, changeRate, busy, onClose, onChoice }: Props
           </span>
           <h2 className="mt-3 text-[20px] font-bold tracking-tight" style={{ color: INK0 }}>지금 팔고 싶으신가요?</h2>
           <p className="mt-2 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>
-            보유하신 <b style={{ color: INK1 }}>{name}</b>이(가) 오늘 <b style={{ color: DOWN }}>{changeRate.toFixed(1)}%</b> 하락 중이에요.
-            항로(전략)는 <b style={{ color: INK1 }}>아직 매도 신호를 주지 않았어요.</b>
+            보유하신 <b style={{ color: INK1 }}>{name}</b>이(가) 오늘 <b style={{ color: DOWN }}>{changeRate.toFixed(1)}%</b> 빠지고 있어요.
+            급락에 놀라서 파는 건지, 원래 계획이었는지 <b style={{ color: INK1 }}>잠깐만 짚어볼까요?</b>
+          </p>
+          <p className="mt-2 rounded-lg px-2.5 py-1.5 text-[11.5px] leading-snug" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: INK2 }}>
+            🐋 막지 않아요. 마음만 살짝 기록하고, <b style={{ color: INK1 }}>며칠 뒤 "팔았다면 vs 안 팔았다면"</b> 결과를 같이 봐요.
           </p>
         </div>
 

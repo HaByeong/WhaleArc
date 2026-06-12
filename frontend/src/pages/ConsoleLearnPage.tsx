@@ -143,18 +143,14 @@ const PRESET_KEYWORDS: [string[], string][] = [
   [['과매도', '과매수', '평균회귀', 'mean revers', 'rsi'], 'preset-rsi-reversal'],
   [['buy & hold', 'buy and hold', '바이앤홀드', '단순 보유', '장기 보유', 'buyhold'], 'preset-buy-hold'],
 ];
-const CATEGORY_PRESET: Record<string, string> = {
-  TREND_FOLLOWING: 'preset-golden-cross',
-  MEAN_REVERSION: 'preset-rsi-reversal',
-  VOLATILITY: 'preset-volatility-breakout',
-  // MOMENTUM / ARBITRAGE / MULTI_FACTOR: 단일자산 프리셋이 없어 매핑하지 않음(빈 빌더로 이동)
-};
+// 정확 매칭만: 상품명·로직에 전략 키워드가 명시된 경우에만 프리셋을 로드한다(카테고리 추정 폴백 제거).
+// 키워드가 없는 상품(예: 마크 미너비니 트렌드 템플릿)은 실제 전략과 다른 프리셋이 열리는 불일치를 피하려 숨긴다.
 const presetFor = (p: QuantProduct): string | null => {
   const hay = `${p.name} ${p.strategyLogic || ''} ${p.description || ''}`.toLowerCase();
   for (const [keys, id] of PRESET_KEYWORDS) {
     if (keys.some(k => hay.includes(k.toLowerCase()))) return id;
   }
-  return CATEGORY_PRESET[p.category] || null;
+  return null;
 };
 
 /* ── 상품 상세 모달 (실데이터 + 교육 Q&A) ── */

@@ -436,9 +436,26 @@ const ConsoleLearnPage = () => {
           {CATS.map(([k, l]) => { const on = k === cat; return <button key={k} onClick={() => setCat(k)} className="whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : `1px solid ${HAIR}`, background: on ? SONAR_DIM : CARD, color: on ? SONAR : INK1 }}>{l}</button>; })}
         </div>
         {/* 카드 — 관리형(구매·자동운용) vs DIY(백테스트→자동매매) 두 갈래 */}
-        {loading ? <div style={{ ...panel, padding: 48, textAlign: 'center' }}><span className="text-[13px]" style={{ color: INK3 }}>전략을 불러오는 중…</span></div>
+        {loading ? (
+          <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="animate-pulse" style={{ ...panel, padding: 18 }}>
+                <div className="flex items-center gap-2">
+                  <div style={{ width: 34, height: 34, borderRadius: 9, background: 'var(--ci-chip)' }} />
+                  <div className="flex-1">
+                    <div style={{ width: '62%', height: 12, borderRadius: 5, background: 'var(--ci-chip)' }} />
+                    <div className="mt-1.5" style={{ width: '38%', height: 9, borderRadius: 5, background: 'var(--ci-chip)' }} />
+                  </div>
+                </div>
+                <div className="mt-3.5" style={{ width: '100%', height: 9, borderRadius: 5, background: 'var(--ci-chip)' }} />
+                <div className="mt-1.5" style={{ width: '85%', height: 9, borderRadius: 5, background: 'var(--ci-chip)' }} />
+                <div className="mt-4" style={{ width: '100%', height: 34, borderRadius: 9, background: 'var(--ci-chip)' }} />
+              </div>
+            ))}
+          </div>
+        )
           : error ? <div style={{ ...panel, padding: 36, textAlign: 'center' }}><div className="text-[13px]" style={{ color: INK2 }}>{error}</div><button onClick={() => setCat(c => c)} className="mt-3 rounded-lg px-4 py-2 text-[12.5px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: SONAR }}>다시 시도</button></div>
-            : shown.length === 0 ? <div style={{ ...panel, padding: 48, textAlign: 'center' }}><div className="text-[28px]">🧭</div><div className="mt-2 text-[14px] font-semibold">해당 카테고리의 전략이 아직 없어요.</div></div>
+            : shown.length === 0 ? <div style={{ ...panel, padding: 48, textAlign: 'center' }}><div className="text-[28px]">🧭</div><div className="mt-2 text-[14px] font-semibold">{cat === 'all' ? '아직 등록된 전략이 없어요.' : '이 카테고리엔 전략이 아직 없어요.'}</div><div className="mt-1 text-[12.5px]" style={{ color: INK3 }}>{cat === 'all' ? '곧 새로운 항로가 추가됩니다.' : '다른 카테고리도 둘러보세요.'}</div>{cat !== 'all' && <button onClick={() => setCat('all')} className="mt-3.5 rounded-lg px-4 py-2 text-[12.5px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: SONAR }}>전체 전략 보기</button>}</div>
               : <div className="flex flex-col gap-9">
                   {managedList.length > 0 && (
                     <div className="flex flex-col gap-3.5">

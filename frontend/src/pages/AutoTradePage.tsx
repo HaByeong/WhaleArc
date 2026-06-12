@@ -261,6 +261,29 @@ const AutoTradePage = () => {
     strategyService.getBacktestHistory().then(setBacktestHistory).catch(() => {});
   }, []);
 
+  // 백테스트 → "자동매매 시작" 딥링크(?deploy=<전략id>): 그 전략이 선택된 채로 생성 모달 자동 오픈
+  useEffect(() => {
+    const deployId = new URLSearchParams(window.location.search).get('deploy');
+    if (!deployId) return;
+    (async () => {
+      let strats = strategies;
+      if (strats.length === 0) {
+        try { strats = await strategyService.getStrategies(); setStrategies(strats); } catch { /* 전략 로드 실패 시 빈 선택으로라도 모달은 연다 */ }
+      }
+      const s = [...PRESET_STRATEGIES, ...strats].find(st => st.id === deployId);
+      setForm(prev => ({
+        ...prev,
+        strategyId: deployId,
+        targetAssetsText: s ? s.targetAssets.join(', ') : prev.targetAssetsText,
+        assetType: s ? (s.assetType === 'MIXED' ? '' : s.assetType) : prev.assetType,
+      }));
+      setShowCreate(true);
+      window.history.replaceState({}, '', window.location.pathname);   // 새로고침 시 재오픈 방지
+    })();
+    // 마운트 시 1회만 (deploy 파라미터 처리)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 실행 로그 lazy 로드 (이미 로드됐으면 토글만)
   const loadOrders = async (deploymentId: string) => {
     if (orderLogs[deploymentId] !== undefined) {

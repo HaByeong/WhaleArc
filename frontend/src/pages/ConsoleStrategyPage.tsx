@@ -884,7 +884,7 @@ const ApplyModal = ({ strategy, cash, onClose, onDone }: { strategy: Strategy; c
                   <div className="flex items-center gap-1.5 text-[13px] font-bold">⚡ 자동매매</div>
                   <p className="mt-1 text-[11.5px] leading-relaxed" style={{ color: INK2 }}>신호가 뜰 때마다 자동으로 사고파는 <b style={{ color: 'var(--ci-ink0)' }}>모의 자동매매</b>는 전용 화면에서 시작해요. 손절·익절·실행로그까지 한곳에서 관리합니다.</p>
                 </div>
-                <button onClick={() => navigate('/virt/auto-trade')} className="shrink-0 rounded-lg px-3.5 py-2 text-[12.5px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}>자동매매 시작 →</button>
+                <button onClick={() => navigate(`/virt/auto-trade?deploy=${strategy.id}`)} className="shrink-0 rounded-lg px-3.5 py-2 text-[12.5px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}>자동매매 시작 →</button>
               </div>
             </div>
           </>

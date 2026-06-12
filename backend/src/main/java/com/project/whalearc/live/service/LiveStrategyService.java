@@ -655,8 +655,7 @@ public class LiveStrategyService {
         pos.setStopLoss(d.getStopLossPct() != null ? pctBelow(fill, d.getStopLossPct()) : null);
         pos.setUnits(1);
         pos.setLastEntryPrice(fill);
-        pos.setTradeCount(pos.getTradeCount() + 1);
-        d.setTradeCount(d.getTradeCount() + 1);
+        // 거래수는 청산(왕복 완료) 시에만 1회 카운트 — 백테스트 totalTrades(왕복)와 단위 일치. 진입에선 세지 않음.
 
         notifyTrade(d, "자동매매 매수 진입", pos.getSymbol(), fill, "ENTRY", null);
     }
@@ -703,8 +702,7 @@ public class LiveStrategyService {
         pos.setStopLoss(d.getStopLossPct() != null ? pctAbove(fill, d.getStopLossPct()) : null);
         pos.setUnits(1);
         pos.setLastEntryPrice(fill);
-        pos.setTradeCount(pos.getTradeCount() + 1);
-        d.setTradeCount(d.getTradeCount() + 1);
+        // 거래수는 청산 시에만 카운트(왕복 기준) — 진입에선 세지 않음.
         notifyTrade(d, "자동매매 숏 진입", pos.getSymbol(), fill, "ENTRY", null);
     }
 
@@ -750,8 +748,7 @@ public class LiveStrategyService {
         pos.setAvgPrice(newAvg);
         pos.setUnits(pos.getUnits() + 1);
         pos.setLastEntryPrice(fill);
-        pos.setTradeCount(pos.getTradeCount() + 1);
-        d.setTradeCount(d.getTradeCount() + 1);
+        // 피라미딩은 같은 왕복의 추가진입 — 거래수에 포함하지 않음(청산 시 1회만).
         notifyTrade(d, "자동매매 추가 진입 (피라미딩 " + pos.getUnits() + "유닛)", pos.getSymbol(), fill, "ENTRY", null);
     }
 

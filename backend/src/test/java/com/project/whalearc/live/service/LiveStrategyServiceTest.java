@@ -176,7 +176,7 @@ class LiveStrategyServiceTest {
         assertEquals(Order.OrderType.BUY, gateway.placed.get(0).getOrderType());
         // 100만원 / 100원 = 10000 (코인 8자리 floor)
         assertEquals(0, p.getQuantity().compareTo(BigDecimal.valueOf(10000)), "수량 = 할당금/체결가");
-        assertEquals(1, d.getTradeCount());
+        assertEquals(0, d.getTradeCount(), "진입은 거래수 미포함 — 청산(왕복 완료) 시 1회 집계");
     }
 
     @Test
@@ -371,7 +371,8 @@ class LiveStrategyServiceTest {
         // 스케줄러(cron)와 수동 evaluate가 같은 봉에 같은 배포를 동시에 평가하는 경합을 재현한다.
         // 유저 락 + 락 안 findById 재조회가 없으면 여러 스레드가 모두 NONE 스냅샷을 읽어 매수를 N건
         // 발주(중복) + 늦은 save가 이른 save를 덮어써 장부(tradeCount/포지션)가 깨진다.
-        // 수정 후에는 정확히 1건만 진입하고 거래수도 1이어야 한다.
+        // 수정 후에는 정확히 1건만 진입한다(중복 방지는 주문 1건·LONG으로 검증).
+        // 거래수는 청산 시 집계라 진입 단계선 0 — 핵심은 경합에도 진입이 1회뿐이라는 점.
         when(candlestickService.getCandlesticks(anyString(), anyString(), anyString()))
                 .thenReturn(flatCandles(130, 100));
 
@@ -402,6 +403,6 @@ class LiveStrategyServiceTest {
         assertEquals(1, gateway.placed.size(), "동시 평가에도 매수 주문은 정확히 1건(중복 발주 없음)");
         LivePosition p = d.getPositions().get(0);
         assertEquals(LivePosition.Direction.LONG, p.getDirection(), "1회만 진입해 LONG 상태");
-        assertEquals(1, d.getTradeCount(), "거래수 1(이중 집계 없음)");
+        assertEquals(0, d.getTradeCount(), "진입 1회 → 거래수 0(청산 시 집계). 중복 방지는 주문 1건·LONG으로 확인");
     }
 }

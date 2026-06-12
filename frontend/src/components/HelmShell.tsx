@@ -66,7 +66,15 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
   const goNav = (path: string) => navigate(prefix + path);
   // '학습 노트'(거래 복기·용어집·실수도감)는 VIRT 전용 — 모의 매매 복기가 핵심이라 모의 섹션에만 노출
   const navItems: NavItem[] = virt
-    ? (() => { const c = [...NAV]; const i = c.findIndex((n) => n.key === 'learn'); c.splice(i + 1, 0, { label: '학습 노트', icon: 'note', path: '/learn', key: 'edu' }); return c; })()
+    ? (() => {
+        const c = [...NAV];
+        const i = c.findIndex((n) => n.key === 'learn');
+        // VIRT 전용 회고 도구: 학습 노트(거래 복기) + 감정 거울(충동 복기)
+        c.splice(i + 1, 0,
+          { label: '학습 노트', icon: 'note', path: '/learn', key: 'edu' },
+          { label: '감정 거울', icon: 'sonar', path: '/mirror', key: 'mirror' });
+        return c;
+      })()
     : NAV;
   // 모바일 하단바: 항목이 많아 가로 스크롤 → 선택된 항목을 화면 안으로
   const mobileNavRef = useRef<HTMLButtonElement | null>(null);

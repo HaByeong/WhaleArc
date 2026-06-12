@@ -36,7 +36,8 @@ public class Notification {
         STRATEGY_EXECUTED,       // 전략(항로) 적용/해제
         TURTLE_TRADE,            // 터틀 전략 매매 실행
         PRICE_ALERT,             // 가격 알림 도달
-        AUTO_TRADE_EXECUTED      // 자동매매(전략 신호) 체결
+        AUTO_TRADE_EXECUTED,     // 자동매매(전략 신호) 체결
+        EMOTION_MIRROR_REVEALED  // 감정 거울 봉인 개봉
     }
 
     public Notification(String userId, NotificationType type, String title, String message) {

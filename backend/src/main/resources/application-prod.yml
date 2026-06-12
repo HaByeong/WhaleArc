@@ -40,3 +40,7 @@ virt:
 # 거래소 실계좌 자격증명 암호화 키 (필수)
 exchange:
   encryption-key: ${EXCHANGE_ENCRYPTION_KEY}
+
+# 감정 거울 — 운영은 7일(10080분) 타임캡슐
+mirror:
+  reveal-minutes: ${MIRROR_REVEAL_MINUTES:10080}

@@ -55,8 +55,8 @@ function toneMessage(c: MirrorCapture): string {
 
 const RevealCard = ({ c }: { c: MirrorCapture }) => {
   const isSell = c.impulseSide !== 'BUY';
-  const impulseLabel = isSell ? '충동대로 팔았다면' : '충동대로 샀다면';
-  const ruleLabel = isSell ? '항로대로 버텼다' : '항로대로 관망했다';
+  const impulseLabel = isSell ? '팔았다면' : '샀다면';
+  const ruleLabel = isSell ? '안 팔고 버텼다면' : '안 사고 기다렸다면';
   const impulse = c.impulseOutcomePct ?? 0, rule = c.ruleOutcomePct ?? 0;
   const cost = c.emotionCostPct ?? (rule - impulse);
   const ruleChosen = c.userChoice === 'FOLLOW_RULE';
@@ -85,7 +85,7 @@ const RevealCard = ({ c }: { c: MirrorCapture }) => {
 
       <div className="px-5 pb-4 pt-2.5">
         {c.emotionNote && <p className="text-[13px]" style={{ color: INK1 }}>"{c.emotionNote}" <span style={{ color: INK3 }}>(강도 {c.emotionIntensity}/5)</span></p>}
-        <p className="mt-1 text-[12px]" style={{ color: INK2 }}>당신의 선택: <b style={{ color: ruleChosen ? GREEN : UP }}>{ruleChosen ? '🧭 항로를 지켰다' : '😰 충동을 따랐다'}</b></p>
+        <p className="mt-1 text-[12px]" style={{ color: INK2 }}>당신의 선택: <b style={{ color: ruleChosen ? GREEN : UP }}>{ruleChosen ? (isSell ? '🧭 안 팔고 버텼다' : '🧭 안 사고 기다렸다') : (isSell ? '😰 팔았다' : '😰 샀다')}</b></p>
 
         <div className="mt-3 flex gap-2.5">
           <Box label={impulseLabel} val={impulse} chosen={!ruleChosen} />
@@ -94,7 +94,7 @@ const RevealCard = ({ c }: { c: MirrorCapture }) => {
 
         {c.pathPct && c.pathPct.length >= 2 && (
           <div className="mt-3 rounded-xl px-3.5 py-2.5" style={{ background: CARD, border: `1px solid ${LINE}` }}>
-            <div className="mb-1 text-[10px]" style={{ color: INK3 }}>그날 이후 가격 경로 (체리피킹 아님)</div>
+            <div className="mb-1 text-[10px]" style={{ color: INK3 }}>그날 이후 가격 흐름 (유리한 날만 고른 게 아니에요)</div>
             <PathSpark data={c.pathPct} />
           </div>
         )}
@@ -104,11 +104,11 @@ const RevealCard = ({ c }: { c: MirrorCapture }) => {
           {cost >= 0
             ? <>충동을 따랐다면 <b style={{ color: UP }}>{base > 0 ? `약 ${wonMag(base * cost / 100)}` : `${cost.toFixed(1)}%p`}</b> 손해였어요</>
             : <>이번엔 충동이 <b style={{ color: GREEN }}>{base > 0 ? `약 ${wonMag(base * cost / 100)}` : `${Math.abs(cost).toFixed(1)}%p`}</b> 아껴줬어요</>}
-          <span className="ml-1 text-[10.5px]" style={{ color: INK3 }}>(두 선택의 차이 {Math.abs(cost).toFixed(1)}%p)</span>
+          <span className="ml-1 text-[10.5px]" style={{ color: INK3 }}>(두 선택의 차이 {Math.abs(cost).toFixed(1)}%포인트)</span>
         </p>
 
         <p className="mt-2.5 text-[10.5px] leading-snug" style={{ color: INK3 }}>
-          ℹ️ '충동=전량 현금화(가격 변동 0%)' 기준이에요 · 수수료·세금은 뺐어요(모의) · <b>한 번의 결과일 뿐</b>, 같은 선택을 여러 번 했을 때가 진짜 교훈이에요.
+          ℹ️ 팔았다면 그 돈은 <b>현금</b>이 돼서 더는 오르내리지 않는 걸로 계산했어요 · 수수료·세금은 뺐어요(모의) · <b>한 번의 결과일 뿐</b>, 같은 선택을 여러 번 했을 때가 진짜예요.
         </p>
       </div>
     </div>

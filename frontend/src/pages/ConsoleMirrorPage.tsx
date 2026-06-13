@@ -4,169 +4,353 @@ import { useRoutePrefix, useVirtNavigate } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
 import { mirrorService, type MirrorCapture } from '../services/mirrorService';
 
-/* 감정 거울(Emotion Mirror) — 흔들린 순간을 모아 보여주고, 열리면 "충동 vs 항로"를 대조한다.
-   판단은 사용자가, 시스템은 사실만 비춘다. 충동이 옳았던 날도 정직하게. */
+/* 유리병 편지 (Message in a Bottle) — 흔들린 순간을 봉인했다가, 며칠 뒤 충동 vs 항로를 대조한다.
+   디자인: 바다·파도·유리병 모티프. 판단은 사용자가, 시스템은 사실만 비춘다. */
 
-const UP = '#ef4d4d', DOWN = '#4d8aff', GREEN = '#3fd6a0';
+const UP = '#ef4d4d', DOWN = '#4d8aff', COMPASS = '#f5d061', ACCENT = '#2c6fe6';
+const SONAR = 'var(--ci-sonar)', SONAR_DIM = 'var(--ci-sonar-dim)', SONAR_GLOW = 'rgba(91,157,255,.22)';
 const INK0 = 'var(--ci-ink0)', INK1 = 'var(--ci-ink1)', INK2 = 'var(--ci-ink2)', INK3 = 'var(--ci-ink3)';
-const LINE = 'var(--ci-line)', CARD = 'var(--ci-card)', SONAR = 'var(--ci-sonar)';
-const panel: React.CSSProperties = { background: 'var(--ci-panel)', border: `1px solid ${LINE}`, borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)' };
-const pct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
-const clr = (v: number) => (v > 0 ? UP : v < 0 ? DOWN : INK2);
-/** 수익률(%) × 걸린 금액 → 실제 원화 임팩트(초보 친화: 숫자보다 '돈'이 와닿음). */
-const wonOf = (pctVal: number, base: number) => {
-  const v = (base * pctVal) / 100;
-  const sign = v > 0 ? '+' : v < 0 ? '−' : '';
-  const abs = Math.abs(v);
-  const s = abs >= 10000 ? `${(abs / 10000).toFixed(1)}만원` : `${Math.round(abs).toLocaleString('ko-KR')}원`;
-  return `${sign}${s}`;
-};
-/** 부호 없는 금액 크기(원). '손해/아껴' 같은 단어가 방향을 담을 때. */
-const wonMag = (krw: number) => {
-  const abs = Math.abs(krw);
-  return abs >= 10000 ? `${(abs / 10000).toFixed(1)}만원` : `${Math.round(abs).toLocaleString('ko-KR')}원`;
+const HAIR = 'var(--ci-line)', HAIRS = 'var(--ci-line-strong)';
+const ABYSS = 'var(--ci-inset)', CARD = 'rgba(255,255,255,.03)';
+
+/* ── 공유 SVG defs (gradients) — 한 번만 렌더 ── */
+const BottleDefs = () => (
+  <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden>
+    <defs>
+      <linearGradient id="wa-glass" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#cfe8ff" stopOpacity=".6" /><stop offset=".45" stopColor="#5b9dff" stopOpacity=".26" /><stop offset="1" stopColor="#2c6fe6" stopOpacity=".42" />
+      </linearGradient>
+      <linearGradient id="wa-paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fbf3da" /><stop offset="1" stopColor="#e9d9ad" /></linearGradient>
+      <linearGradient id="wa-cork" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#c79a64" /><stop offset="1" stopColor="#9a6f3f" /></linearGradient>
+      <radialGradient id="wa-halo" cx="50%" cy="42%" r="55%"><stop offset="0" stopColor="#5b9dff" stopOpacity=".5" /><stop offset="1" stopColor="#5b9dff" stopOpacity="0" /></radialGradient>
+      <linearGradient id="wa-wave" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#2c6fe6" stopOpacity="0" /><stop offset=".5" stopColor="#5b9dff" stopOpacity=".55" /><stop offset="1" stopColor="#2c6fe6" stopOpacity="0" /></linearGradient>
+    </defs>
+  </svg>
+);
+
+const Bottle = ({ size = 64, halo = true, tilt = 0 }: { size?: number; halo?: boolean; tilt?: number }) => (
+  <svg width={size} height={size * 1.5} viewBox="0 0 64 96" fill="none" style={{ transform: `rotate(${tilt}deg)`, overflow: 'visible' }}>
+    {halo && <ellipse cx="32" cy="50" rx="34" ry="40" fill="url(#wa-halo)" />}
+    <rect x="25" y="2.5" width="14" height="11.5" rx="3.2" fill="url(#wa-cork)" />
+    <rect x="25" y="2.5" width="14" height="3.4" rx="1.7" fill="#ddb784" opacity=".8" />
+    <path d="M27 13 L27 25 Q15 29.5 15 50 L15 73 Q15 88 32 88 Q49 88 49 73 L49 50 Q49 29.5 37 25 L37 13 Z" fill="url(#wa-glass)" stroke="rgba(180,215,255,.85)" strokeWidth="1.4" />
+    <g transform="rotate(-9 32 64)">
+      <rect x="21" y="50" width="22" height="26" rx="4" fill="url(#wa-paper)" />
+      <rect x="21" y="50" width="22" height="26" rx="4" fill="none" stroke="rgba(154,111,63,.35)" strokeWidth="1" />
+      <path d="M25 57h14M25 61h14M25 65h10" stroke="rgba(120,86,48,.5)" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M28 70.5q4 2.4 8 0" stroke="#2c6fe6" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".7" />
+    </g>
+    <path d="M21 33 Q18 50 20 70" stroke="rgba(255,255,255,.7)" strokeWidth="2" strokeLinecap="round" fill="none" opacity=".6" />
+    <circle cx="40" cy="40" r="2.4" fill="rgba(255,255,255,.55)" />
+  </svg>
+);
+
+const WaveLine = ({ height = 22 }: { height?: number }) => (
+  <svg viewBox="0 0 240 24" preserveAspectRatio="none" style={{ display: 'block', width: '100%', height }}>
+    <path d="M0 12 Q15 2 30 12 T60 12 T90 12 T120 12 T150 12 T180 12 T210 12 T240 12" fill="none" stroke="url(#wa-wave)" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
+type GlyphKind = 'compass' | 'fear' | 'greed' | 'info' | 'lock';
+const MiniGlyph = ({ kind, c = 'currentColor', s = 16 }: { kind: GlyphKind; c?: string; s?: number }) => {
+  const p: Record<GlyphKind, React.ReactNode> = {
+    compass: <><circle cx="11" cy="11" r="8" stroke={c} strokeWidth="1.5" /><path d="M14.5 7.5 11.8 11.8 7.5 14.5 10.2 10.2Z" fill={c} /></>,
+    fear: <><circle cx="11" cy="11" r="8" stroke={c} strokeWidth="1.5" /><circle cx="8" cy="9.5" r="1.1" fill={c} /><circle cx="14" cy="9.5" r="1.1" fill={c} /><path d="M7.5 15q3.5-3 7 0" stroke={c} strokeWidth="1.5" fill="none" strokeLinecap="round" /></>,
+    greed: <><circle cx="11" cy="11" r="8" stroke={c} strokeWidth="1.5" /><path d="M7.5 8.5 9.5 10M14.5 8.5 12.5 10" stroke={c} strokeWidth="1.5" strokeLinecap="round" /><path d="M7.5 13q3.5 3 7 0" stroke={c} strokeWidth="1.5" fill="none" strokeLinecap="round" /></>,
+    info: <><circle cx="11" cy="11" r="8" stroke={c} strokeWidth="1.5" /><path d="M11 10v4.5" stroke={c} strokeWidth="1.6" strokeLinecap="round" /><circle cx="11" cy="7.3" r="1" fill={c} /></>,
+    lock: <><rect x="5.5" y="9.5" width="11" height="8" rx="2" stroke={c} strokeWidth="1.5" /><path d="M8 9.5V7.5a3 3 0 0 1 6 0v2" stroke={c} strokeWidth="1.5" /></>,
+  };
+  return <svg width={s} height={s} viewBox="0 0 22 22" fill="none">{p[kind]}</svg>;
 };
 
-/* 빈 상태용 예시 개봉 — 며칠 안 기다려도 "이렇게 열려요"를 바로 체감시키는 샘플(실제 기록 아님).
-   급락에 패닉 매도했는데 며칠 뒤 회복한, 가장 흔한 교훈 케이스. */
-const SAMPLE_REVEAL: MirrorCapture = {
-  id: 'sample', triggerType: 'PANIC_DROP', impulseSide: 'SELL',
-  assetSymbol: 'BTC', assetName: '비트코인', assetType: 'CRYPTO',
-  priceAtEvent: 86000000, changeRateAtEvent: -6.2, amountKrwAtEvent: 1500000,
-  userChoice: 'FOLLOW_IMPULSE', strategyName: '골든크로스 추종 전략', emotionNote: '더 떨어질 것 같아 무서웠다', emotionIntensity: 4,
-  capturedAt: '2026-05-21T14:03:00+09:00', revealAt: '2026-05-28T14:03:00+09:00',
-  revealed: true, revealedAt: '2026-05-28T14:03:00+09:00', priceAtReveal: 93310000,
-  impulseOutcomePct: 0, ruleOutcomePct: 8.5, emotionCostPct: 8.5, impulseWasRight: false,
-  pathPct: [-6.2, -4.0, -1.5, 2.0, 5.5, 8.5],
-};
+const Tri = ({ up }: { up: boolean }) => (
+  <span style={{ display: 'inline-block', width: 0, height: 0, marginRight: 3, verticalAlign: 'middle', borderLeft: '3.5px solid transparent', borderRight: '3.5px solid transparent', ...(up ? { borderBottom: '5px solid currentColor' } : { borderTop: '5px solid currentColor' }) }} />
+);
 
-/** 이벤트→열림 경로 스파크라인. 고정 horizon 체리피킹 방지용. */
-const PathSpark = ({ data, w = 220, h = 44 }: { data: number[]; w?: number; h?: number }) => {
+const Intensity = ({ n, tone }: { n: number; tone: string }) => (
+  <span style={{ display: 'inline-flex', gap: 3, verticalAlign: 'middle' }}>
+    {[1, 2, 3, 4, 5].map(i => <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: i <= n ? tone : HAIRS }} />)}
+  </span>
+);
+
+const Sparkline = ({ data, color }: { data: number[]; color: string }) => {
   if (!data || data.length < 2) return null;
-  const min = Math.min(0, ...data), max = Math.max(0, ...data), span = max - min || 1;
-  const x = (i: number) => (i / (data.length - 1)) * w;
-  const y = (v: number) => h - ((v - min) / span) * h;
-  const pts = data.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-  const last = data[data.length - 1];
-  const zeroY = y(0);
+  const min = Math.min(...data, 0), max = Math.max(...data, 0), span = (max - min) || 1;
+  const X = (i: number) => (i / (data.length - 1)) * 100;
+  const Y = (v: number) => 38 - ((v - min) / span) * 34 - 2;
+  const line = data.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+  const zeroY = Y(0).toFixed(1);
+  const gid = 'spk-' + color.replace(/[^a-z0-9]/gi, '');
   return (
-    <svg width={w} height={h} className="overflow-visible">
-      <line x1={0} y1={zeroY} x2={w} y2={zeroY} stroke="var(--ci-line-strong)" strokeWidth={1} strokeDasharray="3 3" />
-      <polyline points={pts} fill="none" stroke={clr(last)} strokeWidth={1.8} strokeLinejoin="round" strokeLinecap="round" />
+    <svg viewBox="0 0 100 40" preserveAspectRatio="none" style={{ width: '100%', height: 90, display: 'block' }}>
+      <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={color} stopOpacity=".22" /><stop offset="1" stopColor={color} stopOpacity="0" /></linearGradient></defs>
+      <line x1="0" y1={zeroY} x2="100" y2={zeroY} stroke={INK3} strokeWidth=".5" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
+      <polygon points={`0,40 ${line} 100,40`} fill={`url(#${gid})`} />
+      <polyline points={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <circle cx="100" cy={Y(data[data.length - 1])} r="2.6" fill={color} vectorEffect="non-scaling-stroke" />
     </svg>
   );
 };
 
-function toneMessage(c: MirrorCapture): string {
-  const ruleKept = c.userChoice === 'FOLLOW_RULE';
-  const impulseRight = !!c.impulseWasRight;
-  if (ruleKept && !impulseRight) return '참길 잘했어요. 항로가 옳았습니다. 🐋';
-  if (ruleKept && impulseRight) return '이번엔 충동이 맞았네요. 그래도 같은 선택 10번 중 몇 번이 맞을지 생각해봐요.';
-  if (!ruleKept && impulseRight) return '운이 좋았어요. 같은 선택 10번이면 몇 번 맞을까요?';
-  return '그때 흔들렸죠. 다음엔 한 박자 쉬어볼까요?';
-}
+const Panel = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
+  <section style={{ background: 'var(--ci-panel)', border: `1px solid ${HAIR}`, borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)', overflow: 'hidden', ...style }}>{children}</section>
+);
 
-const RevealCard = ({ c }: { c: MirrorCapture }) => {
-  const go = useVirtNavigate();
-  const isSample = c.id === 'sample';
-  const isSell = c.impulseSide !== 'BUY';
-  const impulseLabel = isSell ? '팔았다면' : '샀다면';
-  const ruleLabel = isSell ? '안 팔고 버텼다면' : '안 사고 기다렸다면';
-  const impulse = c.impulseOutcomePct ?? 0, rule = c.ruleOutcomePct ?? 0;
-  const cost = c.emotionCostPct ?? (rule - impulse);
-  const ruleChosen = c.userChoice === 'FOLLOW_RULE';
-  const base = c.amountKrwAtEvent || 0;
+/* ── helpers ── */
+const fmtMan = (krw: number) => {
+  const man = krw / 10000;
+  const s = Math.abs(man) >= 100 ? Math.round(man).toLocaleString('ko-KR') : man.toFixed(1);
+  return `${man > 0 ? '+' : man < 0 ? '−' : ''}${s.replace('-', '')}만원`;
+};
+const wonSigned = (krw: number) => (Math.abs(krw) < 1 ? '0원' : fmtMan(krw));
+const fmtPct = (p: number) => `${p > 0 ? '+' : ''}${p.toFixed(1)}%`;
+const fmtDate = (iso: string) => { const d = new Date(iso); return `${d.getMonth() + 1}.${d.getDate()}`; };
+const daysLeft = (iso: string) => Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000));
+const triMeta = (t: string) => t === 'FOMO_SPIKE'
+  ? { wave: '탐욕의 파도', glyph: 'greed' as GlyphKind, tone: COMPASS, dim: 'rgba(245,208,97,.14)', face: '🤤' }
+  : { wave: '공포의 파도', glyph: 'fear' as GlyphKind, tone: DOWN, dim: 'rgba(77,138,255,.14)', face: '😨' };
 
-  const Box = ({ label, val, chosen }: { label: string; val: number; chosen: boolean }) => (
-    <div className="flex-1 rounded-xl px-3.5 py-3 text-center"
-      style={{ background: chosen ? 'rgba(63,214,160,.08)' : CARD, border: `1px solid ${chosen ? 'rgba(63,214,160,.32)' : LINE}` }}>
-      <div className="flex items-center justify-center gap-1.5 text-[11px]" style={{ color: INK3 }}>
-        {chosen && <span style={{ color: GREEN }}>✓</span>}{label}
+/* ── view model ── */
+type BottleVM = {
+  id: string; trigger: string; side: 'SELL' | 'BUY'; asset: string; symbol: string;
+  changeRate: number; sealPrice: number; amountKrw: number; note: string; intensity: number;
+  choice: 'FOLLOW_RULE' | 'FOLLOW_IMPULSE'; impulsePct: number; rulePct: number;
+  strategy: string | null; path: number[]; capturedAt: string; revealAt: string; isSample?: boolean;
+};
+const toVM = (c: MirrorCapture): BottleVM => ({
+  id: c.id, trigger: c.triggerType, side: c.impulseSide === 'BUY' ? 'BUY' : 'SELL',
+  asset: c.assetName || c.assetSymbol, symbol: c.assetSymbol, changeRate: c.changeRateAtEvent,
+  sealPrice: c.priceAtEvent, amountKrw: c.amountKrwAtEvent || 0, note: c.emotionNote || '',
+  intensity: c.emotionIntensity, choice: c.userChoice, impulsePct: c.impulseOutcomePct ?? 0,
+  rulePct: c.ruleOutcomePct ?? 0, strategy: c.strategyName || null, path: c.pathPct || [],
+  capturedAt: c.capturedAt, revealAt: c.revealAt,
+});
+
+const SAMPLE_VM: BottleVM = {
+  id: 'sample', trigger: 'PANIC_DROP', side: 'SELL', asset: '비트코인', symbol: 'BTC',
+  changeRate: -6.2, sealPrice: 86000000, amountKrw: 1500000, note: '더 떨어질 것 같아 무서웠다', intensity: 4,
+  choice: 'FOLLOW_IMPULSE', impulsePct: 0, rulePct: 8.5, strategy: '골든크로스 추종 전략',
+  path: [0, -1.4, -2.1, -0.6, 1.8, 4.2, 6.1, 8.5], capturedAt: '2026-05-21', revealAt: '2026-05-28', isSample: true,
+};
+
+/* ── HERO ── */
+const Hero = ({ savedKrw, lostKrw }: { savedKrw: number; lostKrw: number }) => (
+  <Panel style={{ position: 'relative' }}>
+    <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(120% 130% at 88% 0%, ${SONAR_GLOW}, transparent 55%)` }} />
+    <svg aria-hidden viewBox="0 0 200 200" style={{ position: 'absolute', right: 60, top: '52%', transform: 'translateY(-50%)', width: 300, height: 300, opacity: .14, pointerEvents: 'none' }}>
+      {[40, 68, 96].map(r => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke={SONAR} strokeWidth="1" />)}
+    </svg>
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 24, padding: '34px 34px 30px', flexWrap: 'wrap' }}>
+      <div style={{ flexShrink: 0, animation: 'float-y 5.5s ease-in-out infinite' }}><Bottle size={86} tilt={-12} /></div>
+      <div style={{ flex: 1, minWidth: 280 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 9 }}>
+          <span style={{ fontSize: 10.5, letterSpacing: '.24em', fontWeight: 700, color: SONAR, whiteSpace: 'nowrap' }}>MESSAGE IN A BOTTLE</span>
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: SONAR, boxShadow: `0 0 8px ${SONAR}`, animation: 'bottle-dot 2.4s ease-in-out infinite' }} />
+        </div>
+        <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.15, color: INK0 }}>유리병 편지 🌊</h1>
+        <p style={{ margin: '12px 0 0', fontSize: 14, lineHeight: 1.7, color: INK1, maxWidth: 560 }}>
+          공포·탐욕의 파도에 항로를 벗어날 뻔한 순간을 <strong style={{ color: INK0 }}>유리병에 담아 띄워두면</strong>, 며칠 뒤 파도가 <strong style={{ color: INK0 }}>충동대로 했다면 vs 항로를 지켰다면</strong>을 실제 숫자로 실어다 줍니다.
+        </p>
+        <p style={{ margin: '8px 0 0', fontSize: 12.5, color: INK2, fontStyle: 'italic' }}>🐋 막지 않아요. 마음만 비추는 거울이에요 — 투기를 투자로, 감정을 데이터로.</p>
       </div>
-      <div className="mt-1 font-mono text-[22px] font-bold tabular-nums" style={{ color: clr(val) }}>{pct(val)}</div>
-      {base > 0 && <div className="mt-0.5 font-mono text-[11.5px]" style={{ color: clr(val) }}>약 {wonOf(val, base)}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 190 }}>
+        <HeroStat label="흔들려 잃은 비용" value={wonSigned(-lostKrw)} tone={UP} sub="이번 달 · 충동을 따른 순간" />
+        <HeroStat label="항로로 아낀 금액" value={savedKrw > 0 ? fmtMan(savedKrw) : '0원'} tone={DOWN} sub="규칙을 지켜낸 순간" />
+      </div>
+    </div>
+    <WaveLine height={20} />
+  </Panel>
+);
+const HeroStat = ({ label, value, tone, sub }: { label: string; value: string; tone: string; sub: string }) => (
+  <div style={{ padding: '13px 16px', borderRadius: 13, background: CARD, border: `1px solid ${HAIR}` }}>
+    <div style={{ fontSize: 11, color: INK2 }}>{label}</div>
+    <div className="font-mono" style={{ fontSize: 20, fontWeight: 700, color: tone, marginTop: 3, letterSpacing: '-.01em' }}>{value}</div>
+    <div style={{ fontSize: 10.5, color: INK3, marginTop: 3 }}>{sub}</div>
+  </div>
+);
+
+/* ── 표류 중 (sealed) ── */
+const DriftCard = ({ b }: { b: BottleVM }) => {
+  const m = triMeta(b.trigger);
+  const total = Math.max(1, Math.round((new Date(b.revealAt).getTime() - new Date(b.capturedAt).getTime()) / 86400000));
+  const passed = Math.round((Date.now() - new Date(b.capturedAt).getTime()) / 86400000);
+  const prog = Math.min(100, Math.max(4, (passed / total) * 100));
+  const dleft = daysLeft(b.revealAt);
+  return (
+    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 16, padding: '18px 20px', background: 'var(--ci-panel)', border: `1px solid ${HAIR}`, display: 'flex', gap: 16, alignItems: 'stretch' }}>
+      <span aria-hidden style={{ flexShrink: 0, display: 'flex', width: 54, borderRadius: 14, alignItems: 'center', justifyContent: 'center', background: `linear-gradient(180deg, ${m.dim}, transparent)`, border: `1px solid ${m.tone}26` }}>
+        <span style={{ animation: 'float-y 6s ease-in-out infinite' }}><Bottle size={30} halo={false} tilt={6} /></span>
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 13 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999, fontSize: 11.5, fontWeight: 700, color: m.tone, background: m.dim, border: `1px solid ${m.tone}33`, whiteSpace: 'nowrap' }}>
+            <MiniGlyph kind={m.glyph} c={m.tone} s={14} />{m.wave}
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: INK2, whiteSpace: 'nowrap' }}><MiniGlyph kind="lock" s={13} /> 봉인됨</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, whiteSpace: 'nowrap', color: INK0 }}>{b.asset}</span>
+          <span className="font-mono" style={{ fontSize: 11.5, color: INK2 }}>{b.symbol}</span>
+          <span className="font-mono" style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 600, color: b.changeRate > 0 ? UP : DOWN }}><Tri up={b.changeRate > 0} />{fmtPct(b.changeRate)}</span>
+        </div>
+        {b.note && <p style={{ margin: '12px 0 0', fontSize: 13.5, color: INK0, lineHeight: 1.5 }}>“{b.note}”</p>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+          <span style={{ fontSize: 11.5, color: INK2, whiteSpace: 'nowrap' }}>감정 강도</span>
+          <Intensity n={b.intensity} tone={m.tone} />
+          <span style={{ marginLeft: 'auto', fontSize: 11.5, color: INK2, whiteSpace: 'nowrap' }}>{b.side === 'SELL' ? '매도' : '매수'} {wonSigned(b.amountKrw).replace(/[+−]/, '')} 봉인</span>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: INK2, marginBottom: 6 }}>
+            <span>띄운 날 {fmtDate(b.capturedAt)}</span>
+            <span style={{ color: SONAR, fontWeight: 600, whiteSpace: 'nowrap' }}>D-{dleft} · {fmtDate(b.revealAt)} 개봉</span>
+          </div>
+          <div style={{ position: 'relative', height: 6, borderRadius: 99, background: ABYSS, border: `1px solid ${HAIR}`, overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${prog}%`, background: `linear-gradient(90deg, ${ACCENT}, ${SONAR})` }} />
+            <span style={{ position: 'absolute', top: '50%', left: `${prog}%`, transform: 'translate(-50%,-50%)', fontSize: 11 }}>🌊</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
+};
+
+/* ── 도착 (revealed) — 반사실 센터피스 ── */
+const RevealCard = ({ b }: { b: BottleVM }) => {
+  const go = useVirtNavigate();
+  const m = triMeta(b.trigger);
+  const followedRule = b.choice === 'FOLLOW_RULE';
+  const ruleBetter = b.rulePct >= b.impulsePct;
+  const costPct = b.rulePct - b.impulsePct;
+  const costKrw = Math.abs(costPct) * b.amountKrw / 100;
+  const pathColor = (b.path[b.path.length - 1] ?? 0) >= 0 ? UP : DOWN;
+  const [open, setOpen] = useState(false);
+
+  const impulseLabel = b.side === 'SELL' ? '팔았다면' : '샀다면';
+  const ruleLabel = b.side === 'SELL' ? '안 팔고 버텼다면' : '관망했다면';
+  const choiceLabel = followedRule ? (b.side === 'SELL' ? '안 팔았다' : '관망했다') : (b.side === 'SELL' ? '팔았다' : '샀다');
+  const msg = followedRule
+    ? (ruleBetter ? { t: '참길 잘했어요. 항로가 옳았습니다 🐋', c: DOWN } : { t: '이번엔 충동이 맞았네요. 그래도 같은 선택 10번이면 몇 번 맞을까요?', c: INK1 })
+    : (ruleBetter ? { t: '그때 흔들렸죠. 다음엔 한 박자 쉬어볼까요?', c: UP } : { t: '운이 좋았어요. 같은 선택 10번이면 몇 번 맞을까요?', c: INK1 });
+
+  const Outcome = ({ label, pct, amount, win }: { label: string; pct: number; amount: number; win: boolean }) => {
+    const tone = pct > 0 ? UP : pct < 0 ? DOWN : INK2;
+    return (
+      <div style={{ position: 'relative', flex: 1, padding: '18px 18px 16px', borderRadius: 14, textAlign: 'center', background: win ? 'rgba(91,157,255,.08)' : CARD, border: win ? '1px solid rgba(91,157,255,.4)' : `1px solid ${HAIR}`, boxShadow: win ? '0 0 0 3px rgba(91,157,255,.10)' : 'none' }}>
+        {win && <span style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', padding: '3px 11px', borderRadius: 999, fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap', background: `linear-gradient(180deg, ${SONAR}, ${ACCENT})`, color: '#fff' }}>실제로 더 나았던 길</span>}
+        <div style={{ fontSize: 12.5, color: INK2 }}>{label}</div>
+        <div className="font-mono" style={{ fontSize: 30, fontWeight: 800, color: tone, margin: '6px 0 2px', letterSpacing: '-.02em' }}>{fmtPct(pct)}</div>
+        <div className="font-mono" style={{ fontSize: 12.5, color: pct === 0 ? INK3 : tone }}>약 {wonSigned(amount)}</div>
+      </div>
+    );
+  };
 
   return (
-    <div style={{ ...panel, overflow: 'hidden', animation: 'bottle-arrive .55s cubic-bezier(.2,.8,.2,1) both' }}>
-      <div className="flex items-center gap-2 px-5 pt-4">
-        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold"
-          style={{ background: 'rgba(91,157,255,.12)', color: SONAR, border: '1px solid rgba(91,157,255,.28)' }}>🌊 유리병이 돌아왔어요</span>
-        <span className="text-[11.5px]" style={{ color: INK3 }}>
-          {new Date(c.capturedAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })} · {c.triggerType === 'FOMO_SPIKE' ? '탐욕의 파도' : '공포의 파도'}
-        </span>
+    <Panel style={{ animation: 'bottle-arrive .55s cubic-bezier(.2,.8,.2,1) both' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '16px 22px', borderBottom: `1px solid ${HAIR}`, flexWrap: 'wrap', background: `linear-gradient(105deg, ${SONAR_DIM}, transparent 70%)` }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 700, color: SONAR, background: SONAR_DIM, border: '1px solid rgba(91,157,255,.3)', whiteSpace: 'nowrap' }}>🌊 유리병이 돌아왔어요</span>
+        <span style={{ fontSize: 12, color: INK2, whiteSpace: 'nowrap' }}>{fmtDate(b.revealAt)} 개봉</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 'auto', padding: '5px 11px', borderRadius: 999, fontSize: 11.5, fontWeight: 600, color: m.tone, background: m.dim, border: `1px solid ${m.tone}33`, whiteSpace: 'nowrap' }}><MiniGlyph kind={m.glyph} c={m.tone} s={14} />{m.wave}</span>
       </div>
-
-      <div className="px-5 pb-4 pt-2.5">
-        {c.emotionNote && <p className="text-[13px]" style={{ color: INK1 }}>"{c.emotionNote}" <span style={{ color: INK3 }}>(강도 {c.emotionIntensity}/5)</span></p>}
-        <p className="mt-1 text-[12px]" style={{ color: INK2 }}>당신의 선택: <b style={{ color: ruleChosen ? GREEN : UP }}>{ruleChosen ? (isSell ? '🧭 안 팔고 버텼다' : '🧭 안 사고 기다렸다') : (isSell ? '😰 팔았다' : '😰 샀다')}</b></p>
-
-        <div className="mt-3 flex gap-2.5">
-          <Box label={impulseLabel} val={impulse} chosen={!ruleChosen} />
-          <Box label={ruleLabel} val={rule} chosen={ruleChosen} />
+      <div style={{ padding: '22px 24px 24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ minWidth: 0 }}>
+            {b.note && <div style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.45, color: INK0 }}>“{b.note}”</div>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 9 }}><span style={{ fontSize: 12, color: INK2, whiteSpace: 'nowrap' }}>감정 강도</span><Intensity n={b.intensity} tone={m.tone} /></div>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ fontSize: 11.5, color: INK2 }}>당신의 선택</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 3, color: INK0 }}>{m.face} {choiceLabel}</div>
+            <div style={{ fontSize: 11, color: INK3, marginTop: 2 }}>{b.asset} · 봉인가 <span className="font-mono">{Math.round(b.sealPrice).toLocaleString('ko-KR')}</span></div>
+          </div>
         </div>
 
-        {c.pathPct && c.pathPct.length >= 2 && (
-          <div className="mt-3 rounded-xl px-3.5 py-2.5" style={{ background: CARD, border: `1px solid ${LINE}` }}>
-            <div className="mb-1 text-[10px]" style={{ color: INK3 }}>그날 이후 가격 흐름 (유리한 날만 고른 게 아니에요)</div>
-            <PathSpark data={c.pathPct} />
+        <div style={{ display: 'flex', gap: 14, marginTop: 22 }}>
+          <Outcome label={impulseLabel} pct={b.impulsePct} amount={b.amountKrw * b.impulsePct / 100} win={b.impulsePct > b.rulePct} />
+          <Outcome label={ruleLabel} pct={b.rulePct} amount={b.amountKrw * b.rulePct / 100} win={b.rulePct >= b.impulsePct} />
+        </div>
+
+        <div style={{ marginTop: 14, padding: '12px 16px', borderRadius: 12, textAlign: 'center', background: followedRule ? 'rgba(77,138,255,.08)' : 'rgba(239,77,77,.08)', border: `1px solid ${followedRule ? 'rgba(77,138,255,.24)' : 'rgba(239,77,77,.24)'}` }}>
+          <span style={{ fontSize: 13, color: INK1 }}>
+            감정의 비용 ·{' '}
+            {followedRule
+              ? (costPct >= 0 ? <>항로를 지켜 <strong style={{ color: DOWN }}>약 {fmtMan(costKrw).replace('+', '')}</strong> 아꼈어요</> : <>이번엔 충동이 <strong style={{ color: UP }}>약 {fmtMan(costKrw).replace('+', '')}</strong> 나았어요</>)
+              : (costPct >= 0 ? <>충동을 따라 <strong style={{ color: UP }}>약 {fmtMan(costKrw).replace('+', '')}</strong> 손해였어요</> : <>충동이 <strong style={{ color: DOWN }}>약 {fmtMan(costKrw).replace('+', '')}</strong> 이득이었어요</>)}
+          </span>
+          <span style={{ fontSize: 11.5, color: INK3, marginLeft: 8 }}>(두 선택의 차이 {Math.abs(costPct).toFixed(1)}%P)</span>
+        </div>
+
+        {b.path.length >= 2 && (
+          <div style={{ marginTop: 16, padding: '14px 16px 8px', borderRadius: 12, background: CARD, border: `1px solid ${HAIR}` }}>
+            <div style={{ fontSize: 11.5, color: INK2, marginBottom: 4 }}>봉인 이후 가격 경로 <span style={{ color: INK3 }}>· 유리한 날만 고른 게 아니에요</span></div>
+            <Sparkline data={b.path} color={pathColor} />
           </div>
         )}
 
-        <p className="mt-3 text-center text-[13px] font-semibold" style={{ color: INK0 }}>{toneMessage(c)}</p>
-        <p className="mt-1.5 text-center text-[12.5px]" style={{ color: cost >= 0 ? INK1 : GREEN }}>
-          {cost >= 0
-            ? <>충동을 따랐다면 <b style={{ color: UP }}>{base > 0 ? `약 ${wonMag(base * cost / 100)}` : `${cost.toFixed(1)}%p`}</b> 손해였어요</>
-            : <>이번엔 충동이 <b style={{ color: GREEN }}>{base > 0 ? `약 ${wonMag(base * cost / 100)}` : `${Math.abs(cost).toFixed(1)}%p`}</b> 아껴줬어요</>}
-          <span className="ml-1 text-[10.5px]" style={{ color: INK3 }}>(두 선택의 차이 {Math.abs(cost).toFixed(1)}%포인트)</span>
-        </p>
+        <div style={{ marginTop: 18, textAlign: 'center' }}><div style={{ fontSize: 15.5, fontWeight: 700, color: msg.c }}>{msg.t}</div></div>
 
-        {/* 항로 연결 — '항로'를 비유 아닌 진짜 내 전략으로 */}
-        {c.strategyName ? (
-          <p className="mt-2.5 rounded-lg px-3 py-2 text-[11.5px] leading-snug" style={{ background: 'rgba(63,214,160,.07)', border: '1px solid rgba(63,214,160,.22)', color: INK1 }}>
-            🧭 그때 당신의 항로 <b style={{ color: GREEN }}>『{c.strategyName}』</b>가 운용 중이었어요. 규칙(항로)에 맡기면 이런 순간에 감정으로 흔들리지 않아요.
-            {!isSample && <button onClick={() => go('/auto-trade')} className="ml-1 font-semibold" style={{ color: SONAR }}>내 항로 보기 →</button>}
-          </p>
-        ) : !isSample ? (
-          <button onClick={() => go('/strategy')} className="mt-2.5 w-full rounded-lg px-3 py-2.5 text-left text-[11.5px] font-semibold leading-snug transition-colors hover:opacity-90" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: SONAR }}>
-            🧭 이런 흔들림을 막고 싶다면 — 나만의 <b>항로(전략)</b>를 정해 자동매매에 맡겨보세요 →
-          </button>
-        ) : null}
-
-        <details className="mt-2.5">
-          <summary className="cursor-pointer list-none text-[10.5px]" style={{ color: INK3 }}>ℹ️ 어떻게 계산했나요?</summary>
-          <p className="mt-1 text-[10.5px] leading-snug" style={{ color: INK3 }}>
-            팔았다면 그 돈은 <b>현금</b>이 돼서 더는 오르내리지 않는 걸로 계산했어요 · 수수료·세금은 뺐어요(모의) · <b>한 번의 결과일 뿐</b>, 같은 선택을 여러 번 했을 때가 진짜예요.
-          </p>
-        </details>
-      </div>
-    </div>
-  );
-};
-
-const SealedCard = ({ c }: { c: MirrorCapture }) => {
-  const days = Math.max(0, Math.ceil((new Date(c.revealAt).getTime() - Date.now()) / 86_400_000));
-  return (
-    <div style={{ ...panel, padding: '16px 18px' }} className="flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold"
-            style={{ background: 'var(--ci-chip)', color: INK2, border: `1px solid ${LINE}` }}>🌊 바다 위</span>
-          <span className="truncate text-[13px] font-bold" style={{ color: INK0 }}>{c.assetName || c.assetSymbol}</span>
-          <span className="font-mono text-[11.5px]" style={{ color: c.changeRateAtEvent >= 0 ? UP : DOWN }}>{c.changeRateAtEvent >= 0 ? '+' : ''}{c.changeRateAtEvent.toFixed(1)}%</span>
+        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 13, background: 'rgba(245,208,97,.06)', border: '1px solid rgba(245,208,97,.22)', flexWrap: 'wrap' }}>
+          <span style={{ flexShrink: 0, color: COMPASS }}><MiniGlyph kind="compass" c={COMPASS} s={20} /></span>
+          <span style={{ flex: 1, minWidth: 200, fontSize: 13, color: INK1, lineHeight: 1.5 }}>
+            {b.strategy
+              ? <>그때 당신의 항로 <strong style={{ color: COMPASS }}>『{b.strategy}』</strong>가 운용 중이었어요 — 규칙에 맡기면 이런 순간에 흔들리지 않아요.</>
+              : <>이런 흔들림을 막고 싶다면 — 나만의 <strong style={{ color: COMPASS }}>항로(전략)</strong>를 정해 자동매매에 맡겨보세요.</>}
+          </span>
+          {!b.isSample && (
+            <button onClick={() => go(b.strategy ? '/auto-trade' : '/strategy')} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, color: COMPASS, background: 'rgba(245,208,97,.1)', border: '1px solid rgba(245,208,97,.3)', cursor: 'pointer' }}>{b.strategy ? '내 항로 보기' : '항로 정하기'} →</button>
+          )}
         </div>
-        {c.emotionNote && <p className="mt-1 truncate text-[12px]" style={{ color: INK2 }}>"{c.emotionNote}" <span style={{ color: INK3 }}>·강도 {c.emotionIntensity}/5</span></p>}
-        <p className="mt-0.5 text-[11.5px]" style={{ color: INK3 }}>선택: {c.userChoice === 'FOLLOW_RULE' ? '항로를 지켰다' : '충동을 따랐다'}</p>
+
+        <button onClick={() => setOpen(o => !o)} style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 7, background: 'none', border: 0, cursor: 'pointer', fontFamily: 'inherit', color: INK2, fontSize: 12, padding: 0 }}>
+          <MiniGlyph kind="info" s={14} /> 어떻게 계산했나요? <span style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>▾</span>
+        </button>
+        {open && (
+          <p style={{ margin: '10px 0 0', fontSize: 12, color: INK2, lineHeight: 1.7, padding: '12px 14px', borderRadius: 10, background: ABYSS, border: `1px solid ${HAIR}` }}>
+            봉인 시점의 가격·등락률·걸린 금액을 서버가 기록합니다. <b>{impulseLabel}</b>는 {b.side === 'SELL' ? '전량 현금화(이후 변동 0%)' : '그때 매수(이후 자산 변동분)'}, <b> {ruleLabel}</b>는 {b.side === 'SELL' ? '그대로 보유(자산 변동분)' : '관망(0%)'}으로 단일·보수 가정해 비교합니다. 수수료·세금은 제외(모의 기준)이며, 고정 시점의 체리피킹을 막기 위해 봉인 이후 경로를 함께 보여줍니다. 한 번의 결과일 뿐, 같은 선택의 기대값이 진짜 교훈이에요.
+          </p>
+        )}
       </div>
-      <div className="shrink-0 text-right">
-        <div className="font-mono text-[18px] font-bold" style={{ color: SONAR }}>{days === 0 ? '곧' : `D-${days}`}</div>
-        <div className="text-[10.5px]" style={{ color: INK3 }}>도착까지</div>
+    </Panel>
+  );
+};
+
+/* ── 감정 패턴 ── */
+type PatStat = { label: string; sub: string; total: number; impulse: number };
+const PatternBar = ({ data, weak }: { data: PatStat; weak: boolean }) => {
+  const pct = data.total ? Math.round((data.impulse / data.total) * 100) : 0;
+  const m = data.label.includes('공포') ? triMeta('PANIC_DROP') : triMeta('FOMO_SPIKE');
+  return (
+    <div style={{ padding: '18px 20px', borderRadius: 14, background: CARD, border: `1px solid ${weak ? m.tone + '55' : HAIR}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+        <span style={{ color: m.tone }}><MiniGlyph kind={m.glyph} c={m.tone} s={18} /></span>
+        <span style={{ fontSize: 14.5, fontWeight: 700, whiteSpace: 'nowrap', color: INK0 }}>{data.label}</span>
+        {weak
+          ? <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: m.tone, padding: '3px 9px', borderRadius: 999, background: m.dim, whiteSpace: 'nowrap' }}>약한 파도</span>
+          : <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: DOWN, padding: '3px 9px', borderRadius: 999, background: 'rgba(77,138,255,.12)', whiteSpace: 'nowrap' }}>잘 버팀</span>}
+      </div>
+      <div style={{ fontSize: 12, color: INK2, margin: '4px 0 14px' }}>{data.sub}</div>
+      <div style={{ position: 'relative', height: 10, borderRadius: 99, background: ABYSS, border: `1px solid ${HAIR}`, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, background: `linear-gradient(90deg, ${m.tone}88, ${m.tone})` }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 12 }}>
+        <span style={{ color: INK2, whiteSpace: 'nowrap' }}>충동에 휩쓸림</span>
+        <span className="font-mono" style={{ fontWeight: 700, color: m.tone }}>{data.total}번 중 {data.impulse}번 · {pct}%</span>
       </div>
     </div>
   );
 };
 
+const SectionHead = ({ icon, title, desc, count }: { icon: GlyphKind; title: string; desc?: string; count?: number }) => (
+  <div style={{ marginBottom: 14 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+      <span style={{ color: SONAR }}><MiniGlyph kind={icon} c={SONAR} s={18} /></span>
+      <h2 style={{ fontSize: 19, fontWeight: 700, letterSpacing: '-.01em', whiteSpace: 'nowrap', color: INK0 }}>{title}</h2>
+      {count != null && <span style={{ fontSize: 12, fontWeight: 700, color: SONAR, padding: '2px 9px', borderRadius: 999, background: SONAR_DIM }}>{count}</span>}
+    </div>
+    {desc && <p style={{ margin: '7px 0 0', fontSize: 13, color: INK2 }}>{desc}</p>}
+  </div>
+);
+
+/* ── PAGE ── */
 const ConsoleMirrorPage = () => {
   const { session } = useAuth();
   const { isVirt } = useRoutePrefix();
@@ -178,7 +362,6 @@ const ConsoleMirrorPage = () => {
     mirrorService.list()
       .then(caps => {
         setList(caps);
-        // 방문 = 다 봄: 네비 배지(HelmShell) 리셋용 — 본 revealed 개수 저장 + 배지 캐시 0
         localStorage.setItem('mirror_seen_revealed_count', String(caps.filter(c => c.revealed).length));
         sessionStorage.setItem('mirror_badge', '0');
       })
@@ -186,151 +369,82 @@ const ConsoleMirrorPage = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  const revealed = useMemo(() => list.filter(c => c.revealed), [list]);
-  const sealed = useMemo(() => list.filter(c => !c.revealed), [list]);
-  const stats = useMemo(() => {
-    const ruleWins = revealed.filter(c => !c.impulseWasRight).length;
-    const totalCost = revealed.reduce((s, c) => s + (c.emotionCostPct ?? 0), 0);
-    return { shaken: list.length, ruleWins, impulseWins: revealed.length - ruleWins, totalCost };
-  }, [list, revealed]);
+  const drifting = useMemo(() => list.filter(c => !c.revealed).map(toVM), [list]);
+  const arrived = useMemo(() => list.filter(c => c.revealed).map(toVM), [list]);
+  const showSample = arrived.length === 0;
 
-  // 감정 패턴 — 트리거별 '충동 실행률'(선택은 잠글 때 정해지므로 안 열린 것도 포함)
-  const patterns = useMemo(() => {
-    const defs = [
-      { key: 'PANIC_DROP', label: '공포의 파도', sub: '급락에 팔고 싶은 충동' },
-      { key: 'FOMO_SPIKE', label: '탐욕의 파도', sub: '급등에 사고 싶은 충동' },
-    ];
-    return defs
-      .map(d => {
-        const items = list.filter(c => c.triggerType === d.key);
-        const impulse = items.filter(c => c.userChoice === 'FOLLOW_IMPULSE').length;
-        return { ...d, total: items.length, impulse, rate: items.length ? impulse / items.length : 0 };
-      })
-      .filter(p => p.total > 0);
+  const { savedKrw, lostKrw } = useMemo(() => {
+    let s = 0, l = 0;
+    arrived.forEach(b => { const cost = (b.rulePct - b.impulsePct) * b.amountKrw / 100; if (b.choice === 'FOLLOW_RULE') s += Math.max(0, cost); else l += Math.max(0, cost); });
+    return { savedKrw: s, lostKrw: l };
+  }, [arrived]);
+
+  const pattern = useMemo(() => {
+    const mk = (key: string, label: string, sub: string): PatStat => {
+      const items = list.filter(c => c.triggerType === key);
+      return { label, sub, total: items.length, impulse: items.filter(c => c.userChoice === 'FOLLOW_IMPULSE').length };
+    };
+    return { fear: mk('PANIC_DROP', '공포의 파도', '급락에 팔고 싶어진 순간'), greed: mk('FOMO_SPIKE', '탐욕의 파도', '급등에 사고 싶어진 순간') };
   }, [list]);
-  const weakest = useMemo(() => {
-    // 약점 단정은 표본이 충분할 때만(트리거당 3건 이상) — 1~2번으로 '100% 약함' 과장 방지
-    const sorted = [...patterns].filter(p => p.total >= 3).sort((a, b) => b.rate - a.rate);
-    return sorted[0] && sorted[0].rate >= 0.5 ? sorted[0] : null;
-  }, [patterns]);
+  const fearWeak = pattern.fear.total >= 3 && pattern.fear.impulse / pattern.fear.total >= 0.5;
+  const greedWeak = pattern.greed.total >= 3 && pattern.greed.impulse / pattern.greed.total >= 0.5;
+  const hasPattern = pattern.fear.total + pattern.greed.total >= 2;
+  const weakestGreed = greedWeak && pattern.greed.impulse / pattern.greed.total >= (fearWeak ? pattern.fear.impulse / pattern.fear.total : 0);
 
   return (
     <HelmShell active="mirror" virt={isVirt} userName={userName} session="유리병 편지">
-      <div className="mx-auto flex max-w-[940px] flex-col gap-5 px-5 py-7">
-        <div>
-          <h1 className="text-[30px] font-bold tracking-tight" style={{ color: INK0 }}>유리병 편지 🌊</h1>
-          <p className="mt-2 text-[14.5px] leading-relaxed" style={{ color: INK1 }}>
-            <b style={{ color: INK0 }}>공포·탐욕의 파도</b>에 항로를 벗어날 뻔한 순간을 <b style={{ color: INK0 }}>유리병에 담아 띄워뒀다가</b>, 며칠 뒤 파도가 <b style={{ color: INK0 }}>휩쓸렸다면 vs 항로를 지켰다면</b>을 실어다 줘요. 🐋 투기를 투자로, 감정을 데이터로.
-          </p>
-        </div>
-
-        {/* 누적 거울 */}
-        {revealed.length > 0 && (
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { v: `${stats.shaken}`, l: '흔들린 횟수' },
-              { v: `${stats.ruleWins} : ${stats.impulseWins}`, l: '항로 옳음 : 충동 옳음' },
-              { v: `${stats.totalCost >= 0 ? '−' : '+'}${Math.abs(stats.totalCost).toFixed(0)}%p`, l: '감정이 청구한 비용', c: stats.totalCost >= 0 ? UP : GREEN },
-            ].map((s, i) => (
-              <div key={i} style={{ ...panel, padding: '16px 14px' }} className="text-center">
-                <div className="font-mono text-[22px] font-bold tabular-nums" style={{ color: s.c || INK0 }}>{s.v}</div>
-                <div className="mt-1 text-[11px]" style={{ color: INK3 }}>{s.l}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 감정 패턴 — "당신은 ○○에 약하다" */}
-        {list.length >= 2 && patterns.length > 0 && (
-          <div style={{ ...panel, padding: '18px 20px' }} className="flex flex-col gap-3.5">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold tracking-[.16em]" style={{ color: SONAR }}>어떤 파도에 흔들리나</span>
-            </div>
-            {weakest && (
-              <p className="text-[13.5px] leading-relaxed" style={{ color: INK0 }}>
-                🐋 당신은 <b style={{ color: UP }}>{weakest.label}</b>에 더 약해요 —
-                <b> {weakest.total}번 중 {weakest.impulse}번</b> 휩쓸렸어요.
-              </p>
-            )}
-            <div className="flex flex-col gap-3">
-              {patterns.map(p => {
-                const weak = p.rate >= 0.5;
-                return (
-                  <div key={p.key}>
-                    <div className="mb-1 flex items-center justify-between text-[12px]">
-                      <span style={{ color: INK1 }}>
-                        <b style={{ color: INK0 }}>{p.label}</b>
-                        <span style={{ color: INK3 }}> · {p.total}번 중 {p.impulse}번 휩쓸림</span>
-                      </span>
-                      <span className="font-mono font-semibold" style={{ color: weak ? UP : GREEN }}>
-                        {Math.round(p.rate * 100)}% {weak ? '약함' : '잘 버팀'}
-                      </span>
-                    </div>
-                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--ci-chip)' }}>
-                      <div className="h-full rounded-full" style={{ width: `${Math.max(4, p.rate * 100)}%`, background: weak ? UP : GREEN }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="text-[10.5px]" style={{ color: INK3 }}>파도에 휩쓸린 비율이 높을수록 그 감정에 약한 거예요. 약점을 알면 다음엔 항로를 지킬 수 있어요.</p>
-          </div>
-        )}
-
+      <BottleDefs />
+      <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 26, padding: '4px 0 40px' }}>
         {loading ? (
-          <div style={{ ...panel, padding: 48 }} className="text-center text-[13px]" >
-            <span style={{ color: INK3 }}>불러오는 중…</span>
-          </div>
-        ) : list.length === 0 ? (
-          <>
-          <div style={{ ...panel, padding: '56px 40px' }} className="text-center">
-            <div className="text-[52px]">🌊</div>
-            <div className="mt-3 text-[20px] font-bold" style={{ color: INK0 }}>아직 띄운 유리병이 없어요</div>
-            <div className="mx-auto mt-2.5 max-w-[520px] text-[14px] leading-relaxed" style={{ color: INK2 }}>
-              공포·탐욕의 파도에 <b style={{ color: INK1 }}>항로를 벗어날 뻔한 순간</b>을 유리병에 담아 띄워뒀다가, 며칠 뒤 파도가 결과를 실어다 줘요.<br />
-              충동대로 했을 때 vs 참았을 때를 <b style={{ color: INK1 }}>실제 숫자</b>로 보여줘요.
-            </div>
-            <div className="mx-auto mt-7 grid max-w-[640px] grid-cols-3 gap-4 text-left">
-              {[
-                { n: '1', t: '포착', d: '급락·급등 파도에 흔들릴 때 먼저 물어봐요' },
-                { n: '2', t: '띄우기', d: '판다 / 참는다, 그 마음을 유리병에 담아요' },
-                { n: '3', t: '도착', d: '며칠 뒤 파도가 "안 한 쪽 결과"를 실어다 줘요' },
-              ].map(s => (
-                <div key={s.n} style={{ background: CARD, border: `1px solid ${LINE}`, borderRadius: 14 }} className="px-4 py-4">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-bold" style={{ background: 'var(--ci-sonar-dim)', color: SONAR }}>{s.n}</div>
-                  <div className="mt-2.5 text-[14px] font-bold" style={{ color: INK0 }}>{s.t}</div>
-                  <div className="mt-1 text-[12.5px] leading-snug" style={{ color: INK3 }}>{s.d}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-6 text-[13px]" style={{ color: INK3 }}>
-              👉 <b style={{ color: INK2 }}>거래</b> 화면에서 급락 종목을 팔거나 급등 종목을 사보려 하면 유리병이 떠올라요.
-            </div>
-          </div>
-          {/* 예시 개봉 — 며칠 안 기다려도 결과 장면을 바로 체감 */}
-          <div>
-            <div className="mb-2.5 flex items-center gap-2 text-[12.5px] font-semibold" style={{ color: INK2 }}>
-              👀 이렇게 열려요
-              <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'var(--ci-chip)', color: INK3 }}>예시 · 실제 내 기록 아님</span>
-            </div>
-            <div style={{ opacity: 0.94 }}><RevealCard c={SAMPLE_REVEAL} /></div>
-          </div>
-          </>
+          <Panel style={{ padding: 56, textAlign: 'center' }}><span style={{ color: INK3, fontSize: 13 }}>불러오는 중…</span></Panel>
         ) : (
-          <div className="flex flex-col gap-5">
-            {revealed.length > 0 && (
-              <div className="flex flex-col gap-3.5">
-                <div className="text-[11px] font-semibold tracking-[.16em]" style={{ color: SONAR }}>🌊 돌아온 유리병</div>
-                {revealed.map(c => <RevealCard key={c.id} c={c} />)}
-              </div>
+          <>
+            <Hero savedKrw={savedKrw} lostKrw={lostKrw} />
+
+            {drifting.length > 0 && (
+              <section>
+                <SectionHead icon="lock" title="표류 중인 유리병" desc="봉인된 마음이 파도를 타고 흘러가는 중 — 개봉일이 되면 결과를 실어다 줘요." count={drifting.length} />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+                  {drifting.map(b => <DriftCard key={b.id} b={b} />)}
+                </div>
+              </section>
             )}
-            {sealed.length > 0 && (
-              <div className="flex flex-col gap-3">
-                <div className="text-[11px] font-semibold tracking-[.16em]" style={{ color: INK3 }}>🌊 바다 위</div>
-                {sealed.map(c => <SealedCard key={c.id} c={c} />)}
+
+            <section>
+              <SectionHead icon="info" title={showSample ? '이렇게 열려요' : '도착한 유리병'} desc="파도가 답을 실어왔어요. 충동대로 했다면 vs 항로를 지켰다면 — 실제 숫자로." count={showSample ? undefined : arrived.length} />
+              {showSample && <div style={{ marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: INK2 }}>👀 <span style={{ background: 'var(--ci-chip)', color: INK3, padding: '2px 7px', borderRadius: 6, fontWeight: 700, fontSize: 10.5 }}>예시 · 실제 내 기록 아님</span></div>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {(showSample ? [SAMPLE_VM] : arrived).map(b => <RevealCard key={b.id} b={b} />)}
               </div>
+              {list.length === 0 && (
+                <p style={{ marginTop: 14, fontSize: 13, color: INK3, textAlign: 'center' }}>👉 <b style={{ color: INK2 }}>거래</b> 화면에서 급락 종목을 팔거나 급등 종목을 사보려 하면 유리병이 떠올라요.</p>
+              )}
+            </section>
+
+            {hasPattern && (
+              <section>
+                <SectionHead icon="greed" title="감정 패턴 · 당신이 약한 파도" desc="트리거별 충동 실행률 — 3건 이상 쌓이면 약점을 단정해요." />
+                <Panel style={{ padding: '20px 22px' }}>
+                  {(fearWeak || greedWeak) && (
+                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, color: INK0 }}>
+                      🐋 <span>당신은 <span style={{ color: COMPASS }}>{weakestGreed ? '탐욕' : '공포'}의 파도</span>에 더 약해요</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+                    <PatternBar data={pattern.fear} weak={fearWeak} />
+                    <PatternBar data={pattern.greed} weak={greedWeak} />
+                  </div>
+                </Panel>
+              </section>
             )}
-          </div>
+
+            <div style={{ display: 'flex', gap: 11, padding: '16px 18px', borderRadius: 14, background: CARD, border: `1px solid ${HAIR}` }}>
+              <span style={{ flexShrink: 0, color: INK2, marginTop: 1 }}><MiniGlyph kind="info" s={18} /></span>
+              <p style={{ margin: 0, fontSize: 12.5, color: INK2, lineHeight: 1.7 }}>
+                <b style={{ color: INK1 }}>정직성 원칙</b> · 반사실은 "팔았다면 그 돈은 현금이 돼 더는 오르내리지 않는다"는 보수적 가정입니다. 수수료·세금 제외(모의 기준), 고정 시점의 체리피킹은 경로 그래프로 보완해요. 충동이 옳았던 날도 정직하게 비용을 음수로 적습니다. 한 번의 결과가 아니라, <b style={{ color: INK1 }}>같은 선택의 기대값</b>이 진짜 교훈이에요.
+              </p>
+            </div>
+          </>
         )}
       </div>
     </HelmShell>

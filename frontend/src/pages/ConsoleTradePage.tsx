@@ -814,7 +814,8 @@ const ConsoleTradePage = () => {
             )}
           </div>
           <div className="flex flex-col gap-[18px] lg:sticky lg:top-24">
-            <VirtPromo onGo={() => navigate('/virt/trade')} />
+            {/* 'Virt에서 거래하세요' 권유는 실계좌(non-virt) 페이지에서만 — 이미 VIRT면 모순 */}
+            {!isVirt && <VirtPromo onGo={() => navigate('/virt/trade')} />}
             <PortfolioMini portfolio={portfolio} onGo={() => navigate(`${isVirt ? '/virt' : ''}/my-portfolio`)} onPick={selectSymbol} />
           </div>
         </div>

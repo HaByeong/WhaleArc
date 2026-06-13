@@ -157,8 +157,8 @@ const ConsoleMirrorPage = () => {
   // 감정 패턴 — 트리거별 '충동 실행률'(선택은 봉인 즉시 알 수 있어 미개봉도 포함)
   const patterns = useMemo(() => {
     const defs = [
-      { key: 'PANIC_DROP', label: '급락 공포', sub: '하락에 팔고 싶은 충동' },
-      { key: 'FOMO_SPIKE', label: '급등 FOMO', sub: '상승에 사고 싶은 충동' },
+      { key: 'PANIC_DROP', label: '공포의 파도', sub: '급락에 팔고 싶은 충동' },
+      { key: 'FOMO_SPIKE', label: '탐욕의 파도', sub: '급등에 사고 싶은 충동' },
     ];
     return defs
       .map(d => {
@@ -178,8 +178,8 @@ const ConsoleMirrorPage = () => {
       <div className="mx-auto flex max-w-[760px] flex-col gap-5 px-5 py-6">
         <div>
           <h1 className="text-[26px] font-bold tracking-tight" style={{ color: INK0 }}>흔들린 순간 🐋</h1>
-          <p className="mt-1.5 text-[13.5px]" style={{ color: INK1 }}>
-            투기를 투자로, 감정을 데이터로. 흔들린 순간을 봉인하고, 며칠 뒤 <b style={{ color: INK0 }}>충동대로 vs 항로대로</b>의 결과를 나란히 비춥니다.
+          <p className="mt-1.5 text-[13.5px] leading-relaxed" style={{ color: INK1 }}>
+            <b style={{ color: INK0 }}>공포·탐욕의 파도</b>에 항로를 벗어날 뻔한 순간을 봉인했다가, 며칠 뒤 <b style={{ color: INK0 }}>휩쓸렸다면 vs 항로를 지켰다면</b>을 나란히 비춰요. 🐋 투기를 투자로, 감정을 데이터로.
           </p>
         </div>
 
@@ -203,12 +203,12 @@ const ConsoleMirrorPage = () => {
         {list.length >= 2 && patterns.length > 0 && (
           <div style={{ ...panel, padding: '18px 20px' }} className="flex flex-col gap-3.5">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold tracking-[.16em]" style={{ color: SONAR }}>나의 감정 패턴</span>
+              <span className="text-[11px] font-semibold tracking-[.16em]" style={{ color: SONAR }}>어떤 파도에 흔들리나</span>
             </div>
             {weakest && (
               <p className="text-[13.5px] leading-relaxed" style={{ color: INK0 }}>
                 🐋 당신은 <b style={{ color: UP }}>{weakest.label}</b>에 더 약해요 —
-                <b> {weakest.total}번 중 {weakest.impulse}번</b> 충동을 따랐어요.
+                <b> {weakest.total}번 중 {weakest.impulse}번</b> 휩쓸렸어요.
               </p>
             )}
             <div className="flex flex-col gap-3">
@@ -219,10 +219,10 @@ const ConsoleMirrorPage = () => {
                     <div className="mb-1 flex items-center justify-between text-[12px]">
                       <span style={{ color: INK1 }}>
                         <b style={{ color: INK0 }}>{p.label}</b>
-                        <span style={{ color: INK3 }}> · {p.total}번 중 {p.impulse}번 충동</span>
+                        <span style={{ color: INK3 }}> · {p.total}번 중 {p.impulse}번 휩쓸림</span>
                       </span>
                       <span className="font-mono font-semibold" style={{ color: weak ? UP : GREEN }}>
-                        {Math.round(p.rate * 100)}% {weak ? '약함' : '강함'}
+                        {Math.round(p.rate * 100)}% {weak ? '약함' : '잘 버팀'}
                       </span>
                     </div>
                     <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--ci-chip)' }}>
@@ -232,7 +232,7 @@ const ConsoleMirrorPage = () => {
                 );
               })}
             </div>
-            <p className="text-[10.5px]" style={{ color: INK3 }}>충동 실행률이 높을수록 그 감정에 약한 거예요. 약점을 알면 다음엔 한 박자 쉴 수 있어요.</p>
+            <p className="text-[10.5px]" style={{ color: INK3 }}>파도에 휩쓸린 비율이 높을수록 그 감정에 약한 거예요. 약점을 알면 다음엔 항로를 지킬 수 있어요.</p>
           </div>
         )}
 
@@ -245,7 +245,7 @@ const ConsoleMirrorPage = () => {
             <div className="text-[34px]">🪞</div>
             <div className="mt-2 text-[15px] font-bold" style={{ color: INK0 }}>아직 봉인된 순간이 없어요</div>
             <div className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>
-              급락·급등에 <b style={{ color: INK1 }}>흔들린 순간</b>을 잠깐 잠가뒀다가, 며칠 뒤 결과를 비춰드려요.<br />
+              공포·탐욕의 파도에 <b style={{ color: INK1 }}>항로를 벗어날 뻔한 순간</b>을 잠가뒀다가, 며칠 뒤 결과를 비춰드려요.<br />
               충동대로 했을 때 vs 참았을 때를 <b style={{ color: INK1 }}>실제 숫자</b>로 보여줘요.
             </div>
             <div className="mx-auto mt-4 grid max-w-[460px] grid-cols-3 gap-2.5 text-left">

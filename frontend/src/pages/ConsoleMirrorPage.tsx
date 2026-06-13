@@ -394,7 +394,7 @@ const ConsoleMirrorPage = () => {
   const weakestGreed = greedWeak && pattern.greed.impulse / pattern.greed.total >= (fearWeak ? pattern.fear.impulse / pattern.fear.total : 0);
 
   return (
-    <HelmShell active="mirror" virt={isVirt} userName={userName} session={list.length > 0 ? `유리병 편지 · 표류 ${drifting.length} · 도착 ${arrived.length}` : '유리병 편지'}>
+    <HelmShell active="mirror" virt={isVirt} userName={userName} session={list.length > 0 ? `유리병 편지 · 표류 중 ${drifting.length} · 도착 ${arrived.length}` : '유리병 편지'}>
       <BottleDefs />
       <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 26, padding: '4px 0 40px' }}>
         {loading ? (

@@ -224,7 +224,8 @@ public class RankingService {
                 .nickname(nickname)
                 .portfolioName(nickname + "의 포트폴리오") // 공개 랭킹에 이메일 로컬파트(PII) 노출 금지 — 닉네임만 사용
                 .totalReturn(Math.round(displayReturn * 100.0) / 100.0)
-                .totalValue(p.getTotalValue().doubleValue())
+                // 공개 리더보드엔 타인의 절대 자산액 비노출 — 본인 항목만 채운다(0=타인)
+                .totalValue(p.getUserId().equals(currentUserId) ? p.getTotalValue().doubleValue() : 0.0)
                 .rankChange(0)
                 .isMyRanking(p.getUserId().equals(currentUserId))
                 .routeName(routeName)
@@ -335,12 +336,8 @@ public class RankingService {
         String portfolioName = nickname + "의 포트폴리오"; // 이메일 로컬파트(PII) 노출 금지 — 닉네임만 사용
 
         int rank = calculateRank(portfolio);
-        BigDecimal initialCash = portfolio.getInitialCash();
-        double initialCapital = (initialCash.compareTo(BigDecimal.ZERO) > 0)
-                ? initialCash.doubleValue() : 10_000_000;
-        double totalValue = portfolio.getTotalValue().doubleValue();
+        // 타인 포트폴리오 공개 상세엔 절대 금액(원금·총자산·수익금액) 비노출 — 수익률(%)만.
         double totalReturn = portfolio.getReturnRate().doubleValue();
-        double totalReturnAmount = totalValue - initialCapital;
 
         int stockCount = (int) portfolio.getHoldings().stream().filter(h -> h.isStock()).count();
         int cryptoCount = portfolio.getHoldings().size() - stockCount;
@@ -373,9 +370,6 @@ public class RankingService {
                 .nickname(nickname)
                 .currentRank(rank)
                 .totalReturn(Math.round(totalReturn * 100.0) / 100.0)
-                .totalReturnAmount(Math.round(totalReturnAmount))
-                .initialCapital(initialCapital)
-                .totalValue(totalValue)
                 .stockCount(stockCount)
                 .cryptoCount(cryptoCount)
                 .routeName(routeName)

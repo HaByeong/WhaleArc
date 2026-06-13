@@ -134,6 +134,18 @@ const SAMPLE_VM: BottleVM = {
   choice: 'FOLLOW_IMPULSE', impulsePct: 0, rulePct: 8.5, strategy: '골든크로스 추종 전략',
   path: [0, -1.4, -2.1, -0.6, 1.8, 4.2, 6.1, 8.5], capturedAt: '2026-05-21', revealAt: '2026-05-28', isSample: true,
 };
+const _iso = (dayOffset: number) => new Date(Date.now() + dayOffset * 86400000).toISOString();
+// 빈 상태 미리보기 — '이렇게 채워진다'를 보여주는 예시(표류 1 + 패턴)
+const SAMPLE_DRIFT: BottleVM = {
+  id: 'sample-drift', trigger: 'FOMO_SPIKE', side: 'BUY', asset: '에코프로', symbol: '086520',
+  changeRate: 17.2, sealPrice: 128500, amountKrw: 1500000, note: '지금 안 사면 영영 놓칠 것 같았다', intensity: 5,
+  choice: 'FOLLOW_IMPULSE', impulsePct: 0, rulePct: 0, strategy: null, path: [],
+  capturedAt: _iso(-3), revealAt: _iso(4), isSample: true,
+};
+const SAMPLE_PATTERN = {
+  fear: { label: '공포의 파도', sub: '급락에 팔고 싶어진 순간', total: 5, impulse: 2 },
+  greed: { label: '탐욕의 파도', sub: '급등에 사고 싶어진 순간', total: 6, impulse: 5 },
+};
 
 /* ── HERO ── */
 const Hero = ({ savedKrw, lostKrw }: { savedKrw: number; lostKrw: number }) => (
@@ -371,8 +383,10 @@ const ConsoleMirrorPage = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  const go = useVirtNavigate();
   const drifting = useMemo(() => list.filter(c => !c.revealed).map(toVM), [list]);
   const arrived = useMemo(() => list.filter(c => c.revealed).map(toVM), [list]);
+  const empty = list.length === 0;          // 캡처가 하나도 없음 → 미리보기 모드
   const showSample = arrived.length === 0;
 
   const { savedKrw, lostKrw } = useMemo(() => {
@@ -403,11 +417,23 @@ const ConsoleMirrorPage = () => {
           <>
             <Hero savedKrw={savedKrw} lostKrw={lostKrw} />
 
-            {drifting.length > 0 && (
+            {empty && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', borderRadius: 14, background: 'linear-gradient(105deg, rgba(91,157,255,.10), transparent 70%)', border: '1px solid rgba(91,157,255,.24)', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 26 }}>🌊</span>
+                <div style={{ flex: 1, minWidth: 240 }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 700, color: INK0 }}>아직 띄운 유리병이 없어요</div>
+                  <p style={{ margin: '3px 0 0', fontSize: 12.5, color: INK2, lineHeight: 1.6 }}>거래에서 <b style={{ color: INK1 }}>급락에 팔거나 급등에 사려 할 때</b> 그 순간이 여기 담겨요. 아래는 <b style={{ color: INK1 }}>이렇게 채워진다</b>는 예시예요.</p>
+                </div>
+                <button onClick={() => go('/trade')} className="shrink-0 rounded-[10px] px-4 py-2.5 text-[12.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, ${ACCENT})`, boxShadow: '0 8px 18px -10px rgba(60,120,255,.6)' }}>거래하러 가기 →</button>
+              </div>
+            )}
+
+            {(drifting.length > 0 || empty) && (
               <section>
-                <SectionHead icon="lock" title="표류 중인 유리병" desc="봉인된 마음이 파도를 타고 흘러가는 중 — 개봉일이 되면 결과를 실어다 줘요." count={drifting.length} />
+                <SectionHead icon="lock" title="표류 중인 유리병" desc="봉인된 마음이 파도를 타고 흘러가는 중 — 개봉일이 되면 결과를 실어다 줘요." count={empty ? undefined : drifting.length} />
+                {empty && <div style={{ marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: INK2 }}>👀 <span style={{ background: 'var(--ci-chip)', color: INK3, padding: '2px 7px', borderRadius: 6, fontWeight: 700, fontSize: 10.5 }}>예시 · 실제 내 기록 아님</span></div>}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
-                  {drifting.map(b => <DriftCard key={b.id} b={b} />)}
+                  {(empty ? [SAMPLE_DRIFT] : drifting).map(b => <DriftCard key={b.id} b={b} />)}
                 </div>
               </section>
             )}
@@ -418,23 +444,21 @@ const ConsoleMirrorPage = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 {(showSample ? [SAMPLE_VM] : arrived).map(b => <RevealCard key={b.id} b={b} />)}
               </div>
-              {list.length === 0 && (
-                <p style={{ marginTop: 14, fontSize: 13, color: INK3, textAlign: 'center' }}>👉 <b style={{ color: INK2 }}>거래</b> 화면에서 급락 종목을 팔거나 급등 종목을 사보려 하면 유리병이 떠올라요.</p>
-              )}
             </section>
 
-            {hasPattern && (
+            {(hasPattern || empty) && (
               <section>
                 <SectionHead icon="greed" title="감정 패턴 · 당신이 약한 파도" desc="트리거별 충동 실행률 — 3건 이상 쌓이면 약점을 단정해요." />
+                {empty && <div style={{ marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: INK2 }}>👀 <span style={{ background: 'var(--ci-chip)', color: INK3, padding: '2px 7px', borderRadius: 6, fontWeight: 700, fontSize: 10.5 }}>예시 · 실제 내 기록 아님</span></div>}
                 <Panel style={{ padding: '20px 22px' }}>
-                  {(fearWeak || greedWeak) && (
+                  {(empty || fearWeak || greedWeak) && (
                     <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, color: INK0 }}>
-                      🐋 <span>당신은 <span style={{ color: COMPASS }}>{weakestGreed ? '탐욕' : '공포'}의 파도</span>에 더 약해요</span>
+                      🐋 <span>당신은 <span style={{ color: COMPASS }}>{(empty ? true : weakestGreed) ? '탐욕' : '공포'}의 파도</span>에 더 약해요</span>
                     </div>
                   )}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-                    <PatternBar data={pattern.fear} weak={fearWeak} />
-                    <PatternBar data={pattern.greed} weak={greedWeak} />
+                    <PatternBar data={empty ? SAMPLE_PATTERN.fear : pattern.fear} weak={empty ? false : fearWeak} />
+                    <PatternBar data={empty ? SAMPLE_PATTERN.greed : pattern.greed} weak={empty ? true : greedWeak} />
                   </div>
                 </Panel>
               </section>

@@ -819,6 +819,8 @@ body.whalearc-dark .wa-force-dark .text-slate-600 {
 @keyframes bottle-arrive { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes float-y { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-6px); } }
 @keyframes bottle-dot { 0%,100%{ opacity: 1; } 50%{ opacity: .5; } }
+/* 유리/물에 빛이 반짝 — 유리병 편지 타이틀 글린트 */
+@keyframes glint-twinkle { 0%,100%{ opacity: .35; transform: scale(.82) rotate(0deg); } 50%{ opacity: 1; transform: scale(1) rotate(8deg); } }
 
 @keyframes whale-swim {
   0%, 100% {

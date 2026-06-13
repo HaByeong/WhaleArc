@@ -161,7 +161,12 @@ const Hero = ({ savedKrw, lostKrw }: { savedKrw: number; lostKrw: number }) => (
           <span style={{ fontSize: 10.5, letterSpacing: '.24em', fontWeight: 700, color: SONAR, whiteSpace: 'nowrap' }}>MESSAGE IN A BOTTLE</span>
           <span style={{ width: 5, height: 5, borderRadius: '50%', background: SONAR, boxShadow: `0 0 8px ${SONAR}`, animation: 'bottle-dot 2.4s ease-in-out infinite' }} />
         </div>
-        <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.15, color: INK0 }}>유리병 편지 🌊</h1>
+        <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.15, color: INK0, display: 'inline-flex', alignItems: 'flex-start', gap: 8 }}>
+          유리병 편지
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ marginTop: 4, filter: `drop-shadow(0 0 6px ${SONAR})`, transformOrigin: 'center', animation: 'glint-twinkle 3.2s ease-in-out infinite' }} aria-hidden>
+            <path d="M12 2 L13.4 9.2 L20 12 L13.4 14.8 L12 22 L10.6 14.8 L4 12 L10.6 9.2 Z" fill={SONAR} />
+          </svg>
+        </h1>
         <p style={{ margin: '12px 0 0', fontSize: 14, lineHeight: 1.7, color: INK1, maxWidth: 560 }}>
           공포·탐욕의 파도에 항로를 벗어날 뻔한 순간을 <strong style={{ color: INK0 }}>유리병에 담아 띄워두면</strong>, 며칠 뒤 파도가 <strong style={{ color: INK0 }}>충동대로 했다면 vs 항로를 지켰다면</strong>을 실제 숫자로 실어다 줍니다.
         </p>

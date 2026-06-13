@@ -11,6 +11,8 @@ import com.project.whalearc.mirror.domain.EmotionCapture;
 import com.project.whalearc.mirror.dto.CaptureRequest;
 import com.project.whalearc.mirror.dto.CaptureResponse;
 import com.project.whalearc.mirror.repository.EmotionCaptureRepository;
+import com.project.whalearc.live.domain.LiveStrategyDeployment;
+import com.project.whalearc.live.repository.LiveStrategyDeploymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +38,7 @@ public class EmotionMirrorService {
     private final UsStockPriceProvider usStockPriceProvider;
     private final UsEtfPriceProvider usEtfPriceProvider;
     private final CandlestickService candlestickService;
+    private final LiveStrategyDeploymentRepository deploymentRepository;
 
     /** 개봉까지의 시간(분). 기본 7일(10080분) — test/데모는 application.yml 에서 짧게 줄일 수 있다. */
     @Value("${mirror.reveal-minutes:10080}")
@@ -66,6 +69,7 @@ public class EmotionMirrorService {
                 req.getAssetSymbol(), req.getAssetName(), assetType,
                 priceAtEvent, changeRate, amountKrw, req.getUserChoice(),
                 req.getEmotionNote(), req.getEmotionIntensity(), now, revealAt);
+        c.setStrategyName(activeStrategyFor(userId, req.getAssetSymbol()));   // '항로'를 literal로
 
         // 개봉일이 0이면 즉시 개봉(데모) — 가격이 이미 stamp 됐으니 같은 가격 기준이라도 정직하게 0%로 열림
         if (!revealAt.isAfter(now)) reveal(c);
@@ -154,6 +158,21 @@ public class EmotionMirrorService {
             };
         } catch (Exception e) {
             log.debug("감정 거울 시세 조회 실패 [{} {}]: {}", symbol, assetType, e.getMessage());
+            return null;
+        }
+    }
+
+    /** 그 종목에 운용 중(RUNNING)인 사용자의 전략(항로) 이름 — 없으면 null. */
+    private String activeStrategyFor(String userId, String symbol) {
+        try {
+            return deploymentRepository
+                    .findByUserIdAndStatusIn(userId, java.util.List.of(LiveStrategyDeployment.Status.RUNNING)).stream()
+                    .filter(d -> d.getTargetAssets() != null && d.getTargetAssets().contains(symbol))
+                    .map(LiveStrategyDeployment::getStrategyName)
+                    .filter(n -> n != null && !n.isBlank())
+                    .findFirst().orElse(null);
+        } catch (Exception e) {
+            log.debug("감정 거울 항로 조회 실패 [{}]: {}", symbol, e.getMessage());
             return null;
         }
     }

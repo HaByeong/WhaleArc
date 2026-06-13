@@ -30,6 +30,7 @@ class EmotionMirrorServiceTest {
     @Mock UsStockPriceProvider usStockPriceProvider;
     @Mock UsEtfPriceProvider usEtfPriceProvider;
     @Mock CandlestickService candlestickService;
+    @Mock com.project.whalearc.live.repository.LiveStrategyDeploymentRepository deploymentRepository;
 
     @InjectMocks EmotionMirrorService service;
 

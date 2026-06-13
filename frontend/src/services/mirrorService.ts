@@ -16,6 +16,7 @@ export interface MirrorCapture {
   changeRateAtEvent: number;
   amountKrwAtEvent: number;     // 그 결정에 걸린 금액(원)
   userChoice: UserChoice;
+  strategyName?: string;        // 그 종목에 운용 중이던 실제 전략(항로) — 없으면 undefined
   emotionNote?: string;
   emotionIntensity: number;
   capturedAt: string;

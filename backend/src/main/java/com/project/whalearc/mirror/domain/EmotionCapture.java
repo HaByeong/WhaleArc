@@ -46,6 +46,7 @@ public class EmotionCapture {
     private double changeRateAtEvent;  // 봉인 시점 당일 등락률(%)
     private double amountKrwAtEvent;    // 그 결정에 걸린 금액(원) — 결과를 실제 금액으로 보여주기 위함
     private String userChoice;         // FOLLOW_RULE(항로 지킴) / FOLLOW_IMPULSE(충동 실행)
+    private String strategyName;       // 그 종목에 운용 중이던 실제 전략(항로) 이름 — 없으면 null. '항로'를 비유 아닌 literal로.
     private String emotionNote;        // 감정 메모
     private int emotionIntensity;      // 강도 1~5
     private Instant capturedAt;

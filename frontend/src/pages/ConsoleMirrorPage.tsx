@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useRoutePrefix } from '../hooks/useRoutePrefix';
+import { useRoutePrefix, useVirtNavigate } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
 import { mirrorService, type MirrorCapture } from '../services/mirrorService';
 
@@ -33,7 +33,7 @@ const SAMPLE_REVEAL: MirrorCapture = {
   id: 'sample', triggerType: 'PANIC_DROP', impulseSide: 'SELL',
   assetSymbol: 'BTC', assetName: '비트코인', assetType: 'CRYPTO',
   priceAtEvent: 86000000, changeRateAtEvent: -6.2, amountKrwAtEvent: 1500000,
-  userChoice: 'FOLLOW_IMPULSE', emotionNote: '더 떨어질 것 같아 무서웠다', emotionIntensity: 4,
+  userChoice: 'FOLLOW_IMPULSE', strategyName: '골든크로스 추종 전략', emotionNote: '더 떨어질 것 같아 무서웠다', emotionIntensity: 4,
   capturedAt: '2026-05-21T14:03:00+09:00', revealAt: '2026-05-28T14:03:00+09:00',
   revealed: true, revealedAt: '2026-05-28T14:03:00+09:00', priceAtReveal: 93310000,
   impulseOutcomePct: 0, ruleOutcomePct: 8.5, emotionCostPct: 8.5, impulseWasRight: false,
@@ -67,6 +67,8 @@ function toneMessage(c: MirrorCapture): string {
 }
 
 const RevealCard = ({ c }: { c: MirrorCapture }) => {
+  const go = useVirtNavigate();
+  const isSample = c.id === 'sample';
   const isSell = c.impulseSide !== 'BUY';
   const impulseLabel = isSell ? '팔았다면' : '샀다면';
   const ruleLabel = isSell ? '안 팔고 버텼다면' : '안 사고 기다렸다면';
@@ -119,6 +121,18 @@ const RevealCard = ({ c }: { c: MirrorCapture }) => {
             : <>이번엔 충동이 <b style={{ color: GREEN }}>{base > 0 ? `약 ${wonMag(base * cost / 100)}` : `${Math.abs(cost).toFixed(1)}%p`}</b> 아껴줬어요</>}
           <span className="ml-1 text-[10.5px]" style={{ color: INK3 }}>(두 선택의 차이 {Math.abs(cost).toFixed(1)}%포인트)</span>
         </p>
+
+        {/* 항로 연결 — '항로'를 비유 아닌 진짜 내 전략으로 */}
+        {c.strategyName ? (
+          <p className="mt-2.5 rounded-lg px-3 py-2 text-[11.5px] leading-snug" style={{ background: 'rgba(63,214,160,.07)', border: '1px solid rgba(63,214,160,.22)', color: INK1 }}>
+            🧭 그때 당신의 항로 <b style={{ color: GREEN }}>『{c.strategyName}』</b>가 운용 중이었어요. 규칙(항로)에 맡기면 이런 순간에 감정으로 흔들리지 않아요.
+            {!isSample && <button onClick={() => go('/auto-trade')} className="ml-1 font-semibold" style={{ color: SONAR }}>내 항로 보기 →</button>}
+          </p>
+        ) : !isSample ? (
+          <button onClick={() => go('/strategy')} className="mt-2.5 w-full rounded-lg px-3 py-2.5 text-left text-[11.5px] font-semibold leading-snug transition-colors hover:opacity-90" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: SONAR }}>
+            🧭 이런 흔들림을 막고 싶다면 — 나만의 <b>항로(전략)</b>를 정해 자동매매에 맡겨보세요 →
+          </button>
+        ) : null}
 
         <details className="mt-2.5">
           <summary className="cursor-pointer list-none text-[10.5px]" style={{ color: INK3 }}>ℹ️ 어떻게 계산했나요?</summary>

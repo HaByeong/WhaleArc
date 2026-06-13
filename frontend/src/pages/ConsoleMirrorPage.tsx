@@ -4,7 +4,7 @@ import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
 import { mirrorService, type MirrorCapture } from '../services/mirrorService';
 
-/* 감정 거울(Emotion Mirror) — 흔들린 순간의 봉인을 모아 보여주고, 개봉되면 "충동 vs 항로"를 대조한다.
+/* 감정 거울(Emotion Mirror) — 흔들린 순간을 모아 보여주고, 열리면 "충동 vs 항로"를 대조한다.
    판단은 사용자가, 시스템은 사실만 비춘다. 충동이 옳았던 날도 정직하게. */
 
 const UP = '#ef4d4d', DOWN = '#4d8aff', GREEN = '#3fd6a0';
@@ -27,7 +27,7 @@ const wonMag = (krw: number) => {
   return abs >= 10000 ? `${(abs / 10000).toFixed(1)}만원` : `${Math.round(abs).toLocaleString('ko-KR')}원`;
 };
 
-/** 이벤트→개봉 경로 스파크라인. 고정 horizon 체리피킹 방지용. */
+/** 이벤트→열림 경로 스파크라인. 고정 horizon 체리피킹 방지용. */
 const PathSpark = ({ data, w = 220, h = 44 }: { data: number[]; w?: number; h?: number }) => {
   if (!data || data.length < 2) return null;
   const min = Math.min(0, ...data), max = Math.max(0, ...data), span = max - min || 1;
@@ -77,9 +77,9 @@ const RevealCard = ({ c }: { c: MirrorCapture }) => {
     <div style={{ ...panel, overflow: 'hidden' }}>
       <div className="flex items-center gap-2 px-5 pt-4">
         <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold"
-          style={{ background: 'rgba(91,157,255,.12)', color: SONAR, border: '1px solid rgba(91,157,255,.28)' }}>🔓 봉인이 열렸습니다</span>
+          style={{ background: 'rgba(91,157,255,.12)', color: SONAR, border: '1px solid rgba(91,157,255,.28)' }}>🌊 유리병이 돌아왔어요</span>
         <span className="text-[11.5px]" style={{ color: INK3 }}>
-          {new Date(c.capturedAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })} · 급락 공포
+          {new Date(c.capturedAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })} · {c.triggerType === 'FOMO_SPIKE' ? '탐욕의 파도' : '공포의 파도'}
         </span>
       </div>
 
@@ -94,7 +94,7 @@ const RevealCard = ({ c }: { c: MirrorCapture }) => {
 
         {c.pathPct && c.pathPct.length >= 2 && (
           <div className="mt-3 rounded-xl px-3.5 py-2.5" style={{ background: CARD, border: `1px solid ${LINE}` }}>
-            <div className="mb-1 text-[10px]" style={{ color: INK3 }}>봉인 이후 가격 경로 (체리피킹 아님)</div>
+            <div className="mb-1 text-[10px]" style={{ color: INK3 }}>그날 이후 가격 경로 (체리피킹 아님)</div>
             <PathSpark data={c.pathPct} />
           </div>
         )}
@@ -122,16 +122,16 @@ const SealedCard = ({ c }: { c: MirrorCapture }) => {
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold"
-            style={{ background: 'var(--ci-chip)', color: INK2, border: `1px solid ${LINE}` }}>🔒 봉인됨</span>
+            style={{ background: 'var(--ci-chip)', color: INK2, border: `1px solid ${LINE}` }}>🌊 바다 위</span>
           <span className="truncate text-[13px] font-bold" style={{ color: INK0 }}>{c.assetName || c.assetSymbol}</span>
-          <span className="font-mono text-[11.5px]" style={{ color: DOWN }}>{c.changeRateAtEvent.toFixed(1)}%</span>
+          <span className="font-mono text-[11.5px]" style={{ color: c.changeRateAtEvent >= 0 ? UP : DOWN }}>{c.changeRateAtEvent >= 0 ? '+' : ''}{c.changeRateAtEvent.toFixed(1)}%</span>
         </div>
         {c.emotionNote && <p className="mt-1 truncate text-[12px]" style={{ color: INK2 }}>"{c.emotionNote}" <span style={{ color: INK3 }}>·강도 {c.emotionIntensity}/5</span></p>}
         <p className="mt-0.5 text-[11.5px]" style={{ color: INK3 }}>선택: {c.userChoice === 'FOLLOW_RULE' ? '항로를 지켰다' : '충동을 따랐다'}</p>
       </div>
       <div className="shrink-0 text-right">
         <div className="font-mono text-[18px] font-bold" style={{ color: SONAR }}>{days === 0 ? '곧' : `D-${days}`}</div>
-        <div className="text-[10.5px]" style={{ color: INK3 }}>개봉까지</div>
+        <div className="text-[10.5px]" style={{ color: INK3 }}>도착까지</div>
       </div>
     </div>
   );
@@ -154,7 +154,7 @@ const ConsoleMirrorPage = () => {
     return { shaken: list.length, ruleWins, impulseWins: revealed.length - ruleWins, totalCost };
   }, [list, revealed]);
 
-  // 감정 패턴 — 트리거별 '충동 실행률'(선택은 봉인 즉시 알 수 있어 미개봉도 포함)
+  // 감정 패턴 — 트리거별 '충동 실행률'(선택은 잠글 때 정해지므로 안 열린 것도 포함)
   const patterns = useMemo(() => {
     const defs = [
       { key: 'PANIC_DROP', label: '공포의 파도', sub: '급락에 팔고 싶은 충동' },
@@ -179,7 +179,7 @@ const ConsoleMirrorPage = () => {
         <div>
           <h1 className="text-[26px] font-bold tracking-tight" style={{ color: INK0 }}>흔들린 순간 🐋</h1>
           <p className="mt-1.5 text-[13.5px] leading-relaxed" style={{ color: INK1 }}>
-            <b style={{ color: INK0 }}>공포·탐욕의 파도</b>에 항로를 벗어날 뻔한 순간을 봉인했다가, 며칠 뒤 <b style={{ color: INK0 }}>휩쓸렸다면 vs 항로를 지켰다면</b>을 나란히 비춰요. 🐋 투기를 투자로, 감정을 데이터로.
+            <b style={{ color: INK0 }}>공포·탐욕의 파도</b>에 항로를 벗어날 뻔한 순간을 <b style={{ color: INK0 }}>유리병에 담아 띄워뒀다가</b>, 며칠 뒤 파도가 <b style={{ color: INK0 }}>휩쓸렸다면 vs 항로를 지켰다면</b>을 실어다 줘요. 🐋 투기를 투자로, 감정을 데이터로.
           </p>
         </div>
 
@@ -243,16 +243,16 @@ const ConsoleMirrorPage = () => {
         ) : list.length === 0 ? (
           <div style={{ ...panel, padding: '32px 28px' }} className="text-center">
             <div className="text-[34px]">🪞</div>
-            <div className="mt-2 text-[15px] font-bold" style={{ color: INK0 }}>아직 봉인된 순간이 없어요</div>
+            <div className="mt-2 text-[15px] font-bold" style={{ color: INK0 }}>아직 띄운 유리병이 없어요</div>
             <div className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>
-              공포·탐욕의 파도에 <b style={{ color: INK1 }}>항로를 벗어날 뻔한 순간</b>을 잠가뒀다가, 며칠 뒤 결과를 비춰드려요.<br />
+              공포·탐욕의 파도에 <b style={{ color: INK1 }}>항로를 벗어날 뻔한 순간</b>을 유리병에 담아 띄워뒀다가, 며칠 뒤 파도가 결과를 실어다 줘요.<br />
               충동대로 했을 때 vs 참았을 때를 <b style={{ color: INK1 }}>실제 숫자</b>로 보여줘요.
             </div>
             <div className="mx-auto mt-4 grid max-w-[460px] grid-cols-3 gap-2.5 text-left">
               {[
-                { n: '1', t: '포착', d: '급락에 팔고 싶을 때 거울이 먼저 물어봐요' },
-                { n: '2', t: '봉인', d: '판다 / 참는다, 그 선택을 잠가둬요' },
-                { n: '3', t: '개봉', d: '며칠 뒤 "안 한 쪽 결과"를 나란히 비춰요' },
+                { n: '1', t: '포착', d: '급락·급등 파도에 흔들릴 때 먼저 물어봐요' },
+                { n: '2', t: '띄우기', d: '판다 / 참는다, 그 마음을 유리병에 담아요' },
+                { n: '3', t: '도착', d: '며칠 뒤 파도가 "안 한 쪽 결과"를 실어다 줘요' },
               ].map(s => (
                 <div key={s.n} style={{ background: CARD, border: `1px solid ${LINE}`, borderRadius: 12 }} className="px-3 py-3">
                   <div className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: 'var(--ci-sonar-dim)', color: SONAR }}>{s.n}</div>
@@ -262,20 +262,20 @@ const ConsoleMirrorPage = () => {
               ))}
             </div>
             <div className="mt-4 text-[11.5px]" style={{ color: INK3 }}>
-              👉 <b style={{ color: INK2 }}>거래</b> 화면에서 급락 중인 보유 종목을 팔아보려 하면 거울이 나타나요.
+              👉 <b style={{ color: INK2 }}>거래</b> 화면에서 급락 종목을 팔거나 급등 종목을 사보려 하면 유리병이 떠올라요.
             </div>
           </div>
         ) : (
           <div className="flex flex-col gap-5">
             {revealed.length > 0 && (
               <div className="flex flex-col gap-3.5">
-                <div className="text-[11px] font-semibold tracking-[.16em]" style={{ color: SONAR }}>🔓 개봉됨</div>
+                <div className="text-[11px] font-semibold tracking-[.16em]" style={{ color: SONAR }}>🌊 돌아온 유리병</div>
                 {revealed.map(c => <RevealCard key={c.id} c={c} />)}
               </div>
             )}
             {sealed.length > 0 && (
               <div className="flex flex-col gap-3">
-                <div className="text-[11px] font-semibold tracking-[.16em]" style={{ color: INK3 }}>🔒 봉인 대기</div>
+                <div className="text-[11px] font-semibold tracking-[.16em]" style={{ color: INK3 }}>🌊 바다 위</div>
                 {sealed.map(c => <SealedCard key={c.id} c={c} />)}
               </div>
             )}

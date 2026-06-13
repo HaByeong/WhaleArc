@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { UserChoice } from '../services/mirrorService';
 
 /* 마음 거울 — 흔들린 순간 인터셉트(급락 공포 매도 / 급등 탐욕 매수).
-   막지 않는다. 묻고, 선택을 봉인한다. 판단은 사용자가, 시스템은 사실만 비춘다. */
+   막지 않는다. 묻고, 선택을 잠가둔다. 판단은 사용자가, 시스템은 사실만 비춘다. */
 
 const UP = '#ef4d4d', DOWN = '#4d8aff', AMBER = '#f5d061';
 const INK0 = 'var(--ci-ink0)', INK1 = 'var(--ci-ink1)', INK2 = 'var(--ci-ink2)', INK3 = 'var(--ci-ink3)';
@@ -110,7 +110,7 @@ const EmotionMirrorModal = ({ kind, name, changeRate, busy, onClose, onChoice }:
             </button>
           </div>
           <p className="mt-3 text-center text-[11px]" style={{ color: INK3 }}>
-            🔒 이 선택은 봉인됐다가 <b style={{ color: INK2 }}>며칠 뒤</b> 열려요 · 충동이 옳았던 날도 정직하게 보여드려요
+            🌊 이 마음을 유리병에 담아 띄워요 · <b style={{ color: INK2 }}>며칠 뒤</b> 파도가 답을 실어다 줘요 · 충동이 옳았던 날도 정직하게
           </p>
         </div>
       </div>

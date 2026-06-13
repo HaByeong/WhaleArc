@@ -49,11 +49,11 @@ public class EmotionRevealScheduler {
     private void notifyRevealed(EmotionCapture c) {
         double cost = nz(c.getRuleOutcomePct()) - nz(c.getImpulseOutcomePct());
         String body = cost >= 0
-                ? String.format("'%s' — 항로를 지켰다면 충동보다 %+.1f%%p 나았어요. 봉인이 열렸습니다.", c.getAssetName() != null ? c.getAssetName() : c.getAssetSymbol(), cost)
-                : String.format("'%s' — 이번엔 충동이 %+.1f%%p 나았네요. 정직하게 열어뒀어요.", c.getAssetName() != null ? c.getAssetName() : c.getAssetSymbol(), -cost);
+                ? String.format("'%s' — 항로를 지켰다면 충동보다 %+.1f%%p 나았어요. 유리병이 돌아왔어요.", c.getAssetName() != null ? c.getAssetName() : c.getAssetSymbol(), cost)
+                : String.format("'%s' — 이번엔 충동이 %+.1f%%p 나았네요. 파도가 정직하게 실어왔어요.", c.getAssetName() != null ? c.getAssetName() : c.getAssetSymbol(), -cost);
         notificationService.createNotificationWithMeta(
                 c.getUserId(), Notification.NotificationType.EMOTION_MIRROR_REVEALED,
-                "🔓 그때의 선택이 열렸어요", body,
+                "🌊 유리병이 돌아왔어요", body,
                 Map.of("captureId", c.getId(), "symbol", c.getAssetSymbol()));
     }
 

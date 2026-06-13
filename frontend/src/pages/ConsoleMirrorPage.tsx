@@ -422,7 +422,6 @@ const ConsoleMirrorPage = () => {
 
             {empty && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', borderRadius: 14, background: 'linear-gradient(105deg, rgba(91,157,255,.10), transparent 70%)', border: '1px solid rgba(91,157,255,.24)', flexWrap: 'wrap' }}>
-                <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 46, height: 46, borderRadius: 13, background: SONAR_DIM, border: '1px solid rgba(91,157,255,.3)' }}><Bottle size={20} halo={false} /></span>
                 <div style={{ flex: 1, minWidth: 240 }}>
                   <div style={{ fontSize: 14.5, fontWeight: 700, color: INK0 }}>아직 띄운 유리병이 없어요</div>
                   <p style={{ margin: '3px 0 0', fontSize: 12.5, color: INK2, lineHeight: 1.6 }}>거래에서 <b style={{ color: INK1 }}>급락에 팔거나 급등에 사려 할 때</b> 그 순간이 여기 담겨요. 아래는 <b style={{ color: INK1 }}>이렇게 채워진다</b>는 예시예요.</p>

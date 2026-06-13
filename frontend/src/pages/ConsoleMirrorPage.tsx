@@ -107,9 +107,12 @@ const RevealCard = ({ c }: { c: MirrorCapture }) => {
           <span className="ml-1 text-[10.5px]" style={{ color: INK3 }}>(두 선택의 차이 {Math.abs(cost).toFixed(1)}%포인트)</span>
         </p>
 
-        <p className="mt-2.5 text-[10.5px] leading-snug" style={{ color: INK3 }}>
-          ℹ️ 팔았다면 그 돈은 <b>현금</b>이 돼서 더는 오르내리지 않는 걸로 계산했어요 · 수수료·세금은 뺐어요(모의) · <b>한 번의 결과일 뿐</b>, 같은 선택을 여러 번 했을 때가 진짜예요.
-        </p>
+        <details className="mt-2.5">
+          <summary className="cursor-pointer list-none text-[10.5px]" style={{ color: INK3 }}>ℹ️ 어떻게 계산했나요?</summary>
+          <p className="mt-1 text-[10.5px] leading-snug" style={{ color: INK3 }}>
+            팔았다면 그 돈은 <b>현금</b>이 돼서 더는 오르내리지 않는 걸로 계산했어요 · 수수료·세금은 뺐어요(모의) · <b>한 번의 결과일 뿐</b>, 같은 선택을 여러 번 했을 때가 진짜예요.
+          </p>
+        </details>
       </div>
     </div>
   );

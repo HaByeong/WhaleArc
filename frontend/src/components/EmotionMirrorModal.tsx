@@ -27,7 +27,7 @@ const CFG = {
     ask: '공포의 파도에 휩쓸려 파는 건지, 원래 계획이었는지',
     reassure: '며칠 뒤 "팔았다면 vs 안 팔았다면"',
     placeholder: '더 떨어질 것 같아 무섭다…',
-    impulse: '😰 그래도 판다', rule: '🧭 항로를 지킨다',
+    impulse: '😰 그래도 판다', rule: '🧭 항로 지키기 · 안 판다',
   },
   FOMO: {
     badge: '급등 탐욕 감지', badgeColor: '#ffd97a', badgeBg: 'rgba(245,208,97,.14)', badgeBd: 'rgba(245,208,97,.34)', dot: AMBER,
@@ -36,7 +36,7 @@ const CFG = {
     ask: '탐욕의 파도에 올라타는 건지, 원래 계획이었는지',
     reassure: '며칠 뒤 "샀다면 vs 안 샀다면"',
     placeholder: '나만 못 사는 것 같아 조급하다…',
-    impulse: '🤩 그래도 산다', rule: '🧭 관망한다',
+    impulse: '🤩 그래도 산다', rule: '🧭 관망 · 안 산다',
   },
 } as const;
 
@@ -100,7 +100,7 @@ const EmotionMirrorModal = ({ kind, name, changeRate, busy, onClose, onChoice }:
           <div className="grid grid-cols-2 gap-2.5">
             <button onClick={() => fire('FOLLOW_IMPULSE')} disabled={busy}
               className="rounded-[11px] py-3 text-[13.5px] font-bold disabled:opacity-50"
-              style={{ background: 'rgba(239,77,77,.10)', color: '#ff8a8a', border: '1px solid rgba(239,77,77,.4)' }}>
+              style={{ background: 'var(--ci-card)', color: 'var(--ci-ink1)', border: '1px solid var(--ci-line-strong)' }}>
               {c.impulse}
             </button>
             <button onClick={() => fire('FOLLOW_RULE')} disabled={busy}

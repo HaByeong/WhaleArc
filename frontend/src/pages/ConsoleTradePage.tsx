@@ -12,8 +12,14 @@ import { Term } from '../components/GlossaryTerm';
 import EmotionMirrorModal from '../components/EmotionMirrorModal';
 import { mirrorService, type UserChoice } from '../services/mirrorService';
 
-const PANIC_THRESHOLD = -5;   // 당일 등락률 ≤ −5%면 급락 공포 매도 인터셉트(마음 거울)
-const FOMO_THRESHOLD = 15;    // 미보유 자산 당일 +15%↑ 매수면 급등 탐욕(FOMO) 인터셉트
+// 유리병 인터셉트 임계값 — 자산군별로 변동성이 달라 코인/주식을 분리한다.
+// 코인은 하루 ±5%가 흔한 노이즈라 더 보수적으로, 주식류는 ±5%면 이미 큰 사건이라 더 민감하게.
+const MIRROR_THRESHOLDS = {
+  crypto: { panic: -8, fomo: 25 },   // 코인: −8% 급락 매도 / +25% 급등 매수
+  stock:  { panic: -4, fomo: 10 },   // 주식·ETF: −4% 급락 매도 / +10% 급등 매수
+} as const;
+const mirrorThreshold = (at?: string) =>
+  (at === 'STOCK' || at === 'US_STOCK' || at === 'ETF') ? MIRROR_THRESHOLDS.stock : MIRROR_THRESHOLDS.crypto;
 
 /* ────────────────────────────────────────────────────────────
    ConsoleTradePage — 거래(trade) 실데이터 배선
@@ -200,9 +206,10 @@ const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, o
     if (orderMethod === 'LIMIT' && (!price || price <= 0)) { notify('지정가는 0보다 큰 값을 입력해주세요.', 'error'); return; }
     if (isBuy && portfolio && totalKRW > cash) { notify('잔고가 부족합니다.', 'error'); return; }
     if (!isBuy && qty > heldQty) { notify('보유 수량이 부족합니다.', 'error'); return; }
-    // 유리병 인터셉트 — 막지 않고, 묻고 띄운다. '지금 당장'의 충동이라 시장가에서만(지정가는 즉시 체결 아님).
-    if (orderMethod === 'MARKET' && !isBuy && heldQty > 0 && sel.changeRate <= PANIC_THRESHOLD) { setMirrorKind('PANIC'); setMirror(true); return; }   // 급락 공포 매도
-    if (orderMethod === 'MARKET' && isBuy && heldQty <= 0 && sel.changeRate >= FOMO_THRESHOLD) { setMirrorKind('FOMO'); setMirror(true); return; }     // 급등 탐욕(FOMO) 매수
+    // 유리병 인터셉트 — 막지 않고, 묻고 띄운다. '지금 당장'의 충동이라 시장가에서만(지정가는 즉시 체결 아님). 임계값은 자산군별.
+    const mt = mirrorThreshold(at);
+    if (orderMethod === 'MARKET' && !isBuy && heldQty > 0 && sel.changeRate <= mt.panic) { setMirrorKind('PANIC'); setMirror(true); return; }   // 급락 공포 매도
+    if (orderMethod === 'MARKET' && isBuy && heldQty <= 0 && sel.changeRate >= mt.fomo) { setMirrorKind('FOMO'); setMirror(true); return; }     // 급등 탐욕(FOMO) 매수
     placeOrder();
   };
 

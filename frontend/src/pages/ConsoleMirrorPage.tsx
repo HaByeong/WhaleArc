@@ -470,6 +470,14 @@ const ConsoleMirrorPage = () => {
             <div style={{ display: 'flex', gap: 11, padding: '16px 18px', borderRadius: 14, background: CARD, border: `1px solid ${HAIR}` }}>
               <span style={{ flexShrink: 0, color: INK2, marginTop: 1 }}><MiniGlyph kind="info" s={18} /></span>
               <p style={{ margin: 0, fontSize: 12.5, color: INK2, lineHeight: 1.7 }}>
+                <b style={{ color: INK1 }}>언제 유리병이 생기나요?</b> · <b style={{ color: INK1 }}>시장가</b>로 ① 가진 자산을 <b style={{ color: DOWN }}>급락 중에 팔거나</b> ② 안 가진 자산을 <b style={{ color: UP }}>급등 중에 살 때</b> 그 순간만 담아요. 평소 거래는 그냥 체결됩니다. 변동성이 자산마다 달라 <b style={{ color: INK1 }}>기준도 자산군별</b>로 나눴어요 —
+                {' '}코인은 하루 <b style={{ color: DOWN }}>−8%↓</b>·<b style={{ color: UP }}>+25%↑</b>, 주식·ETF는 <b style={{ color: DOWN }}>−4%↓</b>·<b style={{ color: UP }}>+10%↑</b>. 지정가 주문은 '지금 당장의 충동'이 아니라 막지 않아요.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: 11, padding: '16px 18px', borderRadius: 14, background: CARD, border: `1px solid ${HAIR}` }}>
+              <span style={{ flexShrink: 0, color: INK2, marginTop: 1 }}><MiniGlyph kind="info" s={18} /></span>
+              <p style={{ margin: 0, fontSize: 12.5, color: INK2, lineHeight: 1.7 }}>
                 <b style={{ color: INK1 }}>정직성 원칙</b> · 반사실은 "팔았다면 그 돈은 현금이 돼 더는 오르내리지 않는다"는 보수적 가정입니다. 수수료·세금 제외(모의 기준), 고정 시점의 체리피킹은 경로 그래프로 보완해요. 충동이 옳았던 날도 정직하게 비용을 음수로 적습니다. 한 번의 결과가 아니라, <b style={{ color: INK1 }}>같은 선택의 기대값</b>이 진짜 교훈이에요.
               </p>
             </div>

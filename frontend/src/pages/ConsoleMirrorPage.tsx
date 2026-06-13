@@ -27,6 +27,19 @@ const wonMag = (krw: number) => {
   return abs >= 10000 ? `${(abs / 10000).toFixed(1)}만원` : `${Math.round(abs).toLocaleString('ko-KR')}원`;
 };
 
+/* 빈 상태용 예시 개봉 — 며칠 안 기다려도 "이렇게 열려요"를 바로 체감시키는 샘플(실제 기록 아님).
+   급락에 패닉 매도했는데 며칠 뒤 회복한, 가장 흔한 교훈 케이스. */
+const SAMPLE_REVEAL: MirrorCapture = {
+  id: 'sample', triggerType: 'PANIC_DROP', impulseSide: 'SELL',
+  assetSymbol: 'BTC', assetName: '비트코인', assetType: 'CRYPTO',
+  priceAtEvent: 86000000, changeRateAtEvent: -6.2, amountKrwAtEvent: 1500000,
+  userChoice: 'FOLLOW_IMPULSE', emotionNote: '더 떨어질 것 같아 무서웠다', emotionIntensity: 4,
+  capturedAt: '2026-05-21T14:03:00+09:00', revealAt: '2026-05-28T14:03:00+09:00',
+  revealed: true, revealedAt: '2026-05-28T14:03:00+09:00', priceAtReveal: 93310000,
+  impulseOutcomePct: 0, ruleOutcomePct: 8.5, emotionCostPct: 8.5, impulseWasRight: false,
+  pathPct: [-6.2, -4.0, -1.5, 2.0, 5.5, 8.5],
+};
+
 /** 이벤트→열림 경로 스파크라인. 고정 horizon 체리피킹 방지용. */
 const PathSpark = ({ data, w = 220, h = 44 }: { data: number[]; w?: number; h?: number }) => {
   if (!data || data.length < 2) return null;
@@ -74,7 +87,7 @@ const RevealCard = ({ c }: { c: MirrorCapture }) => {
   );
 
   return (
-    <div style={{ ...panel, overflow: 'hidden' }}>
+    <div style={{ ...panel, overflow: 'hidden', animation: 'bottle-arrive .55s cubic-bezier(.2,.8,.2,1) both' }}>
       <div className="flex items-center gap-2 px-5 pt-4">
         <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold"
           style={{ background: 'rgba(91,157,255,.12)', color: SONAR, border: '1px solid rgba(91,157,255,.28)' }}>🌊 유리병이 돌아왔어요</span>
@@ -255,6 +268,7 @@ const ConsoleMirrorPage = () => {
             <span style={{ color: INK3 }}>불러오는 중…</span>
           </div>
         ) : list.length === 0 ? (
+          <>
           <div style={{ ...panel, padding: '56px 40px' }} className="text-center">
             <div className="text-[52px]">🌊</div>
             <div className="mt-3 text-[20px] font-bold" style={{ color: INK0 }}>아직 띄운 유리병이 없어요</div>
@@ -279,6 +293,15 @@ const ConsoleMirrorPage = () => {
               👉 <b style={{ color: INK2 }}>거래</b> 화면에서 급락 종목을 팔거나 급등 종목을 사보려 하면 유리병이 떠올라요.
             </div>
           </div>
+          {/* 예시 개봉 — 며칠 안 기다려도 결과 장면을 바로 체감 */}
+          <div>
+            <div className="mb-2.5 flex items-center gap-2 text-[12.5px] font-semibold" style={{ color: INK2 }}>
+              👀 이렇게 열려요
+              <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'var(--ci-chip)', color: INK3 }}>예시 · 실제 내 기록 아님</span>
+            </div>
+            <div style={{ opacity: 0.94 }}><RevealCard c={SAMPLE_REVEAL} /></div>
+          </div>
+          </>
         ) : (
           <div className="flex flex-col gap-5">
             {revealed.length > 0 && (

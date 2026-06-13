@@ -813,6 +813,8 @@ body.whalearc-dark .wa-force-dark .text-slate-600 {
 @keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-in { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes message-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* 유리병 도착 — 파도에 실려 잔잔히 떠오르듯 */
+@keyframes bottle-arrive { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 
 @keyframes whale-swim {
   0%, 100% {

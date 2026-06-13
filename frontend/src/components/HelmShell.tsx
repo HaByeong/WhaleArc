@@ -5,6 +5,22 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
 import { mirrorService } from '../services/mirrorService';
+import { useNotifications } from '../hooks/useNotifications';
+import Toast from '../components/Toast';
+import type { Notification } from '../services/notificationService';
+
+/** 알림 종류별 아이콘 + 상대시간 — 벨 드롭다운용. */
+const NOTIF_ICON: Record<string, string> = {
+  EMOTION_MIRROR_REVEALED: '🌊', LIMIT_ORDER_FILLED: '✅', MARKET_ORDER_FILLED: '✅',
+  AUTO_TRADE_EXECUTED: '⚡', TURTLE_TRADE: '🐢', STRATEGY_EXECUTED: '🧭', PRICE_ALERT: '🔔',
+};
+const relTime = (iso: string) => {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60) return '방금';
+  if (s < 3600) return `${Math.floor(s / 60)}분 전`;
+  if (s < 86400) return `${Math.floor(s / 3600)}시간 전`;
+  return `${Math.floor(s / 86400)}일 전`;
+};
 
 /** '흔들린 순간' 도착 배지 — 마지막 방문 이후 새로 돌아온 유리병 수(되돌아오는 넛지). */
 const MIRROR_SEEN_KEY = 'mirror_seen_revealed_count';   // localStorage: 마지막으로 본 revealed 개수
@@ -111,6 +127,16 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
       .catch(() => { /* 조용히 무시 */ });
     return () => { alive = false; };
   }, [virt, active]);
+
+  // 알림 벨 — 30초 폴링 + 새 알림 토스트/브라우저알림(훅 내장). '유리병 도착' 등 모든 알림이 여기로.
+  const notif = useNotifications();
+  const [notifOpen, setNotifOpen] = useState(false);
+  const toggleNotif = () => setNotifOpen(o => { const next = !o; if (next) notif.refreshNotifications(); return next; });
+  const onNotifClick = (n: Notification) => {
+    notif.markAsRead(n.id);
+    setNotifOpen(false);
+    if (n.type === 'EMOTION_MIRROR_REVEALED') navigate('/virt/mirror');
+  };
 
   const handleLogout = async () => {
     try { await authService.logout(); } catch { /* ignore */ }
@@ -241,10 +267,42 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
             <button className="flex h-9 w-9 items-center justify-center rounded-[10px]" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)', color: 'var(--ci-ink2)' }} aria-label="검색">
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="9" cy="9" r="6" /><path d="M14 14l4 4" strokeLinecap="round" /></svg>
             </button>
-            <button className="relative flex h-9 w-9 items-center justify-center rounded-[10px]" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)', color: 'var(--ci-ink2)' }} aria-label="알림">
-              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6 8a4 4 0 1 1 8 0c0 4 1.5 5 1.5 5h-11S6 12 6 8Z" strokeLinejoin="round" /><path d="M8.5 16a1.5 1.5 0 0 0 3 0" /></svg>
-              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full" style={{ background: UP, boxShadow: '0 0 0 2px var(--ci-card)' }} />
-            </button>
+            <div className="relative">
+              <button onClick={toggleNotif} className="relative flex h-9 w-9 items-center justify-center rounded-[10px]" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)', color: 'var(--ci-ink2)' }} aria-label={`알림${notif.unreadCount > 0 ? ` ${notif.unreadCount}건` : ''}`}>
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6 8a4 4 0 1 1 8 0c0 4 1.5 5 1.5 5h-11S6 12 6 8Z" strokeLinejoin="round" /><path d="M8.5 16a1.5 1.5 0 0 0 3 0" /></svg>
+                {notif.unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white" style={{ background: UP, boxShadow: '0 0 0 2px var(--ci-topbar, var(--ci-card))' }}>{notif.unreadCount > 9 ? '9+' : notif.unreadCount}</span>
+                )}
+              </button>
+              {notifOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+                  <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[320px] overflow-hidden rounded-xl" style={{ background: 'var(--ci-overlay)', border: '1px solid var(--ci-line-strong)', boxShadow: 'var(--ci-panel-shadow)' }}>
+                    <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid var(--ci-line)' }}>
+                      <span className="text-[12.5px] font-bold" style={{ color: 'var(--ci-ink0)' }}>알림</span>
+                      {notif.unreadCount > 0 && <button onClick={() => notif.markAllAsRead()} className="text-[11px] font-semibold" style={{ color: 'var(--ci-sonar)' }}>모두 읽음</button>}
+                    </div>
+                    <div className="max-h-[360px] overflow-y-auto">
+                      {notif.notifications.length === 0 ? (
+                        <div className="px-4 py-8 text-center text-[12.5px]" style={{ color: 'var(--ci-ink3)' }}>새 알림이 없어요</div>
+                      ) : notif.notifications.slice(0, 20).map(n => (
+                        <button key={n.id} onClick={() => onNotifClick(n)} className="flex w-full items-start gap-2.5 px-4 py-3 text-left transition-colors hover:bg-white/[0.04]" style={{ borderBottom: '1px solid var(--ci-line)', background: n.read ? 'transparent' : 'rgba(91,157,255,.07)' }}>
+                          <span className="shrink-0 text-[16px]" aria-hidden>{NOTIF_ICON[n.type] || '🔔'}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-1.5">
+                              {!n.read && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: 'var(--ci-sonar)' }} />}
+                              <span className="truncate text-[12.5px] font-semibold" style={{ color: 'var(--ci-ink0)' }}>{n.title}</span>
+                            </span>
+                            <span className="mt-0.5 block truncate text-[11.5px]" style={{ color: 'var(--ci-ink2)' }}>{n.message}</span>
+                            <span className="mt-0.5 block text-[10.5px]" style={{ color: 'var(--ci-ink3)' }}>{relTime(n.createdAt)}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
@@ -270,6 +328,9 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
           );
         })}
       </nav>
+
+      {/* 전역 토스트 — 새 알림(유리병 도착·주문 체결 등)이 도착하면 팝업 */}
+      <Toast toasts={notif.toasts} onDismiss={notif.dismissToast} />
     </div>
   );
 };

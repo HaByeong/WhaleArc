@@ -37,7 +37,7 @@ const MIRROR_VISITED_KEY = 'mirror_visited';           // localStorage: 한 번�
 const SONAR = '#5b9dff';
 const UP = '#ef4d4d';
 
-type IconKind = 'helm' | 'pie' | 'sonar' | 'swap' | 'route' | 'book' | 'chat' | 'gauge' | 'card' | 'bolt' | 'note';
+type IconKind = 'helm' | 'pie' | 'sonar' | 'swap' | 'route' | 'book' | 'chat' | 'gauge' | 'card' | 'bolt' | 'note' | 'bottle';
 
 const NavIcon = ({ kind }: { kind: IconKind }) => {
   const common = { width: 20, height: 20, viewBox: '0 0 22 22', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -50,6 +50,7 @@ const NavIcon = ({ kind }: { kind: IconKind }) => {
     case 'book': return <svg {...common}><path d="M11 5C9 3.5 5.5 3.5 3.5 4.5v12C5.5 15.5 9 15.5 11 17M11 5c2-1.5 5.5-1.5 7.5-.5v12c-2-1-5.5-1-7.5.5M11 5v12" /></svg>;
     case 'chat': return <svg {...common}><path d="M4 5h14v9H9l-4 3.5V14H4z" /></svg>;
     case 'note': return <svg {...common}><rect x="5" y="3.5" width="13" height="16" rx="1.5" /><path d="M8.5 8h6M8.5 11.5h6M8.5 15h3.5" /></svg>;
+    case 'bottle': return <svg {...common}><rect x="9" y="2.5" width="4" height="3.4" rx="1" /><path d="M9 5.8V8Q5.5 9.2 5.5 13.5V16.5Q5.5 19.5 11 19.5Q16.5 19.5 16.5 16.5V13.5Q16.5 9.2 13 8V5.8" /><path d="M8.5 13h5M8.5 15.3h3.4" strokeWidth={1.3} /></svg>;
     case 'gauge': return <svg {...common}><path d="M4 15a7 7 0 0 1 14 0" /><path d="M11 15l4-3.5" /><circle cx="11" cy="15" r="1.2" fill="currentColor" stroke="none" /></svg>;
     case 'card': return <svg {...common}><rect x="2" y="5" width="18" height="13" rx="2" /><path d="M2 9.5h18M5.5 14h4" /></svg>;
     case 'bolt': return <svg {...common}><path d="M12 2 4 13h6l-1 7 8-11h-6z" /></svg>;
@@ -95,7 +96,7 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
         // VIRT 전용 회고 도구: 학습 노트(거래 복기) + 감정 거울(충동 복기)
         c.splice(i + 1, 0,
           { label: '학습 노트', icon: 'note', path: '/learn', key: 'edu' },
-          { label: '유리병 편지', icon: 'sonar', path: '/mirror', key: 'mirror' });
+          { label: '유리병 편지', icon: 'bottle', path: '/mirror', key: 'mirror' });
         return c;
       })()
     : NAV;

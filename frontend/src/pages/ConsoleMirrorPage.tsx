@@ -185,11 +185,11 @@ const ConsoleMirrorPage = () => {
   }, [patterns]);
 
   return (
-    <HelmShell active="mirror" virt={isVirt} userName={userName} session="흔들린 순간">
-      <div className="mx-auto flex max-w-[760px] flex-col gap-5 px-5 py-6">
+    <HelmShell active="mirror" virt={isVirt} userName={userName} session="유리병 편지">
+      <div className="mx-auto flex max-w-[940px] flex-col gap-5 px-5 py-7">
         <div>
-          <h1 className="text-[26px] font-bold tracking-tight" style={{ color: INK0 }}>흔들린 순간 🐋</h1>
-          <p className="mt-1.5 text-[13.5px] leading-relaxed" style={{ color: INK1 }}>
+          <h1 className="text-[30px] font-bold tracking-tight" style={{ color: INK0 }}>유리병 편지 🌊</h1>
+          <p className="mt-2 text-[14.5px] leading-relaxed" style={{ color: INK1 }}>
             <b style={{ color: INK0 }}>공포·탐욕의 파도</b>에 항로를 벗어날 뻔한 순간을 <b style={{ color: INK0 }}>유리병에 담아 띄워뒀다가</b>, 며칠 뒤 파도가 <b style={{ color: INK0 }}>휩쓸렸다면 vs 항로를 지켰다면</b>을 실어다 줘요. 🐋 투기를 투자로, 감정을 데이터로.
           </p>
         </div>
@@ -252,27 +252,27 @@ const ConsoleMirrorPage = () => {
             <span style={{ color: INK3 }}>불러오는 중…</span>
           </div>
         ) : list.length === 0 ? (
-          <div style={{ ...panel, padding: '32px 28px' }} className="text-center">
-            <div className="text-[34px]">🪞</div>
-            <div className="mt-2 text-[15px] font-bold" style={{ color: INK0 }}>아직 띄운 유리병이 없어요</div>
-            <div className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>
+          <div style={{ ...panel, padding: '56px 40px' }} className="text-center">
+            <div className="text-[52px]">🌊</div>
+            <div className="mt-3 text-[20px] font-bold" style={{ color: INK0 }}>아직 띄운 유리병이 없어요</div>
+            <div className="mx-auto mt-2.5 max-w-[520px] text-[14px] leading-relaxed" style={{ color: INK2 }}>
               공포·탐욕의 파도에 <b style={{ color: INK1 }}>항로를 벗어날 뻔한 순간</b>을 유리병에 담아 띄워뒀다가, 며칠 뒤 파도가 결과를 실어다 줘요.<br />
               충동대로 했을 때 vs 참았을 때를 <b style={{ color: INK1 }}>실제 숫자</b>로 보여줘요.
             </div>
-            <div className="mx-auto mt-4 grid max-w-[460px] grid-cols-3 gap-2.5 text-left">
+            <div className="mx-auto mt-7 grid max-w-[640px] grid-cols-3 gap-4 text-left">
               {[
                 { n: '1', t: '포착', d: '급락·급등 파도에 흔들릴 때 먼저 물어봐요' },
                 { n: '2', t: '띄우기', d: '판다 / 참는다, 그 마음을 유리병에 담아요' },
                 { n: '3', t: '도착', d: '며칠 뒤 파도가 "안 한 쪽 결과"를 실어다 줘요' },
               ].map(s => (
-                <div key={s.n} style={{ background: CARD, border: `1px solid ${LINE}`, borderRadius: 12 }} className="px-3 py-3">
-                  <div className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: 'var(--ci-sonar-dim)', color: SONAR }}>{s.n}</div>
-                  <div className="mt-1.5 text-[12px] font-bold" style={{ color: INK0 }}>{s.t}</div>
-                  <div className="mt-0.5 text-[11px] leading-snug" style={{ color: INK3 }}>{s.d}</div>
+                <div key={s.n} style={{ background: CARD, border: `1px solid ${LINE}`, borderRadius: 14 }} className="px-4 py-4">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-bold" style={{ background: 'var(--ci-sonar-dim)', color: SONAR }}>{s.n}</div>
+                  <div className="mt-2.5 text-[14px] font-bold" style={{ color: INK0 }}>{s.t}</div>
+                  <div className="mt-1 text-[12.5px] leading-snug" style={{ color: INK3 }}>{s.d}</div>
                 </div>
               ))}
             </div>
-            <div className="mt-4 text-[11.5px]" style={{ color: INK3 }}>
+            <div className="mt-6 text-[13px]" style={{ color: INK3 }}>
               👉 <b style={{ color: INK2 }}>거래</b> 화면에서 급락 종목을 팔거나 급등 종목을 사보려 하면 유리병이 떠올라요.
             </div>
           </div>

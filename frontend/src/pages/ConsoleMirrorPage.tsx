@@ -73,14 +73,14 @@ const Intensity = ({ n, tone }: { n: number; tone: string }) => (
   </span>
 );
 
-const Sparkline = ({ data, color }: { data: number[]; color: string }) => {
+const Sparkline = ({ data, color, idKey }: { data: number[]; color: string; idKey?: string }) => {
   if (!data || data.length < 2) return null;
   const min = Math.min(...data, 0), max = Math.max(...data, 0), span = (max - min) || 1;
   const X = (i: number) => (i / (data.length - 1)) * 100;
   const Y = (v: number) => 38 - ((v - min) / span) * 34 - 2;
   const line = data.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
   const zeroY = Y(0).toFixed(1);
-  const gid = 'spk-' + color.replace(/[^a-z0-9]/gi, '');
+  const gid = 'spk-' + (idKey || color).replace(/[^a-z0-9]/gi, '');
   return (
     <svg viewBox="0 0 100 40" preserveAspectRatio="none" style={{ width: '100%', height: 90, display: 'block' }}>
       <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={color} stopOpacity=".22" /><stop offset="1" stopColor={color} stopOpacity="0" /></linearGradient></defs>
@@ -121,9 +121,9 @@ type BottleVM = {
 };
 const toVM = (c: MirrorCapture): BottleVM => ({
   id: c.id, trigger: c.triggerType, side: c.impulseSide === 'BUY' ? 'BUY' : 'SELL',
-  asset: c.assetName || c.assetSymbol, symbol: c.assetSymbol, changeRate: c.changeRateAtEvent,
-  sealPrice: c.priceAtEvent, amountKrw: c.amountKrwAtEvent || 0, note: c.emotionNote || '',
-  intensity: c.emotionIntensity, choice: c.userChoice, impulsePct: c.impulseOutcomePct ?? 0,
+  asset: c.assetName || c.assetSymbol, symbol: c.assetSymbol, changeRate: c.changeRateAtEvent ?? 0,
+  sealPrice: c.priceAtEvent ?? 0, amountKrw: c.amountKrwAtEvent || 0, note: c.emotionNote || '',
+  intensity: c.emotionIntensity ?? 0, choice: c.userChoice, impulsePct: c.impulseOutcomePct ?? 0,
   rulePct: c.ruleOutcomePct ?? 0, strategy: c.strategyName || null, path: c.pathPct || [],
   capturedAt: c.capturedAt, revealAt: c.revealAt,
 });
@@ -188,7 +188,8 @@ const DriftCard = ({ b }: { b: BottleVM }) => {
   const m = triMeta(b.trigger);
   const total = Math.max(1, Math.round((new Date(b.revealAt).getTime() - new Date(b.capturedAt).getTime()) / 86400000));
   const passed = Math.round((Date.now() - new Date(b.capturedAt).getTime()) / 86400000);
-  const prog = Math.min(100, Math.max(4, (passed / total) * 100));
+  const rawProg = (passed / total) * 100;
+  const prog = Number.isFinite(rawProg) ? Math.min(100, Math.max(4, rawProg)) : 4;
   const dleft = daysLeft(b.revealAt);
   return (
     <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 16, padding: '18px 20px', background: SEA_PANEL, border: `1px solid ${HAIR}`, display: 'flex', gap: 16, alignItems: 'stretch' }}>
@@ -286,7 +287,9 @@ const RevealCard = ({ b }: { b: BottleVM }) => {
         <div style={{ marginTop: 14, padding: '12px 16px', borderRadius: 12, textAlign: 'center', background: followedRule ? 'rgba(77,138,255,.08)' : 'rgba(239,77,77,.08)', border: `1px solid ${followedRule ? 'rgba(77,138,255,.24)' : 'rgba(239,77,77,.24)'}` }}>
           <span style={{ fontSize: 13, color: INK1 }}>
             감정의 비용 ·{' '}
-            {followedRule
+            {Math.abs(costPct) < 0.1
+              ? <>두 선택의 결과가 <strong style={{ color: INK1 }}>거의 같았어요</strong></>
+              : followedRule
               ? (costPct >= 0 ? <>항로를 지켜 <strong style={{ color: DOWN }}>약 {fmtMan(costKrw).replace('+', '')}</strong> 아꼈어요</> : <>이번엔 충동이 <strong style={{ color: UP }}>약 {fmtMan(costKrw).replace('+', '')}</strong> 나았어요</>)
               : (costPct >= 0 ? <>충동을 따라 <strong style={{ color: UP }}>약 {fmtMan(costKrw).replace('+', '')}</strong> 손해였어요</> : <>충동이 <strong style={{ color: DOWN }}>약 {fmtMan(costKrw).replace('+', '')}</strong> 이득이었어요</>)}
           </span>
@@ -296,7 +299,7 @@ const RevealCard = ({ b }: { b: BottleVM }) => {
         {b.path.length >= 2 && (
           <div style={{ marginTop: 16, padding: '14px 16px 8px', borderRadius: 12, background: CARD, border: `1px solid ${HAIR}` }}>
             <div style={{ fontSize: 11.5, color: INK2, marginBottom: 4 }}>봉인 이후 가격 경로 <span style={{ color: INK3 }}>· 유리한 날만 고른 게 아니에요</span></div>
-            <Sparkline data={b.path} color={pathColor} />
+            <Sparkline data={b.path} color={pathColor} idKey={b.id} />
           </div>
         )}
 

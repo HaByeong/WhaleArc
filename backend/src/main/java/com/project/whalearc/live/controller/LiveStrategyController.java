@@ -9,13 +9,18 @@ import com.project.whalearc.live.dto.DeploymentResponse;
 import com.project.whalearc.live.service.LiveStrategyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -25,6 +30,14 @@ public class LiveStrategyController {
 
     private final LiveStrategyService liveStrategyService;
     private final AutoTradeAccessChecker autoTradeAccessChecker;
+
+    // 전역 킬스위치는 운영자 전용 — 플랫폼 admin userId 허용목록(피드백 모듈과 동일한 운영자 집합) 재사용
+    @Value("${feedback.admin-user-ids:}")
+    private String adminUserIdsCsv;
+    private Set<String> adminUserIds() {
+        if (adminUserIdsCsv == null || adminUserIdsCsv.isBlank()) return Set.of();
+        return Arrays.stream(adminUserIdsCsv.split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
+    }
 
     @PostMapping("/deployments")
     public ResponseEntity<ApiResponse<DeploymentResponse>> createDeployment(
@@ -134,10 +147,15 @@ public class LiveStrategyController {
         }
     }
 
-    /** 전역 킬스위치 토글 — 모든 라이브 자동매매 즉시 정지/재개. */
+    /** 전역 킬스위치 토글 — 모든 라이브 자동매매 즉시 정지/재개. 운영자(admin)만 허용. */
     @PostMapping("/kill-switch")
     public ResponseEntity<?> setKillSwitch(@AuthenticationPrincipal Jwt jwt, @RequestParam boolean engaged) {
+        if (!adminUserIds().contains(jwt.getSubject())) {
+            log.warn("킬스위치 비인가 시도 차단: userId={}", jwt.getSubject());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("권한이 없습니다."));
+        }
         liveStrategyService.setKillSwitch(engaged);
+        log.warn("전역 킬스위치 {} by admin={}", engaged ? "ON(전체 정지)" : "OFF(재개)", jwt.getSubject());
         return ResponseEntity.ok(ApiResponse.ok(Map.of("killSwitch", engaged)));
     }
 

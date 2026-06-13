@@ -222,7 +222,7 @@ const LandingPage = () => {
         <div className="relative mx-auto grid max-w-[1280px] items-center gap-10 px-6 pb-24 pt-28 md:grid-cols-[1.05fr_.95fr] md:px-14 md:pt-36">
           {/* 왼쪽 텍스트 */}
           <div>
-            <Eyebrow>실전 데이터로, 잃을 걱정 없이</Eyebrow>
+            <Eyebrow>투기를 투자로</Eyebrow>
             <h1 className="mt-6 font-extrabold" style={{ fontSize: 'clamp(40px,7vw,72px)', lineHeight: 1.06, letterSpacing: '-.025em' }}>
               고래처럼,<br />
               <span style={{ fontWeight: 700, color: 'rgba(255,255,255,.63)' }}>시장을 <span className="hero-swim">유영하듯</span></span>

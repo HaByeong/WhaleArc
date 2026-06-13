@@ -10,6 +10,7 @@ import { mirrorService } from '../services/mirrorService';
 const MIRROR_SEEN_KEY = 'mirror_seen_revealed_count';   // localStorage: 마지막으로 본 revealed 개수
 const MIRROR_BADGE_KEY = 'mirror_badge';               // sessionStorage: 캐시된 배지 수
 const MIRROR_BADGE_AT_KEY = 'mirror_badge_at';         // sessionStorage: 마지막 fetch 시각(쓰로틀)
+const MIRROR_VISITED_KEY = 'mirror_visited';           // localStorage: 한 번이라도 방문했는가(NEW 안내용)
 
 /* ────────────────────────────────────────────────────────────
    HelmShell — 「디자인 개편」 mockup의 다크 사이드바 콘솔 셸 (공용)
@@ -89,9 +90,11 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
   // '흔들린 순간' 개봉 넛지 — 마지막 방문 이후 새로 도착한 유리병 수를 배지로.
   // 거울 페이지에선 페이지가 직접 fetch(중복 방지) + seen 갱신하므로 여기선 0. 그 외엔 45s 쓰로틀로 매 네비 호출 방지.
   const [mirrorBadge, setMirrorBadge] = useState(() => virt ? Number(sessionStorage.getItem(MIRROR_BADGE_KEY) || 0) : 0);
+  // 첫 방문 전 'NEW' 안내(발견 동선). 방문하면 사라짐. 도착 배지가 있으면 NEW는 숨김(상호배타).
+  const mirrorNew = virt && mirrorBadge === 0 && localStorage.getItem(MIRROR_VISITED_KEY) !== '1';
   useEffect(() => {
     if (!virt) return;
-    if (active === 'mirror') { sessionStorage.setItem(MIRROR_BADGE_KEY, '0'); setMirrorBadge(0); return; }
+    if (active === 'mirror') { localStorage.setItem(MIRROR_VISITED_KEY, '1'); sessionStorage.setItem(MIRROR_BADGE_KEY, '0'); setMirrorBadge(0); return; }
     const last = Number(sessionStorage.getItem(MIRROR_BADGE_AT_KEY) || 0);
     if (Date.now() - last < 45000) return;   // 쓰로틀 — 캐시된 배지 그대로 사용
     let alive = true;
@@ -148,7 +151,10 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
               <NavIcon kind={it.icon} />
               <span className="helm-label">{it.label}</span>
               {it.key === 'mirror' && mirrorBadge > 0 && (
-                <span className="helm-label" style={{ marginLeft: 'auto', minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: '#ef4d4d', color: '#fff', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} aria-label={`개봉 대기 ${mirrorBadge}건`}>{mirrorBadge}</span>
+                <span className="helm-label" style={{ marginLeft: 'auto', minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: '#ef4d4d', color: '#fff', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} aria-label={`도착 ${mirrorBadge}건`}>{mirrorBadge}</span>
+              )}
+              {it.key === 'mirror' && mirrorNew && (
+                <span className="helm-label" style={{ marginLeft: 'auto', padding: '1px 6px', borderRadius: 999, background: 'rgba(91,157,255,.18)', color: '#9ec5ff', fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em', border: '1px solid rgba(91,157,255,.4)' }}>NEW</span>
               )}
               {locked && (
                 <svg className="helm-label" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: 'auto', opacity: .55 }} aria-label="잠김">
@@ -255,6 +261,9 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
               style={{ color: on ? '#cfe1ff' : 'rgba(255,255,255,.55)' }}>
               {it.key === 'mirror' && mirrorBadge > 0 && (
                 <span style={{ position: 'absolute', top: 4, right: 14, minWidth: 15, height: 15, padding: '0 4px', borderRadius: 999, background: '#ef4d4d', color: '#fff', fontSize: 9, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{mirrorBadge}</span>
+              )}
+              {it.key === 'mirror' && mirrorNew && (
+                <span style={{ position: 'absolute', top: 5, right: 18, width: 6, height: 6, borderRadius: 999, background: '#5b9dff' }} />
               )}
               <NavIcon kind={it.icon} />{it.label}
             </button>

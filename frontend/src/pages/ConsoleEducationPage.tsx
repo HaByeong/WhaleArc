@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useRoutePrefix } from '../hooks/useRoutePrefix';
+import { useRoutePrefix, useVirtNavigate } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
 import { tradeService, type Trade } from '../services/tradeService';
 import { marketService } from '../services/marketService';
@@ -420,8 +420,24 @@ const Chip = ({ on, onClick, children }: { on: boolean; onClick: () => void; chi
 );
 
 // ── 탭: 흔한 실수 ───────────────────────────────────────────────────────
-const MistakesTab = () => (
-  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+const MistakesTab = () => {
+  const go = useVirtNavigate();
+  return (
+  <div className="flex flex-col gap-3">
+    {/* 유리병 편지 소개 — 감정 매매를 데이터로 마주하는 도구 */}
+    <button onClick={() => go('/mirror')} className="group flex flex-wrap items-center gap-4 rounded-[14px] p-5 text-left transition-colors"
+      style={{ background: 'linear-gradient(135deg, rgba(91,157,255,.12), rgba(63,214,160,.05) 60%, transparent)', border: '1px solid rgba(91,157,255,.3)' }}>
+      <span className="text-[34px]">🌊</span>
+      <div className="min-w-0 flex-1">
+        <div className="mb-0.5 text-[10.5px] font-bold tracking-[.18em]" style={{ color: SONAR }}>도구 · 유리병 편지</div>
+        <div className="text-[15px] font-bold" style={{ color: INK0 }}>흔들린 순간을 데이터로 마주하기</div>
+        <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: INK1 }}>
+          급락에 팔고 싶거나 급등에 사고 싶을 때, 그 충동을 막지 않고 유리병에 담아뒀다가 — 며칠 뒤 <b style={{ color: INK0 }}>충동대로 했다면 vs 참았다면</b>을 실제 숫자로 보여줘요. 위 실수들을 '내 데이터'로 마주하는 도구예요.
+        </p>
+      </div>
+      <span className="shrink-0 rounded-lg px-3.5 py-2 text-[12.5px] font-bold text-white transition-transform group-hover:translate-x-0.5" style={{ background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}>열어보기 →</span>
+    </button>
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
     {MISTAKES.map((m) => (
       <div key={m.title} style={panel} className="p-4">
         <div className="flex items-center gap-2.5">
@@ -435,8 +451,10 @@ const MistakesTab = () => (
         </div>
       </div>
     ))}
+    </div>
   </div>
-);
+  );
+};
 
 // ── 탭: 투자 계산기 ───────────────────────────────────────────────────────
 const Slider = ({ label, value, min, max, step, onChange, fmt }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void; fmt: (v: number) => string }) => (

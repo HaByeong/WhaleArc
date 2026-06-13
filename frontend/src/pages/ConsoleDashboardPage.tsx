@@ -602,6 +602,13 @@ const VirtDashboard = () => {
                 {qbMsg && <div className="mt-3 rounded-lg px-3.5 py-2.5 text-[12.5px] font-semibold" style={qbMsg.ok ? { background: 'rgba(63,214,160,.1)', border: '1px solid rgba(63,214,160,.28)', color: '#3fd6a0' } : { background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{qbMsg.msg}</div>}
               </Panel>
             )}
+            {/* 유리병 편지 발견 카드 */}
+            <Panel style={{ padding: '22px 26px', background: 'linear-gradient(135deg, rgba(91,157,255,.10), rgba(63,214,160,.04) 60%, transparent)', border: '1px solid rgba(91,157,255,.28)' }}>
+              <div className="mb-1 text-[11px] font-semibold tracking-[.18em]" style={{ color: SONAR }}>🌊 NEW · 유리병 편지</div>
+              <h3 className="text-[18px] font-bold">흔들릴 땐, 유리병에 담아두세요</h3>
+              <p className="mt-1 text-[13.5px] leading-relaxed text-white/65">급락에 팔고 싶거나 급등에 사고 싶을 때 — 막지 않고 그 마음을 기록해뒀다가, 며칠 뒤 <b className="text-white/85">충동대로 했다면 vs 참았다면</b>을 실제 숫자로 비춰줘요.</p>
+              <button onClick={() => navigate('/virt/mirror')} className="mt-3.5 inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[13.5px] font-semibold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)', boxShadow: '0 12px 28px -12px rgba(44,111,230,.6)' }}>유리병 편지 열어보기 →</button>
+            </Panel>
             {/* 실전 모드 카드 */}
             <Panel style={{ padding: '26px 30px', background: 'linear-gradient(135deg, rgba(245,208,97,.12), rgba(245,208,97,.02) 60%, transparent)', border: '1px solid rgba(245,208,97,.26)' }}>
               <div className="mb-2 flex items-center gap-2.5"><span className="rounded px-2 py-[3px] text-[10.5px] font-bold tracking-[.06em]" style={{ background: COMPASS, color: '#0a1230' }}>LIVE</span><span className="text-[11px] font-semibold tracking-[.18em]" style={{ color: COMPASS }}>실전 항해 · 거래소 연동</span></div>

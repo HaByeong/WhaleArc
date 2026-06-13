@@ -9,6 +9,7 @@ import { quantStoreService, type PurchasePerformance } from '../services/quantSt
 import { exchangeService, type ExchangeType, type ExchangeAccount, type ExchangePortfolio, type ExchangeSnapshot } from '../services/exchangeService';
 import ExchangeConnectModal from '../components/ExchangeConnectModal';
 import apiClient from '../utils/api';
+import { FALLBACK_USD_KRW } from '../utils/currency';
 
 /* ────────────────────────────────────────────────────────────
    ConsolePortfolioPage — 포트폴리오(페이퍼/모의투자) 실데이터 배선
@@ -379,7 +380,7 @@ const PaperPortfolio = () => {
   const cash = portfolio?.cashBalance ?? 0;
   const initialCash = portfolio?.initialCash || 10_000_000;
   const totalValue = portfolio?.totalValue ?? 0;
-  const usdKrw = portfolio?.usdKrwRate || 0;
+  const usdKrw = portfolio?.usdKrwRate || FALLBACK_USD_KRW;  // 환율 누락 시 1:1(원화 취급)로 USD가 ~1380배 축소되던 버그 → 폴백 환율
   // 미국주식·ETF(USD)는 환율로 KRW 환산 후 합산(통화 혼합 방지) — 백엔드 totalValue와 정합
   const krwVal = (h: { marketValue: number; assetType?: string }) => (isUsd(h.assetType) && usdKrw > 0 ? h.marketValue * usdKrw : h.marketValue);
   const krwPnl = (h: { profitLoss: number; assetType?: string }) => (isUsd(h.assetType) && usdKrw > 0 ? h.profitLoss * usdKrw : h.profitLoss);
@@ -757,7 +758,7 @@ const RealAccountPortfolio = () => {
   const cashLabel = isStock ? '예수금' : activeTab === 'UPBIT' ? 'KRW 잔고' : 'USDT';
 
   // 도넛/합계는 항상 KRW 기준 — KIS 해외주식(currency=USD)은 서버가 준 환율로 환산(통화 혼합 방지)
-  const usdKrw = port?.usdtKrwRate || 0;
+  const usdKrw = port?.usdtKrwRate || FALLBACK_USD_KRW;  // 환율 누락 시 폴백(원화 1:1 취급 방지)
   // 원화/해외 통화 분리 (KIS 실계좌): 해외 = 외화예수금 + 미국주식 보유, 원화 = 총자산 - 해외(KRW환산)
   const foreignCashUsd = port?.foreignCashUsd ?? 0;
   const foreignCashKrw = port?.foreignCashKrw ?? 0;

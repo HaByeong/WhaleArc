@@ -24,6 +24,28 @@ const HAIR = 'var(--ci-line)', HAIR_S = 'var(--ci-line-strong)';
 const CARD = 'var(--ci-card)', ABYSS = 'var(--ci-inset)';
 const panel: React.CSSProperties = { background: 'var(--ci-panel)', border: `1px solid ${HAIR}`, borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)' };
 
+// 유리병 편지 모티프 아이콘 — defs 내장 자체완결형(마음거울 Bottle 축약판)
+const BottleIcon = ({ size = 26 }: { size?: number }) => (
+  <svg width={size} height={size * 1.5} viewBox="0 0 64 96" fill="none" style={{ overflow: 'visible' }} aria-hidden>
+    <defs>
+      <linearGradient id="note-glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#cfe8ff" stopOpacity=".6" /><stop offset=".45" stopColor="#5b9dff" stopOpacity=".26" /><stop offset="1" stopColor="#2c6fe6" stopOpacity=".42" /></linearGradient>
+      <linearGradient id="note-paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fbf3da" /><stop offset="1" stopColor="#e9d9ad" /></linearGradient>
+      <linearGradient id="note-cork" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#c79a64" /><stop offset="1" stopColor="#9a6f3f" /></linearGradient>
+    </defs>
+    <rect x="25" y="2.5" width="14" height="11.5" rx="3.2" fill="url(#note-cork)" />
+    <rect x="25" y="2.5" width="14" height="3.4" rx="1.7" fill="#ddb784" opacity=".8" />
+    <path d="M27 13 L27 25 Q15 29.5 15 50 L15 73 Q15 88 32 88 Q49 88 49 73 L49 50 Q49 29.5 37 25 L37 13 Z" fill="url(#note-glass)" stroke="rgba(180,215,255,.85)" strokeWidth="1.4" />
+    <g transform="rotate(-9 32 64)">
+      <rect x="21" y="50" width="22" height="26" rx="4" fill="url(#note-paper)" />
+      <rect x="21" y="50" width="22" height="26" rx="4" fill="none" stroke="rgba(154,111,63,.35)" strokeWidth="1" />
+      <path d="M25 57h14M25 61h14M25 65h10" stroke="rgba(120,86,48,.5)" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M28 70.5q4 2.4 8 0" stroke="#2c6fe6" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".7" />
+    </g>
+    <path d="M21 33 Q18 50 20 70" stroke="rgba(255,255,255,.7)" strokeWidth="2" strokeLinecap="round" fill="none" opacity=".6" />
+    <circle cx="40" cy="40" r="2.4" fill="rgba(255,255,255,.55)" />
+  </svg>
+);
+
 const fmtKRW = (n: number) => (n < 0 ? '-₩' : '₩') + Math.abs(Math.round(n || 0)).toLocaleString('ko-KR');
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 const FEE = 0.001;
@@ -481,7 +503,7 @@ const MistakesTab = () => {
   return (
     <div className="flex flex-col gap-4">
       <button onClick={() => go('/mirror')} className="flex flex-wrap items-center gap-4 rounded-[16px] p-[18px_22px] text-left" style={{ padding: '18px 22px', background: 'linear-gradient(105deg, rgba(91,157,255,.14), rgba(91,157,255,.05))', border: '1px solid rgba(91,157,255,.3)' }}>
-        <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[13px] text-[24px]" style={{ background: SONAR_DIM, border: '1px solid rgba(91,157,255,.3)' }}>🌊</span>
+        <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[13px]" style={{ background: SONAR_DIM, border: '1px solid rgba(91,157,255,.3)' }}><BottleIcon size={22} /></span>
         <div className="min-w-0 flex-1" style={{ minWidth: 240 }}>
           <div className="text-[10.5px] font-bold tracking-[.18em]" style={{ color: SONAR }}>도구 · 유리병 편지</div>
           <div className="my-[4px] text-[16px] font-bold" style={{ color: INK0 }}>흔들린 순간을 데이터로 마주하기</div>

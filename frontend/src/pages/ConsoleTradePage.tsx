@@ -193,15 +193,16 @@ const OrderTicket = ({ sel, side, setSide, portfolio, usdKrw, rtPrice, notify, o
   };
 
   const submit = async () => {
+    if (mirror) return;   // 인터셉트 모달이 열려 있으면 중복 진입 금지
     if (!qty || qty <= 0) { notify('수량은 0보다 커야 합니다.', 'error'); return; }
     if (stockLike && qty !== Math.floor(qty)) { notify('주식은 1주 단위로만 거래할 수 있습니다.', 'error'); return; }
     if (!stockLike) { const dec = String(qty).split('.')[1]; if (dec && dec.length > 8) { notify('수량의 소수점은 최대 8자리까지 입력할 수 있습니다.', 'error'); return; } }
     if (orderMethod === 'LIMIT' && (!price || price <= 0)) { notify('지정가는 0보다 큰 값을 입력해주세요.', 'error'); return; }
     if (isBuy && portfolio && totalKRW > cash) { notify('잔고가 부족합니다.', 'error'); return; }
     if (!isBuy && qty > heldQty) { notify('보유 수량이 부족합니다.', 'error'); return; }
-    // 마음 거울 인터셉트 — 막지 않고, 묻고 봉인한다
-    if (!isBuy && heldQty > 0 && sel.changeRate <= PANIC_THRESHOLD) { setMirrorKind('PANIC'); setMirror(true); return; }   // 급락 공포 매도
-    if (isBuy && heldQty <= 0 && sel.changeRate >= FOMO_THRESHOLD) { setMirrorKind('FOMO'); setMirror(true); return; }     // 급등 탐욕(FOMO) 매수
+    // 유리병 인터셉트 — 막지 않고, 묻고 띄운다. '지금 당장'의 충동이라 시장가에서만(지정가는 즉시 체결 아님).
+    if (orderMethod === 'MARKET' && !isBuy && heldQty > 0 && sel.changeRate <= PANIC_THRESHOLD) { setMirrorKind('PANIC'); setMirror(true); return; }   // 급락 공포 매도
+    if (orderMethod === 'MARKET' && isBuy && heldQty <= 0 && sel.changeRate >= FOMO_THRESHOLD) { setMirrorKind('FOMO'); setMirror(true); return; }     // 급등 탐욕(FOMO) 매수
     placeOrder();
   };
 

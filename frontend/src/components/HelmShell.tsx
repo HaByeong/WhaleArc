@@ -6,8 +6,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
 import { mirrorService } from '../services/mirrorService';
 
-/** '흔들린 순간' 개봉 대기 배지 — 마지막 방문 이후 새로 열린 봉인 수(되돌아오는 넛지). */
-const MIRROR_SEEN_KEY = 'mirror_seen_revealed_count';
+/** '흔들린 순간' 도착 배지 — 마지막 방문 이후 새로 돌아온 유리병 수(되돌아오는 넛지). */
+const MIRROR_SEEN_KEY = 'mirror_seen_revealed_count';   // localStorage: 마지막으로 본 revealed 개수
+const MIRROR_BADGE_KEY = 'mirror_badge';               // sessionStorage: 캐시된 배지 수
+const MIRROR_BADGE_AT_KEY = 'mirror_badge_at';         // sessionStorage: 마지막 fetch 시각(쓰로틀)
 
 /* ────────────────────────────────────────────────────────────
    HelmShell — 「디자인 개편」 mockup의 다크 사이드바 콘솔 셸 (공용)
@@ -84,22 +86,24 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
   const mobileNavRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => { mobileNavRef.current?.scrollIntoView({ inline: 'center', block: 'nearest' }); }, [active]);
 
-  // '흔들린 순간' 개봉 넛지 — 마지막 방문 이후 새로 열린 봉인 수를 배지로. 거울 페이지에 들어가면 0으로 리셋.
-  const [mirrorBadge, setMirrorBadge] = useState(0);
+  // '흔들린 순간' 개봉 넛지 — 마지막 방문 이후 새로 도착한 유리병 수를 배지로.
+  // 거울 페이지에선 페이지가 직접 fetch(중복 방지) + seen 갱신하므로 여기선 0. 그 외엔 45s 쓰로틀로 매 네비 호출 방지.
+  const [mirrorBadge, setMirrorBadge] = useState(() => virt ? Number(sessionStorage.getItem(MIRROR_BADGE_KEY) || 0) : 0);
   useEffect(() => {
     if (!virt) return;
+    if (active === 'mirror') { sessionStorage.setItem(MIRROR_BADGE_KEY, '0'); setMirrorBadge(0); return; }
+    const last = Number(sessionStorage.getItem(MIRROR_BADGE_AT_KEY) || 0);
+    if (Date.now() - last < 45000) return;   // 쓰로틀 — 캐시된 배지 그대로 사용
     let alive = true;
     mirrorService.list()
-      .then(list => {
+      .then(caps => {
         if (!alive) return;
-        const revealed = list.filter(c => c.revealed).length;
-        if (active === 'mirror') {
-          localStorage.setItem(MIRROR_SEEN_KEY, String(revealed));   // 페이지 진입 = 다 봄
-          setMirrorBadge(0);
-        } else {
-          const seen = Number(localStorage.getItem(MIRROR_SEEN_KEY) || 0);
-          setMirrorBadge(Math.max(0, revealed - seen));
-        }
+        const revealed = caps.filter(c => c.revealed).length;
+        const seen = Number(localStorage.getItem(MIRROR_SEEN_KEY) || 0);
+        const b = Math.max(0, revealed - seen);
+        sessionStorage.setItem(MIRROR_BADGE_KEY, String(b));
+        sessionStorage.setItem(MIRROR_BADGE_AT_KEY, String(Date.now()));
+        setMirrorBadge(b);
       })
       .catch(() => { /* 조용히 무시 */ });
     return () => { alive = false; };

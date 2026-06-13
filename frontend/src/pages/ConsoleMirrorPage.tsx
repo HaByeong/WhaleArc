@@ -144,7 +144,17 @@ const ConsoleMirrorPage = () => {
   const [list, setList] = useState<MirrorCapture[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { mirrorService.list().then(setList).catch(() => setList([])).finally(() => setLoading(false)); }, []);
+  useEffect(() => {
+    mirrorService.list()
+      .then(caps => {
+        setList(caps);
+        // 방문 = 다 봄: 네비 배지(HelmShell) 리셋용 — 본 revealed 개수 저장 + 배지 캐시 0
+        localStorage.setItem('mirror_seen_revealed_count', String(caps.filter(c => c.revealed).length));
+        sessionStorage.setItem('mirror_badge', '0');
+      })
+      .catch(() => setList([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   const revealed = useMemo(() => list.filter(c => c.revealed), [list]);
   const sealed = useMemo(() => list.filter(c => !c.revealed), [list]);
@@ -169,7 +179,8 @@ const ConsoleMirrorPage = () => {
       .filter(p => p.total > 0);
   }, [list]);
   const weakest = useMemo(() => {
-    const sorted = [...patterns].sort((a, b) => b.rate - a.rate);
+    // 약점 단정은 표본이 충분할 때만(트리거당 3건 이상) — 1~2번으로 '100% 약함' 과장 방지
+    const sorted = [...patterns].filter(p => p.total >= 3).sort((a, b) => b.rate - a.rate);
     return sorted[0] && sorted[0].rate >= 0.5 ? sorted[0] : null;
   }, [patterns]);
 

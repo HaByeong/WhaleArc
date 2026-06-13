@@ -54,6 +54,11 @@ public class EmotionMirrorService {
         double changeRate = (m != null && m.getPrice() > 0) ? m.getChangeRate() : nz(req.getChangeRate());
         double amountKrw = nz(req.getAmountKrw());
 
+        // 시세를 전혀 못 구하면 '죽은 유리병'(영원히 안 열리고 매번 재시도)이 되니 봉인하지 않는다.
+        if (priceAtEvent <= 0) {
+            throw new IllegalArgumentException("현재 시세를 확인할 수 없어 띄울 수 없어요. 잠시 후 다시 시도해 주세요.");
+        }
+
         Instant now = Instant.now();
         Instant revealAt = now.plus(Math.max(0, revealMinutes), ChronoUnit.MINUTES);
 
@@ -77,7 +82,12 @@ public class EmotionMirrorService {
         List<EmotionCapture> list = repository.findByUserIdOrderByCapturedAtDesc(userId);
         for (EmotionCapture c : list) {
             if (!c.isRevealed() && !c.getRevealAt().isAfter(now) && reveal(c)) {
-                repository.save(c);
+                try {
+                    repository.save(c);
+                } catch (Exception e) {
+                    // 동시 개봉 충돌(배치가 먼저 열었음) — 이미 열린 데이터라 무시. 응답엔 방금 계산한 c 그대로 사용.
+                    log.debug("감정 거울 lazy 개봉 저장 충돌(무시) [{}]: {}", c.getId(), e.getMessage());
+                }
             }
         }
         return list.stream().map(CaptureResponse::new).toList();
@@ -85,6 +95,7 @@ public class EmotionMirrorService {
 
     // ── 개봉(반사실 계산). 가격을 못 구하면 false(다음 기회에 재시도) ──
     public boolean reveal(EmotionCapture c) {
+        if (c.isRevealed()) return false;        // 재진입 가드(이미 열린 유리병)
         if (c.getPriceAtEvent() <= 0) return false;
         MarketPriceResponse m = currentMarket(c.getAssetSymbol(), c.getAssetType());
         if (m == null || m.getPrice() <= 0) return false;

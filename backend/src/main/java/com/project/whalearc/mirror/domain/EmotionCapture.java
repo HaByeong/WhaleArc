@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -28,6 +29,9 @@ public class EmotionCapture {
 
     @Id
     private String id;
+
+    @Version
+    private Long version;   // 낙관적 락 — 동시 개봉(읽기 lazy + 배치) 시 한쪽만 성공
 
     @Indexed
     private String userId;

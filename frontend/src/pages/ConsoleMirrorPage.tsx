@@ -154,7 +154,7 @@ const Hero = ({ savedKrw, lostKrw }: { savedKrw: number; lostKrw: number }) => (
         <p style={{ margin: '8px 0 0', fontSize: 12.5, color: INK2, fontStyle: 'italic' }}>🐋 막지 않아요. 마음만 비추는 거울이에요 — 투기를 투자로, 감정을 데이터로.</p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 190 }}>
-        <HeroStat label="흔들려 잃은 비용" value={wonSigned(-lostKrw)} tone={UP} sub="이번 달 · 충동을 따른 순간" />
+        <HeroStat label="흔들려 잃은 비용" value={wonSigned(-lostKrw)} tone={UP} sub="지금까지 · 충동을 따른 순간" />
         <HeroStat label="항로로 아낀 금액" value={savedKrw > 0 ? fmtMan(savedKrw) : '0원'} tone={DOWN} sub="규칙을 지켜낸 순간" />
       </div>
     </div>
@@ -392,7 +392,7 @@ const ConsoleMirrorPage = () => {
   const weakestGreed = greedWeak && pattern.greed.impulse / pattern.greed.total >= (fearWeak ? pattern.fear.impulse / pattern.fear.total : 0);
 
   return (
-    <HelmShell active="mirror" virt={isVirt} userName={userName} session="유리병 편지">
+    <HelmShell active="mirror" virt={isVirt} userName={userName} session={list.length > 0 ? `유리병 편지 · 표류 ${drifting.length} · 도착 ${arrived.length}` : '유리병 편지'}>
       <BottleDefs />
       <div style={{ maxWidth: 1080, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 26, padding: '4px 0 40px' }}>
         {loading ? (

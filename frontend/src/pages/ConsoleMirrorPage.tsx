@@ -92,8 +92,10 @@ const Sparkline = ({ data, color }: { data: number[]; color: string }) => {
   );
 };
 
+// 바다 깊이감 — 상단 은은한 블루 글로우를 --ci-panel 위에 레이어(라이트모드에선 거의 안 보임).
+const SEA_PANEL = 'linear-gradient(180deg, rgba(91,157,255,.055), transparent 55%), var(--ci-panel)';
 const Panel = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
-  <section style={{ background: 'var(--ci-panel)', border: `1px solid ${HAIR}`, borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)', overflow: 'hidden', ...style }}>{children}</section>
+  <section style={{ background: SEA_PANEL, border: `1px solid ${HAIR}`, borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)', overflow: 'hidden', ...style }}>{children}</section>
 );
 
 /* ── helpers ── */
@@ -177,7 +179,7 @@ const DriftCard = ({ b }: { b: BottleVM }) => {
   const prog = Math.min(100, Math.max(4, (passed / total) * 100));
   const dleft = daysLeft(b.revealAt);
   return (
-    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 16, padding: '18px 20px', background: 'var(--ci-panel)', border: `1px solid ${HAIR}`, display: 'flex', gap: 16, alignItems: 'stretch' }}>
+    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 16, padding: '18px 20px', background: SEA_PANEL, border: `1px solid ${HAIR}`, display: 'flex', gap: 16, alignItems: 'stretch' }}>
       <span aria-hidden style={{ flexShrink: 0, display: 'flex', width: 54, borderRadius: 14, alignItems: 'center', justifyContent: 'center', background: `linear-gradient(180deg, ${m.dim}, transparent)`, border: `1px solid ${m.tone}26` }}>
         <span style={{ animation: 'float-y 6s ease-in-out infinite' }}><Bottle size={30} halo={false} tilt={6} /></span>
       </span>
@@ -444,6 +446,11 @@ const ConsoleMirrorPage = () => {
                 <b style={{ color: INK1 }}>정직성 원칙</b> · 반사실은 "팔았다면 그 돈은 현금이 돼 더는 오르내리지 않는다"는 보수적 가정입니다. 수수료·세금 제외(모의 기준), 고정 시점의 체리피킹은 경로 그래프로 보완해요. 충동이 옳았던 날도 정직하게 비용을 음수로 적습니다. 한 번의 결과가 아니라, <b style={{ color: INK1 }}>같은 선택의 기대값</b>이 진짜 교훈이에요.
               </p>
             </div>
+
+            <footer style={{ marginTop: 6, paddingTop: 18, borderTop: `1px solid ${HAIR}`, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <span className="font-mono" style={{ fontSize: 11.5, color: INK3 }}>© 2026 WHALEARC · 유리병 편지</span>
+              <span style={{ fontSize: 11.5, color: INK3 }}>Built quietly, beneath the surface.</span>
+            </footer>
           </>
         )}
       </div>

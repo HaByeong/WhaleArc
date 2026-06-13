@@ -222,14 +222,14 @@ const LandingPage = () => {
         <div className="relative mx-auto grid max-w-[1280px] items-center gap-10 px-6 pb-24 pt-28 md:grid-cols-[1.05fr_.95fr] md:px-14 md:pt-36">
           {/* 왼쪽 텍스트 */}
           <div>
-            <Eyebrow>실전 데이터로, 잃을 걱정 없이</Eyebrow>
+            <Eyebrow>투기를 투자로</Eyebrow>
             <h1 className="mt-6 font-extrabold" style={{ fontSize: 'clamp(40px,7vw,72px)', lineHeight: 1.06, letterSpacing: '-.025em' }}>
               고래처럼,<br />
               <span style={{ fontWeight: 700, color: 'rgba(255,255,255,.63)' }}>시장을 <span className="hero-swim">유영하듯</span></span>
             </h1>
             <p className="mt-6 text-white/70" style={{ fontSize: 18, lineHeight: 1.6, maxWidth: 480 }}>
-              실시간 시세와 포트폴리오 분석으로<br />
-              나만의 투자 전략을 잃을 걱정 없이 검증해보세요.
+              급락에 팔고, 급등에 사서 후회한 적 있죠?<br />
+              가상으로 안전하게 연습하고, 그 충동까지 데이터로 마주하는 곳이에요.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3.5">
               <PrimaryBtn onClick={() => go('/dashboard')}>항해 시작하기 →</PrimaryBtn>

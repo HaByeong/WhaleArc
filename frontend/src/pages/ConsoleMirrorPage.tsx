@@ -304,7 +304,7 @@ const DriftCard = ({ b }: { b: BottleVM }) => {
           <span className="font-mono" style={{ fontSize: 11.5, color: INK2 }}>{b.symbol}</span>
           <span className="font-mono" style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 600, color: b.changeRate > 0 ? UP : DOWN }}><Tri up={b.changeRate > 0} />{fmtPct(b.changeRate)}</span>
         </div>
-        {b.note && <p style={{ margin: '12px 0 0', fontSize: 13.5, color: INK0, lineHeight: 1.5 }}>“{b.note}”</p>}
+        {b.note && <p style={{ margin: '12px 0 0', fontSize: 13.5, color: INK0, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>“{b.note}”</p>}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
           <span style={{ fontSize: 11.5, color: INK2, whiteSpace: 'nowrap' }}>감정 강도</span>
           <Intensity n={b.intensity} tone={m.tone} />
@@ -405,7 +405,7 @@ const RevealCard = ({ b, showRank, disc }: { b: BottleVM; showRank: boolean; dis
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '13px 16px', borderRadius: 12, background: CARD, border: `1px solid ${HAIR}` }}>
             <span style={{ flexShrink: 0, color: m.tone, marginTop: 1 }}><MiniGlyph kind="heart" c={m.tone} s={16} /></span>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: 13.5, color: INK0, lineHeight: 1.5 }}>“{b.note}”</div>
+              <div style={{ fontSize: 13.5, color: INK0, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>“{b.note}”</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7 }}>
                 <span style={{ fontSize: 11.5, color: INK2 }}>그때의 감정 강도</span>
                 <Intensity n={b.intensity} tone={m.tone} />
@@ -578,7 +578,10 @@ const EmptyDiscipline = ({ badges, onStart }: { badges: Badge[]; onStart: () => 
   </Panel>
 );
 
-const DisciplinePanel = ({ d, badges, resil, showRank }: { d: DiscData; badges: Badge[]; resil: { fear: Resil; greed: Resil }; showRank: boolean }) => (
+const DisciplinePanel = ({ d, badges, resil, showRank, pending }: { d: DiscData; badges: Badge[]; resil: { fear: Resil; greed: Resil }; showRank: boolean; pending: boolean }) => {
+  const lowSample = d.totalTriggers < 3;             // 표본 적으면 점수 신뢰도 낮음 — 정직하게 캐비엇
+  const awaiting = d.defendedKrw === 0 && pending;   // 표류 중이라 아직 집계 전
+  return (
   <Panel>
     <div style={{ padding: '22px 24px 8px', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 26, alignItems: 'center' }} className="disc-top">
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
@@ -586,11 +589,12 @@ const DisciplinePanel = ({ d, badges, resil, showRank }: { d: DiscData; badges: 
         {showRank
           ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: 700, color: SONAR, background: SONAR_DIM, border: '1px solid rgba(91,157,255,.3)', whiteSpace: 'nowrap' }}>{whaleTagFull(d)}</span>
           : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: 700, color: COMPASS, background: 'rgba(245,208,97,.12)', border: '1px solid rgba(245,208,97,.28)', whiteSpace: 'nowrap' }}>🐋 {d.streak}회째 항해 중</span>}
+        {lowSample && <span style={{ fontSize: 10.5, color: INK3, textAlign: 'center', lineHeight: 1.4, maxWidth: 150 }}>표본 {d.totalTriggers}건 · 기록이 쌓일수록 정확해져요</span>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Stat label="충동을 참은 비율" value={`${d.resistRate}%`} sub={`${d.totalTriggers}번 중 ${d.resisted}번`} tone={SONAR} />
-          <Stat label="지켜낸 가치 (누적)" value={fmtWon(d.defendedKrw)} sub="규율로 막아낸 손실" tone={DOWN} />
+          <Stat label="지켜낸 가치 (누적)" value={awaiting ? '대기 중' : fmtWon(d.defendedKrw)} sub={awaiting ? '유리병이 열리면 집계돼요' : '규율로 막아낸 손실'} tone={awaiting ? INK2 : DOWN} />
         </div>
         <StreakRow days={d.streak} best={d.bestStreak} />
       </div>
@@ -608,7 +612,8 @@ const DisciplinePanel = ({ d, badges, resil, showRank }: { d: DiscData; badges: 
       </div>
     </div>
   </Panel>
-);
+  );
+};
 
 /* ── 공유 카드 + 모달 ── */
 const ShareCard = forwardRef<HTMLDivElement, { d: DiscData }>(({ d }, ref) => (
@@ -646,6 +651,14 @@ ShareCard.displayName = 'ShareCard';
 
 const ShareModal = ({ open, onClose, d }: { open: boolean; onClose: () => void; d: DiscData }) => {
   const cardRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    closeRef.current?.focus();
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
   if (!open) return null;
   const download = () => {
     const node = cardRef.current;
@@ -669,7 +682,7 @@ const ShareModal = ({ open, onClose, d }: { open: boolean; onClose: () => void; 
     } catch { alert('카드를 길게 눌러 이미지로 저장하거나 화면을 캡처해 공유하세요 🐋'); }
   };
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'rgba(4,9,24,.72)', backdropFilter: 'blur(6px)' }}>
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-label="고래 카드 공유" style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'rgba(4,9,24,.72)', backdropFilter: 'blur(6px)' }}>
       <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, animation: 'modal-pop .3s ease both' }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>자랑할 시간이에요 🐋</div>
@@ -680,7 +693,7 @@ const ShareModal = ({ open, onClose, d }: { open: boolean; onClose: () => void; 
           <button onClick={download} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 12, border: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, color: '#fff', background: `linear-gradient(180deg, ${SONAR}, ${ACCENT})`, boxShadow: '0 10px 24px -10px rgba(60,120,255,.7)' }}>
             <MiniGlyph kind="share" c="#fff" s={16} /> 이미지로 저장
           </button>
-          <button onClick={onClose} style={{ padding: '12px 20px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 600, color: 'rgba(255,255,255,.85)', background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.18)' }}>닫기</button>
+          <button ref={closeRef} onClick={onClose} style={{ padding: '12px 20px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 600, color: 'rgba(255,255,255,.85)', background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.18)' }}>닫기</button>
         </div>
       </div>
     </div>
@@ -760,7 +773,7 @@ const ConsoleMirrorPage = () => {
 
             <section>
               <SectionHead icon="shield" title="규율 점수 · 당신이 참아낸 기록" desc="칭찬하는 건 수익이 아니라 인내예요 — 참은 비율·연속 기록·지켜낸 가치." />
-              {empty ? <EmptyDiscipline badges={badges} onStart={() => go('/trade')} /> : <DisciplinePanel d={disc} badges={badges} resil={resil} showRank={SHOW_RANK} />}
+              {empty ? <EmptyDiscipline badges={badges} onStart={() => go('/trade')} /> : <DisciplinePanel d={disc} badges={badges} resil={resil} showRank={SHOW_RANK} pending={drifting.length > 0} />}
             </section>
 
             <div style={{ display: 'flex', gap: 11, padding: '16px 18px', borderRadius: 14, background: CARD, border: `1px solid ${HAIR}` }}>

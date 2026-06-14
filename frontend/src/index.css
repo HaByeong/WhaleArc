@@ -825,6 +825,8 @@ body.whalearc-dark .wa-force-dark .text-slate-600 {
 @keyframes twinkle { 0%,100%{ opacity: .25; transform: scale(.7); } 50%{ opacity: 1; transform: scale(1); } }
 @keyframes modal-pop { from { opacity: 0; transform: scale(.94) translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes count-pop { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: none; } }
+/* 규율 점수 패널 — 좁은 화면에선 게이지+스탯을 세로로 */
+@media (max-width: 560px) { .disc-top { grid-template-columns: 1fr !important; justify-items: center; } }
 
 @keyframes whale-swim {
   0%, 100% {

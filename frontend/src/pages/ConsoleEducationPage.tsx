@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRoutePrefix, useVirtNavigate } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
+import EmptyState from '../components/EmptyState';
 import { tradeService, type Trade } from '../services/tradeService';
 import { marketService } from '../services/marketService';
 import { liveTradeService } from '../services/liveTradeService';
@@ -276,6 +277,7 @@ const KPI = ({ label, value, tone }: { label: string; value: string; tone?: stri
   </div>
 );
 const ReviewTab = () => {
+  const go = useVirtNavigate();
   const [trades, setTrades] = useState<Trade[] | null>(null);
   const [usdKrw, setUsdKrw] = useState(0);
   const [deployMap, setDeployMap] = useState<Map<string, string>>(new Map());
@@ -336,11 +338,19 @@ const ReviewTab = () => {
   );
   if (trades === null) return <div className="py-20 text-center text-[13px]" style={{ color: INK2 }}>불러오는 중…</div>;
   if (!closed.length) return (
-    <div style={panel} className="px-6 py-16 text-center">
-      <div className="text-[34px]">📓</div>
-      <div className="mt-3 text-[15px] font-bold" style={{ color: INK0 }}>아직 복기할 거래가 없어요</div>
-      <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed" style={{ color: INK2 }}>거래 페이지에서 모의 매매를 하고 <b>매도로 청산</b>하면, 그 거래의 손익·보유기간이 여기 자동으로 정리됩니다. 종목별 FIFO로 매수–매도를 짝지어 계산해요.</p>
-    </div>
+    <EmptyState
+      kicker="FIRST REVIEW"
+      title="아직 복기할 거래가 없어요"
+      desc="첫 모의 거래를 마치면 여기서 수익률·승률·평균 손익을 돌아볼 수 있어요. 결과보다 ‘규칙을 지켰는가’를 점검하는 게 복기예요."
+      ctaLabel="첫 모의 거래 하기" onCta={() => go('/trade')}
+      secondaryLabel="전략 둘러보기" onSecondary={() => go('/strategy')}
+      preview={[
+        { icon: 'card', label: '청산 거래 KPI', sub: '승률·평균 수익률·실현 손익' },
+        { icon: 'swap', label: '최고·최악의 거래', sub: '가장 잘된·아쉬웠던 한 판' },
+        { icon: 'note', label: '거래별 복기 카드', sub: '유리병 편지로 이어져요' },
+      ]}
+      note="모든 거래는 가상이에요. VIRT로 부담 없이 연습하세요."
+    />
   );
 
   return (

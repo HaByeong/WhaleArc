@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
+import EmptyState from '../components/EmptyState';
 import { communityService, type Post as PostT, type Comment as CommentT, type PopularRoute, type Channel } from '../services/communityService';
 import { API_BASE_URL } from '../utils/api';
 import { rankingService, type RankingEntry } from '../services/rankingService';
@@ -415,7 +416,21 @@ const ConsoleCommunityPage = () => {
             </Panel>
             {loading ? <Panel style={{ padding: '40px', textAlign: 'center' }}><span className="text-[13px]" style={{ color: INK3 }}>라운지를 불러오는 중…</span></Panel>
               : error ? <Panel style={{ padding: '32px', textAlign: 'center' }}><div className="text-[13px]" style={{ color: INK2 }}>{error}</div><button onClick={loadPosts} className="mt-3 rounded-lg px-4 py-2 text-[12.5px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: SONAR }}>다시 시도</button></Panel>
-                : posts.length === 0 ? <Panel style={{ padding: '48px 24px', textAlign: 'center' }}><div className="text-[28px]">🌊</div><div className="mt-2 text-[14px] font-semibold">{isPreview ? '로그인 후 라운지를 이용할 수 있습니다.' : '아직 일지가 없어요. 첫 항해 일지를 남겨보세요!'}</div></Panel>
+                : posts.length === 0 ? (isPreview
+                  ? <Panel style={{ padding: '48px 24px', textAlign: 'center' }}><div className="text-[28px]">🌊</div><div className="mt-2 text-[14px] font-semibold">로그인 후 라운지를 이용할 수 있습니다.</div></Panel>
+                  : <EmptyState
+                      kicker="FIRST LOG"
+                      title="아직 남긴 항해 일지가 없어요"
+                      desc="첫 일지를 남기면 다른 항해사들과 항로를 나눌 수 있어요. 만선 자랑도, 막막한 질문도 좋아요 — 고래들은 서로의 항로를 응원해요."
+                      ctaLabel="첫 일지 쓰기" onCta={() => setCompose(true)}
+                      secondaryLabel="다른 항로 구경하기" onSecondary={() => navigate(`${prefix}/strategy`)}
+                      preview={[
+                        { icon: 'route', label: '전략 공유', sub: '내 항로와 수익률을 카드로 나눠요' },
+                        { icon: 'chat', label: '정박지 질문', sub: '막히는 부분을 물어보세요' },
+                        { icon: 'sonar', label: '만선 자랑', sub: 'VIRT·실계좌 수익을 인증해요' },
+                      ]}
+                      note="투자 권유·종목 리딩은 금지예요. 서로의 항로를 존중해주세요."
+                    />)
                   : filteredPosts.length === 0 ? <Panel style={{ padding: '40px 24px', textAlign: 'center' }}><div className="text-[13px]" style={{ color: INK3 }}>검색 결과가 없습니다. 다른 검색어나 태그를 시도해보세요.</div><button onClick={() => { setSearchTerm(''); setActiveTag(null); }} className="mt-3 rounded-lg px-4 py-2 text-[12.5px] font-semibold" style={{ border: `1px solid ${HAIR}`, color: INK1 }}>검색 초기화</button></Panel>
                     : filteredPosts.map(p => <Post key={p.id} p={p} userName={userName} onRoute={() => follow(p)} onChange={upsert} onCommentDelta={d => patchPost(p.id, x => ({ ...x, commentCount: Math.max(0, x.commentCount + d) }))} onDelete={removePost} showToast={showToast} />)}
           </div>

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
+import EmptyState from '../components/EmptyState';
 import { tradeService, portfolioService, type Portfolio, type Holding, type Trade, type PortfolioSnapshot } from '../services/tradeService';
 import { quantStoreService, type PurchasePerformance } from '../services/quantStoreService';
 import { exchangeService, type ExchangeType, type ExchangeAccount, type ExchangePortfolio, type ExchangeSnapshot } from '../services/exchangeService';
@@ -500,6 +501,8 @@ const PaperPortfolio = () => {
     return { mdd: mdd * 100, sharpe, winRate, avgHoldDays, alpha, closedTrades: matched.length };
   }, [history, trades, kospiHistory]);
 
+  const navTo = (p: string) => navigate(`${isVirt ? '/virt' : ''}${p}`);
+  const isEmpty = !loading && holdings.length === 0 && trades.length === 0;
   return (
     <HelmShell active="portfolio" virt={isVirt} userName={userName} session="모의투자 · 15초 갱신">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-[18px]">
@@ -509,6 +512,21 @@ const PaperPortfolio = () => {
         </div>
         {error && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 text-[13px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}><span>{error}</span><button onClick={() => load()} className="rounded-md px-3 py-1 text-[12px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.35)', color: '#fca5a5' }}>다시 시도</button></div>}
 
+        {isEmpty ? (
+          <EmptyState
+            kicker="FIRST VOYAGE"
+            title="아직 항해를 시작하지 않았어요"
+            desc="첫 거래를 하면 보유 종목·자산 추이·항해 중인 항로가 이곳에 채워져요. VIRT 가상 자금 1,000만 원으로 위험 없이 시작할 수 있어요."
+            ctaLabel="첫 거래 시작하기" onCta={() => navTo('/trade')}
+            secondaryLabel="시세 둘러보기" onSecondary={() => navTo('/market')}
+            preview={[
+              { icon: 'pie', label: '자산 배분', sub: '현금·종목 비중이 도넛으로 표시돼요' },
+              { icon: 'swap', label: '보유 종목 · 거래 내역', sub: '매수·매도한 종목과 평가손익' },
+              { icon: 'route', label: '항해 중인 항로', sub: '적용한 전략의 실시간 수익률' },
+            ]}
+            note="모든 거래는 가상이에요. 실계좌 연동 전, VIRT에서 충분히 연습하세요."
+          />
+        ) : (<>
         {/* 총자산 + 도넛 */}
         <Panel style={{ padding: 0, overflow: 'hidden' }}>
           <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr]">
@@ -674,6 +692,7 @@ const PaperPortfolio = () => {
           <span className="font-mono text-[11.5px] text-white/30">© 2026 WHALEARC · 모든 항해는 사용자의 책임 아래 진행됩니다.</span>
           <span className="text-[11.5px] text-white/30">Built quietly, beneath the surface.</span>
         </footer>
+        </>)}
       </div>
       {toast && <Toast msg={toast.msg} type={toast.type} />}
     </HelmShell>

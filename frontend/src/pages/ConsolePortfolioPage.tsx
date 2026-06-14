@@ -502,7 +502,7 @@ const PaperPortfolio = () => {
   }, [history, trades, kospiHistory]);
 
   const navTo = (p: string) => navigate(`${isVirt ? '/virt' : ''}${p}`);
-  const isEmpty = !loading && holdings.length === 0 && trades.length === 0;
+  const isEmpty = !loading && !error && holdings.length === 0 && trades.length === 0;
   return (
     <HelmShell active="portfolio" virt={isVirt} userName={userName} session="모의투자 · 15초 갱신">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-[18px]">

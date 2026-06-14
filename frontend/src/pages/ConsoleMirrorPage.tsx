@@ -359,9 +359,10 @@ const RevealCard = ({ b, showRank, disc }: { b: BottleVM; showRank: boolean; dis
   const ruleText = gaveIn
     ? (b.side === 'SELL' ? '결국 팔았어요' : '결국 샀어요')
     : (b.side === 'SELL' ? '안 팔고 버텼어요' : '사지 않고 관망했어요');
-  // 충동 카드 강조: GAVE_IN이면 충동이 곧 사용자의 선택 / 그 외엔 규율 우위일 때 규율 강조
-  const ruleWin = !gaveIn && state !== 'LUCKY';
-  const impulseWin = gaveIn ? diffPct < 0 : state === 'LUCKY';
+  // 강조는 '실제로 어느 쪽이 나았나'(결과 기준)로만 — 선택과 무관하게 정직하게.
+  // NEUTRAL(|diff|<1)은 둘 다 강조 안 함(과장 방지). GAVE_IN이어도 참은 길이 나았으면 그쪽을 비춘다.
+  const ruleBetter = diffPct >= 1.0;
+  const impulseBetter = diffPct <= -1.0;
 
   return (
     <Panel style={{ position: 'relative', overflow: 'hidden', border: meta.celebrate ? '1px solid rgba(91,157,255,.4)' : `1px solid ${HAIR}`, boxShadow: meta.celebrate ? '0 0 0 3px rgba(91,157,255,.08), 0 18px 44px -26px rgba(40,110,230,.5)' : 'none', animation: 'bottle-arrive .55s cubic-bezier(.2,.8,.2,1) both' }}>
@@ -392,8 +393,8 @@ const RevealCard = ({ b, showRank, disc }: { b: BottleVM; showRank: boolean; dis
               </div>
             )}
             <div style={{ marginTop: 14, display: 'flex', alignItems: 'stretch', gap: 10, flexWrap: 'wrap' }}>
-              <CompactOutcome label={impulseLabel} pct={b.impulsePct} win={impulseWin} muted={!impulseWin && !gaveIn && state !== 'LUCKY' ? true : false} />
-              <CompactOutcome label="참아서 지킨 길" pct={b.rulePct} win={ruleWin} muted={gaveIn || state === 'LUCKY'} />
+              <CompactOutcome label={impulseLabel} pct={b.impulsePct} win={impulseBetter} muted={ruleBetter} />
+              <CompactOutcome label="참아서 지킨 길" pct={b.rulePct} win={ruleBetter} muted={impulseBetter} />
             </div>
           </div>
         </div>
@@ -612,6 +613,8 @@ const DisciplinePanel = ({ d, badges, resil, showRank }: { d: DiscData; badges: 
 /* ── 공유 카드 + 모달 ── */
 const ShareCard = forwardRef<HTMLDivElement, { d: DiscData }>(({ d }, ref) => (
   <div ref={ref} style={{ position: 'relative', width: 380, height: 380, borderRadius: 22, overflow: 'hidden', background: 'linear-gradient(160deg, #0c1a3a 0%, #0a1430 46%, #102a5e 100%)', border: '1px solid rgba(91,157,255,.3)', flexShrink: 0, boxShadow: '0 30px 70px -30px rgba(10,25,70,.9)' }}>
+    {/* PNG 내보내기 시 복제 노드 안에 그라데이션 defs가 함께 직렬화돼야 병이 안 깨짐(중복 id는 무해) */}
+    <BottleDefs />
     <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(120% 90% at 80% 8%, rgba(91,157,255,.32), transparent 55%)' }} />
     <svg aria-hidden viewBox="0 0 200 200" style={{ position: 'absolute', left: -40, bottom: -40, width: 240, height: 240, opacity: .18 }}>
       {[40, 70, 100].map(r => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="#5b9dff" strokeWidth="1" />)}
@@ -654,10 +657,12 @@ const ShareModal = ({ open, onClose, d }: { open: boolean; onClose: () => void; 
       const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
       const img = new Image();
       img.onload = () => {
-        const c = document.createElement('canvas'); c.width = w * 2; c.height = h * 2;
-        const ctx = c.getContext('2d'); if (!ctx) return;
-        ctx.scale(2, 2); ctx.drawImage(img, 0, 0);
-        c.toBlob(blob => { if (!blob) return; const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'whalearc-유리병편지.png'; a.click(); URL.revokeObjectURL(url); }, 'image/png');
+        try {
+          const c = document.createElement('canvas'); c.width = w * 2; c.height = h * 2;
+          const ctx = c.getContext('2d'); if (!ctx) return;
+          ctx.scale(2, 2); ctx.drawImage(img, 0, 0);
+          c.toBlob(blob => { if (!blob) return; const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'whalearc-유리병편지.png'; a.click(); URL.revokeObjectURL(url); }, 'image/png');
+        } catch { alert('카드를 길게 눌러 이미지로 저장하거나 화면을 캡처해 공유하세요 🐋'); URL.revokeObjectURL(url); }
       };
       img.onerror = () => { alert('카드를 길게 눌러 이미지로 저장하거나 화면을 캡처해 공유하세요 🐋'); URL.revokeObjectURL(url); };
       img.src = url;

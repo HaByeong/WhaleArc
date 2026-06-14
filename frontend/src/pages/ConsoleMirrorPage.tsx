@@ -238,7 +238,7 @@ const heroSubFull = (d: DiscData) => `인내심 상위 ${d.rankPct}%의 고래`;
 const heroSubAlt = (d: DiscData) => `${d.streak}회 연속 규칙을 지킨 고래`;
 
 /* ── HERO — 방어 톤 (지켜낸 가치 · 인내 점수 · 공유) ── */
-const Hero = ({ d, onShare, showRank, canShare }: { d: DiscData; onShare: () => void; showRank: boolean; canShare: boolean }) => (
+const Hero = ({ d, onShare, showRank, canShare, onAbout }: { d: DiscData; onShare: () => void; showRank: boolean; canShare: boolean; onAbout: () => void }) => (
   <Panel style={{ position: 'relative' }}>
     <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(120% 130% at 88% 0%, ${SONAR_GLOW}, transparent 55%)` }} />
     <svg aria-hidden viewBox="0 0 200 200" style={{ position: 'absolute', right: 64, top: '52%', transform: 'translateY(-50%)', width: 300, height: 300, opacity: .12, pointerEvents: 'none' }}>
@@ -252,7 +252,13 @@ const Hero = ({ d, onShare, showRank, canShare }: { d: DiscData; onShare: () => 
           <span style={{ fontSize: 10.5, letterSpacing: '.24em', fontWeight: 700, color: SONAR, whiteSpace: 'nowrap' }}>MESSAGE IN A BOTTLE</span>
           <span style={{ width: 5, height: 5, borderRadius: '50%', background: SONAR, boxShadow: `0 0 8px ${SONAR}`, animation: 'bottle-dot 2.4s ease-in-out infinite' }} />
         </div>
-        <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.15, color: INK0 }}>유리병 편지</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.15, color: INK0 }}>유리병 편지</h1>
+          <button onClick={onAbout} aria-label="유리병 편지란?" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600, color: SONAR, background: SONAR_DIM, border: '1px solid rgba(91,157,255,.3)' }}>
+            <span style={{ width: 15, height: 15, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: SONAR, color: '#06121f', fontSize: 11, fontWeight: 800 }}>?</span>
+            유리병 편지란?
+          </button>
+        </div>
         <p style={{ margin: '12px 0 0', fontSize: 14, lineHeight: 1.7, color: INK1, maxWidth: 560 }}>
           흔들렸지만 <strong style={{ color: INK0 }}>다시 잡은 순간</strong>을 유리병에 담아 띄워두면, 며칠 뒤 파도가 <strong style={{ color: INK0 }}>참아서 지켜낸 가치</strong>를 실어다 줍니다.
         </p>
@@ -700,6 +706,109 @@ const ShareModal = ({ open, onClose, d }: { open: boolean; onClose: () => void; 
   );
 };
 
+/* ── "유리병 편지란?" 설명 모달 (온디맨드, 자동 팝업 ❌) ── */
+const StepArt = ({ kind }: { kind: 'seal' | 'wait' | 'reveal' }) => {
+  const wrap: React.CSSProperties = { width: 60, height: 60, borderRadius: 16, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `linear-gradient(160deg, ${SONAR_DIM}, rgba(91,157,255,.04))`, border: '1px solid rgba(91,157,255,.26)' };
+  if (kind === 'seal') return (
+    <span style={wrap}><span style={{ position: 'relative', display: 'flex' }}>
+      <Bottle size={30} halo={false} />
+      <svg width="14" height="14" viewBox="0 0 14 14" style={{ position: 'absolute', top: -9, left: '50%', transform: 'translateX(-50%)' }}><path d="M7 1.5v6M4 5l3 3 3-3" stroke={SONAR} strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    </span></span>
+  );
+  if (kind === 'wait') return (
+    <span style={wrap}><svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+      <path d="M3 11q3.5-3 7 0t7 0 7 0" stroke={SONAR} strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M3 17q3.5-3 7 0t7 0 7 0" stroke="#5b9dff" strokeWidth="1.7" strokeLinecap="round" opacity=".7" />
+      <path d="M3 23q3.5-3 7 0t7 0 7 0" stroke="#5b9dff" strokeWidth="1.7" strokeLinecap="round" opacity=".4" />
+    </svg></span>
+  );
+  return (
+    <span style={wrap}><svg width="32" height="30" viewBox="0 0 32 30" fill="none">
+      <rect x="2.5" y="9" width="12" height="13" rx="3" stroke={DOWN} strokeWidth="1.6" /><path d="M5.5 15.5h6" stroke={DOWN} strokeWidth="1.6" strokeLinecap="round" />
+      <rect x="17.5" y="9" width="12" height="13" rx="3" stroke={UP} strokeWidth="1.6" /><path d="M23.5 12.5v6M20.5 15.5h6" stroke={UP} strokeWidth="1.6" strokeLinecap="round" />
+    </svg></span>
+  );
+};
+const ABOUT_STEPS: { art: 'seal' | 'wait' | 'reveal'; n: string; title: string; desc: string }[] = [
+  { art: 'seal', n: '1', title: '담기', desc: '급락에 팔거나 급등에 사려는 충동의 순간을 유리병에 봉인해요. 막지 않아요 — 그냥 담아둘 뿐이에요.' },
+  { art: 'wait', n: '2', title: '기다리기', desc: '며칠간 바다에 띄워둬요. 그동안 시장이 움직이고, 유리병은 파도를 타고 흘러가요.' },
+  { art: 'reveal', n: '3', title: '마주하기', desc: '개봉하면 “충동대로 했다면 vs 참았다면”을 실제 숫자로 나란히 보여줘요.' },
+];
+const SampleReveal = () => (
+  <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 14, padding: '16px 18px', background: `radial-gradient(120% 120% at 82% 0%, ${SONAR_GLOW}, transparent 60%), ${ABYSS}`, border: '1px solid rgba(91,157,255,.28)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, color: SONAR, background: SONAR_DIM, border: '1px solid rgba(91,157,255,.3)', whiteSpace: 'nowrap' }}><MiniGlyph kind="bottle" c={SONAR} s={13} /> 좋은 소식이 도착했어요</span>
+      <span style={{ marginLeft: 'auto', fontSize: 10.5, color: INK3 }}>이렇게 보여요 · 예시</span>
+    </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+      <span style={{ flexShrink: 0, display: 'flex' }}><Bottle size={42} halo={false} tilt={-10} /></span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 11.5, color: INK2, fontWeight: 600 }}>참아서 지켜냈어요</div>
+        <div className="font-mono" style={{ fontSize: 26, fontWeight: 800, color: DOWN, letterSpacing: '-.02em', lineHeight: 1.1 }}>+₩128,350</div>
+      </div>
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+        <span style={{ padding: '7px 11px', borderRadius: 10, background: CARD, border: `1px solid ${HAIR}`, opacity: .7 }}><div style={{ fontSize: 9.5, color: INK3, whiteSpace: 'nowrap' }}>충동대로</div><div className="font-mono" style={{ fontSize: 13, fontWeight: 700, color: INK2 }}>0.0%</div></span>
+        <span style={{ position: 'relative', padding: '7px 11px', borderRadius: 10, background: 'rgba(91,157,255,.08)', border: '1px solid rgba(91,157,255,.4)' }}><div style={{ fontSize: 9.5, color: INK3, whiteSpace: 'nowrap' }}>참은 길</div><div className="font-mono" style={{ fontSize: 13, fontWeight: 700, color: UP }}>+8.5%</div></span>
+      </div>
+    </div>
+  </div>
+);
+const AboutBottleModal = ({ open, onClose, onStart }: { open: boolean; onClose: () => void; onStart: () => void }) => {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const t = setTimeout(() => closeRef.current?.focus(), 40);
+    const prev = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); clearTimeout(t); document.body.style.overflow = prev; };
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', overflowY: 'auto', background: 'rgba(4,9,24,.74)', backdropFilter: 'blur(6px)' }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="about-bottle-title" onClick={e => e.stopPropagation()} style={{ position: 'relative', width: '100%', maxWidth: 560, margin: 'auto', borderRadius: 20, overflow: 'hidden', animation: 'modal-pop .3s ease both', background: SEA_PANEL, border: `1px solid ${HAIR}`, boxShadow: '0 40px 90px -30px rgba(4,12,34,.9)' }}>
+        <button ref={closeRef} onClick={onClose} aria-label="닫기" style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, width: 34, height: 34, borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', background: ABYSS, border: `1px solid ${HAIR}`, color: INK1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+        </button>
+        <div style={{ position: 'relative', overflow: 'hidden', padding: '30px 28px 22px', textAlign: 'center' }}>
+          <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: `radial-gradient(120% 90% at 50% -10%, ${SONAR_GLOW}, transparent 60%)` }} />
+          <svg aria-hidden viewBox="0 0 200 200" style={{ position: 'absolute', left: '50%', top: -40, transform: 'translateX(-50%)', width: 300, height: 300, opacity: .1, pointerEvents: 'none' }}>{[46, 78, 110].map(r => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke={SONAR} strokeWidth="1" />)}</svg>
+          <div style={{ position: 'relative' }}>
+            <span style={{ display: 'inline-flex', animation: 'float-y 5s ease-in-out infinite' }}><Bottle size={48} tilt={-10} /></span>
+            <h2 id="about-bottle-title" style={{ margin: '12px 0 0', fontSize: 22, fontWeight: 800, letterSpacing: '-.01em', color: INK0 }}>유리병 편지란?</h2>
+            <p style={{ margin: '10px auto 0', fontSize: 13.5, color: INK1, lineHeight: 1.7, maxWidth: 420 }}>흔들린 순간을 <b style={{ color: INK0 }}>봉인</b>했다가, 며칠 뒤 <b style={{ color: INK0 }}>‘충동 vs 규칙’</b>을 숫자로 마주하는 곳이에요.</p>
+          </div>
+        </div>
+        <div style={{ padding: '4px 24px 24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {ABOUT_STEPS.map(s => (
+              <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 15, padding: '14px 16px', borderRadius: 14, background: CARD, border: `1px solid ${HAIR}` }}>
+                <StepArt kind={s.art} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="font-mono" style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, fontSize: 11, fontWeight: 700, color: SONAR, background: SONAR_DIM, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{s.n}</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: INK0 }}>{s.title}</span>
+                  </div>
+                  <p style={{ margin: '6px 0 0', fontSize: 12.5, color: INK1, lineHeight: 1.6 }}>{s.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 18 }}><SampleReveal /></div>
+          <div style={{ marginTop: 16, display: 'flex', gap: 11, padding: '14px 16px', borderRadius: 13, background: 'rgba(245,208,97,.07)', border: '1px solid rgba(245,208,97,.22)' }}>
+            <span style={{ flexShrink: 0, fontSize: 17 }}>🐋</span>
+            <p style={{ margin: 0, fontSize: 12.5, color: INK1, lineHeight: 1.65 }}>막지 않아요. 칭찬하는 건 수익이 아니라 당신의 <b style={{ color: INK0 }}>인내</b>예요. 충동이 옳았던 날도 <b style={{ color: INK0 }}>정직하게</b> 보여줘요.</p>
+          </div>
+          <div style={{ marginTop: 20, display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <button onClick={onStart} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 18px', borderRadius: 12, border: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, color: '#fff', background: `linear-gradient(180deg, ${SONAR}, ${ACCENT})`, boxShadow: '0 10px 24px -10px rgba(60,120,255,.7)' }}><MiniGlyph kind="bottle" c="#fff" s={15} /> 첫 유리병 띄우러 가기 →</button>
+            <button onClick={onClose} style={{ padding: '12px 20px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, color: INK0, background: ABYSS, border: `1px solid ${HAIRS}` }}>이해했어요</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SectionHead = ({ icon, title, desc, count }: { icon: GlyphKind; title: string; desc?: string; count?: number }) => (
   <div style={{ marginBottom: 14 }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -723,6 +832,7 @@ const ConsoleMirrorPage = () => {
   const [list, setList] = useState<MirrorCapture[]>([]);
   const [loading, setLoading] = useState(true);
   const [share, setShare] = useState(false);
+  const [about, setAbout] = useState(false);
   const go = useVirtNavigate();
 
   useEffect(() => {
@@ -751,7 +861,7 @@ const ConsoleMirrorPage = () => {
           <Panel style={{ padding: 56, textAlign: 'center' }}><span style={{ color: INK3, fontSize: 13 }}>불러오는 중…</span></Panel>
         ) : (
           <>
-            <Hero d={disc} onShare={() => setShare(true)} showRank={SHOW_RANK} canShare={canShare} />
+            <Hero d={disc} onShare={() => setShare(true)} showRank={SHOW_RANK} canShare={canShare} onAbout={() => setAbout(true)} />
 
             {(drifting.length > 0 || empty) && (
               <section>
@@ -799,6 +909,7 @@ const ConsoleMirrorPage = () => {
         )}
       </div>
       <ShareModal open={share} onClose={() => setShare(false)} d={disc} />
+      <AboutBottleModal open={about} onClose={() => setAbout(false)} onStart={() => { setAbout(false); go('/trade'); }} />
     </HelmShell>
   );
 };

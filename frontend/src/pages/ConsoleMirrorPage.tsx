@@ -254,8 +254,8 @@ const Hero = ({ d, onShare, showRank, canShare, onAbout }: { d: DiscData; onShar
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.15, color: INK0 }}>유리병 편지</h1>
-          <button onClick={onAbout} aria-label="유리병 편지란?" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600, color: SONAR, background: SONAR_DIM, border: '1px solid rgba(91,157,255,.3)' }}>
-            <span style={{ width: 15, height: 15, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: SONAR, color: '#06121f', fontSize: 11, fontWeight: 800 }}>?</span>
+          <button onClick={onAbout} aria-label="유리병 편지란?" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600, color: INK2, background: CARD, border: `1px solid ${HAIR}` }}>
+            <span style={{ width: 15, height: 15, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1.4px solid ${SONAR}`, color: SONAR, fontSize: 10, fontWeight: 800 }}>?</span>
             유리병 편지란?
           </button>
         </div>

@@ -40,6 +40,11 @@ public class MomentumDataCache {
     @Value("${momentum.cache-dir:${user.home}/.whalearc/usdaily}")
     private String cacheDir;
 
+    // 로컬 사전수집 데이터셋(파이썬 봇이 받아둔 {TICKER}_1d.csv). 있으면 Yahoo 대신 즉시 시드.
+    // 환경에 없으면(예: prod) 무시되고 Yahoo 페이스드 페치로 폴백.
+    @Value("${momentum.seed-dir:${user.home}/crypto/dataset}")
+    private String seedDir;
+
     private final AtomicBoolean warming = new AtomicBoolean(false);
 
     private Path fileFor(String symbol) {
@@ -100,6 +105,39 @@ public class MomentumDataCache {
         return n;
     }
 
+    /** 로컬 데이터셋(<seedDir>/<TICKER>_1d.csv)에서 비신선 종목을 즉시 캐시에 시드. 반환=시드한 종목 수. */
+    private int seedFromDisk() {
+        if (seedDir == null || seedDir.isBlank() || !Files.isDirectory(Path.of(seedDir))) return 0;
+        int n = 0;
+        for (String s : allSymbols()) {
+            if (isFresh(s)) continue;
+            Path src = Path.of(seedDir, s.toUpperCase() + "_1d.csv");
+            if (!Files.exists(src)) continue;
+            try {
+                List<CandlestickResponse> c = parseDatasetCsv(src);
+                if (!c.isEmpty()) { save(s, c); n++; }
+            } catch (IOException e) {
+                log.debug("데이터셋 시드 실패(스킵): {} — {}", s, e.getMessage());
+            }
+        }
+        return n;
+    }
+
+    /** 데이터셋 CSV 파싱: 헤더 time,open,high,low,close,volume — date(yyyy-MM-dd)+close(수정주가) 사용. */
+    private List<CandlestickResponse> parseDatasetCsv(Path f) throws IOException {
+        List<CandlestickResponse> out = new ArrayList<>();
+        for (String line : Files.readAllLines(f)) {
+            String[] p = line.split(",");
+            if (p.length < 5 || p[0].equalsIgnoreCase("time")) continue;
+            try {
+                long t = LocalDate.parse(p[0].trim()).atStartOfDay(KST).toEpochSecond();
+                double close = Double.parseDouble(p[4].trim());
+                if (close > 0) out.add(new CandlestickResponse(t, close, close, close, close, 0));
+            } catch (Exception ignore) { /* 손상 라인 스킵 */ }
+        }
+        return out;
+    }
+
     private static void sleep(long ms) {
         try { Thread.sleep(ms); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
     }
@@ -138,6 +176,10 @@ public class MomentumDataCache {
         long t0 = System.currentTimeMillis();
         int fetched = 0, skipped = 0, failed = 0;
         try {
+            // 0) 로컬 데이터셋에서 즉시 시드(있으면) — Yahoo 버스트 없이 대부분 채움
+            int seeded = seedFromDisk();
+            if (seeded > 0) log.info("모멘텀 캐시: 로컬 데이터셋에서 {}종목 즉시 시드", seeded);
+
             String today = LocalDate.now(KST).toString();
             for (String s : allSymbols()) {
                 if (isFresh(s)) { skipped++; continue; }

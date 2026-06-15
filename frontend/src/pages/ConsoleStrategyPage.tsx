@@ -9,7 +9,7 @@ import {
   type BacktestRequest, type BacktestResult, type Indicator, type Condition, type BacktestHistoryItem, type Strategy,
 } from '../services/strategyService';
 import { marketService } from '../services/marketService';
-import { PRESET_STRATEGIES, type PresetStrategy, TURTLE_PRESET_ID, TURTLE_DEFAULTS, buildTurtleConditions, type TurtleParams } from '../data/presetStrategies';
+import { PRESET_STRATEGIES, type PresetStrategy, TURTLE_PRESET_ID, TURTLE_DEFAULTS, buildTurtleConditions, type TurtleParams, MOMENTUM_PRESET_ID, MOMENTUM_DEFAULTS, type MomentumParams } from '../data/presetStrategies';
 import { tradeService } from '../services/tradeService';
 import { Term } from '../components/GlossaryTerm';
 import GuideTour, { type TourStep } from '../components/GuideTour';
@@ -475,6 +475,30 @@ const ResultView = ({ result, strat, onExport }: { result: BacktestResult; strat
           {result.totalDividendsReceived ? <div className="flex items-baseline justify-between border-b border-dotted py-1.5 text-[13px]" style={{ borderColor: LINE }}><span style={{ color: INK2 }}>받은 배당 합계</span><span className="font-mono font-semibold">{money(result.totalDividendsReceived)}</span></div> : null}
         </div>
       </div>
+      {/* 모멘텀 로테이션 — 월별 보유 top-N 이력 */}
+      {result.rotationHistory && result.rotationHistory.length > 0 && (
+        <div style={{ ...mkCard, padding: '20px 22px' }}>
+          <h3 className="mb-1 text-[14px] font-bold">월별 보유 이력 (모멘텀 Top{result.rotationHistory[0]?.holdings.length || ''})</h3>
+          <p className="mb-3 text-[12px]" style={{ color: INK2 }}>매월 첫 거래일에 모멘텀 랭킹으로 교체된 보유 종목입니다. 약세장(SPY&lt;200일선)엔 노출을 줄입니다.</p>
+          <div className="no-scrollbar flex flex-col gap-1.5 overflow-y-auto" style={{ maxHeight: 360 }}>
+            {result.rotationHistory.slice().reverse().map((snap) => (
+              <div key={snap.date} className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}>
+                <span className="shrink-0 font-mono text-[12px] font-semibold" style={{ color: INK1, width: 78 }}>{snap.date.slice(0, 7)}</span>
+                {snap.regimeBear && <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(77,138,255,.16)', color: '#cfe1ff' }}>약세 ½</span>}
+                <div className="flex flex-wrap gap-1">
+                  {snap.holdings.length === 0
+                    ? <span className="text-[12px]" style={{ color: INK3 }}>현금 (양수 모멘텀 없음)</span>
+                    : snap.holdings.map(h => (
+                      <span key={h.symbol} className="rounded px-1.5 py-0.5 font-mono text-[11px]" style={{ background: 'rgba(91,157,255,.12)', color: 'var(--ci-ink0)', border: '1px solid rgba(91,157,255,.2)' }}>
+                        {h.symbol} <span style={{ color: h.momentum >= 0 ? UP : DOWN }}>{h.momentum >= 0 ? '+' : ''}{(h.momentum * 100).toFixed(0)}%</span>
+                      </span>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {/* 2자산 리밸런싱 분해 */}
       {result.secondStockCode && (
         <div style={{ ...mkCard, padding: '20px 24px' }}>
@@ -591,7 +615,7 @@ type RunnerProps = {
   strat: Strat | null; target: Target; setTarget: (t: Target) => void; period: string; setPeriod: (p: string) => void;
   capital: number; setCapital: (n: number) => void; monthly: number; setMonthly: (n: number) => void;
   editInd: Indicator[]; setEditInd: (v: Indicator[]) => void; editEntry: Condition[]; setEditEntry: (v: Condition[]) => void; editExit: Condition[]; setEditExit: (v: Condition[]) => void;
-  adv: AdvOpts; setAdv: (v: AdvOpts) => void; turtle: TurtleParams; setTurtle: (v: TurtleParams) => void;
+  adv: AdvOpts; setAdv: (v: AdvOpts) => void; turtle: TurtleParams; setTurtle: (v: TurtleParams) => void; momentum: MomentumParams; setMomentum: (v: MomentumParams) => void;
   second: Target | null; setSecond: (v: Target | null) => void; firstWeight: number; setFirstWeight: (n: number) => void; rebalanceFreq: RebalFreq; setRebalanceFreq: (v: RebalFreq) => void;
   stratAssets: Target[]; onRun: () => void; running: boolean; historyCount: number; onShowHistory: () => void;
 };
@@ -627,7 +651,7 @@ const AssetSearchBox = ({ cryptoList, onPick }: { cryptoList: { code: string; na
     </>
   );
 };
-const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, setCapital, monthly, setMonthly, editInd, setEditInd, editEntry, setEditEntry, editExit, setEditExit, adv, setAdv, turtle, setTurtle, second, setSecond, firstWeight, setFirstWeight, rebalanceFreq, setRebalanceFreq, stratAssets, onRun, running, historyCount, onShowHistory }: RunnerProps) => {
+const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, setCapital, monthly, setMonthly, editInd, setEditInd, editEntry, setEditEntry, editExit, setEditExit, adv, setAdv, turtle, setTurtle, momentum, setMomentum, second, setSecond, firstWeight, setFirstWeight, rebalanceFreq, setRebalanceFreq, stratAssets, onRun, running, historyCount, onShowHistory }: RunnerProps) => {
   const range = adv.dateMode === 'custom' && adv.customStart && adv.customEnd ? { startDate: adv.customStart, endDate: adv.customEnd } : periodDates(period);
   const today = periodDates('1Y').endDate;
   const [cryptoList, setCryptoList] = useState<{ code: string; name: string }[]>([]);
@@ -672,6 +696,22 @@ const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, 
           <label className="mt-3 flex items-center gap-2 text-[12.5px]" style={{ color: INK1 }}><input type="checkbox" className="accent-[#5b9dff]" checked={monthly > 0} onChange={e => setMonthly(e.target.checked ? Math.max(100_000, Math.round(capital / 12)) : 0)} /><Term k="적립식" compact>적립식 투자</Term> (매월 {monthly > 0 ? `₩${fmtNum(monthly)}` : '첫 거래일'})</label>
           {monthly > 0 && <div className="mt-2"><input type="number" value={monthly} onChange={e => setMonthly(Math.max(0, Number(e.target.value) || 0))} className="w-full rounded-lg px-3 py-2 text-right font-mono text-[13px] outline-none" style={fieldStyle} /><div className="mt-1.5 grid grid-cols-4 gap-1.5">{[100_000, 300_000, 500_000, 1_000_000].map(v => <button key={v} onClick={() => setMonthly(v)} className="rounded-md py-1 text-[10.5px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>{fmtNum(v / 10000)}만</button>)}</div></div>}
         </div>
+        {/* 모멘텀 로테이션 설정 — top-N·lookback·레짐 (유니버스 132종목 고정) */}
+        {strat?.id === MOMENTUM_PRESET_ID && (
+          <div className="rounded-lg p-3" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.06)' }}>
+            <div className="mb-2 text-[12.5px] font-bold" style={{ color: GLOW }}>📈 모멘텀 로테이션 설정</div>
+            <div className="grid grid-cols-3 gap-2">
+              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>상위 N종목</span><input type="number" min={1} max={20} step={1} value={momentum.topN} onChange={e => setMomentum({ ...momentum, topN: Number(e.target.value) || 1 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>모멘텀 기간(일)</span><input type="number" min={20} step={1} value={momentum.lookbackDays} onChange={e => setMomentum({ ...momentum, lookbackDays: Number(e.target.value) || 20 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>약세장 노출</span><input type="number" min={0} max={1} step={0.1} value={momentum.regimeFloor} onChange={e => setMomentum({ ...momentum, regimeFloor: Number(e.target.value) })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+            </div>
+            <label className="mt-2 flex items-center gap-2 text-[12px]" style={{ color: INK1 }}>
+              <input type="checkbox" className="accent-[#5b9dff]" checked={momentum.regimeFilter} onChange={e => setMomentum({ ...momentum, regimeFilter: e.target.checked })} />
+              SPY 200일선 레짐 필터 (약세장 시 노출 ×{momentum.regimeFloor})
+            </label>
+            <div className="mt-1.5 text-[10.5px]" style={{ color: INK3 }}>미국 대형주 132종목 유니버스 고정. <b style={{ color: 'var(--ci-ink0)' }}>종목 선택은 무시</b>되고 매월 모멘텀 랭킹으로 자동 교체됩니다. 132종목 일봉 로드로 첫 실행은 수십 초 걸릴 수 있어요.</div>
+          </div>
+        )}
         {/* 터틀 전용 설정 — 채널 기간·ADX·유닛·레버리지 (종목별로 다르게) */}
         {strat?.id === TURTLE_PRESET_ID && (
           <div className="rounded-lg p-3" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.06)' }}>
@@ -1117,6 +1157,7 @@ const ConsoleStrategyPage = () => {
   // 고급 백테스트 옵션 (리스크·비용·방향·배당·커스텀 기간) + 2자산 리밸런싱
   const [adv, setAdv] = useState<AdvOpts>(ADV_DEFAULTS);
   const [turtle, setTurtle] = useState<TurtleParams>(TURTLE_DEFAULTS); // 터틀 전용 설정(채널 기간·ADX·유닛·레버리지)
+  const [momentum, setMomentum] = useState<MomentumParams>(MOMENTUM_DEFAULTS); // 모멘텀 로테이션 설정(top-N·lookback·레짐)
   const [second, setSecond] = useState<Target | null>(null);
   const [firstWeight, setFirstWeight] = useState(50);
   const [rebalanceFreq, setRebalanceFreq] = useState<RebalFreq>('MONTHLY');
@@ -1214,6 +1255,37 @@ const ConsoleStrategyPage = () => {
   const run = async (id: string | null = activeId) => {
     const s = allStrats.find(x => x.id === id);
     if (!s) { setError('전략을 선택해주세요.'); return; }
+
+    // 미국주식 모멘텀 로테이션 — 종목·조건 무시, 유니버스 랭킹 엔진으로 위임(전용 요청)
+    if (s.id === MOMENTUM_PRESET_ID) {
+      if (!(capital > 0)) { setError('초기 투자금은 0보다 커야 합니다.'); return; }
+      if (adv.dateMode === 'custom' && (!adv.customStart || !adv.customEnd || adv.customStart >= adv.customEnd)) {
+        setError('직접지정 기간을 올바르게 선택해주세요.'); return;
+      }
+      const { startDate, endDate } = adv.dateMode === 'custom'
+        ? { startDate: adv.customStart, endDate: adv.customEnd } : periodDates(period);
+      const mreq: BacktestRequest = {
+        stockCode: 'US_MOMENTUM', stockName: s.name, startDate, endDate, initialCapital: capital, assetType: 'US_STOCK',
+        strategyName: s.name, strategyType: 'MOMENTUM_ROTATION',
+        topN: momentum.topN, lookbackDays: momentum.lookbackDays, regimeFilter: momentum.regimeFilter,
+        regimeFloor: momentum.regimeFloor, rebalanceBandPct: momentum.rebalanceBandPct,
+      };
+      const myRun = ++runIdRef.current;
+      setRunning(true); setError(null); setResult(null);
+      try {
+        const r = await strategyService.runBacktest(mreq);
+        if (runIdRef.current !== myRun) return;
+        r.strategyName = s.name; setResult(r); refreshHistory();
+      } catch (e: any) {
+        if (runIdRef.current !== myRun) return;
+        const status = e?.response?.status;
+        const raw = e?.response?.data?.message || e?.message || '';
+        setError(status === 429 ? '요청이 너무 많습니다. 잠시 후 다시 시도해주세요. (분당 5회 제한)'
+          : (raw || '백테스트 실행에 실패했습니다. 132종목 데이터 로드에 시간이 걸릴 수 있어요(잠시 후 재시도).'));
+      } finally { if (runIdRef.current === myRun) setRunning(false); }
+      return;
+    }
+
     const isTurtle = s.id === TURTLE_PRESET_ID;
     // 터틀은 설정 패널 파라미터로 지표·조건을 즉석 생성(채널 기간·ADX·유닛·레버리지·트레일링 반영)
     const preset = isTurtle
@@ -1335,7 +1407,7 @@ const ConsoleStrategyPage = () => {
                   : <EmptyHero running={running} total={allStrats.length} userCount={userStrats.length} onGuide={() => { setActiveId('preset-golden-cross'); setTarget({ symbol: 'BTC', name: '비트코인', assetType: 'CRYPTO' }); run('preset-golden-cross'); }} />}
           </div>
           <div data-tour="runner" className="min-w-0">
-          <BacktestRunner strat={strat} target={target} setTarget={setTarget} period={period} setPeriod={setPeriod} capital={capital} setCapital={setCapital} monthly={monthly} setMonthly={setMonthly} editInd={editInd} setEditInd={setEditInd} editEntry={editEntry} setEditEntry={setEditEntry} editExit={editExit} setEditExit={setEditExit} adv={adv} setAdv={setAdv} turtle={turtle} setTurtle={setTurtle} second={second} setSecond={setSecond} firstWeight={firstWeight} setFirstWeight={setFirstWeight} rebalanceFreq={rebalanceFreq} setRebalanceFreq={setRebalanceFreq} stratAssets={stratAssets} onRun={() => run()} running={running} historyCount={history.length} onShowHistory={() => setHistOpen(true)} />
+          <BacktestRunner strat={strat} target={target} setTarget={setTarget} period={period} setPeriod={setPeriod} capital={capital} setCapital={setCapital} monthly={monthly} setMonthly={setMonthly} editInd={editInd} setEditInd={setEditInd} editEntry={editEntry} setEditEntry={setEditEntry} editExit={editExit} setEditExit={setEditExit} adv={adv} setAdv={setAdv} turtle={turtle} setTurtle={setTurtle} momentum={momentum} setMomentum={setMomentum} second={second} setSecond={setSecond} firstWeight={firstWeight} setFirstWeight={setFirstWeight} rebalanceFreq={rebalanceFreq} setRebalanceFreq={setRebalanceFreq} stratAssets={stratAssets} onRun={() => run()} running={running} historyCount={history.length} onShowHistory={() => setHistOpen(true)} />
           </div>
         </div>
         <footer className="flex flex-wrap items-center justify-between gap-3.5 pt-6" style={{ borderTop: `1px solid ${LINE}` }}>

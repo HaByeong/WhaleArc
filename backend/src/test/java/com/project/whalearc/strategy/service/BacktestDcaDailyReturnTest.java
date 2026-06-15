@@ -49,7 +49,7 @@ public class BacktestDcaDailyReturnTest {
         req.setExitConditions(Collections.emptyList());
 
         // deps 는 CRYPTO/거래없음 경로에서 호출되지 않으므로 전부 null
-        BacktestService svc = new BacktestService(null, null, null, null, null, null);
+        BacktestService svc = new BacktestService(null, null, null, null, null, null, null);
 
         Method m = BacktestService.class.getDeclaredMethod(
                 "simulate", String.class, String.class, List.class, List.class,
@@ -113,7 +113,7 @@ public class BacktestDcaDailyReturnTest {
         req.setEntryConditions(Collections.emptyList());
         req.setExitConditions(Collections.emptyList());
 
-        BacktestService svc = new BacktestService(null, null, null, null, null, null);
+        BacktestService svc = new BacktestService(null, null, null, null, null, null, null);
 
         Method m = BacktestService.class.getDeclaredMethod(
                 "simulateRebalance", String.class, String.class, List.class, List.class,

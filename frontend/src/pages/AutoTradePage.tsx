@@ -1069,7 +1069,8 @@ const AutoTradePage = () => {
                 >
                   <option value="">전략을 선택하세요</option>
                   <optgroup label="기본 제공 전략">
-                    {PRESET_STRATEGIES.map(s => (
+                    {/* 모멘텀 로테이션은 라이브 미지원(백테스트 전용) — 추후 단계에서 노출 */}
+                    {PRESET_STRATEGIES.filter(s => s.strategyType !== 'MOMENTUM_ROTATION').map(s => (
                       <option key={s.id} value={s.id}>{s.name}{s.difficulty ? ` · ${s.difficulty}` : ''}</option>
                     ))}
                   </optgroup>

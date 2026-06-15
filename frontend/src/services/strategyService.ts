@@ -63,6 +63,14 @@ export interface BacktestRequest {
   // 독립 양방향(LONG_SHORT_FLAT) 전용 숏 조건
   shortEntryConditions?: Condition[];
   shortExitConditions?: Condition[];
+  // 미국주식 상대모멘텀 로테이션 (strategyType=MOMENTUM_ROTATION)
+  strategyType?: string;
+  topN?: number;
+  lookbackDays?: number;
+  regimeFilter?: boolean;
+  regimeFloor?: number;
+  universe?: string[];
+  rebalanceBandPct?: number;
   // 적립식 투자: 매월 첫 거래일에 추가 납입할 금액 (KRW). 0/undefined 면 off
   monthlyContribution?: number;
   // 2자산 리밸런싱 (둘 다 채워졌을 때만 활성)
@@ -143,6 +151,8 @@ export interface BacktestResult {
   totalDividendsReceived?: number;  // OFF 모드일 때 누적 배당 cash 입금액 (native 단위)
   // 지표 요약 (0-trade 디버깅용)
   indicatorSummary?: Record<string, { min: number; max: number; avg: number; last: number }>;
+  // 모멘텀 로테이션: 월별 보유 top-N 변천 이력
+  rotationHistory?: { date: string; regimeBear: boolean; holdings: { symbol: string; momentum: number; weight: number }[] }[];
 }
 
 export interface BacktestTrade {

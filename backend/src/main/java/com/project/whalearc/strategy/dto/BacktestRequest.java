@@ -60,6 +60,16 @@ public class BacktestRequest {
     // 레버리지 (선물). null/1 = 현물 동일(무회귀). >1이면 명목가=증거금×leverage, 손익·청산 증폭.
     private Integer leverage;
 
+    // ─── 미국주식 상대모멘텀 로테이션 (strategyType=MOMENTUM_ROTATION 일 때만) ───
+    // null/미지정이면 기존 단일·2자산 경로(무회귀). 설정 시 유니버스 랭킹 로테이션 엔진으로 위임.
+    private String strategyType;          // "MOMENTUM_ROTATION"
+    private Integer topN;                 // 상위 N종목 (기본 5)
+    private Integer lookbackDays;         // 모멘텀 거래일 수 (기본 252)
+    private Boolean regimeFilter;         // SPY 200SMA 레짐 필터 (기본 true)
+    private Double regimeFloor;           // 약세장 노출 비율 (기본 0.5)
+    private List<String> universe;        // 종목 풀. null/빈값이면 내장 132종목
+    private Double rebalanceBandPct;      // 잔존 종목 비중 유지 밴드(±%p, 기본 3)
+
     // 적립식 투자: 매월 첫 거래일에 추가 납입할 금액 (KRW)
     // null 또는 0 이면 적립식 off (기존 동작). 양수면 시뮬레이션 중 매월 첫 거래일마다 cash 에 가산.
     private Double monthlyContribution;

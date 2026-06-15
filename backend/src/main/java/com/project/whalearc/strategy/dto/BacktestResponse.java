@@ -86,6 +86,26 @@ public class BacktestResponse {
     // 지표 요약 (0-trade 디버깅용: 지표명 → {min, max, avg, last})
     private Map<String, IndicatorSummaryDto> indicatorSummary;
 
+    // ─── 모멘텀 로테이션 (strategyType=MOMENTUM_ROTATION 일 때만) ───
+    // 월별 보유 top-N 변천 이력. UI에서 "언제 무엇을 들고 있었나"를 표/타임라인으로 표시.
+    private List<RotationSnapshotDto> rotationHistory;
+
+    @Getter
+    @Builder
+    public static class RotationSnapshotDto {
+        private String date;                 // 결정일 yyyy-MM-dd
+        private boolean regimeBear;          // 그 달 레짐(약세=true → 노출 축소)
+        private List<HoldingDto> holdings;   // 보유 종목(빈 슬롯 제외)
+    }
+
+    @Getter
+    @Builder
+    public static class HoldingDto {
+        private String symbol;
+        private double momentum;             // 모멘텀(예: 0.35 = +35%)
+        private double weight;               // 목표 비중(0~1, 레짐 반영 후)
+    }
+
     @Getter
     @Builder
     public static class DailyReturnDto {

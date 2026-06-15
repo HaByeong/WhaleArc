@@ -34,12 +34,18 @@ public class BacktestService {
     private final ExchangeRateService exchangeRateService;
     private final UsEtfCatalog usEtfCatalog;
     private final UsStockPriceProvider usStockPriceProvider;
+    private final MomentumRotationBacktestService momentumRotationBacktestService;
 
     private static final double DEFAULT_COMMISSION_RATE = 0.001; // 0.1%
     private static final ZoneOffset KST = ZoneOffset.of("+09:00");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     public BacktestResponse runBacktest(BacktestRequest request, String userId) {
+        // 미국주식 모멘텀 로테이션 — 유니버스 랭킹 전용 엔진으로 위임(기존 단일·2자산 경로와 격리, 무회귀).
+        if ("MOMENTUM_ROTATION".equalsIgnoreCase(request.getStrategyType())) {
+            return momentumRotationBacktestService.run(request, userId);
+        }
+
         validateRequest(request);
 
         // 전략 or 직접 조건 분기

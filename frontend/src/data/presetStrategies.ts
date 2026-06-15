@@ -17,7 +17,20 @@ export interface PresetStrategy extends Strategy {
   /** 독립 양방향 전용 숏 진입/청산 조건. */
   shortEntryConditions?: Condition[];
   shortExitConditions?: Condition[];
+  /** 특수 엔진 타입. "MOMENTUM_ROTATION"이면 지표-조건이 아닌 유니버스 랭킹 로테이션. */
+  strategyType?: 'MOMENTUM_ROTATION';
 }
+
+// ── 미국주식 상대모멘텀 로테이션 ──
+export const MOMENTUM_PRESET_ID = 'preset-momentum-top5';
+export interface MomentumParams {
+  topN: number;          // 상위 N종목 (기본 5)
+  lookbackDays: number;  // 모멘텀 거래일 (기본 252)
+  regimeFilter: boolean; // SPY 200SMA 레짐 필터
+  regimeFloor: number;   // 약세장 노출 비율 (기본 0.5)
+  rebalanceBandPct: number; // 잔존 비중 유지 밴드(±%p)
+}
+export const MOMENTUM_DEFAULTS: MomentumParams = { topN: 5, lookbackDays: 252, regimeFilter: true, regimeFloor: 0.5, rebalanceBandPct: 3 };
 
 // ── 터틀 트레이딩 파라미터화 ──
 // 백엔드는 임의 기간 DONCHIAN_HIGH_<n>/DONCHIAN_LOW_<n> 와 ADX 임계값을 그대로 지원하므로,
@@ -264,6 +277,17 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       strategyLogic: '롱: 종가 > 진입채널 신고가 + ADX>임계 / 숏: 종가 < 진입채널 신저가 + ADX>임계 / 청산: 청산채널 반대 또는 트레일링 / 피라미딩: +ATR마다 유닛 추가 (전략 선택 시 채널 기간·ADX·유닛·레버리지를 직접 설정)',
       assetType: 'CRYPTO', targetAssets: ['BTC', 'ETH'], targetAssetNames: { BTC: '비트코인', ETH: '이더리움' },
       ...buildTurtleConditions(TURTLE_DEFAULTS),   // 기본값(100/30/ADX15) — UI에서 종목별로 변경 가능
+      applied: false, createdAt: '', updatedAt: '',
+    },
+    {
+      id: MOMENTUM_PRESET_ID, category: 'trend', strategyType: 'MOMENTUM_ROTATION', name: '미국주식 모멘텀 Top5 로테이션',
+      description: '미국 대형주 132종목 유니버스를 매월 12개월(252거래일) 수익률로 줄 세워 상위 5종목에 각 20%씩 분산 투자하고, 다음 달에 다시 줄 세워 교체하는 추세추종 로테이션입니다. 양수 모멘텀만 담고(없으면 현금), SPY가 200일선 아래(약세장)면 노출을 절반으로 줄입니다.',
+      beginnerTip: '쉽게 말하면: "최근 1년 가장 잘 오른 미국주식 5개만 골라 담고, 매달 새로 줄 세워 갈아타는" 전략이에요. 시장 전체가 약세면 절반만 싣고 위험을 줄입니다.',
+      whyUse: '같은 종목 풀의 단순 보유보다 꾸준히 초과수익(상대 모멘텀 알파)을 내는 게 검증된 방식입니다. 크립토 터틀과 수익이 거의 무상관이라 둘을 85:15로 섞으면 변동성이 낮아집니다(샤프↑). 월 1회 교체라 손이 적게 갑니다. (KIS 해외주식 현물 1배, 양도세·생존편향 감안해 기대치는 보수적으로.)',
+      difficulty: '고급',
+      strategyLogic: '매월 첫 거래일: 132종목 252일 모멘텀 랭킹 → 양수 상위 5(각 20%) → SPY<200일선이면 ×0.5 → 월간 리밸런싱 (top-N·lookback·레짐을 직접 설정)',
+      assetType: 'US_STOCK', targetAssets: [], targetAssetNames: {},
+      indicators: [], entryConditions: [], exitConditions: [],
       applied: false, createdAt: '', updatedAt: '',
     },
   ];

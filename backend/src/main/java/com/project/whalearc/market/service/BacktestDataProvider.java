@@ -55,7 +55,7 @@ public class BacktestDataProvider {
 
     // ── 데이터 캐시 (종목+기간 → 캔들 + adjclose + 배당, 30분 TTL) ──
     private static final long CACHE_TTL_MS = 30 * 60 * 1000; // 30분
-    private static final int MAX_CACHE_SIZE = 100;
+    private static final int MAX_CACHE_SIZE = 400;   // 모멘텀 유니버스(132+) 한 번에 캐시 유지 → 재실행 즉시(첫 실행만 콜드)
     private final ConcurrentHashMap<String, CacheEntry> candleCache = new ConcurrentHashMap<>();
 
     private record CacheEntry(FetchResult data, long expiry) {
@@ -95,20 +95,32 @@ public class BacktestDataProvider {
      * Yahoo Finance API 인증용 crumb + cookie 획득 (1시간 캐시)
      */
     private synchronized void ensureYahooCrumb() {
-        if (yahooCrumb != null && System.currentTimeMillis() < yahooCrumbExpiry) {
+        // 성공 시 1시간, 실패 시 10분 쿨다운 — 크럼 획득 실패 때 매 요청마다 쿠키 엔드포인트를 다시 때려
+        // (132종목이면 수백 회) Yahoo rate-limit을 스스로 유발하던 문제 방지. chart는 크럼 없이도 동작한다.
+        if (System.currentTimeMillis() < yahooCrumbExpiry) {
             return;
         }
+        yahooCrumbExpiry = System.currentTimeMillis() + 600_000;   // 우선 10분 쿨다운(성공하면 아래에서 1시간으로 연장)
 
         try {
-            // Step 1: Yahoo 접속 → 쿠키 획득
+            // Step 1: Yahoo 접속 → 쿠키(A1/A3) 획득.
+            // 과거 쿠키 발급 URL이던 fc.yahoo.com 은 현재 404(폐기) → 모든 요청이 크럼 없이 429가 됨.
+            // finance.yahoo.com 메인이 Set-Cookie 를 내려주므로 이를 사용한다.
             HttpHeaders initHeaders = new HttpHeaders();
             initHeaders.set("User-Agent", YAHOO_USER_AGENT);
+            initHeaders.set("Accept", "text/html,application/xhtml+xml");
 
-            ResponseEntity<String> initResp = restTemplate.exchange(
-                    "https://fc.yahoo.com/", HttpMethod.GET,
-                    new HttpEntity<>(initHeaders), String.class);
-
-            List<String> setCookies = initResp.getHeaders().get(HttpHeaders.SET_COOKIE);
+            List<String> setCookies = null;
+            for (String primeUrl : new String[]{"https://finance.yahoo.com/", "https://fc.yahoo.com/"}) {
+                try {
+                    ResponseEntity<String> initResp = restTemplate.exchange(
+                            primeUrl, HttpMethod.GET, new HttpEntity<>(initHeaders), String.class);
+                    List<String> sc = initResp.getHeaders().get(HttpHeaders.SET_COOKIE);
+                    if (sc != null && !sc.isEmpty()) { setCookies = sc; break; }
+                } catch (Exception primeErr) {
+                    log.debug("Yahoo 쿠키 프라이밍 실패({}): {}", primeUrl, primeErr.getMessage());
+                }
+            }
             if (setCookies == null || setCookies.isEmpty()) {
                 log.warn("Yahoo Finance 쿠키 획득 실패: Set-Cookie 없음");
                 return;

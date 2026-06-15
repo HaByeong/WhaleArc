@@ -1,8 +1,8 @@
 package com.project.whalearc.strategy.service;
 
 import com.project.whalearc.market.dto.CandlestickResponse;
-import com.project.whalearc.market.service.BacktestDataProvider;
 import com.project.whalearc.market.service.ExchangeRateService;
+import com.project.whalearc.market.service.MomentumDataCache;
 import com.project.whalearc.strategy.dto.BacktestRequest;
 import com.project.whalearc.strategy.dto.BacktestResponse;
 import org.junit.jupiter.api.Test;
@@ -49,13 +49,12 @@ class MomentumRotationBacktestServiceTest {
 
     @Test
     void momentumRotation_picksStrongestRiser_andProfits() {
-        BacktestDataProvider provider = mock(BacktestDataProvider.class);
-        when(provider.getBacktestCandles(anyString(), anyString(), anyString(), anyString(), anyBoolean()))
-                .thenAnswer(inv -> synth(inv.getArgument(0)));
+        MomentumDataCache cache = mock(MomentumDataCache.class);
+        when(cache.get(anyString())).thenAnswer(inv -> synth(inv.getArgument(0)));
         ExchangeRateService fx = mock(ExchangeRateService.class);
         when(fx.getUsdKrwRate()).thenReturn(1400.0);
 
-        MomentumRotationBacktestService svc = new MomentumRotationBacktestService(provider, fx);
+        MomentumRotationBacktestService svc = new MomentumRotationBacktestService(cache, fx);
 
         BacktestRequest req = new BacktestRequest();
         req.setStrategyType("MOMENTUM_ROTATION");
@@ -85,18 +84,17 @@ class MomentumRotationBacktestServiceTest {
 
     @Test
     void allNegativeMomentum_goesToCash() {
-        BacktestDataProvider provider = mock(BacktestDataProvider.class);
-        when(provider.getBacktestCandles(anyString(), anyString(), anyString(), anyString(), anyBoolean()))
-                .thenAnswer(inv -> {
-                    String s = inv.getArgument(0);
-                    if (s.equals("SPY")) return series(400, 520);
-                    if (s.equals("AAPL")) return series(300, 150);   // 하락 → 음수
-                    return List.of();
-                });
+        MomentumDataCache cache = mock(MomentumDataCache.class);
+        when(cache.get(anyString())).thenAnswer(inv -> {
+            String s = inv.getArgument(0);
+            if (s.equals("SPY")) return series(400, 520);
+            if (s.equals("AAPL")) return series(300, 150);   // 하락 → 음수
+            return List.of();
+        });
         ExchangeRateService fx = mock(ExchangeRateService.class);
         when(fx.getUsdKrwRate()).thenReturn(1400.0);
 
-        MomentumRotationBacktestService svc = new MomentumRotationBacktestService(provider, fx);
+        MomentumRotationBacktestService svc = new MomentumRotationBacktestService(cache, fx);
         BacktestRequest req = new BacktestRequest();
         req.setStrategyType("MOMENTUM_ROTATION");
         req.setStartDate("2023-01-02"); req.setEndDate("2024-01-01");

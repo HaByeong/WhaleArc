@@ -1,9 +1,9 @@
 package com.project.whalearc.strategy.service;
 
 import com.project.whalearc.market.dto.CandlestickResponse;
-import com.project.whalearc.market.service.BacktestDataProvider;
 import com.project.whalearc.market.service.ExchangeRateService;
 import com.project.whalearc.market.service.IndicatorCalculator;
+import com.project.whalearc.market.service.MomentumDataCache;
 import com.project.whalearc.market.service.MomentumUniverse;
 import com.project.whalearc.strategy.dto.BacktestRequest;
 import com.project.whalearc.strategy.dto.BacktestResponse;
@@ -22,9 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * 미국주식 상대모멘텀 top-N 로테이션 백테스트 엔진 (신규, 기존 simulate/simulateRebalance와 격리).
@@ -39,13 +36,12 @@ import java.util.concurrent.Executors;
 @RequiredArgsConstructor
 public class MomentumRotationBacktestService {
 
-    private final BacktestDataProvider backtestDataProvider;
+    private final MomentumDataCache momentumDataCache;   // 디스크 영구 캐시(백그라운드 워밍) — 버스트 429 회피
     private final ExchangeRateService exchangeRateService;
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-    private static final int FETCH_LEAD_DAYS = 540;   // 252거래일 모멘텀 + 200SMA 워밍업 확보용 선행 일수
-    private static final int FETCH_PARALLELISM = 3;    // Yahoo 동시 페치 수 — 너무 높으면 429(레이트리밋). 재시도와 병행.
+    private static final int FETCH_LEAD_DAYS = 540;   // 252거래일 모멘텀 + 200SMA 워밍업 확보용 마스터축 선행 일수
 
     private static final class Position {
         double shares;
@@ -69,13 +65,21 @@ public class MomentumRotationBacktestService {
         String reqEnd = req.getEndDate();
         String fetchStart = LocalDate.parse(reqStart).minusDays(FETCH_LEAD_DAYS).format(DATE_FMT);
 
-        // ── 1) SPY(레짐·캘린더·벤치)를 먼저 순차로 확보 — Yahoo 크럼 워밍 + 일시 429 흡수(재시도) ──
-        List<CandlestickResponse> spy = fetchWithRetry(MomentumUniverse.SPY_SYMBOL, fetchStart, reqEnd, 4);
-        if (spy == null || spy.size() < lookback + 30) {
-            throw new IllegalArgumentException("SPY 데이터를 가져오지 못했습니다(시세 서버 일시 제한일 수 있음). 잠시 후 다시 시도하거나 기간을 조정해주세요.");
+        // ── 1) 디스크 영구 캐시에서 SPY + 유니버스 일봉 로드 (백그라운드에서 천천히 워밍됨 → 버스트 429 회피) ──
+        LocalDate fetchStartD = LocalDate.parse(fetchStart);
+        LocalDate reqEndD = LocalDate.parse(reqEnd);
+        List<CandlestickResponse> spy = clip(momentumDataCache.get(MomentumUniverse.SPY_SYMBOL), fetchStartD, reqEndD);
+        if (spy.size() < lookback + 30) {
+            momentumDataCache.triggerWarmAsync();   // 캐시 워밍 시작(이미 진행 중이면 무시)
+            long left = momentumDataCache.staleCount();
+            throw new IllegalArgumentException("미국주식 일봉을 준비 중입니다(백그라운드 캐시 워밍, 종목당 ~2.5초로 천천히 수집). "
+                    + (left > 0 ? "남은 종목 약 " + left + "개 — " : "") + "수 분 후 다시 시도해주세요. (한 번 받아두면 이후엔 즉시 실행됩니다)");
         }
-        // 유니버스 일봉 로드(수정주가, 제한 병렬 + 재시도)
-        Map<String, List<CandlestickResponse>> raw = fetchAll(universe, fetchStart, reqEnd);
+        Map<String, List<CandlestickResponse>> raw = new HashMap<>();
+        for (String sym : universe) {
+            List<CandlestickResponse> c = momentumDataCache.get(sym);
+            if (!c.isEmpty()) raw.put(sym, c);
+        }
 
         // ── 2) 마스터 거래일축 = SPY 거래일 ──
         int n = spy.size();
@@ -313,45 +317,14 @@ public class MomentumRotationBacktestService {
         return v;
     }
 
-    private Map<String, List<CandlestickResponse>> fetchAll(List<String> universe, String start, String end) {
-        Map<String, List<CandlestickResponse>> out = new HashMap<>();
-        ExecutorService pool = Executors.newFixedThreadPool(FETCH_PARALLELISM);
-        try {
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
-            for (String sym : universe) {
-                futures.add(CompletableFuture.runAsync(() -> {
-                    List<CandlestickResponse> c = fetchWithRetry(sym, start, end, 2);
-                    if (c != null && !c.isEmpty()) {
-                        synchronized (out) { out.put(sym, c); }
-                    }
-                }, pool));
-            }
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-        } finally {
-            pool.shutdown();
+    /** 캐시 전체 일봉을 [from, to] 범위로 자른다(마스터축 경계 설정용). */
+    private List<CandlestickResponse> clip(List<CandlestickResponse> all, LocalDate from, LocalDate to) {
+        List<CandlestickResponse> out = new ArrayList<>();
+        for (CandlestickResponse c : all) {
+            LocalDate d = Instant.ofEpochSecond(c.getTime()).atZone(KST).toLocalDate();
+            if (!d.isBefore(from) && !d.isAfter(to)) out.add(c);
         }
-        log.info("모멘텀 백테스트 데이터 로드: 요청 {}종목 중 {}종목 확보", universe.size(), out.size());
         return out;
-    }
-
-    /** 빈 결과(429/일시 오류)면 백오프 후 재시도. 빈 결과는 provider가 캐시하지 않으므로 재시도가 유효. */
-    private List<CandlestickResponse> fetchWithRetry(String symbol, String start, String end, int attempts) {
-        for (int a = 0; a < attempts; a++) {
-            List<CandlestickResponse> c = backtestDataProviderSafe(symbol, start, end);
-            if (c != null && !c.isEmpty()) return c;
-            try { Thread.sleep(600L * (a + 1)); }
-            catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
-        }
-        return null;
-    }
-
-    private List<CandlestickResponse> backtestDataProviderSafe(String symbol, String start, String end) {
-        try {
-            return backtestDataProvider.getBacktestCandles(symbol, "US_STOCK", start, end, true);
-        } catch (Exception e) {
-            log.debug("모멘텀 데이터 페치 실패(스킵): {} — {}", symbol, e.getMessage());
-            return null;
-        }
     }
 
     private static double sharpe(List<Double> rets, double rfAnnual) {

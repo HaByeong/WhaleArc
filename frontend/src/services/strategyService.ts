@@ -251,7 +251,10 @@ export const strategyService = {
 
   // 백테스팅 실행 (서버가 결과를 자동 보관)
   runBacktest: async (request: BacktestRequest): Promise<BacktestResult> => {
-    const response = await apiClient.post('/api/strategies/backtest', request);
+    // 모멘텀 로테이션은 132종목 일봉을 모아 계산하므로 콜드 캐시 첫 실행이 수십 초 걸린다.
+    // 전역 15초 타임아웃을 넘기므로 백테스트 요청은 넉넉히(모멘텀 120초, 그 외 60초) 오버라이드.
+    const timeout = request.strategyType === 'MOMENTUM_ROTATION' ? 120000 : 60000;
+    const response = await apiClient.post('/api/strategies/backtest', request, { timeout });
     return response.data.data;
   },
 

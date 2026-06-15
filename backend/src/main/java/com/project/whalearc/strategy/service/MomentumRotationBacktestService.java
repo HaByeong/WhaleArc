@@ -45,7 +45,7 @@ public class MomentumRotationBacktestService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final int FETCH_LEAD_DAYS = 540;   // 252거래일 모멘텀 + 200SMA 워밍업 확보용 선행 일수
-    private static final int FETCH_PARALLELISM = 6;    // Yahoo 동시 페치 수(레이트리밋/타임아웃 균형)
+    private static final int FETCH_PARALLELISM = 3;    // Yahoo 동시 페치 수 — 너무 높으면 429(레이트리밋). 재시도와 병행.
 
     private static final class Position {
         double shares;
@@ -69,12 +69,13 @@ public class MomentumRotationBacktestService {
         String reqEnd = req.getEndDate();
         String fetchStart = LocalDate.parse(reqStart).minusDays(FETCH_LEAD_DAYS).format(DATE_FMT);
 
-        // ── 1) SPY(레짐·캘린더·벤치) + 유니버스 일봉 병렬 로드 (수정주가) ──
-        Map<String, List<CandlestickResponse>> raw = fetchAll(universe, fetchStart, reqEnd);
-        List<CandlestickResponse> spy = backtestDataProviderSafe(MomentumUniverse.SPY_SYMBOL, fetchStart, reqEnd);
+        // ── 1) SPY(레짐·캘린더·벤치)를 먼저 순차로 확보 — Yahoo 크럼 워밍 + 일시 429 흡수(재시도) ──
+        List<CandlestickResponse> spy = fetchWithRetry(MomentumUniverse.SPY_SYMBOL, fetchStart, reqEnd, 4);
         if (spy == null || spy.size() < lookback + 30) {
-            throw new IllegalArgumentException("SPY 데이터를 충분히 가져오지 못했습니다(레짐·캘린더 기준). 기간을 조정해주세요.");
+            throw new IllegalArgumentException("SPY 데이터를 가져오지 못했습니다(시세 서버 일시 제한일 수 있음). 잠시 후 다시 시도하거나 기간을 조정해주세요.");
         }
+        // 유니버스 일봉 로드(수정주가, 제한 병렬 + 재시도)
+        Map<String, List<CandlestickResponse>> raw = fetchAll(universe, fetchStart, reqEnd);
 
         // ── 2) 마스터 거래일축 = SPY 거래일 ──
         int n = spy.size();
@@ -319,7 +320,7 @@ public class MomentumRotationBacktestService {
             List<CompletableFuture<Void>> futures = new ArrayList<>();
             for (String sym : universe) {
                 futures.add(CompletableFuture.runAsync(() -> {
-                    List<CandlestickResponse> c = backtestDataProviderSafe(sym, start, end);
+                    List<CandlestickResponse> c = fetchWithRetry(sym, start, end, 2);
                     if (c != null && !c.isEmpty()) {
                         synchronized (out) { out.put(sym, c); }
                     }
@@ -331,6 +332,17 @@ public class MomentumRotationBacktestService {
         }
         log.info("모멘텀 백테스트 데이터 로드: 요청 {}종목 중 {}종목 확보", universe.size(), out.size());
         return out;
+    }
+
+    /** 빈 결과(429/일시 오류)면 백오프 후 재시도. 빈 결과는 provider가 캐시하지 않으므로 재시도가 유효. */
+    private List<CandlestickResponse> fetchWithRetry(String symbol, String start, String end, int attempts) {
+        for (int a = 0; a < attempts; a++) {
+            List<CandlestickResponse> c = backtestDataProviderSafe(symbol, start, end);
+            if (c != null && !c.isEmpty()) return c;
+            try { Thread.sleep(600L * (a + 1)); }
+            catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+        }
+        return null;
     }
 
     private List<CandlestickResponse> backtestDataProviderSafe(String symbol, String start, String end) {

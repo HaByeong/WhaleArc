@@ -447,10 +447,27 @@ public class LiveStrategyService {
         Set<String> targetSymbols = new HashSet<>();
         for (MomentumRanker.Ranked r : ranked) targetSymbols.add(r.symbol());
 
-        // 3) 목표 비중: 각 종목 (1/topN)×regimeMult of allocatedCash (빈 슬롯은 현금, 재배분 금지 → topN으로 나눔)
-        BigDecimal alloc = nz(d.getAllocatedCash());
-        BigDecimal perTargetKrw = alloc.multiply(BigDecimal.valueOf(regimeMult))
-                .divide(BigDecimal.valueOf(topN), 10, RoundingMode.HALF_UP);
+        // 3) 정수주 균등비중 배분(Hamilton 최대잉여 + 예산 풀링). 종목당 1주값(KRW) 산정.
+        double usdKrw = exchangeRateService.getUsdKrwRate();
+        double investKrw = nz(d.getAllocatedCash()).doubleValue() * regimeMult;   // 레짐 반영 총 투입액
+        Map<String, Double> pxBySymbol = new HashMap<>();        // 심볼 → 현재가(USD)
+        Map<String, Double> krwPerShare = new HashMap<>();       // 심볼 → 1주값(KRW)
+        for (MomentumRanker.Ranked r : ranked) {
+            LivePosition pos = findOrCreatePosition(d, r.symbol());
+            double px = momentumPrice(d, pos);
+            pxBySymbol.put(r.symbol(), px);
+            krwPerShare.put(r.symbol(), px > 0 ? px * usdKrw : 0.0);
+        }
+        Map<String, Integer> targetShares = allocateShares(ranked, investKrw, krwPerShare);
+
+        // 최소자본 가드: 1주도 못 받는 종목이 있으면 경고(균등비중 왜곡 — 자본 부족). 권장 최소 = topN × 최고가 1주.
+        double maxShare = krwPerShare.values().stream().mapToDouble(Double::doubleValue).max().orElse(0);
+        List<String> unfunded = ranked.stream().map(MomentumRanker.Ranked::symbol)
+                .filter(s -> targetShares.getOrDefault(s, 0) == 0).toList();
+        if (!unfunded.isEmpty()) {
+            log.warn("모멘텀 자본 부족: 투입 {}원으론 {}종목이 0주(균등비중 왜곡). 미편입={}. top{} 균등비중 권장 최소 ≈ {}원.",
+                    (long) investKrw, unfunded.size(), unfunded, topN, (long) (maxShare * topN));
+        }
 
         // 4) 매도: 현 보유 중 목표에 없는 종목 전량 청산
         for (LivePosition pos : d.getPositions()) {
@@ -460,23 +477,16 @@ public class LiveStrategyService {
             }
         }
 
-        // 5) 매수/조정: 목표 종목을 목표 수량까지 (±밴드 밖이면 트림)
-        double usdKrw = exchangeRateService.getUsdKrwRate();
+        // 5) 매수/조정: 배분된 목표 주수까지 (기존 보유는 ±밴드 밖이면 트림)
         for (MomentumRanker.Ranked r : ranked) {
             LivePosition pos = findOrCreatePosition(d, r.symbol());
-            double px = momentumPrice(d, pos);
+            double px = pxBySymbol.getOrDefault(r.symbol(), 0.0);
             if (px <= 0) continue;
-            BigDecimal krwPerShare = BigDecimal.valueOf(px).multiply(BigDecimal.valueOf(usdKrw));
-            if (krwPerShare.compareTo(BigDecimal.ZERO) <= 0) continue;
-            BigDecimal targetQty = perTargetKrw.divide(krwPerShare, 0, RoundingMode.DOWN);
+            BigDecimal targetQty = BigDecimal.valueOf(targetShares.getOrDefault(r.symbol(), 0));
             BigDecimal curQty = nz(pos.getQuantity());
             BigDecimal diff = targetQty.subtract(curQty);
-            log.info("모멘텀 종목 사이징: {} px=${} 1주={}원 목표비중={}원 → 목표 {}주(보유 {}주, diff {})",
-                    r.symbol(), px, krwPerShare.toBigInteger(), perTargetKrw.toBigInteger(), targetQty, curQty, diff);
-            if (targetQty.signum() == 0 && curQty.signum() == 0) {
-                log.warn("모멘텀 매수 불가(1주 가격 > 종목당 배분액): {} 1주={}원 > 배분 {}원. 할당 증액 또는 top-N 축소 필요.",
-                        r.symbol(), krwPerShare.toBigInteger(), perTargetKrw.toBigInteger());
-            }
+            log.info("모멘텀 종목 사이징: {} px=${} 1주={}원 → 목표 {}주(보유 {}주, diff {})",
+                    r.symbol(), px, (long) (krwPerShare.getOrDefault(r.symbol(), 0.0).doubleValue()), targetQty, curQty, diff);
             if (diff.signum() == 0) continue;
             // 밴드: 기존 보유 종목은 목표 대비 ±REBALANCE_BAND 안이면 회전 억제(스킵). 신규(curQty=0)는 항상 매수.
             if (curQty.signum() > 0 && targetQty.signum() > 0) {
@@ -539,6 +549,53 @@ public class LiveStrategyService {
 
     /** 기존 보유 종목 대비 목표가 이 비율 안이면 회전 억제(스킵). */
     private static final double REBALANCE_BAND = 0.05;
+    /** 균등비중 정수주 배분 시 한 종목이 목표비중을 초과할 수 있는 한도(±%p, 명세 17~23% 밴드와 정합). */
+    private static final double MOMENTUM_WEIGHT_BAND = 0.03;
+
+    /**
+     * 정수주 균등비중 배분 — Hamilton 최대잉여법 + 예산 풀링.
+     *
+     * <p>고가 미국주식을 정수주로만 살 수 있어, 슬라이스(자본/N)를 각자 내림하면 비싼 종목은 0주가 되고
+     * 예산이 낭비된다. 대신 (1) 각 종목 floor(종목당목표/1주값)로 시작, (2) <b>남은 예산을 풀로 묶어</b>
+     * 잉여(목표 대비 미달분)가 큰 종목부터 1주씩 추가한다 — 단 비중밴드(목표+밴드)를 넘지 않고 예산 내에서만.
+     * 싼 종목의 잉여 현금이 비싼 종목의 첫 1주를 채워, 적은 자본에서도 보유 종목 수와 비중 균형을 개선한다.
+     *
+     * @param ranked       상위 종목(모멘텀 내림차순)
+     * @param investKrw    총 투입액(레짐 반영 후, KRW)
+     * @param krwPerShare  심볼 → 1주값(KRW). 0이면 가격 미상(스킵)
+     * @return 심볼 → 목표 주수
+     */
+    private Map<String, Integer> allocateShares(List<MomentumRanker.Ranked> ranked, double investKrw,
+                                                Map<String, Double> krwPerShare) {
+        Map<String, Integer> shares = new HashMap<>();
+        int n = ranked.size();
+        if (n == 0 || investKrw <= 0) return shares;
+        double target = investKrw / n;                              // 종목당 균등 가치
+        double cap = target + MOMENTUM_WEIGHT_BAND * investKrw;      // 과편입 방지(비중밴드 상한)
+        Map<String, Double> remainder = new HashMap<>();
+        double spent = 0;
+        for (MomentumRanker.Ranked r : ranked) {
+            double p = krwPerShare.getOrDefault(r.symbol(), 0.0);
+            int f = p > 0 ? (int) Math.floor(target / p) : 0;
+            shares.put(r.symbol(), f);
+            spent += f * p;
+            remainder.put(r.symbol(), p > 0 ? (target / p - f) : -1);   // 가격 미상은 후순위
+        }
+        // 남은 예산을 잉여 큰 순서로 1주씩(단일 패스): 예산 내 + 비중밴드 내에서만
+        double leftover = investKrw - spent;
+        List<String> byRemainder = new ArrayList<>(remainder.keySet());
+        byRemainder.sort((a, b) -> Double.compare(remainder.get(b), remainder.get(a)));
+        for (String s : byRemainder) {
+            double p = krwPerShare.getOrDefault(s, 0.0);
+            if (p <= 0) continue;
+            double newValue = (shares.get(s) + 1) * p;
+            if (p <= leftover && newValue <= cap) {
+                shares.put(s, shares.get(s) + 1);
+                leftover -= p;
+            }
+        }
+        return shares;
+    }
 
     /** 심볼의 LivePosition 조회(없으면 US_STOCK으로 생성·추가). */
     private LivePosition findOrCreatePosition(LiveStrategyDeployment d, String symbol) {

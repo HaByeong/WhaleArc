@@ -37,6 +37,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -484,6 +485,32 @@ class LiveStrategyServiceTest {
         int after1 = gateway.placed.size();
         svc.rebalanceMomentum(d);   // 같은 달 재호출 → 멱등(무동작)
         assertEquals(after1, gateway.placed.size(), "같은 달 재실행은 추가 주문 없음(멱등)");
+    }
+
+    @Test
+    void momentumRotation_poolsBudgetToFundExpensiveName() {
+        // 정수주 균등배분(풀링): AAA(비쌈) 1주값 52만 > 종목당목표 50만이라 단순 floor면 0주.
+        // 그러나 싼 BBB/CCC(8만) floor 후 남는 예산으로 AAA 1주를 채워야 한다(비중밴드 내).
+        // 기대: AAA=1, BBB=6, CCC=6 (투입 150만, target 50만, cap 54.5만).
+        when(momentumDataCache.get("AAA")).thenReturn(trend(30, 100, 300));
+        when(momentumDataCache.get("BBB")).thenReturn(trend(30, 100, 250));
+        when(momentumDataCache.get("CCC")).thenReturn(trend(30, 100, 200));
+        // 종목별 현재가(USD): candlestickService가 심볼마다 다른 평탄가를 주도록 스텁
+        when(candlestickService.getCandlesticks(eq("AAA"), anyString(), anyString())).thenReturn(flatCandles(5, 520));
+        when(candlestickService.getCandlesticks(eq("BBB"), anyString(), anyString())).thenReturn(flatCandles(5, 80));
+        when(candlestickService.getCandlesticks(eq("CCC"), anyString(), anyString())).thenReturn(flatCandles(5, 80));
+        when(exchangeRateService.getUsdKrwRate()).thenReturn(1000.0);
+
+        LiveStrategyDeployment d = momentumDeployment(3, 1_500_000);
+        svc.rebalanceMomentum(d);
+
+        LiveStrategyDeployment saved = store.get("mom1");
+        java.util.function.Function<String, BigDecimal> qty = sym -> saved.getPositions().stream()
+                .filter(p -> p.getSymbol().equals(sym)).map(LivePosition::getQuantity).findFirst().orElse(BigDecimal.ZERO);
+        assertEquals(0, qty.apply("AAA").compareTo(BigDecimal.valueOf(1)), "비싼 AAA도 풀링된 잉여로 1주 편입");
+        assertEquals(0, qty.apply("BBB").compareTo(BigDecimal.valueOf(6)), "BBB 6주");
+        assertEquals(0, qty.apply("CCC").compareTo(BigDecimal.valueOf(6)), "CCC 6주");
+        assertEquals(3, gateway.placed.size(), "3종목 매수");
     }
 
     @Test

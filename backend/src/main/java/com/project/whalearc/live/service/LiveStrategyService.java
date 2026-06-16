@@ -446,7 +446,7 @@ public class LiveStrategyService {
         // 4) 매도: 현 보유 중 목표에 없는 종목 전량 청산
         for (LivePosition pos : d.getPositions()) {
             if (pos.getDirection() == LivePosition.Direction.LONG && !targetSymbols.contains(pos.getSymbol())) {
-                double px = latestPrice(d, pos);
+                double px = momentumPrice(d, pos);
                 if (px > 0) momentumSell(d, pos, gateway, px, nz(pos.getQuantity()), "ROTATION_OUT", bar);
             }
         }
@@ -455,7 +455,7 @@ public class LiveStrategyService {
         double usdKrw = exchangeRateService.getUsdKrwRate();
         for (MomentumRanker.Ranked r : ranked) {
             LivePosition pos = findOrCreatePosition(d, r.symbol());
-            double px = latestPrice(d, pos);
+            double px = momentumPrice(d, pos);
             if (px <= 0) continue;
             BigDecimal krwPerShare = BigDecimal.valueOf(px).multiply(BigDecimal.valueOf(usdKrw));
             if (krwPerShare.compareTo(BigDecimal.ZERO) <= 0) continue;
@@ -504,7 +504,7 @@ public class LiveStrategyService {
             long bar = dayToEpoch(today);
             for (LivePosition pos : d.getPositions()) {
                 if (pos.getDirection() != LivePosition.Direction.LONG) continue;
-                double px = latestPrice(d, pos);
+                double px = momentumPrice(d, pos);
                 if (px <= 0) continue;
                 BigDecimal curQty = nz(pos.getQuantity());
                 BigDecimal targetQty = curQty.multiply(BigDecimal.valueOf(factor)).setScale(0, RoundingMode.DOWN);
@@ -607,6 +607,18 @@ public class LiveStrategyService {
         pos.setQuantity(remain);
         if (remain.compareTo(BigDecimal.ZERO) <= 0) resetPosition(pos);
         notifyTrade(d, "모멘텀 매도 (" + reason + ")", pos.getSymbol(), fill, "EXIT", pnl);
+    }
+
+    /**
+     * 모멘텀 주문 가격(USD). 실시간(KIS 일봉)을 우선하되, 0이면(미국장 마감·KIS rate-limit EGW00201 등)
+     * 모멘텀 캐시의 최근 종가로 폴백한다 — 랭킹이 쓰는 바로 그 데이터라 일관적이고, 시세 throttle에도
+     * 리밸런싱이 조용히 스킵되지 않는다. KIS 지정가는 ±1% 버퍼가 붙으므로 며칠 내 종가면 체결에 충분.
+     */
+    private double momentumPrice(LiveStrategyDeployment d, LivePosition pos) {
+        double px = latestPrice(d, pos);
+        if (px > 0) return px;
+        double[] c = recentCloses(pos.getSymbol(), 1);
+        return c != null ? c[0] : 0;
     }
 
     /** 캐시에서 심볼의 최근 n개 (수정)종가를 시간 오름차순으로. n개 미만이면 null(상장 초기·누락 → 후보 제외). */

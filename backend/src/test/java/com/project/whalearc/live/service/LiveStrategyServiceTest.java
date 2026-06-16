@@ -10,6 +10,7 @@ import com.project.whalearc.live.repository.LiveStrategyDeploymentRepository;
 import com.project.whalearc.market.dto.CandlestickResponse;
 import com.project.whalearc.market.service.CandlestickService;
 import com.project.whalearc.market.service.ExchangeRateService;
+import com.project.whalearc.market.service.MomentumDataCache;
 import com.project.whalearc.market.service.UsEtfCatalog;
 import com.project.whalearc.market.service.UsStockPriceProvider;
 import com.project.whalearc.notification.service.NotificationService;
@@ -50,6 +51,8 @@ class LiveStrategyServiceTest {
     private CandlestickService candlestickService;
     private PortfolioService portfolioService;
     private RecordingGateway gateway;
+    private MomentumDataCache momentumDataCache;
+    private ExchangeRateService exchangeRateService;
     private LiveStrategyService svc;
     // 배포 저장소 인메모리 모사 — evaluateDeployment 가 락 안에서 findById 로 최신본을 다시 읽으므로
     // save/findById 가 같은 인스턴스를 주고받아야 테스트가 그 인스턴스의 상태 전이를 검증할 수 있다.
@@ -85,7 +88,8 @@ class LiveStrategyServiceTest {
         candlestickService = mock(CandlestickService.class);
         NotificationService notificationService = mock(NotificationService.class);
         portfolioService = mock(PortfolioService.class);
-        ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
+        exchangeRateService = mock(ExchangeRateService.class);
+        momentumDataCache = mock(MomentumDataCache.class);
         UsEtfCatalog usEtfCatalog = mock(UsEtfCatalog.class);
         UsStockPriceProvider usStockPriceProvider = mock(UsStockPriceProvider.class);
         LiveOrderLogRepository orderLogRepo = mock(LiveOrderLogRepository.class);
@@ -120,7 +124,7 @@ class LiveStrategyServiceTest {
                 notificationService, portfolioService,
                 exchangeRateService, usEtfCatalog, usStockPriceProvider,
                 bitgetApiClient, List.of(gateway), orderLogRepo,
-                equitySnapshotRepo, new UserLockRegistry());
+                equitySnapshotRepo, new UserLockRegistry(), momentumDataCache);
     }
 
     private void stubCashBalance(BigDecimal cash) {
@@ -404,5 +408,99 @@ class LiveStrategyServiceTest {
         LivePosition p = d.getPositions().get(0);
         assertEquals(LivePosition.Direction.LONG, p.getDirection(), "1회만 진입해 LONG 상태");
         assertEquals(0, d.getTradeCount(), "진입 1회 → 거래수 0(청산 시 집계). 중복 방지는 주문 1건·LONG으로 확인");
+    }
+
+    // ── 모멘텀 Top-N 로테이션 ──────────────────────────────────────────────
+
+    /** 시간 오름차순 상승/하락 종가 시계열(캐시 모사). n개, start→end 선형. */
+    private List<CandlestickResponse> trend(int n, double start, double end) {
+        List<CandlestickResponse> out = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            double p = start + (end - start) * i / (n - 1);
+            out.add(new CandlestickResponse(1_700_000_000L + i * 86400L, p, p, p, p, 1000));
+        }
+        return out;
+    }
+
+    private LiveStrategyDeployment momentumDeployment(int topN, double allocKrw) {
+        LiveStrategyDeployment d = new LiveStrategyDeployment();
+        d.setId("mom1");
+        d.setUserId("u1");
+        d.setDeploymentType("MOMENTUM_ROTATION");
+        d.setRotationTopN(topN);
+        d.setRotationLookbackDays(20);
+        d.setRotationRegimeFilter(false);   // SPY 의존 제거(로테이션 자체 검증에 집중)
+        d.setRotationUniverse(new ArrayList<>(List.of("AAA", "BBB", "CCC")));
+        d.setAssetType("US_STOCK");
+        d.setInterval("1d");
+        d.setAccountMode(LiveStrategyDeployment.AccountMode.PAPER);
+        d.setBrokerType(LiveStrategyDeployment.BrokerType.MOCK);
+        d.setStatus(LiveStrategyDeployment.Status.RUNNING);
+        d.setAllocatedCash(BigDecimal.valueOf(allocKrw));
+        d.setPositions(new ArrayList<>());
+        store.put(d.getId(), d);
+        return d;
+    }
+
+    @Test
+    void momentumRotation_buysPositiveTopN() {
+        // 캐시: AAA 강한 상승, BBB 약한 상승, CCC 하락(음수→제외). 현재가는 모두 $100(candlestickService).
+        when(momentumDataCache.get("AAA")).thenReturn(trend(30, 100, 300));
+        when(momentumDataCache.get("BBB")).thenReturn(trend(30, 100, 150));
+        when(momentumDataCache.get("CCC")).thenReturn(trend(30, 100, 50));
+        when(candlestickService.getCandlesticks(anyString(), anyString(), anyString()))
+                .thenReturn(flatCandles(5, 100));   // 현재가 $100
+        when(exchangeRateService.getUsdKrwRate()).thenReturn(1300.0);
+
+        // 할당 2,600,000원 / topN 2 = 1,300,000원/종목 ÷ ($100×1300=130,000원/주) = 10주
+        LiveStrategyDeployment d = momentumDeployment(2, 2_600_000);
+        svc.rebalanceMomentum(d);
+
+        LiveStrategyDeployment saved = store.get("mom1");
+        LivePosition aaa = saved.getPositions().stream().filter(p -> p.getSymbol().equals("AAA")).findFirst().orElse(null);
+        LivePosition bbb = saved.getPositions().stream().filter(p -> p.getSymbol().equals("BBB")).findFirst().orElse(null);
+        assertNotNull(aaa); assertNotNull(bbb);
+        assertEquals(LivePosition.Direction.LONG, aaa.getDirection(), "AAA(양수 모멘텀) 보유");
+        assertEquals(0, aaa.getQuantity().compareTo(BigDecimal.valueOf(10)), "목표비중 기반 정수 수량 10주");
+        assertEquals(LivePosition.Direction.LONG, bbb.getDirection());
+        assertTrue(saved.getPositions().stream().noneMatch(p ->
+                p.getSymbol().equals("CCC") && p.getDirection() == LivePosition.Direction.LONG), "CCC(음수)는 미보유");
+        assertEquals(2, gateway.placed.size(), "매수 2건");
+        assertEquals(List.of("AAA", "BBB"), saved.getCurrentTopHoldings());
+        assertNotNull(saved.getLastRotationMonth(), "리밸런싱 달 기록(멱등키)");
+    }
+
+    @Test
+    void momentumRotation_idempotentWithinSameMonth() {
+        when(momentumDataCache.get("AAA")).thenReturn(trend(30, 100, 300));
+        when(momentumDataCache.get("BBB")).thenReturn(trend(30, 100, 150));
+        when(momentumDataCache.get("CCC")).thenReturn(trend(30, 100, 50));
+        when(candlestickService.getCandlesticks(anyString(), anyString(), anyString()))
+                .thenReturn(flatCandles(5, 100));
+        when(exchangeRateService.getUsdKrwRate()).thenReturn(1300.0);
+
+        LiveStrategyDeployment d = momentumDeployment(2, 2_600_000);
+        svc.rebalanceMomentum(d);
+        int after1 = gateway.placed.size();
+        svc.rebalanceMomentum(d);   // 같은 달 재호출 → 멱등(무동작)
+        assertEquals(after1, gateway.placed.size(), "같은 달 재실행은 추가 주문 없음(멱등)");
+    }
+
+    @Test
+    void momentumRotation_allNegativeGoesToCash() {
+        when(momentumDataCache.get("AAA")).thenReturn(trend(30, 300, 100));   // 하락
+        when(momentumDataCache.get("BBB")).thenReturn(trend(30, 200, 120));   // 하락
+        when(momentumDataCache.get("CCC")).thenReturn(trend(30, 100, 50));    // 하락
+        when(candlestickService.getCandlesticks(anyString(), anyString(), anyString()))
+                .thenReturn(flatCandles(5, 100));
+        when(exchangeRateService.getUsdKrwRate()).thenReturn(1300.0);
+
+        LiveStrategyDeployment d = momentumDeployment(2, 2_600_000);
+        svc.rebalanceMomentum(d);
+
+        LiveStrategyDeployment saved = store.get("mom1");
+        assertTrue(gateway.placed.isEmpty(), "양수 모멘텀 없음 → 매수 없음(전액 현금)");
+        assertTrue(saved.getCurrentTopHoldings().isEmpty(), "보유 종목 없음");
+        assertNotNull(saved.getLastRotationMonth());
     }
 }

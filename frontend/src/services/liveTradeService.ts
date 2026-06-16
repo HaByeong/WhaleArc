@@ -58,6 +58,14 @@ export interface Deployment {
   todayFilledCount?: number;        // 오늘(KST) 체결 수
   lastOrder?: LastOrderSummary | null;  // 가장 최근 주문(최근 신호)
   equitySpark?: number[];           // 일별 평가손익률(%) 시계열 — 스파크라인
+  // ── 모멘텀 로테이션 전용 ──
+  deploymentType?: string;          // "MOMENTUM_ROTATION" or undefined
+  rotationTopN?: number;
+  rotationLookbackDays?: number;
+  rotationRegimeFilter?: boolean;
+  regimeBear?: boolean | null;      // 현재 레짐 약세 여부
+  currentTopHoldings?: string[];    // 현 보유 top-N 심볼
+  lastRotationMonth?: string;       // 마지막 리밸런싱 달(yyyy-MM)
 }
 
 export interface CreateDeploymentRequest {
@@ -85,6 +93,13 @@ export interface CreateDeploymentRequest {
   takeProfitPct?: number;
   trailingStopPct?: number;
   dailyLossLimit?: number;
+  // ── 모멘텀 로테이션 전용 ──
+  deploymentType?: string;          // "MOMENTUM_ROTATION"
+  rotationTopN?: number;
+  rotationLookbackDays?: number;
+  rotationRegimeFilter?: boolean;
+  rotationRegimeFloor?: number;
+  rotationUniverse?: string[];
 }
 
 // ── 실행 로그 타입 ──

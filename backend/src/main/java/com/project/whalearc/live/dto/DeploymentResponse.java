@@ -42,6 +42,14 @@ public class DeploymentResponse {
     private final int todayFilledCount;       // 오늘(KST) 체결 수
     private final LastOrderDto lastOrder;     // 가장 최근 주문(최근 신호), 없으면 null
     private final List<Double> equitySpark;   // 일별 평가손익률(%) 시계열, 스파크라인용
+    // ── 모멘텀 로테이션 전용(아니면 null/기본값) ──
+    private final String deploymentType;          // "MOMENTUM_ROTATION" or null
+    private final Integer rotationTopN;
+    private final Integer rotationLookbackDays;
+    private final Boolean rotationRegimeFilter;
+    private final Boolean regimeBear;             // 현재 레짐 약세 여부
+    private final List<String> currentTopHoldings;// 현 보유 top-N 심볼
+    private final String lastRotationMonth;       // 마지막 리밸런싱 달(yyyy-MM)
 
     private DeploymentResponse(LiveStrategyDeployment d, int todayFilledCount,
                                LiveOrderLog lastOrder, List<Double> equitySpark) {
@@ -72,6 +80,13 @@ public class DeploymentResponse {
         this.todayFilledCount = todayFilledCount;
         this.lastOrder = lastOrder != null ? new LastOrderDto(lastOrder) : null;
         this.equitySpark = equitySpark != null ? equitySpark : List.of();
+        this.deploymentType = d.getDeploymentType();
+        this.rotationTopN = d.getRotationTopN();
+        this.rotationLookbackDays = d.getRotationLookbackDays();
+        this.rotationRegimeFilter = d.getRotationRegimeFilter();
+        this.regimeBear = d.isMomentumRotation() ? d.isRegimeBear() : null;
+        this.currentTopHoldings = d.getCurrentTopHoldings() != null ? d.getCurrentTopHoldings() : List.of();
+        this.lastRotationMonth = d.getLastRotationMonth();
     }
 
     /** 변이 응답 등 확장 데이터 없이 매핑(체결수 0·최근주문 null·스파크 빈 목록). */

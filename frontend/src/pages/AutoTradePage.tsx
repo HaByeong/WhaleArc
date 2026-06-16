@@ -7,7 +7,7 @@ import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { strategyService, type Strategy, type BacktestHistoryItem } from '../services/strategyService';
-import { PRESET_STRATEGIES, type PresetStrategy, TURTLE_PRESET_ID, TURTLE_DEFAULTS, buildTurtleConditions, type TurtleParams } from '../data/presetStrategies';
+import { PRESET_STRATEGIES, type PresetStrategy, TURTLE_PRESET_ID, TURTLE_DEFAULTS, buildTurtleConditions, type TurtleParams, MOMENTUM_PRESET_ID, MOMENTUM_DEFAULTS, type MomentumParams } from '../data/presetStrategies';
 import {
   liveTradeService,
   type Deployment,
@@ -219,6 +219,7 @@ const AutoTradePage = () => {
     dailyLossLimit: '',
   });
   const [turtle, setTurtle] = useState<TurtleParams>(TURTLE_DEFAULTS); // 터틀 전용 설정(채널 기간·ADX·유닛)
+  const [momentum, setMomentum] = useState<MomentumParams>(MOMENTUM_DEFAULTS); // 모멘텀 로테이션 전용 설정(top-N·룩백·레짐)
 
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
@@ -344,11 +345,14 @@ const AutoTradePage = () => {
 
   const onSelectStrategy = (strategyId: string) => {
     const s = allStrategies.find(st => st.id === strategyId);
+    const isMomentumSel = strategyId === MOMENTUM_PRESET_ID;
     setForm(prev => ({
       ...prev,
       strategyId,
       targetAssetsText: s ? s.targetAssets.join(', ') : prev.targetAssetsText,
       assetType: s ? (s.assetType === 'MIXED' ? '' : s.assetType) : prev.assetType,
+      // 모멘텀 로테이션 실거래는 KIS(해외주식) 고정
+      brokerType: isMomentumSel ? 'KIS' : prev.brokerType,
     }));
   };
 
@@ -388,13 +392,34 @@ const AutoTradePage = () => {
     const typedAssets = form.targetAssetsText.split(',').map(s => s.trim()).filter(Boolean);
     const targetAssets = typedAssets.length ? typedAssets : (isPreset ? (selected?.targetAssets ?? []) : []);
 
+    const isMomentum = isPreset && form.strategyId === MOMENTUM_PRESET_ID;
+
     setCreating(true);
     try {
       const presetSel = selected as PresetStrategy | undefined;
       // 터틀이면 설정 패널 파라미터로 지표·조건을 즉석 생성(채널 기간·ADX). 그 외 프리셋은 정의값 그대로.
       const isTurtle = isPreset && form.strategyId === TURTLE_PRESET_ID;
       const turtleCond = isTurtle ? buildTurtleConditions(turtle) : null;
-      await liveTradeService.createDeployment({
+      await liveTradeService.createDeployment(isMomentum
+        ? {
+            // 모멘텀 로테이션: 지표-조건 없이 전용 엔진. 실거래는 KIS(해외주식)·US_STOCK 고정, 종목은 첫 로테이션이 채움.
+            strategyName: selected?.name,
+            deploymentType: 'MOMENTUM_ROTATION',
+            rotationTopN: momentum.topN,
+            rotationLookbackDays: momentum.lookbackDays,
+            rotationRegimeFilter: momentum.regimeFilter,
+            rotationRegimeFloor: momentum.regimeFloor,
+            allocatedCash,
+            assetType: 'US_STOCK',
+            interval: '1d',
+            accountMode: isLive ? 'LIVE' : 'PAPER',
+            brokerType: isLive ? 'KIS' : 'MOCK',
+            stopLossPct: form.stopLossPct ? Number(form.stopLossPct) : undefined,
+            takeProfitPct: form.takeProfitPct ? Number(form.takeProfitPct) : undefined,
+            trailingStopPct: form.trailingStopPct ? Number(form.trailingStopPct) : undefined,
+            dailyLossLimit: form.dailyLossLimit ? Number(form.dailyLossLimit) : undefined,
+          }
+        : {
         ...(isPreset
           ? {
               strategyName: selected?.name,
@@ -697,11 +722,43 @@ const AutoTradePage = () => {
 
                     {/* 메타 칩 */}
                     <div className="flex flex-wrap gap-1.5">
-                      <Chip>{INTERVAL_LABELS[d.interval] ?? d.interval}</Chip>
+                      {d.deploymentType === 'MOMENTUM_ROTATION'
+                        ? <Chip>모멘텀 Top{d.rotationTopN ?? 5} · 월간</Chip>
+                        : <Chip>{INTERVAL_LABELS[d.interval] ?? d.interval}</Chip>}
                       <Chip>{isLive ? '실거래' : '모의'} {formatKRW(d.allocatedCash)}</Chip>
                       {isLive && <Chip>{modeBadge}</Chip>}
                       {d.assetType && <Chip>{d.assetType}</Chip>}
                     </div>
+
+                    {/* 모멘텀 로테이션: 현 보유 top-N + 레짐 + 마지막 리밸런싱 */}
+                    {d.deploymentType === 'MOMENTUM_ROTATION' && (
+                      <div style={{ padding: '11px 13px', borderRadius: 11, background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span style={{ fontSize: 10.5, letterSpacing: '.12em', color: 'var(--ci-ink3)', fontWeight: 600 }}>현재 보유 (Top{d.rotationTopN ?? 5})</span>
+                          {d.regimeBear != null && (
+                            <span className="rounded-full px-2 py-0.5 text-[10.5px] font-bold"
+                              style={d.regimeBear
+                                ? { background: 'rgba(245,158,11,.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,.35)' }
+                                : { background: 'rgba(52,211,153,.13)', color: '#34d399', border: '1px solid rgba(52,211,153,.32)' }}>
+                              {d.regimeBear ? `약세장 · 노출↓` : '강세장'}
+                            </span>
+                          )}
+                        </div>
+                        {(d.currentTopHoldings?.length ?? 0) > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {d.currentTopHoldings!.map(sym => (
+                              <span key={sym} className="font-mono rounded-md px-1.5 py-0.5 text-[11px] font-bold"
+                                style={{ background: 'var(--ci-sonar-dim)', color: 'var(--ci-sonar)', border: '1px solid rgba(91,157,255,.25)' }}>{sym}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, color: 'var(--ci-ink3)' }}>첫 리밸런싱 대기 — '지금 평가'로 즉시 실행할 수 있어요.</div>
+                        )}
+                        {d.lastRotationMonth && (
+                          <div className="mt-1.5" style={{ fontSize: 11, color: 'var(--ci-ink3)' }}>마지막 리밸런싱: {d.lastRotationMonth}</div>
+                        )}
+                      </div>
+                    )}
 
                     {/* 평가손익 + 손익 스파크라인 */}
                     <div style={{ display: 'grid', gridTemplateColumns: hasSpark ? '1fr 116px' : '1fr', gap: 14, alignItems: 'flex-end' }}>
@@ -1069,8 +1126,7 @@ const AutoTradePage = () => {
                 >
                   <option value="">전략을 선택하세요</option>
                   <optgroup label="기본 제공 전략">
-                    {/* 모멘텀 로테이션은 라이브 미지원(백테스트 전용) — 추후 단계에서 노출 */}
-                    {PRESET_STRATEGIES.filter(s => s.strategyType !== 'MOMENTUM_ROTATION').map(s => (
+                    {PRESET_STRATEGIES.map(s => (
                       <option key={s.id} value={s.id}>{s.name}{s.difficulty ? ` · ${s.difficulty}` : ''}</option>
                     ))}
                   </optgroup>
@@ -1107,6 +1163,36 @@ const AutoTradePage = () => {
                 </div>
               )}
 
+              {/* 모멘텀 로테이션 전용 설정 — top-N·룩백·레짐 */}
+              {form.strategyId === MOMENTUM_PRESET_ID && (
+                <div className={`rounded-lg border p-3 ${isDark ? 'border-cyan-400/30 bg-cyan-400/[0.06]' : 'border-cyan-300 bg-cyan-50'}`}>
+                  <div className={`text-xs font-bold mb-2 ${isDark ? 'text-cyan-300' : 'text-cyan-700'}`}>📈 모멘텀 Top-N 로테이션 설정</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex flex-col gap-1">
+                      <span className={`text-[10.5px] ${subText}`}>보유 종목 수 (top-N)</span>
+                      <input type="number" min={1} max={20} step={1} value={momentum.topN}
+                        onChange={e => setMomentum({ ...momentum, topN: Number(e.target.value) || 1 })}
+                        className={`rounded-lg border px-2 py-1.5 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`} />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className={`text-[10.5px] ${subText}`}>모멘텀 룩백 (거래일)</span>
+                      <input type="number" min={20} max={500} step={1} value={momentum.lookbackDays}
+                        onChange={e => setMomentum({ ...momentum, lookbackDays: Number(e.target.value) || 252 })}
+                        className={`rounded-lg border px-2 py-1.5 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`} />
+                    </label>
+                  </div>
+                  <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                    <input type="checkbox" checked={momentum.regimeFilter}
+                      onChange={e => setMomentum({ ...momentum, regimeFilter: e.target.checked })} />
+                    <span className={`text-[11px] ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>SPY 200일선 레짐 필터 (약세장에서 노출 ×{momentum.regimeFloor})</span>
+                  </label>
+                  <p className={`text-[10.5px] mt-1.5 ${subText}`}>
+                    매월 첫 거래일, 미국 대형주 132종목을 {momentum.lookbackDays}거래일 모멘텀으로 랭킹해 상위 {momentum.topN}종목을 각 {(100 / momentum.topN).toFixed(0)}%씩 보유(양수 모멘텀만, 없으면 현금). KIS 해외주식 1배·월간 리밸런싱.
+                    {isLive ? ' 실거래는 KIS(해외주식)로 고정됩니다.' : ' 모의(가상자금)로 안전하게 검증하세요.'}
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>{isLive ? '거래소 (브로커)' : '계좌'}</label>
                 {isLive ? (
@@ -1117,7 +1203,9 @@ const AutoTradePage = () => {
                       className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700'}`}
                     >
                       <option value="KIS">KIS 한국투자증권 — 국내·미국주식 (실제 자금 ⚠️)</option>
-                      <option value="BITGET">Bitget — 코인 현물·선물 (실제 자금 ⚠️)</option>
+                      {form.strategyId !== MOMENTUM_PRESET_ID && (
+                        <option value="BITGET">Bitget — 코인 현물·선물 (실제 자금 ⚠️)</option>
+                      )}
                     </select>
                     {form.brokerType === 'KIS' ? (
                       <p className={`text-[11px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
@@ -1186,6 +1274,8 @@ const AutoTradePage = () => {
                 </div>
               )}
 
+              {/* 모멘텀은 유니버스(132종목 내장)·자산유형(US_STOCK)·주기(일봉/월간)가 고정이라 숨김 */}
+              {form.strategyId !== MOMENTUM_PRESET_ID && (
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>자산 유형</label>
                 <select
@@ -1201,7 +1291,9 @@ const AutoTradePage = () => {
                 </select>
                 <p className={`text-[11px] mt-1 ${subText}`}>미국주식(JOBY 등)은 <b>미국주식</b>으로 지정하세요. 비워두면 종목 코드로 자동 판별합니다.</p>
               </div>
+              )}
 
+              {form.strategyId !== MOMENTUM_PRESET_ID && (
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>대상 종목 (쉼표 구분)</label>
                 <input
@@ -1212,6 +1304,7 @@ const AutoTradePage = () => {
                 />
                 <p className={`text-[11px] mt-1 ${subText}`}>비워두면 전략의 기본 종목을 사용합니다.</p>
               </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1223,6 +1316,7 @@ const AutoTradePage = () => {
                     className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`}
                   />
                 </div>
+                {form.strategyId !== MOMENTUM_PRESET_ID ? (
                 <div>
                   <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>평가 주기</label>
                   <select
@@ -1234,6 +1328,12 @@ const AutoTradePage = () => {
                     <option value="1d">일봉</option>
                   </select>
                 </div>
+                ) : (
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>리밸런싱</label>
+                  <div className={`rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-slate-300' : 'bg-gray-50 border-gray-300 text-gray-600'}`}>월간 (자동)</div>
+                </div>
+                )}
               </div>
 
               <div>

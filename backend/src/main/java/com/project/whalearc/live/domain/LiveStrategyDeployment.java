@@ -48,6 +48,21 @@ public class LiveStrategyDeployment {
     private List<Condition> shortEntryConditions = new ArrayList<>();
     private List<Condition> shortExitConditions = new ArrayList<>();
 
+    // 배포 유형: null/기본=시그널 기반(단일종목 지표-조건) / "MOMENTUM_ROTATION"=미국주식 모멘텀 top-N 로테이션.
+    // 모멘텀이면 GenericStrategyScheduler(매정시)는 스킵하고 MomentumRotationScheduler(일간)가 담당.
+    private String deploymentType;
+
+    // ── 모멘텀 로테이션 전용(deploymentType=MOMENTUM_ROTATION일 때만 의미) ──
+    private Integer rotationTopN;          // 상위 N종목(기본 5)
+    private Integer rotationLookbackDays;  // 모멘텀 룩백 거래일(기본 252)
+    private Boolean rotationRegimeFilter;  // SPY 200SMA 레짐 필터 사용
+    private Double rotationRegimeFloor;    // 약세장 노출 배수(기본 0.5)
+    private List<String> rotationUniverse; // null이면 내장 132종목 유니버스
+    private boolean regimeBear;            // 현재 레짐 약세 여부(상태)
+    private List<String> currentTopHoldings = new ArrayList<>(); // 현 보유 top-N 심볼(표시/추적용)
+    private String lastRotationMonth;      // 마지막 월간 리밸런싱 처리 달(yyyy-MM) — 멱등
+    private String lastRegimeDay;          // 마지막 레짐 점검 일(yyyy-MM-dd) — 멱등
+
     // 매매 방향: null/LONG_ONLY(기존, 롱만) / LONG_SHORT_FLAT(독립 롱+숏+flat)
     private String tradeDirection;
     // 피라미딩 최대 유닛 수 (null/1이면 단일 진입, 기존 동작). +ATR 또는 진입신호 재충족 시 추가.
@@ -115,6 +130,16 @@ public class LiveStrategyDeployment {
     public boolean isLongShortFlat() {
         return "LONG_SHORT_FLAT".equals(tradeDirection);
     }
+
+    /** 모멘텀 top-N 로테이션 배포 여부. */
+    public boolean isMomentumRotation() {
+        return "MOMENTUM_ROTATION".equalsIgnoreCase(deploymentType);
+    }
+
+    public int effectiveRotationTopN() { return (rotationTopN != null && rotationTopN > 0) ? rotationTopN : 5; }
+    public int effectiveRotationLookback() { return (rotationLookbackDays != null && rotationLookbackDays > 0) ? rotationLookbackDays : 252; }
+    public boolean effectiveRegimeFilter() { return rotationRegimeFilter == null || rotationRegimeFilter; }
+    public double effectiveRegimeFloor() { return (rotationRegimeFloor != null && rotationRegimeFloor > 0) ? rotationRegimeFloor : 0.5; }
 
     /** 최대 유닛 수(피라미딩). null/<1이면 1(단일 진입). */
     public int effectiveMaxUnits() {

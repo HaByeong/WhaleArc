@@ -13,6 +13,8 @@ import com.project.whalearc.exchange.service.client.BitgetApiClient;
 import com.project.whalearc.market.dto.CandlestickResponse;
 import com.project.whalearc.market.service.CandlestickService;
 import com.project.whalearc.market.service.ExchangeRateService;
+import com.project.whalearc.market.service.MomentumDataCache;
+import com.project.whalearc.market.service.MomentumUniverse;
 import com.project.whalearc.market.service.UsEtfCatalog;
 import com.project.whalearc.market.service.UsStockPriceProvider;
 import com.project.whalearc.notification.domain.Notification;
@@ -22,6 +24,7 @@ import com.project.whalearc.strategy.domain.Indicator;
 import com.project.whalearc.strategy.domain.Strategy;
 import com.project.whalearc.strategy.repository.StrategyRepository;
 import com.project.whalearc.strategy.service.IndicatorContextBuilder;
+import com.project.whalearc.strategy.service.MomentumRanker;
 import com.project.whalearc.strategy.service.SignalEvaluator;
 import com.project.whalearc.trade.domain.Order;
 import com.project.whalearc.trade.domain.Portfolio;
@@ -35,6 +38,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.Objects;
 import java.util.ArrayList;
@@ -76,6 +80,7 @@ public class LiveStrategyService {
     private final LiveOrderLogRepository orderLogRepository;
     private final LiveDeploymentEquitySnapshotRepository equitySnapshotRepository;
     private final UserLockRegistry userLockRegistry;
+    private final MomentumDataCache momentumDataCache;
 
     /** 전역 킬스위치 — 켜지면 스케줄러가 모든 평가를 건너뛴다. */
     private final AtomicBoolean killSwitch = new AtomicBoolean(false);
@@ -98,6 +103,10 @@ public class LiveStrategyService {
     // ── 배포 라이프사이클 ─────────────────────────────────────────────
 
     public LiveStrategyDeployment createDeployment(String userId, CreateDeploymentRequest req) {
+        // 모멘텀 top-N 로테이션 배포는 시그널 기반 경로와 모델이 달라(유니버스 랭킹) 전용 생성 경로로 분기.
+        if ("MOMENTUM_ROTATION".equalsIgnoreCase(req.getDeploymentType())) {
+            return createMomentumDeployment(userId, req);
+        }
         List<Indicator> indicators;
         List<Condition> entryConditions;
         List<Condition> exitConditions;
@@ -261,9 +270,16 @@ public class LiveStrategyService {
 
         // 자금 예약 가드(over-allocation 방지) + 저장을 유저 락 안에서 원자적으로 수행한다.
         // 활성(RUNNING/PAUSED) 배포들의 할당금 합 + 신규 할당이 가용 현금을 넘지 않게 한다. 현금을 별도
-        // 버킷으로 옮기지 않고 cashBalance를 단일 출처로 유지(터틀 이중트랙 정합성 문제 회피). 정지(STOPPED)는
-        // 자동 예약 해제됨. 락이 없으면 동시 2건 생성이 같은 reserved를 읽어 둘 다 통과(가용현금 초과 예약)할 수 있다.
-        final BigDecimal allocatedCashFinal = allocatedCash;
+        return reserveAndSave(userId, d, allocatedCash);
+    }
+
+    /**
+     * 자금 예약 가드(over-allocation 방지) + 저장을 유저 락 안에서 원자적으로 수행한다.
+     * 활성(RUNNING/PAUSED) 배포들의 할당금 합 + 신규 할당이 가용 현금을 넘지 않게 한다. 현금을 별도
+     * 버킷으로 옮기지 않고 cashBalance를 단일 출처로 유지(터틀 이중트랙 정합성 문제 회피). 정지(STOPPED)는
+     * 자동 예약 해제됨. 락이 없으면 동시 2건 생성이 같은 reserved를 읽어 둘 다 통과할 수 있다.
+     */
+    private LiveStrategyDeployment reserveAndSave(String userId, LiveStrategyDeployment d, BigDecimal allocatedCash) {
         return userLockRegistry.withLock(userId, () -> {
             Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
             BigDecimal cash = portfolio.getCashBalance() != null ? portfolio.getCashBalance() : BigDecimal.ZERO;
@@ -274,15 +290,361 @@ public class LiveStrategyService {
                     .map(LiveStrategyDeployment::getAllocatedCash)
                     .filter(Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            if (reserved.add(allocatedCashFinal).compareTo(cash) > 0) {
+            if (reserved.add(allocatedCash).compareTo(cash) > 0) {
                 throw new IllegalArgumentException(
                         "할당 금액이 가용 현금을 초과합니다(이미 자동매매에 예약된 금액 포함). 가용=" + cash + ", 기예약=" + reserved);
             }
             LiveStrategyDeployment saved = deploymentRepository.save(d);
             log.info("라이브 배포 생성: userId={}, deploymentId={}, strategy={}, assets={}, mode={}",
-                    userId, saved.getId(), strategyName, targetAssets, accountMode);
+                    userId, saved.getId(), d.getStrategyName(), d.getTargetAssets(), d.getAccountMode());
             return saved;
         });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  미국주식 모멘텀 Top-N 로테이션 (월간 리밸런싱 + 일간 레짐) — 신규 격리 경로
+    //  시그널 기반 evaluateDeployment 와 독립. MomentumRotationScheduler 가 일 1회 호출한다.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** 모멘텀 로테이션 배포 생성 — assetType=US_STOCK 고정, 포지션은 첫 리밸런싱이 채운다(초기 빈 보유). */
+    private LiveStrategyDeployment createMomentumDeployment(String userId, CreateDeploymentRequest req) {
+        BigDecimal allocatedCash = req.getAllocatedCash();
+        if (allocatedCash == null || allocatedCash.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("할당 금액은 0보다 커야 합니다.");
+        }
+        validateRiskParams(req);
+
+        LiveStrategyDeployment.AccountMode accountMode =
+                req.getAccountMode() != null ? req.getAccountMode() : LiveStrategyDeployment.AccountMode.PAPER;
+        LiveStrategyDeployment.BrokerType brokerType =
+                req.getBrokerType() != null ? req.getBrokerType() : LiveStrategyDeployment.BrokerType.MOCK;
+        if (accountMode == LiveStrategyDeployment.AccountMode.PAPER
+                && brokerType != LiveStrategyDeployment.BrokerType.MOCK) {
+            throw new IllegalArgumentException("모의(PAPER) 모드는 MOCK 브로커만 사용할 수 있습니다.");
+        }
+        if (accountMode == LiveStrategyDeployment.AccountMode.LIVE) {
+            if (brokerType == LiveStrategyDeployment.BrokerType.MOCK) {
+                throw new IllegalArgumentException("실계좌(LIVE) 모드는 실거래 브로커가 필요합니다.");
+            }
+            if (brokerType != LiveStrategyDeployment.BrokerType.KIS) {
+                throw new IllegalArgumentException("모멘텀 로테이션 실거래는 KIS(해외주식)만 지원합니다.");
+            }
+        }
+        resolveGateway(brokerType);   // 게이트웨이 없으면(예: KIS 비활성) 거부
+
+        if (brokerType == LiveStrategyDeployment.BrokerType.KIS
+                && kisMaxAllocatedKrw != null && allocatedCash.compareTo(kisMaxAllocatedKrw) > 0) {
+            throw new IllegalArgumentException(
+                    "실거래(KIS) 1건당 할당 한도(" + kisMaxAllocatedKrw + "원)를 초과했습니다. 소액으로 먼저 검증한 뒤 한도를 올리세요.");
+        }
+
+        int topN = req.getRotationTopN() != null && req.getRotationTopN() > 0 ? req.getRotationTopN() : 5;
+        if (topN < 1 || topN > 20) throw new IllegalArgumentException("top-N은 1~20 사이여야 합니다.");
+        int lookback = req.getRotationLookbackDays() != null && req.getRotationLookbackDays() > 0
+                ? req.getRotationLookbackDays() : 252;
+        if (lookback < 20 || lookback > 500) throw new IllegalArgumentException("룩백은 20~500거래일 사이여야 합니다.");
+
+        LiveStrategyDeployment d = new LiveStrategyDeployment();
+        d.setUserId(userId);
+        d.setStrategyId(null);
+        d.setStrategyName(req.getStrategyName() != null ? req.getStrategyName() : "미국주식 모멘텀 Top" + topN + " 로테이션");
+        d.setDeploymentType("MOMENTUM_ROTATION");
+        d.setRotationTopN(topN);
+        d.setRotationLookbackDays(lookback);
+        d.setRotationRegimeFilter(req.getRotationRegimeFilter() == null || req.getRotationRegimeFilter());
+        d.setRotationRegimeFloor(req.getRotationRegimeFloor() != null && req.getRotationRegimeFloor() > 0
+                ? req.getRotationRegimeFloor() : 0.5);
+        d.setRotationUniverse(req.getRotationUniverse() != null && !req.getRotationUniverse().isEmpty()
+                ? new ArrayList<>(req.getRotationUniverse()) : null);
+        d.setTargetAssets(new ArrayList<>());        // 첫 로테이션이 채움
+        d.setPositions(new ArrayList<>());
+        d.setAssetType("US_STOCK");
+        d.setInterval("1d");
+        d.setTradeDirection("LONG_ONLY");
+        d.setAccountMode(accountMode);
+        d.setBrokerType(brokerType);
+        d.setMarketType(LiveStrategyDeployment.MarketType.SPOT);
+        d.setStatus(LiveStrategyDeployment.Status.RUNNING);
+        d.setAllocatedCash(allocatedCash);
+        d.setStopLossPct(req.getStopLossPct());
+        d.setTakeProfitPct(req.getTakeProfitPct());
+        d.setTrailingStopPct(req.getTrailingStopPct());
+        d.setDailyLossLimit(req.getDailyLossLimit());
+        d.setDayKey(LocalDate.now(KST).toString());
+        Instant now = Instant.now();
+        d.setCreatedAt(now);
+        d.setUpdatedAt(now);
+
+        return reserveAndSave(userId, d, allocatedCash);
+    }
+
+    /** 월간 리밸런싱(멱등: lastRotationMonth). 스케줄러가 매일 호출 → 이번 달 첫 호출만 실행. */
+    public void rebalanceMomentum(LiveStrategyDeployment d) {
+        if (killSwitch.get()) return;
+        userLockRegistry.withLock(d.getUserId(), () -> doRebalanceMomentumLocked(d.getId(), false));
+    }
+
+    /** 수동 즉시 리밸런싱 — 월 멱등 가드를 무시하고 지금 1회 실행(PAPER 검증/긴급 재조정용). */
+    public LiveStrategyDeployment rebalanceMomentumNow(String userId, String deploymentId) {
+        LiveStrategyDeployment d = deploymentRepository.findByIdAndUserId(deploymentId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+        if (killSwitch.get()) throw new IllegalArgumentException("전역 킬스위치가 켜져 있어 평가할 수 없습니다.");
+        if (d.getStatus() != LiveStrategyDeployment.Status.RUNNING) {
+            throw new IllegalArgumentException("가동 중(RUNNING)인 배포만 평가할 수 있습니다.");
+        }
+        userLockRegistry.withLock(userId, () -> {
+            doApplyRegimeLocked(deploymentId);
+            doRebalanceMomentumLocked(deploymentId, true);
+        });
+        return deploymentRepository.findById(deploymentId).orElse(d);
+    }
+
+    /** 일간 레짐 점검(멱등: lastRegimeDay). 레짐이 전일과 바뀐 경우에만 보유분 비중을 조정. */
+    public void applyRegimeDaily(LiveStrategyDeployment d) {
+        if (killSwitch.get()) return;
+        userLockRegistry.withLock(d.getUserId(), () -> doApplyRegimeLocked(d.getId()));
+    }
+
+    private void doRebalanceMomentumLocked(String deploymentId, boolean force) {
+        LiveStrategyDeployment d = deploymentRepository.findById(deploymentId).orElse(null);
+        if (d == null || d.getStatus() != LiveStrategyDeployment.Status.RUNNING || !d.isMomentumRotation()) return;
+        String month = YearMonth.now(KST).toString();   // yyyy-MM
+        if (!force && month.equals(d.getLastRotationMonth())) return;   // 이번 달 이미 처리(멱등)
+
+        int topN = d.effectiveRotationTopN();
+        int lookback = d.effectiveRotationLookback();
+        List<String> universe = (d.getRotationUniverse() != null && !d.getRotationUniverse().isEmpty())
+                ? d.getRotationUniverse() : MomentumUniverse.symbols();
+
+        // 1) 캐시 일봉으로 상대모멘텀 랭킹 (백테스트와 동일한 MomentumRanker)
+        Map<String, double[]> closes = new HashMap<>();
+        for (String s : universe) {
+            double[] arr = recentCloses(s, lookback + 1);
+            if (arr != null) closes.put(s, arr);
+        }
+        if (closes.isEmpty()) {
+            log.warn("모멘텀 리밸런싱 보류(데이터 없음): deploymentId={} — 다음 사이클 재시도", deploymentId);
+            momentumDataCache.triggerWarmAsync();
+            return;
+        }
+        List<MomentumRanker.Ranked> ranked = MomentumRanker.rank(closes, lookback, lookback, topN);
+
+        // 2) 레짐(SPY 200SMA) — 약세면 노출 ×floor
+        boolean bear = d.effectiveRegimeFilter() && isRegimeBear();
+        double regimeMult = bear ? d.effectiveRegimeFloor() : 1.0;
+
+        OrderGateway gateway = resolveGateway(d.getBrokerType());
+        long bar = ymToEpoch(month);
+        Set<String> targetSymbols = new HashSet<>();
+        for (MomentumRanker.Ranked r : ranked) targetSymbols.add(r.symbol());
+
+        // 3) 목표 비중: 각 종목 (1/topN)×regimeMult of allocatedCash (빈 슬롯은 현금, 재배분 금지 → topN으로 나눔)
+        BigDecimal alloc = nz(d.getAllocatedCash());
+        BigDecimal perTargetKrw = alloc.multiply(BigDecimal.valueOf(regimeMult))
+                .divide(BigDecimal.valueOf(topN), 10, RoundingMode.HALF_UP);
+
+        // 4) 매도: 현 보유 중 목표에 없는 종목 전량 청산
+        for (LivePosition pos : d.getPositions()) {
+            if (pos.getDirection() == LivePosition.Direction.LONG && !targetSymbols.contains(pos.getSymbol())) {
+                double px = latestPrice(d, pos);
+                if (px > 0) momentumSell(d, pos, gateway, px, nz(pos.getQuantity()), "ROTATION_OUT", bar);
+            }
+        }
+
+        // 5) 매수/조정: 목표 종목을 목표 수량까지 (±밴드 밖이면 트림)
+        double usdKrw = exchangeRateService.getUsdKrwRate();
+        for (MomentumRanker.Ranked r : ranked) {
+            LivePosition pos = findOrCreatePosition(d, r.symbol());
+            double px = latestPrice(d, pos);
+            if (px <= 0) continue;
+            BigDecimal krwPerShare = BigDecimal.valueOf(px).multiply(BigDecimal.valueOf(usdKrw));
+            if (krwPerShare.compareTo(BigDecimal.ZERO) <= 0) continue;
+            BigDecimal targetQty = perTargetKrw.divide(krwPerShare, 0, RoundingMode.DOWN);
+            BigDecimal curQty = nz(pos.getQuantity());
+            BigDecimal diff = targetQty.subtract(curQty);
+            if (diff.signum() == 0) continue;
+            // 밴드: 기존 보유 종목은 목표 대비 ±REBALANCE_BAND 안이면 회전 억제(스킵). 신규(curQty=0)는 항상 매수.
+            if (curQty.signum() > 0 && targetQty.signum() > 0) {
+                double ratio = Math.abs(diff.doubleValue()) / targetQty.doubleValue();
+                if (ratio < REBALANCE_BAND) continue;
+            }
+            if (diff.signum() > 0) momentumBuy(d, pos, gateway, px, diff, "ROTATION_IN", bar);
+            else momentumSell(d, pos, gateway, px, diff.abs(), "ROTATION_TRIM", bar);
+        }
+
+        // 6) 상태 갱신
+        List<String> held = new ArrayList<>();
+        for (MomentumRanker.Ranked r : ranked) held.add(r.symbol());
+        d.setCurrentTopHoldings(held);
+        d.setRegimeBear(bear);
+        d.setLastRotationMonth(month);
+        d.setLastRegimeDay(LocalDate.now(KST).toString());   // 리밸런싱이 레짐 기준선도 갱신(일간과 이중적용 방지)
+        d.setTargetAssets(new ArrayList<>(targetSymbols));
+        d.setLastEvaluatedAt(Instant.now());
+        d.setUpdatedAt(Instant.now());
+        deploymentRepository.save(d);
+        log.info("모멘텀 리밸런싱 완료: deploymentId={}, month={}, top{}={}, 레짐={}",
+                deploymentId, month, topN, held, bear ? "약세(×" + d.effectiveRegimeFloor() + ")" : "강세");
+    }
+
+    private void doApplyRegimeLocked(String deploymentId) {
+        LiveStrategyDeployment d = deploymentRepository.findById(deploymentId).orElse(null);
+        if (d == null || d.getStatus() != LiveStrategyDeployment.Status.RUNNING || !d.isMomentumRotation()) return;
+        String today = LocalDate.now(KST).toString();
+        if (today.equals(d.getLastRegimeDay())) return;        // 오늘 이미 처리(멱등; 리밸런싱도 갱신함)
+        if (!d.effectiveRegimeFilter()) { d.setLastRegimeDay(today); deploymentRepository.save(d); return; }
+
+        boolean bear = isRegimeBear();
+        boolean wasBear = d.isRegimeBear();
+        if (bear != wasBear) {
+            OrderGateway gateway = resolveGateway(d.getBrokerType());
+            double floor = d.effectiveRegimeFloor();
+            // 약세 진입: 보유분 ×floor 축소. 강세 복귀: ÷floor 로 원복.
+            double factor = bear ? floor : (floor > 0 ? 1.0 / floor : 1.0);
+            long bar = dayToEpoch(today);
+            for (LivePosition pos : d.getPositions()) {
+                if (pos.getDirection() != LivePosition.Direction.LONG) continue;
+                double px = latestPrice(d, pos);
+                if (px <= 0) continue;
+                BigDecimal curQty = nz(pos.getQuantity());
+                BigDecimal targetQty = curQty.multiply(BigDecimal.valueOf(factor)).setScale(0, RoundingMode.DOWN);
+                BigDecimal diff = targetQty.subtract(curQty);
+                if (diff.signum() > 0) momentumBuy(d, pos, gateway, px, diff, "REGIME_UP", bar);
+                else if (diff.signum() < 0) momentumSell(d, pos, gateway, px, diff.abs(), "REGIME_DOWN", bar);
+            }
+            d.setRegimeBear(bear);
+            log.info("모멘텀 레짐 전환: deploymentId={}, {} → {}", deploymentId,
+                    wasBear ? "약세" : "강세", bear ? "약세" : "강세");
+        }
+        d.setLastRegimeDay(today);
+        d.setLastEvaluatedAt(Instant.now());
+        d.setUpdatedAt(Instant.now());
+        deploymentRepository.save(d);
+    }
+
+    /** 기존 보유 종목 대비 목표가 이 비율 안이면 회전 억제(스킵). */
+    private static final double REBALANCE_BAND = 0.05;
+
+    /** 심볼의 LivePosition 조회(없으면 US_STOCK으로 생성·추가). */
+    private LivePosition findOrCreatePosition(LiveStrategyDeployment d, String symbol) {
+        for (LivePosition p : d.getPositions()) {
+            if (p.getSymbol().equalsIgnoreCase(symbol)) return p;
+        }
+        LivePosition p = new LivePosition(symbol, BigDecimal.ZERO);
+        p.setAssetType("US_STOCK");
+        d.getPositions().add(p);
+        return p;
+    }
+
+    /** 모멘텀 전용 매수(명시 수량). openPosition과 달리 비중 기반이라 수량을 직접 받는다. */
+    private void momentumBuy(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
+                             double px, BigDecimal qty, String reason, long bar) {
+        if (qty == null || qty.compareTo(BigDecimal.ZERO) <= 0) return;
+        String clientOrderId = clientOrderId(d, pos, "BUY", bar);
+        if (orderLogRepository.existsByClientOrderId(clientOrderId)) return;
+        BigDecimal price = BigDecimal.valueOf(px);
+        Order order;
+        try {
+            order = gateway.placeMarketOrder(d, d.getUserId(), pos.getSymbol(), pos.getSymbol(),
+                    Order.OrderType.BUY, qty, price, "US_STOCK", clientOrderId);
+        } catch (Exception e) {
+            log.warn("모멘텀 매수 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
+            return;
+        }
+        if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return;
+        BigDecimal fill = order.getFilledPrice() != null ? order.getFilledPrice() : price;
+        BigDecimal filledQty = order.getFilledQuantity() != null && order.getFilledQuantity().compareTo(BigDecimal.ZERO) > 0
+                ? order.getFilledQuantity() : qty;
+        recordOrder(d, pos, "BUY", filledQty, fill, clientOrderId, order.getId(), reason);
+        // 평단 가중평균 갱신
+        BigDecimal oldQty = nz(pos.getQuantity());
+        BigDecimal newQty = oldQty.add(filledQty);
+        BigDecimal oldAvg = pos.getAvgPrice() != null ? pos.getAvgPrice() : fill;
+        BigDecimal newAvg = newQty.compareTo(BigDecimal.ZERO) > 0
+                ? oldAvg.multiply(oldQty).add(fill.multiply(filledQty)).divide(newQty, 10, RoundingMode.HALF_UP)
+                : fill;
+        pos.setDirection(LivePosition.Direction.LONG);
+        pos.setAvgPrice(newAvg);
+        pos.setQuantity(newQty);
+        pos.setUnits(1);
+        pos.setLastEntryPrice(fill);
+        notifyTrade(d, "모멘텀 매수 (" + reason + ")", pos.getSymbol(), fill, "ENTRY", null);
+    }
+
+    /** 모멘텀 전용 매도(명시 수량; 전량이면 포지션 리셋). 실현손익은 KRW로 환산해 누적. */
+    private void momentumSell(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
+                              double px, BigDecimal qty, String reason, long bar) {
+        BigDecimal have = nz(pos.getQuantity());
+        BigDecimal sellQty = qty.min(have);
+        if (sellQty.compareTo(BigDecimal.ZERO) <= 0) return;
+        String clientOrderId = clientOrderId(d, pos, "SELL", bar);
+        if (orderLogRepository.existsByClientOrderId(clientOrderId)) return;
+        BigDecimal price = BigDecimal.valueOf(px);
+        Order order;
+        try {
+            order = gateway.placeMarketOrder(d, d.getUserId(), pos.getSymbol(), pos.getSymbol(),
+                    Order.OrderType.SELL, sellQty, price, "US_STOCK", clientOrderId);
+        } catch (Exception e) {
+            log.warn("모멘텀 매도 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
+            return;
+        }
+        if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return;
+        BigDecimal fill = order.getFilledPrice() != null ? order.getFilledPrice() : price;
+        BigDecimal pnlUsd = pos.getAvgPrice() != null
+                ? fill.subtract(pos.getAvgPrice()).multiply(sellQty) : BigDecimal.ZERO;
+        BigDecimal pnl = pnlUsd.multiply(BigDecimal.valueOf(exchangeRateService.getUsdKrwRate()));
+        recordOrder(d, pos, "SELL", sellQty, fill, clientOrderId, order.getId(), reason);
+
+        pos.setRealizedPnl(nz(pos.getRealizedPnl()).add(pnl));
+        pos.setTradeCount(pos.getTradeCount() + 1);
+        if (pnl.compareTo(BigDecimal.ZERO) > 0) pos.setWinCount(pos.getWinCount() + 1);
+        d.setRealizedPnl(nz(d.getRealizedPnl()).add(pnl));
+        d.setTodayRealizedPnl(nz(d.getTodayRealizedPnl()).add(pnl));
+        d.setTradeCount(d.getTradeCount() + 1);
+        if (pnl.compareTo(BigDecimal.ZERO) > 0) d.setWinCount(d.getWinCount() + 1);
+
+        BigDecimal remain = have.subtract(sellQty);
+        pos.setQuantity(remain);
+        if (remain.compareTo(BigDecimal.ZERO) <= 0) resetPosition(pos);
+        notifyTrade(d, "모멘텀 매도 (" + reason + ")", pos.getSymbol(), fill, "EXIT", pnl);
+    }
+
+    /** 캐시에서 심볼의 최근 n개 (수정)종가를 시간 오름차순으로. n개 미만이면 null(상장 초기·누락 → 후보 제외). */
+    private double[] recentCloses(String symbol, int n) {
+        List<CandlestickResponse> c = momentumDataCache.get(symbol);
+        if (c == null || c.size() < n) return null;
+        c = new ArrayList<>(c);
+        c.sort(Comparator.comparingLong(CandlestickResponse::getTime));
+        double[] out = new double[n];
+        int from = c.size() - n;
+        for (int i = 0; i < n; i++) out[i] = c.get(from + i).getClose();
+        return out;
+    }
+
+    /** SPY가 200일 SMA 아래면 약세 레짐(true). 데이터 부족 시 강세로 간주(false, 보수적 미축소). */
+    private boolean isRegimeBear() {
+        List<CandlestickResponse> spy = momentumDataCache.get(MomentumUniverse.SPY_SYMBOL);
+        if (spy == null || spy.size() < 200) return false;
+        spy = new ArrayList<>(spy);
+        spy.sort(Comparator.comparingLong(CandlestickResponse::getTime));
+        int n = spy.size();
+        double sum = 0;
+        for (int i = n - 200; i < n; i++) sum += spy.get(i).getClose();
+        double sma = sum / 200.0;
+        return spy.get(n - 1).getClose() < sma;
+    }
+
+    private static long ymToEpoch(String yyyymm) {
+        return YearMonth.parse(yyyymm).atDay(1).atStartOfDay(KST).toEpochSecond();
+    }
+
+    private static long dayToEpoch(String yyyymmdd) {
+        return LocalDate.parse(yyyymmdd).atStartOfDay(KST).toEpochSecond();
+    }
+
+    /** 모멘텀 로테이션 RUNNING 배포 목록(스케줄러용). */
+    public List<LiveStrategyDeployment> getRunningMomentumDeployments() {
+        return getRunningDeployments().stream().filter(LiveStrategyDeployment::isMomentumRotation).toList();
     }
 
     public List<LiveStrategyDeployment> getUserDeployments(String userId) {
@@ -430,6 +792,10 @@ public class LiveStrategyService {
         }
         if (d.getStatus() != LiveStrategyDeployment.Status.RUNNING) {
             throw new IllegalArgumentException("가동 중(RUNNING)인 배포만 평가할 수 있습니다.");
+        }
+        // 모멘텀 로테이션은 시그널 평가가 아니라 즉시 리밸런싱(레짐+월간)을 수행한다.
+        if (d.isMomentumRotation()) {
+            return rebalanceMomentumNow(userId, deploymentId);
         }
         evaluateDeployment(d);
         return deploymentRepository.findById(deploymentId).orElse(d);

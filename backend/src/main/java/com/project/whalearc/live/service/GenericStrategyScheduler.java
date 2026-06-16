@@ -37,6 +37,8 @@ public class GenericStrategyScheduler {
         log.info("라이브 스케줄러: {}개 배포 시그널 체크 시작", running.size());
         int executed = 0;
         for (LiveStrategyDeployment d : running) {
+            // 모멘텀 로테이션은 시그널 평가 대상이 아님 — 전용 MomentumRotationScheduler(일간)가 담당.
+            if (d.isMomentumRotation()) continue;
             try {
                 liveStrategyService.evaluateDeployment(d);
                 executed++;

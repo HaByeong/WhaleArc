@@ -85,9 +85,17 @@ public class LiveStrategyService {
     /** 전역 킬스위치 — 켜지면 스케줄러가 모든 평가를 건너뛴다. */
     private final AtomicBoolean killSwitch = new AtomicBoolean(false);
 
-    /** 실거래(KIS) 1건당 할당 상한(KRW) — 팻핑거 방지 가드. 소액 검증 후 config로 상향. (null=미설정 시 무제한) */
+    /** 실전(real=true) KIS 1건당 할당 상한(KRW) — 실제 돈 팻핑거 방지 가드. 소액 유지. (null=무제한) */
     @org.springframework.beans.factory.annotation.Value("${live.broker.kis.max-allocated-krw:100000}")
     private BigDecimal kisMaxAllocatedKrw;
+
+    /** 모의투자(real=false) KIS 1건당 할당 상한(KRW) — 가상자금이라 검증 편의를 위해 크게. (null=무제한) */
+    @org.springframework.beans.factory.annotation.Value("${live.broker.kis.paper-max-allocated-krw:100000000}")
+    private BigDecimal kisPaperMaxAllocatedKrw;
+
+    /** KIS 실전 여부(KisPaperTradeClient와 동일 플래그). 모드별 할당 상한 선택에 사용. */
+    @org.springframework.beans.factory.annotation.Value("${live.broker.kis.real:false}")
+    private boolean kisRealTrading;
 
     /** 실거래(Bitget) 1건당 할당 상한(KRW) — KIS와 동일한 팻핑거 방지 가드. */
     @org.springframework.beans.factory.annotation.Value("${live.broker.bitget.max-allocated-krw:100000}")
@@ -170,13 +178,8 @@ public class LiveStrategyService {
         // 처리 가능한 게이트웨이가 없으면 거부 (MOCK 외 미지원이면 실계좌 자동 차단)
         resolveGateway(brokerType);
 
-        // 실거래(KIS) 1건당 할당 상한 가드 — 팻핑거로 큰 실주문이 나가는 사고 방지(소액 검증 단계)
-        if (brokerType == LiveStrategyDeployment.BrokerType.KIS
-                && kisMaxAllocatedKrw != null
-                && allocatedCash.compareTo(kisMaxAllocatedKrw) > 0) {
-            throw new IllegalArgumentException(
-                    "실거래(KIS) 1건당 할당 한도(" + kisMaxAllocatedKrw + "원)를 초과했습니다. 소액으로 먼저 검증한 뒤 한도를 올리세요.");
-        }
+        // KIS 1건당 할당 상한 가드 — 모드별(실전=소액, 모의=크게)
+        if (brokerType == LiveStrategyDeployment.BrokerType.KIS) checkKisCap(allocatedCash);
         // 실거래(Bitget) 1건당 할당 상한 가드 — KIS와 동일
         if (brokerType == LiveStrategyDeployment.BrokerType.BITGET
                 && bitgetMaxAllocatedKrw != null
@@ -279,6 +282,16 @@ public class LiveStrategyService {
      * 버킷으로 옮기지 않고 cashBalance를 단일 출처로 유지(터틀 이중트랙 정합성 문제 회피). 정지(STOPPED)는
      * 자동 예약 해제됨. 락이 없으면 동시 2건 생성이 같은 reserved를 읽어 둘 다 통과할 수 있다.
      */
+    /** KIS 모드별 1건당 할당 상한. 실전(real=true)=소액 가드, 모의투자(real=false)=가상자금이라 크게. */
+    private void checkKisCap(BigDecimal allocatedCash) {
+        BigDecimal cap = kisRealTrading ? kisMaxAllocatedKrw : kisPaperMaxAllocatedKrw;
+        if (cap != null && allocatedCash.compareTo(cap) > 0) {
+            throw new IllegalArgumentException(
+                    (kisRealTrading ? "실거래(KIS 실전)" : "KIS 모의투자") + " 1건당 할당 한도(" + cap + "원)를 초과했습니다."
+                            + (kisRealTrading ? " 소액으로 먼저 검증한 뒤 한도를 올리세요." : ""));
+        }
+    }
+
     private LiveStrategyDeployment reserveAndSave(String userId, LiveStrategyDeployment d, BigDecimal allocatedCash) {
         return userLockRegistry.withLock(userId, () -> {
             Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
@@ -332,11 +345,7 @@ public class LiveStrategyService {
         }
         resolveGateway(brokerType);   // 게이트웨이 없으면(예: KIS 비활성) 거부
 
-        if (brokerType == LiveStrategyDeployment.BrokerType.KIS
-                && kisMaxAllocatedKrw != null && allocatedCash.compareTo(kisMaxAllocatedKrw) > 0) {
-            throw new IllegalArgumentException(
-                    "실거래(KIS) 1건당 할당 한도(" + kisMaxAllocatedKrw + "원)를 초과했습니다. 소액으로 먼저 검증한 뒤 한도를 올리세요.");
-        }
+        if (brokerType == LiveStrategyDeployment.BrokerType.KIS) checkKisCap(allocatedCash);
 
         int topN = req.getRotationTopN() != null && req.getRotationTopN() > 0 ? req.getRotationTopN() : 5;
         if (topN < 1 || topN > 20) throw new IllegalArgumentException("top-N은 1~20 사이여야 합니다.");
@@ -462,6 +471,12 @@ public class LiveStrategyService {
             BigDecimal targetQty = perTargetKrw.divide(krwPerShare, 0, RoundingMode.DOWN);
             BigDecimal curQty = nz(pos.getQuantity());
             BigDecimal diff = targetQty.subtract(curQty);
+            log.info("모멘텀 종목 사이징: {} px=${} 1주={}원 목표비중={}원 → 목표 {}주(보유 {}주, diff {})",
+                    r.symbol(), px, krwPerShare.toBigInteger(), perTargetKrw.toBigInteger(), targetQty, curQty, diff);
+            if (targetQty.signum() == 0 && curQty.signum() == 0) {
+                log.warn("모멘텀 매수 불가(1주 가격 > 종목당 배분액): {} 1주={}원 > 배분 {}원. 할당 증액 또는 top-N 축소 필요.",
+                        r.symbol(), krwPerShare.toBigInteger(), perTargetKrw.toBigInteger());
+            }
             if (diff.signum() == 0) continue;
             // 밴드: 기존 보유 종목은 목표 대비 ±REBALANCE_BAND 안이면 회전 억제(스킵). 신규(curQty=0)는 항상 매수.
             if (curQty.signum() > 0 && targetQty.signum() > 0) {

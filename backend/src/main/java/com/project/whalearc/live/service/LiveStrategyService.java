@@ -363,6 +363,7 @@ public class LiveStrategyService {
         d.setRotationRegimeFilter(req.getRotationRegimeFilter() == null || req.getRotationRegimeFilter());
         d.setRotationRegimeFloor(req.getRotationRegimeFloor() != null && req.getRotationRegimeFloor() > 0
                 ? req.getRotationRegimeFloor() : 0.5);
+        d.setRotationFullInvest(Boolean.TRUE.equals(req.getRotationFullInvest()));
         d.setRotationUniverse(req.getRotationUniverse() != null && !req.getRotationUniverse().isEmpty()
                 ? new ArrayList<>(req.getRotationUniverse()) : null);
         d.setTargetAssets(new ArrayList<>());        // 첫 로테이션이 채움
@@ -458,15 +459,21 @@ public class LiveStrategyService {
             pxBySymbol.put(r.symbol(), px);
             krwPerShare.put(r.symbol(), px > 0 ? px * usdKrw : 0.0);
         }
-        Map<String, Integer> targetShares = allocateShares(ranked, investKrw, krwPerShare);
+        boolean fullInvest = d.isRotationFullInvest();
+        Map<String, Integer> targetShares = allocateShares(ranked, investKrw, krwPerShare, fullInvest);
 
-        // 최소자본 가드: 1주도 못 받는 종목이 있으면 경고(균등비중 왜곡 — 자본 부족). 권장 최소 = topN × 최고가 1주.
+        // 최소자본 가드: 1주도 못 받는 종목이 있으면 경고. 자본최대활용 모드는 의도된 집중이라 경고 톤만 낮춤.
         double maxShare = krwPerShare.values().stream().mapToDouble(Double::doubleValue).max().orElse(0);
         List<String> unfunded = ranked.stream().map(MomentumRanker.Ranked::symbol)
                 .filter(s -> targetShares.getOrDefault(s, 0) == 0).toList();
         if (!unfunded.isEmpty()) {
-            log.warn("모멘텀 자본 부족: 투입 {}원으론 {}종목이 0주(균등비중 왜곡). 미편입={}. top{} 균등비중 권장 최소 ≈ {}원.",
-                    (long) investKrw, unfunded.size(), unfunded, topN, (long) (maxShare * topN));
+            if (fullInvest) {
+                log.info("모멘텀 자본최대활용: 투입 {}원으로 {}종목 미편입(가격 편향·집중). 미편입={}. 균등비중 권장 최소 ≈ {}원.",
+                        (long) investKrw, unfunded.size(), unfunded, (long) (maxShare * topN));
+            } else {
+                log.warn("모멘텀 자본 부족: 투입 {}원으론 {}종목이 0주(균등비중 왜곡). 미편입={}. top{} 균등비중 권장 최소 ≈ {}원.",
+                        (long) investKrw, unfunded.size(), unfunded, topN, (long) (maxShare * topN));
+            }
         }
 
         // 4) 매도: 현 보유 중 목표에 없는 종목 전량 청산
@@ -566,24 +573,49 @@ public class LiveStrategyService {
      * @return 심볼 → 목표 주수
      */
     private Map<String, Integer> allocateShares(List<MomentumRanker.Ranked> ranked, double investKrw,
-                                                Map<String, Double> krwPerShare) {
+                                                Map<String, Double> krwPerShare, boolean fullInvest) {
         Map<String, Integer> shares = new HashMap<>();
         int n = ranked.size();
         if (n == 0 || investKrw <= 0) return shares;
         double target = investKrw / n;                              // 종목당 균등 가치
-        double cap = target + MOMENTUM_WEIGHT_BAND * investKrw;      // 과편입 방지(비중밴드 상한)
-        Map<String, Double> remainder = new HashMap<>();
         double spent = 0;
         for (MomentumRanker.Ranked r : ranked) {
             double p = krwPerShare.getOrDefault(r.symbol(), 0.0);
             int f = p > 0 ? (int) Math.floor(target / p) : 0;
             shares.put(r.symbol(), f);
             spent += f * p;
-            remainder.put(r.symbol(), p > 0 ? (target / p - f) : -1);   // 가격 미상은 후순위
         }
-        // 남은 예산을 잉여 큰 순서로 1주씩(단일 패스): 예산 내 + 비중밴드 내에서만
         double leftover = investKrw - spent;
-        List<String> byRemainder = new ArrayList<>(remainder.keySet());
+
+        if (fullInvest) {
+            // 자본 최대 활용(bin-packing): 비중밴드 무시. 살 수 있는 한, 매번 '가장 미달인'(목표 대비) 종목에
+            // 1주씩 반복 매수해 예산을 최대한 소진한다. 소액에선 싼 종목에 집중되고(가격 편향), 자본이 크면
+            // 자연히 균등비중으로 수렴한다. leftover가 매회 최소 1주값 이상 줄어 반드시 종료.
+            while (true) {
+                String pick = null;
+                double mostUnderfunded = Double.NEGATIVE_INFINITY;   // 목표 초과(음수 deficit)라도 살 수 있으면 매수
+                for (MomentumRanker.Ranked r : ranked) {
+                    double p = krwPerShare.getOrDefault(r.symbol(), 0.0);
+                    if (p <= 0 || p > leftover) continue;            // 가격 미상·예산 초과 제외
+                    double deficit = target - shares.get(r.symbol()) * p;   // 클수록 미달(균형 우선)
+                    if (deficit > mostUnderfunded) { mostUnderfunded = deficit; pick = r.symbol(); }
+                }
+                if (pick == null) break;
+                shares.put(pick, shares.get(pick) + 1);
+                leftover -= krwPerShare.get(pick);
+            }
+            return shares;
+        }
+
+        // 균등비중(기본): 남은 예산을 잉여 큰 순서로 1주씩(단일 패스), 예산 내 + 비중밴드(과편입 방지) 내에서만.
+        double cap = target + MOMENTUM_WEIGHT_BAND * investKrw;
+        List<String> byRemainder = new ArrayList<>();
+        Map<String, Double> remainder = new HashMap<>();
+        for (MomentumRanker.Ranked r : ranked) {
+            double p = krwPerShare.getOrDefault(r.symbol(), 0.0);
+            remainder.put(r.symbol(), p > 0 ? (target / p - shares.get(r.symbol())) : -1);
+            byRemainder.add(r.symbol());
+        }
         byRemainder.sort((a, b) -> Double.compare(remainder.get(b), remainder.get(a)));
         for (String s : byRemainder) {
             double p = krwPerShare.getOrDefault(s, 0.0);

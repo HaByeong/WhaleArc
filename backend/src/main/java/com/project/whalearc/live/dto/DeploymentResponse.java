@@ -47,6 +47,7 @@ public class DeploymentResponse {
     private final Integer rotationTopN;
     private final Integer rotationLookbackDays;
     private final Boolean rotationRegimeFilter;
+    private final Boolean rotationFullInvest;     // 자본 최대 활용 모드
     private final Boolean regimeBear;             // 현재 레짐 약세 여부
     private final List<String> currentTopHoldings;// 현 보유 top-N 심볼
     private final String lastRotationMonth;       // 마지막 리밸런싱 달(yyyy-MM)
@@ -84,6 +85,7 @@ public class DeploymentResponse {
         this.rotationTopN = d.getRotationTopN();
         this.rotationLookbackDays = d.getRotationLookbackDays();
         this.rotationRegimeFilter = d.getRotationRegimeFilter();
+        this.rotationFullInvest = d.isMomentumRotation() ? d.isRotationFullInvest() : null;
         this.regimeBear = d.isMomentumRotation() ? d.isRegimeBear() : null;
         this.currentTopHoldings = d.getCurrentTopHoldings() != null ? d.getCurrentTopHoldings() : List.of();
         this.lastRotationMonth = d.getLastRotationMonth();

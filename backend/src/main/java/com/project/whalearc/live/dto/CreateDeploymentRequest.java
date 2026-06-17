@@ -38,6 +38,7 @@ public class CreateDeploymentRequest {
     private Integer rotationLookbackDays;
     private Boolean rotationRegimeFilter;
     private Double rotationRegimeFloor;
+    private Boolean rotationFullInvest;   // 자본 최대 활용(bin-packing) 모드, null/false=균등비중
     private List<String> rotationUniverse;
 
     // 매매 방향: null/LONG_ONLY(롱만) / LONG_SHORT_FLAT(독립 롱+숏+flat)

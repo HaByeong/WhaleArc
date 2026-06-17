@@ -409,6 +409,7 @@ const AutoTradePage = () => {
             rotationLookbackDays: momentum.lookbackDays,
             rotationRegimeFilter: momentum.regimeFilter,
             rotationRegimeFloor: momentum.regimeFloor,
+            rotationFullInvest: momentum.fullInvest,
             allocatedCash,
             assetType: 'US_STOCK',
             interval: '1d',
@@ -723,7 +724,7 @@ const AutoTradePage = () => {
                     {/* 메타 칩 */}
                     <div className="flex flex-wrap gap-1.5">
                       {d.deploymentType === 'MOMENTUM_ROTATION'
-                        ? <Chip>모멘텀 Top{d.rotationTopN ?? 5} · 월간</Chip>
+                        ? <Chip>모멘텀 Top{d.rotationTopN ?? 5} · 월간{d.rotationFullInvest ? ' · 최대활용' : ''}</Chip>
                         : <Chip>{INTERVAL_LABELS[d.interval] ?? d.interval}</Chip>}
                       <Chip>{isLive ? '실거래' : '모의'} {formatKRW(d.allocatedCash)}</Chip>
                       {isLive && <Chip>{modeBadge}</Chip>}
@@ -1185,6 +1186,14 @@ const AutoTradePage = () => {
                     <input type="checkbox" checked={momentum.regimeFilter}
                       onChange={e => setMomentum({ ...momentum, regimeFilter: e.target.checked })} />
                     <span className={`text-[11px] ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>SPY 200일선 레짐 필터 (약세장에서 노출 ×{momentum.regimeFloor})</span>
+                  </label>
+                  <label className="flex items-start gap-2 mt-1.5 cursor-pointer">
+                    <input type="checkbox" className="mt-0.5" checked={!!momentum.fullInvest}
+                      onChange={e => setMomentum({ ...momentum, fullInvest: e.target.checked })} />
+                    <span className={`text-[11px] ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
+                      자본 최대 활용 (소액용) — 균등비중 대신 살 수 있는 만큼 매수해 할당금을 최대한 소진.
+                      <b className={isDark ? 'text-amber-300' : 'text-amber-600'}> 단 소액이면 싼 종목에 집중</b>돼 검증된 균등비중과 거동이 달라집니다.
+                    </span>
                   </label>
                   <p className={`text-[10.5px] mt-1.5 ${subText}`}>
                     매월 첫 거래일, 미국 대형주 132종목을 {momentum.lookbackDays}거래일 모멘텀으로 랭킹해 상위 {momentum.topN}종목을 각 {(100 / momentum.topN).toFixed(0)}%씩 보유(양수 모멘텀만, 없으면 현금). KIS 해외주식 1배·월간 리밸런싱.

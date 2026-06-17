@@ -63,6 +63,7 @@ export interface Deployment {
   rotationTopN?: number;
   rotationLookbackDays?: number;
   rotationRegimeFilter?: boolean;
+  rotationFullInvest?: boolean;     // 자본 최대 활용 모드
   regimeBear?: boolean | null;      // 현재 레짐 약세 여부
   currentTopHoldings?: string[];    // 현 보유 top-N 심볼
   lastRotationMonth?: string;       // 마지막 리밸런싱 달(yyyy-MM)
@@ -99,6 +100,7 @@ export interface CreateDeploymentRequest {
   rotationLookbackDays?: number;
   rotationRegimeFilter?: boolean;
   rotationRegimeFloor?: number;
+  rotationFullInvest?: boolean;     // 자본 최대 활용(bin-packing) 모드
   rotationUniverse?: string[];
 }
 

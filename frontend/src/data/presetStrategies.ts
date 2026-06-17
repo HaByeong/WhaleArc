@@ -29,8 +29,9 @@ export interface MomentumParams {
   regimeFilter: boolean; // SPY 200SMA 레짐 필터
   regimeFloor: number;   // 약세장 노출 비율 (기본 0.5)
   rebalanceBandPct: number; // 잔존 비중 유지 밴드(±%p)
+  fullInvest?: boolean;  // 자본 최대 활용(bin-packing). true면 균등비중 풀고 예산 최대 소진(소액 적합)
 }
-export const MOMENTUM_DEFAULTS: MomentumParams = { topN: 5, lookbackDays: 252, regimeFilter: true, regimeFloor: 0.5, rebalanceBandPct: 3 };
+export const MOMENTUM_DEFAULTS: MomentumParams = { topN: 5, lookbackDays: 252, regimeFilter: true, regimeFloor: 0.5, rebalanceBandPct: 3, fullInvest: false };
 
 // ── 터틀 트레이딩 파라미터화 ──
 // 백엔드는 임의 기간 DONCHIAN_HIGH_<n>/DONCHIAN_LOW_<n> 와 ADX 임계값을 그대로 지원하므로,

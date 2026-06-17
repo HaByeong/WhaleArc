@@ -514,6 +514,37 @@ class LiveStrategyServiceTest {
     }
 
     @Test
+    void momentumRotation_fullInvestSpendsBudgetOnAffordableNames() {
+        // 자본 최대 활용 모드: 비싼 AAA/CCC(1주 52만)는 못 사고, 싼 BBB(1주 8만)에 예산을 몰아 2주 매수.
+        // 기본(균등비중)이면 슬라이스(20만/3≈6.7만)<BBB 8만이라 0주(현금). 둘을 대비 검증.
+        when(momentumDataCache.get("AAA")).thenReturn(trend(30, 100, 300));
+        when(momentumDataCache.get("BBB")).thenReturn(trend(30, 100, 250));
+        when(momentumDataCache.get("CCC")).thenReturn(trend(30, 100, 200));
+        when(candlestickService.getCandlesticks(eq("AAA"), anyString(), anyString())).thenReturn(flatCandles(5, 520));
+        when(candlestickService.getCandlesticks(eq("BBB"), anyString(), anyString())).thenReturn(flatCandles(5, 80));
+        when(candlestickService.getCandlesticks(eq("CCC"), anyString(), anyString())).thenReturn(flatCandles(5, 520));
+        when(exchangeRateService.getUsdKrwRate()).thenReturn(1000.0);
+
+        // 기본(균등비중): 200,000 / 3 ≈ 66,667 슬라이스 < BBB 80,000 → 전부 0주(현금)
+        LiveStrategyDeployment def = momentumDeployment(3, 200_000);
+        svc.rebalanceMomentum(def);
+        assertTrue(gateway.placed.isEmpty(), "균등비중 기본 모드는 슬라이스<1주값이라 매수 없음");
+
+        // 자본최대활용: BBB(8만)에 예산 소진 → 2주(16만), 잔여 4만<1주
+        LiveStrategyDeployment full = momentumDeployment(3, 200_000);
+        full.setRotationFullInvest(true);
+        svc.rebalanceMomentum(full);
+        LiveStrategyDeployment saved = store.get("mom1");
+        BigDecimal bbb = saved.getPositions().stream().filter(p -> p.getSymbol().equals("BBB"))
+                .map(LivePosition::getQuantity).findFirst().orElse(BigDecimal.ZERO);
+        assertEquals(0, bbb.compareTo(BigDecimal.valueOf(2)), "자본최대활용: 싼 BBB 2주로 예산 소진, 실제 " + bbb);
+        assertTrue(saved.getPositions().stream().filter(p -> !p.getSymbol().equals("BBB"))
+                .allMatch(p -> nz(p.getQuantity()).signum() == 0), "비싼 AAA/CCC는 미편입");
+    }
+
+    private static BigDecimal nz(BigDecimal v) { return v != null ? v : BigDecimal.ZERO; }
+
+    @Test
     void momentumRotation_allNegativeGoesToCash() {
         when(momentumDataCache.get("AAA")).thenReturn(trend(30, 300, 100));   // 하락
         when(momentumDataCache.get("BBB")).thenReturn(trend(30, 200, 120));   // 하락

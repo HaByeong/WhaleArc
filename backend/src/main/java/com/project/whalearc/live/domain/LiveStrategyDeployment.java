@@ -57,6 +57,9 @@ public class LiveStrategyDeployment {
     private Integer rotationLookbackDays;  // 모멘텀 룩백 거래일(기본 252)
     private Boolean rotationRegimeFilter;  // SPY 200SMA 레짐 필터 사용
     private Double rotationRegimeFloor;    // 약세장 노출 배수(기본 0.5)
+    // 자본 최대 활용(bin-packing) 모드. true면 비중밴드를 풀고 할당금을 최대한 소진(살 수 있는 한 매수).
+    // 소액에서 비싼 상위종목 대신 싼 종목에 집중됨(가격 편향) — 검증된 균등비중과 다른 거동. 기본 false(균등비중).
+    private boolean rotationFullInvest;
     private List<String> rotationUniverse; // null이면 내장 132종목 유니버스
     private boolean regimeBear;            // 현재 레짐 약세 여부(상태)
     private List<String> currentTopHoldings = new ArrayList<>(); // 현 보유 top-N 심볼(표시/추적용)

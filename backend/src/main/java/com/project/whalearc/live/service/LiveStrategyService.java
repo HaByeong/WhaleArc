@@ -476,11 +476,14 @@ public class LiveStrategyService {
             }
         }
 
+        boolean allFilled = true;   // 모든 의도 주문이 체결/무동작이면 true. 하나라도 실패(장 마감·거부)면 false → 이번 달 미완료로 두고 재시도.
+
         // 4) 매도: 현 보유 중 목표에 없는 종목 전량 청산
         for (LivePosition pos : d.getPositions()) {
             if (pos.getDirection() == LivePosition.Direction.LONG && !targetSymbols.contains(pos.getSymbol())) {
                 double px = momentumPrice(d, pos);
-                if (px > 0) momentumSell(d, pos, gateway, px, nz(pos.getQuantity()), "ROTATION_OUT", bar);
+                if (px > 0) allFilled &= momentumSell(d, pos, gateway, px, nz(pos.getQuantity()), "ROTATION_OUT", bar);
+                else allFilled = false;   // 가격 못 구함 → 미완료
             }
         }
 
@@ -500,23 +503,31 @@ public class LiveStrategyService {
                 double ratio = Math.abs(diff.doubleValue()) / targetQty.doubleValue();
                 if (ratio < REBALANCE_BAND) continue;
             }
-            if (diff.signum() > 0) momentumBuy(d, pos, gateway, px, diff, "ROTATION_IN", bar);
-            else momentumSell(d, pos, gateway, px, diff.abs(), "ROTATION_TRIM", bar);
+            boolean ok = diff.signum() > 0
+                    ? momentumBuy(d, pos, gateway, px, diff, "ROTATION_IN", bar)
+                    : momentumSell(d, pos, gateway, px, diff.abs(), "ROTATION_TRIM", bar);
+            allFilled &= ok;
         }
 
-        // 6) 상태 갱신
+        // 6) 상태 갱신 — 모든 주문이 체결됐을 때만 '이번 달 완료'로 멱등 마킹. 장 마감·거부로 일부 실패면
+        //    미완료로 남겨 다음 세션(스케줄러 다음 주기)에 자동 재시도. 부분 체결 포지션은 그대로 영속.
         List<String> held = new ArrayList<>();
         for (MomentumRanker.Ranked r : ranked) held.add(r.symbol());
         d.setCurrentTopHoldings(held);
         d.setRegimeBear(bear);
-        d.setLastRotationMonth(month);
-        d.setLastRegimeDay(LocalDate.now(KST).toString());   // 리밸런싱이 레짐 기준선도 갱신(일간과 이중적용 방지)
+        d.setLastRegimeDay(LocalDate.now(KST).toString());   // 레짐은 평가됨(일간과 이중적용 방지)
         d.setTargetAssets(new ArrayList<>(targetSymbols));
         d.setLastEvaluatedAt(Instant.now());
         d.setUpdatedAt(Instant.now());
+        if (allFilled) {
+            d.setLastRotationMonth(month);   // 완전 실행 → 이번 달 멱등 마킹
+        } else {
+            log.warn("모멘텀 리밸런싱 부분 실행(장 마감/주문 거부 가능): deploymentId={} — 이번 달 미완료로 두고 다음 세션 재시도", deploymentId);
+        }
         deploymentRepository.save(d);
-        log.info("모멘텀 리밸런싱 완료: deploymentId={}, month={}, top{}={}, 레짐={}",
-                deploymentId, month, topN, held, bear ? "약세(×" + d.effectiveRegimeFloor() + ")" : "강세");
+        log.info("모멘텀 리밸런싱 {}: deploymentId={}, month={}, top{}={}, 레짐={}",
+                allFilled ? "완료" : "부분(재시도 예정)", deploymentId, month, topN, held,
+                bear ? "약세(×" + d.effectiveRegimeFloor() + ")" : "강세");
     }
 
     private void doApplyRegimeLocked(String deploymentId) {
@@ -640,12 +651,15 @@ public class LiveStrategyService {
         return p;
     }
 
-    /** 모멘텀 전용 매수(명시 수량). openPosition과 달리 비중 기반이라 수량을 직접 받는다. */
-    private void momentumBuy(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
+    /**
+     * 모멘텀 전용 매수(명시 수량). openPosition과 달리 비중 기반이라 수량을 직접 받는다.
+     * @return true=체결됨 또는 할 것 없음(이미 처리/수량0), false=발주 시도했으나 실패(장 마감·거부 등) → 재시도 대상
+     */
+    private boolean momentumBuy(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
                              double px, BigDecimal qty, String reason, long bar) {
-        if (qty == null || qty.compareTo(BigDecimal.ZERO) <= 0) return;
+        if (qty == null || qty.compareTo(BigDecimal.ZERO) <= 0) return true;
         String clientOrderId = clientOrderId(d, pos, "BUY", bar);
-        if (orderLogRepository.existsByClientOrderId(clientOrderId)) return;
+        if (orderLogRepository.existsByClientOrderId(clientOrderId)) return true;   // 이미 발주됨(멱등)
         BigDecimal price = BigDecimal.valueOf(px);
         Order order;
         try {
@@ -653,9 +667,9 @@ public class LiveStrategyService {
                     Order.OrderType.BUY, qty, price, "US_STOCK", clientOrderId);
         } catch (Exception e) {
             log.warn("모멘텀 매수 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
-            return;
+            return false;
         }
-        if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return;
+        if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return false;
         BigDecimal fill = order.getFilledPrice() != null ? order.getFilledPrice() : price;
         BigDecimal filledQty = order.getFilledQuantity() != null && order.getFilledQuantity().compareTo(BigDecimal.ZERO) > 0
                 ? order.getFilledQuantity() : qty;
@@ -673,16 +687,20 @@ public class LiveStrategyService {
         pos.setUnits(1);
         pos.setLastEntryPrice(fill);
         notifyTrade(d, "모멘텀 매수 (" + reason + ")", pos.getSymbol(), fill, "ENTRY", null);
+        return true;
     }
 
-    /** 모멘텀 전용 매도(명시 수량; 전량이면 포지션 리셋). 실현손익은 KRW로 환산해 누적. */
-    private void momentumSell(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
+    /**
+     * 모멘텀 전용 매도(명시 수량; 전량이면 포지션 리셋). 실현손익은 KRW로 환산해 누적.
+     * @return true=체결됨 또는 할 것 없음, false=발주 시도했으나 실패(재시도 대상)
+     */
+    private boolean momentumSell(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
                               double px, BigDecimal qty, String reason, long bar) {
         BigDecimal have = nz(pos.getQuantity());
         BigDecimal sellQty = qty.min(have);
-        if (sellQty.compareTo(BigDecimal.ZERO) <= 0) return;
+        if (sellQty.compareTo(BigDecimal.ZERO) <= 0) return true;
         String clientOrderId = clientOrderId(d, pos, "SELL", bar);
-        if (orderLogRepository.existsByClientOrderId(clientOrderId)) return;
+        if (orderLogRepository.existsByClientOrderId(clientOrderId)) return true;
         BigDecimal price = BigDecimal.valueOf(px);
         Order order;
         try {
@@ -690,9 +708,9 @@ public class LiveStrategyService {
                     Order.OrderType.SELL, sellQty, price, "US_STOCK", clientOrderId);
         } catch (Exception e) {
             log.warn("모멘텀 매도 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
-            return;
+            return false;
         }
-        if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return;
+        if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return false;
         BigDecimal fill = order.getFilledPrice() != null ? order.getFilledPrice() : price;
         BigDecimal pnlUsd = pos.getAvgPrice() != null
                 ? fill.subtract(pos.getAvgPrice()).multiply(sellQty) : BigDecimal.ZERO;
@@ -711,6 +729,7 @@ public class LiveStrategyService {
         pos.setQuantity(remain);
         if (remain.compareTo(BigDecimal.ZERO) <= 0) resetPosition(pos);
         notifyTrade(d, "모멘텀 매도 (" + reason + ")", pos.getSymbol(), fill, "EXIT", pnl);
+        return true;
     }
 
     /**

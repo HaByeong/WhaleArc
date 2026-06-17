@@ -62,12 +62,14 @@ class LiveStrategyServiceTest {
     /** 발주 내역을 기록하고 항상 FILLED를 반환하는 가짜 MOCK 게이트웨이. */
     static class RecordingGateway implements OrderGateway {
         final List<Order> placed = new ArrayList<>();
+        boolean reject = false;   // true면 주문을 거부(예외) — 장 마감/거부 시나리오 모사
         @Override public boolean supports(LiveStrategyDeployment.BrokerType b) {
             return b == LiveStrategyDeployment.BrokerType.MOCK;
         }
         @Override public Order placeMarketOrder(LiveStrategyDeployment deployment, String userId, String code, String name,
                                                 Order.OrderType side, BigDecimal quantity, BigDecimal price,
                                                 String assetType, String clientOrderId) {
+            if (reject) throw new IllegalStateException("주문 거부(장 운영시간 아님)");
             Order o = new Order();
             o.setUserId(userId);
             o.setStockCode(code);
@@ -543,6 +545,31 @@ class LiveStrategyServiceTest {
     }
 
     private static BigDecimal nz(BigDecimal v) { return v != null ? v : BigDecimal.ZERO; }
+
+    @Test
+    void momentumRotation_rejectedOrdersLeaveMonthUnmarkedForRetry() {
+        // 장 마감/거부로 주문이 안 나가면 lastRotationMonth를 찍지 않아 다음 세션에 재시도되어야 한다.
+        when(momentumDataCache.get("AAA")).thenReturn(trend(30, 100, 300));
+        when(momentumDataCache.get("BBB")).thenReturn(trend(30, 100, 150));
+        when(momentumDataCache.get("CCC")).thenReturn(trend(30, 100, 50));
+        when(candlestickService.getCandlesticks(anyString(), anyString(), anyString())).thenReturn(flatCandles(5, 100));
+        when(exchangeRateService.getUsdKrwRate()).thenReturn(1300.0);
+        gateway.reject = true;   // 모든 주문 거부
+
+        LiveStrategyDeployment d = momentumDeployment(2, 2_600_000);
+        svc.rebalanceMomentum(d);
+
+        LiveStrategyDeployment saved = store.get("mom1");
+        assertNull(saved.getLastRotationMonth(), "거부로 미체결 → 이번 달 미완료(재시도 위해 마킹 안 함)");
+        assertTrue(saved.getPositions().stream().allMatch(p -> nz(p.getQuantity()).signum() == 0), "체결 0");
+
+        // 장 열림(거부 해제) 후 재호출 → 이제 체결되고 월 마킹
+        gateway.reject = false;
+        svc.rebalanceMomentum(d);
+        saved = store.get("mom1");
+        assertNotNull(saved.getLastRotationMonth(), "재시도 시 체결 → 월 마킹");
+        assertFalse(gateway.placed.isEmpty(), "재시도 매수 발생");
+    }
 
     @Test
     void momentumRotation_allNegativeGoesToCash() {

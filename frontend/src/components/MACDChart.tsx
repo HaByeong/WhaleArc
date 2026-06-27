@@ -321,7 +321,7 @@ export default function MACDChart() {
 
   return (
     <div>
-      <div className="flex gap-4 flex-wrap mb-2.5 text-[12px] text-gray-500">
+      <div className="flex gap-4 flex-wrap mb-2.5 text-[13px] text-gray-500">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: '#2962ff' }} />MACD
         </span>
@@ -332,11 +332,11 @@ export default function MACDChart() {
           <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: 'rgba(38,166,154,0.6)' }} />Histogram
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[9px] text-white font-semibold" style={{ background: '#26a69a' }}>G</span>
+          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] text-white font-semibold" style={{ background: '#26a69a' }}>G</span>
           MACD 골든크로스
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[9px] text-white font-semibold" style={{ background: '#ef5350' }}>D</span>
+          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] text-white font-semibold" style={{ background: '#ef5350' }}>D</span>
           MACD 데드크로스
         </span>
       </div>
@@ -354,7 +354,7 @@ export default function MACDChart() {
           </div>
         )}
       </div>
-      <div className="mt-2.5 text-[13px] min-h-[20px]">
+      <div className="mt-2.5 text-[14px] min-h-[20px]">
         {statusText && <span style={{ color: statusColor }}>{statusLabel}</span>}
       </div>
     </div>

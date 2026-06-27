@@ -115,6 +115,14 @@ public class KisApiClient {
                         new TypeReference<Map<String, Object>>() {});
 
                 String token = (String) result.get("access_token");
+                if (token == null || token.isBlank()) {
+                    // HTTP 200이라도 access_token이 없으면(예: error_description 본문) 발급 실패로 간주하고 재시도
+                    log.warn("KIS 토큰 응답에 access_token 없음 (시도 {}/{}): {}", attempt, maxRetries, response.getBody());
+                    if (attempt < maxRetries) {
+                        sleep(retryDelayMs * attempt);
+                    }
+                    continue;
+                }
                 tokenExpiresAt = System.currentTimeMillis() + 23 * 60 * 60 * 1000L;
                 accessToken.set(token);
                 log.info("KIS API 토큰 발급 성공");
@@ -391,10 +399,6 @@ public class KisApiClient {
     /* ───── 해외주식 일봉 조회 ───── */
 
     @SuppressWarnings("unchecked")
-    public List<Map<String, String>> getUsStockDailyCandles(String exchange, String symbol) {
-        return getUsStockDailyCandles(exchange, symbol, "");
-    }
-
     public List<Map<String, String>> getUsStockDailyCandles(String exchange, String symbol, String bymd) {
         String cacheKey = "us-candle:" + exchange + ":" + symbol + ":" + bymd;
 

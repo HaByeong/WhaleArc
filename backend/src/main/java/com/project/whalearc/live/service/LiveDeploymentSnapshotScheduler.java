@@ -13,9 +13,12 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 
+import static com.project.whalearc.live.domain.LiveStrategyDeployment.Status.PAUSED;
+import static com.project.whalearc.live.domain.LiveStrategyDeployment.Status.RUNNING;
+
 /**
  * 라이브 배포(자동매매)의 일별 손익 스냅샷 스케줄러.
- * 매일 00:00(KST) 모든 배포의 평가손익률(%)을 1건씩 저장 → 카드 손익 스파크라인 데이터.
+ * 매일 00:00(KST) 활성(RUNNING/PAUSED) 배포의 평가손익률(%)을 1건씩 저장 → 카드 손익 스파크라인 데이터.
  * (실계좌 {@link com.project.whalearc.exchange.service.ExchangeSnapshotScheduler} 와 동일 패턴, 배포 단위)
  *
  * <p>손익률 산정은 {@link LiveStrategyService#currentPnlPct} 가 보유 포지션의 현재가를 조회하므로
@@ -36,7 +39,9 @@ public class LiveDeploymentSnapshotScheduler {
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     public void captureDaily() {
         LocalDate today = LocalDate.now(KST);
-        List<LiveStrategyDeployment> all = deploymentRepository.findAll();
+        // 정지(STOPPED/ERROR) 배포는 더 이상 가동되지 않으므로 손익 스냅샷에서 제외 —
+        // 매일 잔여 포지션 시세를 재조회하는 불필요한 외부 호출(KIS/Bitget/빗썸)을 막는다.
+        List<LiveStrategyDeployment> all = deploymentRepository.findByStatusIn(List.of(RUNNING, PAUSED));
 
         int saved = 0;
         for (LiveStrategyDeployment d : all) {

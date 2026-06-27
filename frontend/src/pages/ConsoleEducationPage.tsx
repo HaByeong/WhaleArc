@@ -199,7 +199,7 @@ const InfoNote = ({ children, tone = SONAR }: { children: ReactNode; tone?: stri
   </div>
 );
 const Chip = ({ on, onClick, color, children }: { on: boolean; onClick: () => void; color?: string; children: ReactNode }) => (
-  <button onClick={onClick} className="rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors" style={{ whiteSpace: 'nowrap', ...(on ? { background: color ? `${color}1f` : SONAR_DIM, color: color || SONAR, border: `1px solid ${color ? color + '66' : 'rgba(91,157,255,.4)'}` } : { background: 'transparent', color: INK1, border: `1px solid ${HAIR}` }) }}>{children}</button>
+  <button onClick={onClick} className="rounded-full px-3.5 py-1.5 text-[13.5px] font-semibold transition-colors" style={{ whiteSpace: 'nowrap', ...(on ? { background: color ? `${color}1f` : SONAR_DIM, color: color || SONAR, border: `1px solid ${color ? color + '66' : 'rgba(91,157,255,.4)'}` } : { background: 'transparent', color: INK1, border: `1px solid ${HAIR}` }) }}>{children}</button>
 );
 
 // ── 복기 카드 (체크리스트·메모 영속 — 로직 보존) ───────────────────────────
@@ -216,7 +216,12 @@ const ReviewCard = ({ t, checklist, note }: { t: ClosedTrade; checklist: string[
     if (!dirty.current) return;
     dirty.current = false;
     const snap = latest.current;
-    saving.current = saving.current.then(() => reviewService.saveReview(t.id, snap)).catch(() => { dirty.current = true; });
+    saving.current = saving.current.then(() => reviewService.saveReview(t.id, snap)).catch(() => {
+      // 저장 실패 시 변경분을 되돌리고 일정 시간 후 자동 재시도 (네트워크 일시 장애 대비)
+      dirty.current = true;
+      clearTimeout(timer.current);
+      timer.current = setTimeout(flush, 4000);
+    });
   };
   const persist = (c: Record<string, boolean>, m: string) => {
     latest.current = { checks: c, memo: m };
@@ -225,6 +230,7 @@ const ReviewCard = ({ t, checklist, note }: { t: ClosedTrade; checklist: string[
     clearTimeout(timer.current);
     timer.current = setTimeout(flush, 700);
   };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 언마운트 시 1회만 flush; flush를 deps에 넣으면 매 렌더마다 cleanup이 실행됨
   useEffect(() => () => { clearTimeout(timer.current); flush(); }, []);
   const dir = t.pnl > 0 ? 1 : t.pnl < 0 ? -1 : 0;
   const col = dir > 0 ? UP : dir < 0 ? DOWN : INK1;
@@ -236,33 +242,33 @@ const ReviewCard = ({ t, checklist, note }: { t: ClosedTrade; checklist: string[
       <div className="flex flex-wrap items-center gap-4 px-5 py-4">
         <div className="min-w-0 flex-1" style={{ minWidth: 200 }}>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[15px] font-bold" style={{ color: INK0 }}>{t.stockName}</span>
-            <span className="rounded-[5px] px-1.5 py-0.5 text-[10.5px] font-bold" style={{ color: col, background: dir > 0 ? 'rgba(239,77,77,.12)' : dir < 0 ? 'rgba(77,138,255,.12)' : 'rgba(255,255,255,.08)', border: `1px solid ${col}33` }}>{badge}</span>
-            <span className="max-w-[140px] truncate rounded-[5px] px-1.5 py-0.5 text-[10.5px] font-semibold" style={t.auto ? { background: SONAR_DIM, color: SONAR, border: '1px solid rgba(91,157,255,.28)' } : { background: 'rgba(255,255,255,.04)', color: INK2, border: `1px solid ${HAIR}` }}>{t.auto ? (t.strategy || '자동') : '수동'}</span>
+            <span className="text-[16px] font-bold" style={{ color: INK0 }}>{t.stockName}</span>
+            <span className="rounded-[5px] px-1.5 py-0.5 text-[11.5px] font-bold" style={{ color: col, background: dir > 0 ? 'rgba(239,77,77,.12)' : dir < 0 ? 'rgba(77,138,255,.12)' : 'rgba(255,255,255,.08)', border: `1px solid ${col}33` }}>{badge}</span>
+            <span className="max-w-[140px] truncate rounded-[5px] px-1.5 py-0.5 text-[11.5px] font-semibold" style={t.auto ? { background: SONAR_DIM, color: SONAR, border: '1px solid rgba(91,157,255,.28)' } : { background: 'rgba(255,255,255,.04)', color: INK2, border: `1px solid ${HAIR}` }}>{t.auto ? (t.strategy || '자동') : '수동'}</span>
           </div>
-          <div className="mt-1.5 font-mono text-[11.5px]" style={{ color: INK2 }}>
+          <div className="mt-1.5 font-mono text-[12.5px]" style={{ color: INK2 }}>
             {price(t.buyPrice)} → {price(t.sellPrice)} · {t.qty}주 · 보유 {t.holdDays == null ? '-' : t.holdDays === 0 ? '당일' : `${t.holdDays}일`} · {fmtDate(t.buyAt)}~{fmtDate(t.sellAt)}
           </div>
         </div>
         <div className="text-right">
-          <div className="font-mono text-[16px] font-bold" style={{ color: col }}>{fmtPct(t.pnlRate)}</div>
-          <div className="font-mono text-[11.5px]" style={{ color: INK2 }}>{fmtCur(t.pnl, t.usd)}</div>
+          <div className="font-mono text-[17.5px] font-bold" style={{ color: col }}>{fmtPct(t.pnlRate)}</div>
+          <div className="font-mono text-[12.5px]" style={{ color: INK2 }}>{fmtCur(t.pnl, t.usd)}</div>
         </div>
-        <button onClick={() => setOpen((o) => !o)} className="shrink-0 rounded-[10px] px-4 py-2 text-[12.5px] font-semibold" style={{ color: SONAR, background: SONAR_DIM, border: '1px solid rgba(91,157,255,.3)' }}>{open ? '접기' : '복기'}</button>
+        <button onClick={() => setOpen((o) => !o)} className="shrink-0 rounded-[10px] px-4 py-2 text-[13.5px] font-semibold" style={{ color: SONAR, background: SONAR_DIM, border: '1px solid rgba(91,157,255,.3)' }}>{open ? '접기' : '복기'}</button>
       </div>
       {open && (
         <div className="border-t px-5 py-4" style={{ borderColor: HAIR, background: CARD }}>
-          <div className="mb-2 text-[11px] font-semibold tracking-wide" style={{ color: INK2 }}>복기 체크리스트</div>
+          <div className="mb-2 text-[12px] font-semibold tracking-wide" style={{ color: INK2 }}>복기 체크리스트</div>
           <div className="flex flex-col gap-1.5">
             {checklist.map((c) => (
-              <label key={c} className="flex cursor-pointer items-start gap-2 text-[12.5px]" style={{ color: INK1 }}>
+              <label key={c} className="flex cursor-pointer items-start gap-2 text-[13.5px]" style={{ color: INK1 }}>
                 <input type="checkbox" checked={!!checks[c]} onChange={(e) => { const next = { ...checks, [c]: e.target.checked }; setChecks(next); persist(next, memo); }} className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ accentColor: ACCENT }} />
                 <span>{c}</span>
               </label>
             ))}
           </div>
           <textarea value={memo} onChange={(e) => { setMemo(e.target.value); persist(checks, e.target.value); }} rows={2} placeholder="이 거래에서 배운 점 / 다음에 고칠 점을 적어보세요"
-            className="mt-3 w-full resize-none rounded-lg px-3 py-2 text-[12.5px] outline-none" style={{ border: `1px solid ${HAIR}`, background: 'var(--ci-panel)', color: INK0 }} />
+            className="mt-3 w-full resize-none rounded-lg px-3 py-2 text-[13.5px] outline-none" style={{ border: `1px solid ${HAIR}`, background: 'var(--ci-panel)', color: INK0 }} />
         </div>
       )}
     </div>
@@ -330,13 +336,13 @@ const ReviewTab = () => {
 
   if (error) return (
     <div style={panel} className="px-6 py-16 text-center">
-      <div className="text-[34px]">⚠️</div>
-      <div className="mt-3 text-[15px] font-bold" style={{ color: INK0 }}>거래 내역을 불러오지 못했어요</div>
-      <p className="mt-2 text-[13px]" style={{ color: INK2 }}>잠시 후 다시 시도해주세요.</p>
-      <button onClick={load} className="mt-4 rounded-lg px-4 py-2 text-[13px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: INK1 }}>다시 시도</button>
+      <div className="text-[36.5px]">⚠️</div>
+      <div className="mt-3 text-[16px] font-bold" style={{ color: INK0 }}>거래 내역을 불러오지 못했어요</div>
+      <p className="mt-2 text-[14px]" style={{ color: INK2 }}>잠시 후 다시 시도해주세요.</p>
+      <button onClick={load} className="mt-4 rounded-lg px-4 py-2 text-[14px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: INK1 }}>다시 시도</button>
     </div>
   );
-  if (trades === null) return <div className="py-20 text-center text-[13px]" style={{ color: INK2 }}>불러오는 중…</div>;
+  if (trades === null) return <div className="py-20 text-center text-[14px]" style={{ color: INK2 }}>불러오는 중…</div>;
   if (!closed.length) return (
     <EmptyState
       kicker="FIRST REVIEW"
@@ -361,7 +367,7 @@ const ReviewTab = () => {
         {groups.strategies.map(([name, n]) => <Chip key={name} on={filter === name} onClick={() => setFilter(name)}>{name} {n}</Chip>)}
       </div>
       {!view.length ? (
-        <div className="px-6 py-12 text-center text-[13px]" style={{ ...panel, color: INK2 }}>이 분류에 해당하는 거래가 없어요.</div>
+        <div className="px-6 py-12 text-center text-[14px]" style={{ ...panel, color: INK2 }}>이 분류에 해당하는 거래가 없어요.</div>
       ) : (<>
         {stats && (
           <div style={{ ...panel, padding: '22px 26px' }}>
@@ -386,7 +392,7 @@ const ReviewTab = () => {
             ))}
           </div>
         )}
-        <div className="flex flex-col gap-1 text-[11.5px]" style={{ color: INK3 }}>
+        <div className="flex flex-col gap-1 text-[12.5px]" style={{ color: INK3 }}>
           <span>* 손익은 체결 수수료(0.1%)를 양방향 차감한 순손익입니다.</span>
           {hasUsd && <span>* 미국주식·ETF는 현재 환율로 원화 환산해 합산했어요(수익률·개별 손익은 해당 통화 기준).</span>}
           {droppedSells > 0 && <span>* 매수 기록이 조회 범위 밖이라 짝짓지 못한 매도 {droppedSells.toLocaleString()}주는 복기에서 제외됐어요.</span>}
@@ -413,23 +419,23 @@ const RulesTab = () => {
       <InfoNote>나만의 <b style={{ color: INK0 }}>매매 원칙</b>을 정해두면 거래 복기 체크리스트가 이 원칙으로 바뀝니다. 매매할 때마다 "내 원칙을 지켰나?"를 점검하세요.</InfoNote>
       <div className="flex gap-2.5">
         <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(draft); }} aria-label="매매 원칙 입력"
-          placeholder="원칙 입력 후 Enter (예: 손절가는 진입 시 미리 정한다)" className="flex-1 rounded-[11px] px-4 py-3 text-[13.5px] outline-none" style={{ background: ABYSS, border: `1px solid ${HAIR_S}`, color: INK0 }} />
-        <button onClick={() => add(draft)} className="rounded-[11px] px-6 text-[13.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, ${ACCENT})`, boxShadow: '0 8px 18px -10px rgba(60,120,255,.6)' }}>추가</button>
+          placeholder="원칙 입력 후 Enter (예: 손절가는 진입 시 미리 정한다)" className="flex-1 rounded-[11px] px-4 py-3 text-[14.5px] outline-none" style={{ background: ABYSS, border: `1px solid ${HAIR_S}`, color: INK0 }} />
+        <button onClick={() => add(draft)} className="rounded-[11px] px-6 text-[14.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, ${ACCENT})`, boxShadow: '0 8px 18px -10px rgba(60,120,255,.6)' }}>추가</button>
       </div>
       <div style={{ ...panel, padding: rules.length ? 10 : '34px 24px' }}>
         {rules.length === 0 ? (
-          <div className="text-center text-[13px]" style={{ color: INK2 }}>아직 등록한 원칙이 없어요. 아래 추천에서 골라 담거나 직접 적어보세요.</div>
+          <div className="text-center text-[14px]" style={{ color: INK2 }}>아직 등록한 원칙이 없어요. 아래 추천에서 골라 담거나 직접 적어보세요.</div>
         ) : (
           <ol className="m-0 flex list-none flex-col gap-2 p-0">
             {rules.map((r, i) => (
               <li key={r} className="flex items-center gap-3 rounded-[11px] px-4 py-3" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md font-mono text-[12px] font-bold" style={{ background: SONAR_DIM, color: SONAR }}>{i + 1}</span>
-                <span className="flex-1 text-[13.5px]" style={{ color: INK0 }}>{r}</span>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md font-mono text-[13px] font-bold" style={{ background: SONAR_DIM, color: SONAR }}>{i + 1}</span>
+                <span className="flex-1 text-[14.5px]" style={{ color: INK0 }}>{r}</span>
                 <div className="flex shrink-0 flex-col">
-                  <button onClick={() => move(i, -1)} disabled={i === 0} aria-label="위로 이동" className="text-[9px] leading-none transition-opacity disabled:opacity-25 hover:opacity-70" style={{ color: INK2 }}>▲</button>
-                  <button onClick={() => move(i, 1)} disabled={i === rules.length - 1} aria-label="아래로 이동" className="text-[9px] leading-none transition-opacity disabled:opacity-25 hover:opacity-70" style={{ color: INK2 }}>▼</button>
+                  <button onClick={() => move(i, -1)} disabled={i === 0} aria-label="위로 이동" className="text-[10px] leading-none transition-opacity disabled:opacity-25 hover:opacity-70" style={{ color: INK2 }}>▲</button>
+                  <button onClick={() => move(i, 1)} disabled={i === rules.length - 1} aria-label="아래로 이동" className="text-[10px] leading-none transition-opacity disabled:opacity-25 hover:opacity-70" style={{ color: INK2 }}>▼</button>
                 </div>
-                <button onClick={() => remove(i)} aria-label="삭제" className="shrink-0 text-[12px] transition-colors hover:opacity-70" style={{ color: INK3 }}>삭제</button>
+                <button onClick={() => remove(i)} aria-label="삭제" className="shrink-0 text-[13px] transition-colors hover:opacity-70" style={{ color: INK3 }}>삭제</button>
               </li>
             ))}
           </ol>
@@ -437,11 +443,11 @@ const RulesTab = () => {
       </div>
       {STARTER_RULES.some((s) => !rules.includes(s)) && (
         <div>
-          <div className="mb-2.5 text-[12.5px] font-bold" style={{ color: SONAR }}>추천 원칙 — 눌러서 담기</div>
+          <div className="mb-2.5 text-[13.5px] font-bold" style={{ color: SONAR }}>추천 원칙 — 눌러서 담기</div>
           <div className="flex flex-col gap-2">
             {STARTER_RULES.filter((s) => !rules.includes(s)).map((s) => (
-              <button key={s} onClick={() => add(s)} className="flex items-center gap-3 rounded-[11px] px-4 py-3 text-left text-[13.5px] transition-colors hover:opacity-90" style={{ color: INK1, background: 'var(--ci-card)', border: `1px solid ${HAIR}` }}>
-                <span className="shrink-0 text-[16px] font-bold leading-none" style={{ color: SONAR }}>+</span>{s}
+              <button key={s} onClick={() => add(s)} className="flex items-center gap-3 rounded-[11px] px-4 py-3 text-left text-[14.5px] transition-colors hover:opacity-90" style={{ color: INK1, background: 'var(--ci-card)', border: `1px solid ${HAIR}` }}>
+                <span className="shrink-0 text-[17.5px] font-bold leading-none" style={{ color: SONAR }}>+</span>{s}
               </button>
             ))}
           </div>
@@ -473,28 +479,28 @@ const GlossaryTab = () => {
     <div className="flex flex-col gap-4">
       <div className="relative">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }}><circle cx="7" cy="7" r="4.5" stroke={INK2} strokeWidth="1.5" /><path d="M10.5 10.5 14 14" stroke={INK2} strokeWidth="1.5" strokeLinecap="round" /></svg>
-        <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="용어 검색" placeholder="용어 검색 (예: 샤프, 손절, RSI)" className="w-full rounded-[11px] py-3 pl-[42px] pr-4 text-[13.5px] outline-none" style={{ background: ABYSS, border: `1px solid ${HAIR_S}`, color: INK0 }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="용어 검색" placeholder="용어 검색 (예: 샤프, 손절, RSI)" className="w-full rounded-[11px] py-3 pl-[42px] pr-4 text-[14.5px] outline-none" style={{ background: ABYSS, border: `1px solid ${HAIR_S}`, color: INK0 }} />
       </div>
       <div className="flex flex-wrap gap-2">
         <Chip on={cat === 'all'} onClick={() => setCat('all')}>전체</Chip>
         {cats.map((c) => <Chip key={c.id} on={cat === c.id} color={CAT_COLOR[c.id]} onClick={() => setCat(c.id)}>{c.label}</Chip>)}
       </div>
-      {list.length === 0 && <div className="py-16 text-center text-[13.5px]" style={{ color: INK2 }}>"{q}"에 해당하는 용어가 없어요.</div>}
+      {list.length === 0 && <div className="py-16 text-center text-[14.5px]" style={{ color: INK2 }}>"{q}"에 해당하는 용어가 없어요.</div>}
       {list.map((c) => (
         <div key={c.id}>
           <div className="mb-3 flex items-center gap-2">
             <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} />
-            <span className="text-[13.5px] font-bold" style={{ color: c.color }}>{c.label}</span>
-            <span className="text-[11.5px]" style={{ color: INK3 }}>{c.items.length}</span>
+            <span className="text-[14.5px] font-bold" style={{ color: c.color }}>{c.label}</span>
+            <span className="text-[12.5px]" style={{ color: INK3 }}>{c.items.length}</span>
           </div>
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))' }}>
             {c.items.map((k) => (
               <div key={k} className="relative overflow-hidden" style={{ padding: '16px 18px 16px 20px', borderRadius: 14, background: CARD, border: `1px solid ${HAIR}` }}>
                 <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: c.color, opacity: .7 }} />
-                <div className="text-[14.5px] font-bold" style={{ color: INK0, wordBreak: 'keep-all' }}>{GLOSSARY[k].title}</div>
-                <p className="mt-2 text-[12.5px] leading-relaxed" style={{ color: INK1 }}>{GLOSSARY[k].desc}</p>
+                <div className="text-[15.5px] font-bold" style={{ color: INK0, wordBreak: 'keep-all' }}>{GLOSSARY[k].title}</div>
+                <p className="mt-2 text-[13.5px] leading-relaxed" style={{ color: INK1 }}>{GLOSSARY[k].desc}</p>
                 {GLOSSARY[k].example && (
-                  <div className="mt-2.5 rounded-[9px] px-3 py-2 text-[11.5px] leading-snug" style={{ background: ABYSS, border: `1px solid ${HAIR}`, color: INK2 }}>
+                  <div className="mt-2.5 rounded-[9px] px-3 py-2 text-[12.5px] leading-snug" style={{ background: ABYSS, border: `1px solid ${HAIR}`, color: INK2 }}>
                     <span style={{ color: c.color, fontWeight: 700 }}>예 </span>{GLOSSARY[k].example}
                   </div>
                 )}
@@ -515,22 +521,22 @@ const MistakesTab = () => {
       <button onClick={() => go('/mirror')} className="flex flex-wrap items-center gap-4 rounded-[16px] p-[18px_22px] text-left" style={{ padding: '18px 22px', background: 'linear-gradient(105deg, rgba(91,157,255,.14), rgba(91,157,255,.05))', border: '1px solid rgba(91,157,255,.3)' }}>
         <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[13px]" style={{ background: SONAR_DIM, border: '1px solid rgba(91,157,255,.3)' }}><BottleIcon size={22} /></span>
         <div className="min-w-0 flex-1" style={{ minWidth: 240 }}>
-          <div className="text-[10.5px] font-bold tracking-[.18em]" style={{ color: SONAR }}>도구 · 유리병 편지</div>
-          <div className="my-[4px] text-[16px] font-bold" style={{ color: INK0 }}>흔들린 순간을 데이터로 마주하기</div>
-          <p className="m-0 text-[12.5px] leading-relaxed" style={{ color: INK1 }}>급락에 팔고 싶거나 급등에 사고 싶을 때, 그 충동을 막지 않고 유리병에 담아뒀다가 — 며칠 뒤 <b style={{ color: INK0 }}>충동대로 했다면 vs 참았다면</b>을 실제 숫자로 보여줘요. 위 실수들을 '내 데이터'로 마주하는 도구예요.</p>
+          <div className="text-[11.5px] font-bold tracking-[.18em]" style={{ color: SONAR }}>도구 · 유리병 편지</div>
+          <div className="my-[4px] text-[17.5px] font-bold" style={{ color: INK0 }}>흔들린 순간을 데이터로 마주하기</div>
+          <p className="m-0 text-[13.5px] leading-relaxed" style={{ color: INK1 }}>급락에 팔고 싶거나 급등에 사고 싶을 때, 그 충동을 막지 않고 유리병에 담아뒀다가 — 며칠 뒤 <b style={{ color: INK0 }}>충동대로 했다면 vs 참았다면</b>을 실제 숫자로 보여줘요. 위 실수들을 '내 데이터'로 마주하는 도구예요.</p>
         </div>
-        <span className="shrink-0 rounded-[10px] px-4 py-2.5 text-[12.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, ${ACCENT})`, boxShadow: '0 8px 18px -10px rgba(60,120,255,.6)' }}>열어보기 →</span>
+        <span className="shrink-0 rounded-[10px] px-4 py-2.5 text-[13.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, ${ACCENT})`, boxShadow: '0 8px 18px -10px rgba(60,120,255,.6)' }}>열어보기 →</span>
       </button>
       <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))' }}>
         {MISTAKES.map((m) => (
           <div key={m.title} style={{ ...panel, padding: '18px 20px' }} className="flex flex-col gap-3">
-            <div className="flex items-center gap-2.5"><span className="text-[22px] leading-none">{m.icon}</span><span className="text-[15.5px] font-bold" style={{ color: INK0 }}>{m.title}</span></div>
-            <p className="m-0 text-[13px] leading-relaxed" style={{ color: INK1 }}>{m.body}</p>
+            <div className="flex items-center gap-2.5"><span className="text-[24px] leading-none">{m.icon}</span><span className="text-[16.5px] font-bold" style={{ color: INK0 }}>{m.title}</span></div>
+            <p className="m-0 text-[14px] leading-relaxed" style={{ color: INK1 }}>{m.body}</p>
             <div className="rounded-[11px] px-3.5 py-3" style={{ background: 'rgba(53,224,200,.07)', border: '1px solid rgba(53,224,200,.22)' }}>
-              <div className="mb-1.5 flex items-center gap-1.5 text-[11.5px] font-bold" style={{ color: GREEN }}>
+              <div className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-bold" style={{ color: GREEN }}>
                 <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2.5 7.5 5.5 10.5 11.5 4" stroke={GREEN} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>피하는 법
               </div>
-              <p className="m-0 text-[12.5px] leading-relaxed" style={{ color: INK1 }}>{m.fix}</p>
+              <p className="m-0 text-[13.5px] leading-relaxed" style={{ color: INK1 }}>{m.fix}</p>
             </div>
           </div>
         ))}
@@ -543,20 +549,20 @@ const MistakesTab = () => {
 const Slider = ({ label, value, min, max, step, onChange, fmt }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void; fmt: (v: number) => string }) => (
   <div>
     <div className="mb-2 flex items-baseline justify-between">
-      <span className="text-[12.5px]" style={{ color: INK1 }}>{label}</span>
-      <span className="font-mono text-[15px] font-bold" style={{ color: SONAR }}>{fmt(value)}</span>
+      <span className="text-[13.5px]" style={{ color: INK1 }}>{label}</span>
+      <span className="font-mono text-[16px] font-bold" style={{ color: SONAR }}>{fmt(value)}</span>
     </div>
     <input type="range" aria-label={label} aria-valuetext={fmt(value)} min={min} max={max} step={step} value={value} onChange={(e) => onChange(+e.target.value)} className="w-full" style={{ accentColor: SONAR, cursor: 'pointer' }} />
   </div>
 );
 const CalcCard = ({ title, desc, children, insight }: { title: string; desc: ReactNode; children: ReactNode; insight: ReactNode }) => (
   <div style={{ ...panel, padding: '22px 24px' }}>
-    <h3 className="text-[17px] font-bold" style={{ color: INK0 }}>{title}</h3>
-    <p className="mb-[18px] mt-1.5 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>{desc}</p>
+    <h3 className="text-[18.5px] font-bold" style={{ color: INK0 }}>{title}</h3>
+    <p className="mb-[18px] mt-1.5 text-[13.5px] leading-relaxed" style={{ color: INK2 }}>{desc}</p>
     <div className="flex flex-col gap-3.5">{children}</div>
     <div className="mt-4 flex gap-2.5 rounded-[12px] px-4 py-3" style={{ background: 'rgba(245,208,97,.07)', border: '1px solid rgba(245,208,97,.22)' }}>
       <span className="shrink-0">💡</span>
-      <p className="m-0 text-[12.5px] leading-relaxed" style={{ color: INK1 }}><b style={{ color: COMPASS }}>핵심 </b>{insight}</p>
+      <p className="m-0 text-[13.5px] leading-relaxed" style={{ color: INK1 }}><b style={{ color: COMPASS }}>핵심 </b>{insight}</p>
     </div>
   </div>
 );
@@ -602,22 +608,22 @@ const MathTab = () => {
         <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}>
           {[1, 3, 5, 10].map((y) => (
             <div key={y} className="rounded-[11px] px-3 py-2.5" style={{ background: ABYSS, border: `1px solid ${HAIR}` }}>
-              <div className="text-[11px]" style={{ color: INK2 }}>{y}년 후</div>
-              <div className="font-mono text-[14px] font-bold" style={{ color: SONAR }}>{fmtKRWCompact(grow(y))}</div>
+              <div className="text-[12px]" style={{ color: INK2 }}>{y}년 후</div>
+              <div className="font-mono text-[15px] font-bold" style={{ color: SONAR }}>{fmtKRWCompact(grow(y))}</div>
             </div>
           ))}
         </div>
-        <div className="text-center text-[12px]" style={{ color: INK2 }}>→ 10년 후엔 원금의 약 <b className="font-mono" style={{ color: SONAR }}>{mult10.toFixed(1)}배</b> ({monthly}%/월로 꾸준히 굴렸을 때)</div>
-        <div className="text-[11px] leading-relaxed" style={{ color: INK3 }}>※ 실제 수익은 매달 들쭉날쭉하고 평균적으로 이보다 훨씬 낮아요(주식 장기평균 ≈ 연 7~10%, 월 1%도 안 됨). 이건 '꾸준한 복리가 얼마나 강한지'의 <b>원리</b>를 보여주는 예시이지, 기대 수익이 아닙니다.</div>
+        <div className="text-center text-[13px]" style={{ color: INK2 }}>→ 10년 후엔 원금의 약 <b className="font-mono" style={{ color: SONAR }}>{mult10.toFixed(1)}배</b> ({monthly}%/월로 꾸준히 굴렸을 때)</div>
+        <div className="text-[12px] leading-relaxed" style={{ color: INK3 }}>※ 실제 수익은 매달 들쭉날쭉하고 평균적으로 이보다 훨씬 낮아요(주식 장기평균 ≈ 연 7~10%, 월 1%도 안 됨). 이건 '꾸준한 복리가 얼마나 강한지'의 <b>원리</b>를 보여주는 예시이지, 기대 수익이 아닙니다.</div>
       </CalcCard>
       <CalcCard title="② 손실의 비대칭"
         desc="잃은 만큼만 다시 벌면 본전일 것 같지만 아니에요. -50%면 돈이 절반이 되고, 원래대로 돌아오려면 남은 절반으로 +100%(두 배)를 벌어야 합니다. 손실이 커질수록 회복에 필요한 수익률은 훨씬 가파르게 늘어나요."
         insight={<>큰 손실 한 번이 그동안 쌓은 수익을 통째로 날립니다. 그래서 <b style={{ color: INK0 }}>'크게 벌기'보다 '크게 잃지 않기'가 먼저</b> — 손절(미리 정한 선에서 끊기)과 분산투자가 중요한 이유예요.</>}>
         <Slider label="손실률" value={loss} min={5} max={90} step={5} onChange={setLoss} fmt={(v) => `-${v}%`} />
-        <ResultBox><span className="text-[13px]" style={{ color: INK1 }}>-{loss}% 손실 → 본전까지 </span><span className="font-mono text-[22px] font-extrabold" style={{ color: UP }}>+{recover === Infinity ? '∞' : pctNice(recover)}%</span><span className="text-[13px]" style={{ color: INK1 }}> 필요</span></ResultBox>
+        <ResultBox><span className="text-[14px]" style={{ color: INK1 }}>-{loss}% 손실 → 본전까지 </span><span className="font-mono text-[24px] font-extrabold" style={{ color: UP }}>+{recover === Infinity ? '∞' : pctNice(recover)}%</span><span className="text-[14px]" style={{ color: INK1 }}> 필요</span></ResultBox>
         <div className="flex flex-wrap gap-2">
           {[10, 20, 30, 50, 70].map((l) => (
-            <span key={l} className="font-mono text-[11.5px]" style={{ padding: '5px 10px', borderRadius: 8, background: l === loss ? 'rgba(239,77,77,.16)' : CARD, border: `1px solid ${l === loss ? 'rgba(239,77,77,.4)' : HAIR}`, color: l === loss ? UP : INK2 }}>-{l}% → +{pctNice((l / (100 - l)) * 100)}%</span>
+            <span key={l} className="font-mono text-[12.5px]" style={{ padding: '5px 10px', borderRadius: 8, background: l === loss ? 'rgba(239,77,77,.16)' : CARD, border: `1px solid ${l === loss ? 'rgba(239,77,77,.4)' : HAIR}`, color: l === loss ? UP : INK2 }}>-{l}% → +{pctNice((l / (100 - l)) * 100)}%</span>
           ))}
         </div>
       </CalcCard>
@@ -628,19 +634,19 @@ const MathTab = () => {
         <Slider label="손절 폭(질 때)" value={stop} min={1} max={30} step={1} onChange={setStop} fmt={(v) => `-${v}%`} />
         <Slider label="익절 폭(이길 때)" value={take} min={1} max={50} step={1} onChange={setTake} fmt={(v) => `+${v}%`} />
         <ResultBox>
-          <div className="text-[12px]" style={{ color: INK2 }}>손익비 1 : {rr.toFixed(1)} · 거래당 기대값</div>
-          <div className="font-mono text-[20px] font-bold" style={{ color: ev >= 0 ? UP : DOWN }}>{ev >= 0 ? '+' : ''}{ev.toFixed(2)}%</div>
-          <div className="mt-1.5 text-[11.5px]" style={{ color: INK2 }}>10번 거래하면 약 {Math.round(winRate / 10)}번 이기고 {10 - Math.round(winRate / 10)}번 져도 → 평균 거래당 {ev >= 0 ? '+' : ''}{ev.toFixed(1)}%</div>
-          <div className="mt-1.5 text-[12px] font-semibold" style={{ color: ev >= 0 ? UP : DOWN }}>{ev >= 0 ? '장기적으로 이득이 기대돼요 👍' : '장기적으로 손실 — 손익비나 승률을 높이세요'}</div>
+          <div className="text-[13px]" style={{ color: INK2 }}>손익비 1 : {rr.toFixed(1)} · 거래당 기대값</div>
+          <div className="font-mono text-[21.5px] font-bold" style={{ color: ev >= 0 ? UP : DOWN }}>{ev >= 0 ? '+' : ''}{ev.toFixed(2)}%</div>
+          <div className="mt-1.5 text-[12.5px]" style={{ color: INK2 }}>10번 거래하면 약 {Math.round(winRate / 10)}번 이기고 {10 - Math.round(winRate / 10)}번 져도 → 평균 거래당 {ev >= 0 ? '+' : ''}{ev.toFixed(1)}%</div>
+          <div className="mt-1.5 text-[13px] font-semibold" style={{ color: ev >= 0 ? UP : DOWN }}>{ev >= 0 ? '장기적으로 이득이 기대돼요 👍' : '장기적으로 손실 — 손익비나 승률을 높이세요'}</div>
         </ResultBox>
-        <div className="text-[11px] leading-relaxed" style={{ color: INK3 }}>※ 기대값이 +라도 한 번에 너무 크게 걸면 운 나쁜 연속 손실로 파산할 수 있어요. 그래서 자산을 한 거래에 몰지 않고 나눠 거는 <b>포지션 사이징·분산</b>이 함께 중요합니다.</div>
+        <div className="text-[12px] leading-relaxed" style={{ color: INK3 }}>※ 기대값이 +라도 한 번에 너무 크게 걸면 운 나쁜 연속 손실로 파산할 수 있어요. 그래서 자산을 한 거래에 몰지 않고 나눠 거는 <b>포지션 사이징·분산</b>이 함께 중요합니다.</div>
       </CalcCard>
       <CalcCard title="④ 72의 법칙 (2배까지 몇 년?)"
         desc="내 돈이 2배 되는 데 몇 년 걸릴지 '72 ÷ 연수익률(%)'로 암산할 수 있어요. 연 6%면 약 12년, 연 12%면 약 6년 — 수익률이 2배면 2배 빨라집니다."
         insight={<>작은 수익률 차이가 큰 시간 차이를 만들어요. 연 3%와 6%는 2배 차이지만 2배 되는 시간은 <b style={{ color: INK0 }}>24년 vs 12년</b> — 그래서 비용을 줄이고 수익률을 조금이라도 높이는 게 복리에선 큽니다.</>}>
         <Slider label="연 수익률" value={rate72} min={1} max={20} step={1} onChange={setRate72} fmt={(v) => `${v}%/년`} />
-        <ResultBox><span className="text-[13px]" style={{ color: INK1 }}>약 </span><span className="font-mono text-[20px] font-bold" style={{ color: SONAR }}>{y72.toFixed(1)}년</span><span className="text-[13px]" style={{ color: INK1 }}> 후 2배</span><div className="mt-1 text-[11.5px]" style={{ color: INK2 }}>정확히 계산하면 {yExact.toFixed(1)}년 — 72법칙이 거의 들어맞아요</div></ResultBox>
-        <div className="text-[11px] leading-relaxed" style={{ color: INK3 }}>※ 빠른 암산용 근사값이에요. 실제 수익은 매년 달라 정확한 시점은 알 수 없습니다.</div>
+        <ResultBox><span className="text-[14px]" style={{ color: INK1 }}>약 </span><span className="font-mono text-[21.5px] font-bold" style={{ color: SONAR }}>{y72.toFixed(1)}년</span><span className="text-[14px]" style={{ color: INK1 }}> 후 2배</span><div className="mt-1 text-[12.5px]" style={{ color: INK2 }}>정확히 계산하면 {yExact.toFixed(1)}년 — 72법칙이 거의 들어맞아요</div></ResultBox>
+        <div className="text-[12px] leading-relaxed" style={{ color: INK3 }}>※ 빠른 암산용 근사값이에요. 실제 수익은 매년 달라 정확한 시점은 알 수 없습니다.</div>
       </CalcCard>
       <CalcCard title="⑤ 수수료가 복리를 갉아먹는다"
         desc="수수료·세금은 매년 수익에서 조금씩 떼어가요. '1%쯤이야' 싶지만 복리로 수십 년 쌓이면 최종 자산의 상당 부분을 먹습니다."
@@ -648,7 +654,7 @@ const MathTab = () => {
         <Slider label="연 수익률" value={feeRate} min={3} max={12} step={1} onChange={setFeeRate} fmt={(v) => `${v}%/년`} />
         <Slider label="연 비용(수수료+세금)" value={feeCost} min={0} max={3} step={0.1} onChange={setFeeCost} fmt={(v) => `${v.toFixed(1)}%/년`} />
         <Slider label="기간" value={feeYears} min={5} max={40} step={5} onChange={setFeeYears} fmt={(v) => `${v}년`} />
-        <ResultBox><div className="text-[12px]" style={{ color: INK2 }}>{feeYears}년 후, 연 {feeCost.toFixed(1)}% 비용이 먹는 몫</div><div className="font-mono text-[20px] font-bold" style={{ color: DOWN }}>최종 자산의 약 {feeEaten.toFixed(0)}%</div><div className="mt-1.5 text-[11.5px]" style={{ color: INK2 }}>1,000만원 기준 — 비용 없으면 {fmtKRWCompact(10000000 * multNo)}, 비용 있으면 {fmtKRWCompact(10000000 * multFee)}</div></ResultBox>
+        <ResultBox><div className="text-[13px]" style={{ color: INK2 }}>{feeYears}년 후, 연 {feeCost.toFixed(1)}% 비용이 먹는 몫</div><div className="font-mono text-[21.5px] font-bold" style={{ color: DOWN }}>최종 자산의 약 {feeEaten.toFixed(0)}%</div><div className="mt-1.5 text-[12.5px]" style={{ color: INK2 }}>1,000만원 기준 — 비용 없으면 {fmtKRWCompact(10000000 * multNo)}, 비용 있으면 {fmtKRWCompact(10000000 * multFee)}</div></ResultBox>
       </CalcCard>
       <CalcCard title="⑥ 분산투자 효과"
         desc="한 종목에 전부 넣으면 그 종목이 무너질 때 나도 무너져요. 여러 종목에 나눠 담으면 한 곳이 폭락해도 전체 타격은 그만큼 작아집니다."
@@ -656,10 +662,10 @@ const MathTab = () => {
         <Slider label="나눠 담은 종목 수" value={divCount} min={1} max={20} step={1} onChange={setDivCount} fmt={(v) => `${v}개`} />
         <Slider label="한 종목 폭락률" value={divCrash} min={10} max={90} step={10} onChange={setDivCrash} fmt={(v) => `-${v}%`} />
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="rounded-[11px] px-3 py-3 text-center" style={{ background: ABYSS, border: `1px solid ${HAIR}` }}><div className="text-[11px]" style={{ color: INK2 }}>몰빵 (1종목)</div><div className="font-mono text-[17px] font-bold" style={{ color: DOWN }}>-{divCrash}%</div></div>
-          <div className="rounded-[11px] px-3 py-3 text-center" style={{ background: ABYSS, border: `1px solid ${HAIR}` }}><div className="text-[11px]" style={{ color: INK2 }}>분산 ({divCount}종목)</div><div className="font-mono text-[17px] font-bold" style={{ color: divCount > 1 ? UP : DOWN }}>-{pctNice(divLoss)}%</div></div>
+          <div className="rounded-[11px] px-3 py-3 text-center" style={{ background: ABYSS, border: `1px solid ${HAIR}` }}><div className="text-[12px]" style={{ color: INK2 }}>몰빵 (1종목)</div><div className="font-mono text-[18.5px] font-bold" style={{ color: DOWN }}>-{divCrash}%</div></div>
+          <div className="rounded-[11px] px-3 py-3 text-center" style={{ background: ABYSS, border: `1px solid ${HAIR}` }}><div className="text-[12px]" style={{ color: INK2 }}>분산 ({divCount}종목)</div><div className="font-mono text-[18.5px] font-bold" style={{ color: divCount > 1 ? UP : DOWN }}>-{pctNice(divLoss)}%</div></div>
         </div>
-        <div className="text-[11px] leading-relaxed" style={{ color: INK3 }}>※ '한 종목만 폭락하고 나머지는 그대로'일 때예요. 진짜 분산은 <b>같이 안 움직이는</b> 자산을 섞어야 효과가 커요 — 같은 업종·시장에 몰면 폭락 때 함께 빠집니다.</div>
+        <div className="text-[12px] leading-relaxed" style={{ color: INK3 }}>※ '한 종목만 폭락하고 나머지는 그대로'일 때예요. 진짜 분산은 <b>같이 안 움직이는</b> 자산을 섞어야 효과가 커요 — 같은 업종·시장에 몰면 폭락 때 함께 빠집니다.</div>
       </CalcCard>
       <CalcCard title="⑦ 포지션 사이징 (얼마 살까?)"
         desc="'한 번에 최대로 잃어도 괜찮은 금액'을 먼저 정하고, 손절 폭에서 거꾸로 매수 금액을 계산해요. 그래야 한 번 틀려도 정한 만큼만 잃습니다."
@@ -667,7 +673,7 @@ const MathTab = () => {
         <Slider label="총자산" value={psCapital} min={100} max={10000} step={100} onChange={setPsCapital} fmt={(v) => `${v.toLocaleString()}만원`} />
         <Slider label="한 거래 최대 손실(위험)" value={psRisk} min={0.5} max={5} step={0.5} onChange={setPsRisk} fmt={(v) => `${v}%`} />
         <Slider label="손절 폭" value={psStop} min={2} max={30} step={1} onChange={setPsStop} fmt={(v) => `-${v}%`} />
-        <ResultBox><div className="text-[12px]" style={{ color: INK2 }}>최대 손실 {fmtKRWCompact(psRiskAmt * 10000)} 이내로 잡으려면 → 매수</div><div className="font-mono text-[20px] font-bold" style={{ color: SONAR }}>{fmtKRWCompact(psPosition * 10000)}</div><div className="mt-1.5 text-[11.5px]" style={{ color: INK2 }}>{fmtKRWCompact(psPosition * 10000)} 사서 -{psStop}%에 손절하면 딱 {fmtKRWCompact(psRiskAmt * 10000)}만 손실</div></ResultBox>
+        <ResultBox><div className="text-[13px]" style={{ color: INK2 }}>최대 손실 {fmtKRWCompact(psRiskAmt * 10000)} 이내로 잡으려면 → 매수</div><div className="font-mono text-[21.5px] font-bold" style={{ color: SONAR }}>{fmtKRWCompact(psPosition * 10000)}</div><div className="mt-1.5 text-[12.5px]" style={{ color: INK2 }}>{fmtKRWCompact(psPosition * 10000)} 사서 -{psStop}%에 손절하면 딱 {fmtKRWCompact(psRiskAmt * 10000)}만 손실</div></ResultBox>
       </CalcCard>
     </div>
   );
@@ -707,7 +713,7 @@ const ConsoleEducationPage = () => {
           <NoteWhale size={48} />
           <div>
             <h1 style={{ fontSize: 27, fontWeight: 800, letterSpacing: '-.02em', color: INK0 }}>학습 노트</h1>
-            <p className="mt-[7px] text-[13.5px]" style={{ color: INK1 }}>모의 매매를 돌아보고, 나만의 원칙·용어·투자 계산기로 실력을 다져보세요.</p>
+            <p className="mt-[7px] text-[14.5px]" style={{ color: INK1 }}>모의 매매를 돌아보고, 나만의 원칙·용어·투자 계산기로 실력을 다져보세요.</p>
           </div>
         </div>
 
@@ -734,8 +740,8 @@ const ConsoleEducationPage = () => {
         </div>
 
         <footer className="flex flex-wrap items-center justify-between gap-3" style={{ marginTop: 8, paddingTop: 18, borderTop: `1px solid ${HAIR}` }}>
-          <span className="font-mono text-[11.5px]" style={{ color: INK3 }}>© 2026 WHALEARC · 학습 노트</span>
-          <span className="text-[11.5px]" style={{ color: INK3 }}>Built quietly, beneath the surface.</span>
+          <span className="font-mono text-[12.5px]" style={{ color: INK3 }}>© 2026 WHALEARC · 학습 노트</span>
+          <span className="text-[12.5px]" style={{ color: INK3 }}>Built quietly, beneath the surface.</span>
         </footer>
       </div>
     </HelmShell>

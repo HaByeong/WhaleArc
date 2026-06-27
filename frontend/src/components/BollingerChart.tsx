@@ -306,7 +306,7 @@ export default function BollingerChart() {
 
   return (
     <div>
-      <div className="flex gap-4 flex-wrap mb-2.5 text-[12px] text-gray-500">
+      <div className="flex gap-4 flex-wrap mb-2.5 text-[13px] text-gray-500">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: '#f7a21b' }} />SMA(20)
         </span>
@@ -317,11 +317,11 @@ export default function BollingerChart() {
           <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: '#ff9800' }} />Squeeze
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[9px] text-white font-semibold" style={{ background: '#26a69a' }}>B</span>
+          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] text-white font-semibold" style={{ background: '#26a69a' }}>B</span>
           상방 돌파
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[9px] text-white font-semibold" style={{ background: '#ef5350' }}>S</span>
+          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] text-white font-semibold" style={{ background: '#ef5350' }}>S</span>
           하방 돌파
         </span>
       </div>
@@ -339,7 +339,7 @@ export default function BollingerChart() {
           </div>
         )}
       </div>
-      <div className="mt-2.5 text-[13px] min-h-[20px]">
+      <div className="mt-2.5 text-[14px] min-h-[20px]">
         {statusText && <span style={{ color: statusColor }}>{statusLabel}</span>}
       </div>
     </div>

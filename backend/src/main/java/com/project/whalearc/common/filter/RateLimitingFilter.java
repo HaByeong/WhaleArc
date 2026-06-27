@@ -45,6 +45,12 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             return;
         }
 
+        // CORS preflight(OPTIONS)는 카운트 없이 통과 — 폴링 SPA에서 실제 요청과 별개로 버킷을 소모하지 않도록.
+        if ("OPTIONS".equals(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String clientIp = getClientIp(request);
         String method = request.getMethod();
         int limit = DEFAULT_LIMIT;

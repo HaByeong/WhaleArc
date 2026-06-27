@@ -25,7 +25,7 @@ public class User {
 
     private String authProvider; // "email", "google", "kakao"
 
-    /** 구독 등급 — 기능 접근 범위(예: 자동매매=PRO). 결제 연동 전 기본 FREE. */
+    /** 구독 등급 — 기능 접근 범위(예: 자동매매=BASIC 이상). 결제 연동 전 기본 FREE. */
     private Tier tier = Tier.FREE;
 
     /** 권한 역할 — tier와 별개 축. ADMIN은 등급 무관 전 기능 접근(자동매매 포함). */

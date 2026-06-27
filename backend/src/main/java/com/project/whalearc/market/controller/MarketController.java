@@ -116,11 +116,17 @@ public class MarketController {
                 return ResponseEntity.internalServerError().build();
             }
 
+            // 시세 0(레이트리밋/부분응답/스테일 캐시 폴백)은 정상 시세가 아님 — StockPriceProvider의 price<=0 스킵 정책과 일관되게 503으로 응답
+            long price = parseLong(output.get("stck_prpr"));
+            if (price <= 0) {
+                return ResponseEntity.status(503).build();
+            }
+
             MarketPriceResponse dto = new MarketPriceResponse();
             dto.setAssetType(AssetType.STOCK);
             dto.setSymbol(code);
             dto.setName(stockMasterService.getStockName(code));
-            dto.setPrice(parseLong(output.get("stck_prpr")));
+            dto.setPrice(price);
             dto.setChange(parseLong(output.get("prdy_vrss")));
             dto.setChangeRate(parseDouble(output.get("prdy_ctrt")));
             dto.setVolume(parseLong(output.get("acml_vol")));
@@ -249,6 +255,8 @@ public class MarketController {
         if (!kisApiClient.isConfigured()) {
             return ResponseEntity.ok(List.of());
         }
+        // 음수/과대 입력 방어: 벤치마크 용도상 2년이면 충분하므로 1~730일로 클램프
+        days = Math.max(1, Math.min(days, 730));
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
         String endDate = LocalDate.now().format(fmt);
         String startDate = LocalDate.now().minusDays(days).format(fmt);
@@ -304,14 +312,16 @@ public class MarketController {
                 String[] parts = token.trim().split(":");
                 String type = parts[0].toUpperCase();
 
-                // 숫자 파라미터(기간 등)는 1 이상이어야 함 — period<=0 입력으로 인한 ArrayIndexOutOfBounds(500) 방지
+                // 숫자 파라미터는 0보다 커야 함 — period<=0 입력으로 인한 500 방지.
+                // 소수 인자(볼린저 stdDev=2.5, PARABOLIC_SAR af=0.02 등)를 통과시키기 위해 Double로 검증한다.
                 boolean validParams = true;
                 for (int pi = 1; pi < parts.length; pi++) {
-                    try { if (Integer.parseInt(parts[pi].trim()) < 1) validParams = false; }
+                    try { if (Double.parseDouble(parts[pi].trim()) <= 0) validParams = false; }
                     catch (NumberFormatException e) { validParams = false; }
                 }
                 if (!validParams) continue; // 잘못된 파라미터의 지표 토큰은 건너뜀
 
+                try {
                 switch (type) {
                     case "RSI" -> {
                         int period = parts.length > 1 ? Integer.parseInt(parts[1]) : 14;
@@ -418,6 +428,10 @@ public class MarketController {
                                 Map.of("tenkan", tenkan, "kijun", kijun, "senkouB", senkouB)));
                     }
                     default -> log.warn("지원하지 않는 지표 타입: {}", type);
+                }
+                } catch (NumberFormatException e) {
+                    // 정수형 인자에 소수가 들어오는 등 토큰 단위 파싱 실패는 해당 토큰만 건너뛴다(전체 요청은 보존).
+                    log.warn("지표 토큰 파싱 실패, 건너뜀 [{}]: {}", token, e.getMessage());
                 }
             }
 

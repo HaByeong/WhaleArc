@@ -123,10 +123,12 @@ public class TurtleStrategyService {
             boolean longSignal = currHigh >= entryHigh && prevADX > ADX_THRESHOLD;
 
             if (longSignal && entryHigh > 0) {
-                // Python 동일: entry_price_candidate = high_break (브레이크아웃 레벨)
-                double entryPriceCandidate = entryHigh;
+                // 라이브 정확성: 진입가 기준을 브레이크아웃 레벨(entryHigh)이 아니라 실제 체결가(시장가=현재가)로 둔다.
+                // 백테스트 포팅은 high_break를 쓰지만, 라이브는 갭 상승 시 평단·손절·사이징이 왜곡되므로 분리한다.
+                // (브레이크아웃 트리거 longSignal=currHigh>=entryHigh 는 그대로 — 트리거 레벨과 체결가는 별개)
+                double entryPriceCandidate = currPrice;
 
-                // Python 동일: volatility = entry_atr / entry_price_candidate
+                // volatility 분모도 체결가 기준 → 사이징이 의도한 거래당 리스크(SL거리×수량)를 정확히 달성.
                 double volatility = prevATR / entryPriceCandidate;
                 if (volatility <= 0) return;
 
@@ -145,7 +147,7 @@ public class TurtleStrategyService {
                             getSymbolName(pos.getSymbol()),
                             Order.OrderType.BUY, Order.OrderMethod.MARKET, BigDecimal.valueOf(quantity), null);
 
-                    // Python 동일: 진입가/평단가/트레일기준 모두 브레이크아웃 레벨 사용
+                    // 진입가/평단가/손절/트레일기준 모두 실제 체결가(currPrice) 기준 — 라이브 장부 정확성.
                     BigDecimal entryPriceBd = BigDecimal.valueOf(entryPriceCandidate);
                     pos.setDirection(TurtlePosition.Direction.LONG);
                     pos.setEntryPrice(entryPriceBd);
@@ -418,7 +420,8 @@ public class TurtleStrategyService {
 
     /** shift(1) 적용 — 직전까지의 rolling max */
     private double rollingMax(double[] data, int idx, int period) {
-        double max = Double.MIN_VALUE;
+        double max = -Double.MAX_VALUE; // 음수/0 값도 올바른 최대값으로 갱신되도록 가장 작은 실수로 초기화(Double.MIN_VALUE는 가장 작은 '양수')
+
         int start = Math.max(0, idx - period);
         for (int i = start; i < idx; i++) { // idx 미포함 (shift 1)
             max = Math.max(max, data[i]);

@@ -308,7 +308,7 @@ const DriftCard = ({ b }: { b: BottleVM }) => {
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontSize: 16, fontWeight: 700, whiteSpace: 'nowrap', color: INK0 }}>{b.asset}</span>
           <span className="font-mono" style={{ fontSize: 11.5, color: INK2 }}>{b.symbol}</span>
-          <span className="font-mono" style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 600, color: b.changeRate > 0 ? UP : DOWN }}><Tri up={b.changeRate > 0} />{fmtPct(b.changeRate)}</span>
+          <span className="font-mono" style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 600, color: b.changeRate > 0 ? UP : b.changeRate < 0 ? DOWN : INK2 }}>{b.changeRate !== 0 && <Tri up={b.changeRate > 0} />}{fmtPct(b.changeRate)}</span>
         </div>
         {b.note && <p style={{ margin: '12px 0 0', fontSize: 13.5, color: INK0, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>“{b.note}”</p>}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
@@ -680,7 +680,7 @@ const ShareModal = ({ open, onClose, d }: { open: boolean; onClose: () => void; 
           const c = document.createElement('canvas'); c.width = w * 2; c.height = h * 2;
           const ctx = c.getContext('2d'); if (!ctx) return;
           ctx.scale(2, 2); ctx.drawImage(img, 0, 0);
-          c.toBlob(blob => { if (!blob) return; const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'whalearc-유리병편지.png'; a.click(); URL.revokeObjectURL(url); }, 'image/png');
+          c.toBlob(blob => { if (!blob) { alert('카드를 길게 눌러 이미지로 저장하거나 화면을 캡처해 공유하세요 🐋'); URL.revokeObjectURL(url); return; } const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'whalearc-bottle-letter.png'; a.click(); URL.revokeObjectURL(url); }, 'image/png');
         } catch { alert('카드를 길게 눌러 이미지로 저장하거나 화면을 캡처해 공유하세요 🐋'); URL.revokeObjectURL(url); }
       };
       img.onerror = () => { alert('카드를 길게 눌러 이미지로 저장하거나 화면을 캡처해 공유하세요 🐋'); URL.revokeObjectURL(url); };
@@ -839,8 +839,11 @@ const ConsoleMirrorPage = () => {
     mirrorService.list()
       .then(caps => {
         setList(caps);
-        localStorage.setItem('mirror_seen_revealed_count', String(caps.filter(c => c.revealed).length));
-        sessionStorage.setItem('mirror_badge', '0');
+        // 결과가 비었을 땐(일시 오류·미수신) 기존 seen 카운트/배지를 유지해 신규 배지가 과조정되지 않게
+        if (caps.length > 0) {
+          localStorage.setItem('mirror_seen_revealed_count', String(caps.filter(c => c.revealed).length));
+          sessionStorage.setItem('mirror_badge', '0');
+        }
       })
       .catch(() => setList([]))
       .finally(() => setLoading(false));

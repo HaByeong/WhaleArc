@@ -63,8 +63,9 @@ export interface BacktestRequest {
   // 독립 양방향(LONG_SHORT_FLAT) 전용 숏 조건
   shortEntryConditions?: Condition[];
   shortExitConditions?: Condition[];
-  // 미국주식 상대모멘텀 로테이션 (strategyType=MOMENTUM_ROTATION)
+  // 모멘텀 TopN 로테이션 (strategyType=MOMENTUM_ROTATION)
   strategyType?: string;
+  momentumAssetType?: string;   // US_STOCK·ETF·STOCK(한국)·CRYPTO
   topN?: number;
   lookbackDays?: number;
   regimeFilter?: boolean;
@@ -335,17 +336,21 @@ export function exportBacktestCsv(result: BacktestResult): void {
 
   // 요약 헤더
   lines.push('전략명,종목,기간,초기자본,최종가치,수익률,최대낙폭,샤프비율,승률');
-  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  // CSV 수식 인젝션 방어: =,+,-,@ 로 시작하는 값은 앞에 작은따옴표를 붙여 수식 해석을 막는다
+  const esc = (v: string) => {
+    const safe = /^[=+\-@]/.test(v) ? `'${v}` : v;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
   lines.push([
     esc(result.strategyName || '-'),
     esc(`${result.stockName || ''}(${result.stockCode || ''})`),
     esc(`${result.startDate} ~ ${result.endDate}`),
     result.initialCapital,
     Math.round(result.finalValue),
-    `${result.totalReturnRate.toFixed(2)}%`,
-    `${result.maxDrawdown.toFixed(2)}%`,
-    result.sharpeRatio.toFixed(2),
-    `${result.winRate.toFixed(1)}%`,
+    `${(result.totalReturnRate ?? 0).toFixed(2)}%`,
+    `${(result.maxDrawdown ?? 0).toFixed(2)}%`,
+    (result.sharpeRatio ?? 0).toFixed(2),
+    `${(result.winRate ?? 0).toFixed(1)}%`,
   ].join(','));
 
   // 빈 줄 구분

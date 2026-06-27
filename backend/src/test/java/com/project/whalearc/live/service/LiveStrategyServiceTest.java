@@ -8,6 +8,7 @@ import com.project.whalearc.live.repository.LiveDeploymentEquitySnapshotReposito
 import com.project.whalearc.live.repository.LiveOrderLogRepository;
 import com.project.whalearc.live.repository.LiveStrategyDeploymentRepository;
 import com.project.whalearc.market.dto.CandlestickResponse;
+import com.project.whalearc.market.service.BacktestDataProvider;
 import com.project.whalearc.market.service.CandlestickService;
 import com.project.whalearc.market.service.ExchangeRateService;
 import com.project.whalearc.market.service.MomentumDataCache;
@@ -54,6 +55,7 @@ class LiveStrategyServiceTest {
     private RecordingGateway gateway;
     private MomentumDataCache momentumDataCache;
     private ExchangeRateService exchangeRateService;
+    private com.project.whalearc.user.policy.TierResolver tierResolver;
     private LiveStrategyService svc;
     // 배포 저장소 인메모리 모사 — evaluateDeployment 가 락 안에서 findById 로 최신본을 다시 읽으므로
     // save/findById 가 같은 인스턴스를 주고받아야 테스트가 그 인스턴스의 상태 전이를 검증할 수 있다.
@@ -121,13 +123,15 @@ class LiveStrategyServiceTest {
             return l;
         });
 
+        tierResolver = mock(com.project.whalearc.user.policy.TierResolver.class);
         svc = new LiveStrategyService(
                 deploymentRepo, strategyRepo, candlestickService,
                 new IndicatorContextBuilder(), new SignalEvaluator(),
                 notificationService, portfolioService,
                 exchangeRateService, usEtfCatalog, usStockPriceProvider,
                 bitgetApiClient, List.of(gateway), orderLogRepo,
-                equitySnapshotRepo, new UserLockRegistry(), momentumDataCache);
+                equitySnapshotRepo, new UserLockRegistry(), momentumDataCache,
+                mock(BacktestDataProvider.class), tierResolver);
     }
 
     private void stubCashBalance(BigDecimal cash) {
@@ -587,5 +591,60 @@ class LiveStrategyServiceTest {
         assertTrue(gateway.placed.isEmpty(), "양수 모멘텀 없음 → 매수 없음(전액 현금)");
         assertTrue(saved.getCurrentTopHoldings().isEmpty(), "보유 종목 없음");
         assertNotNull(saved.getLastRotationMonth());
+    }
+
+    // ── 실거래(LIVE) 등급 한도: 종목 수(BASIC 3) · 동시 전략 수(BASIC 1) ──
+
+    private LiveStrategyDeployment liveDeploymentWithAssets(int symbolCount) {
+        LiveStrategyDeployment d = new LiveStrategyDeployment();
+        List<String> assets = new ArrayList<>();
+        for (int i = 0; i < symbolCount; i++) assets.add("SYM" + i);
+        d.setTargetAssets(assets);
+        d.setAccountMode(LiveStrategyDeployment.AccountMode.LIVE);
+        return d;
+    }
+
+    @Test
+    void liveBlockedWhenTooManySymbols() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> svc.enforceLiveTierLimitsLocked("u1", com.project.whalearc.user.domain.User.Tier.BASIC,
+                        liveDeploymentWithAssets(4)));
+        assertTrue(e.getMessage().contains("종목"));
+    }
+
+    @Test
+    void liveBlockedWhenStrategyLimitReached() {
+        when(deploymentRepo.countByUserIdAndAccountModeAndStatusIn(anyString(), any(), any())).thenReturn(1L);
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> svc.enforceLiveTierLimitsLocked("u1", com.project.whalearc.user.domain.User.Tier.BASIC,
+                        liveDeploymentWithAssets(1)));
+        assertTrue(e.getMessage().contains("전략"));
+    }
+
+    @Test
+    void liveAllowedWithinLimits() {
+        when(deploymentRepo.countByUserIdAndAccountModeAndStatusIn(anyString(), any(), any())).thenReturn(0L);
+        assertDoesNotThrow(() -> svc.enforceLiveTierLimitsLocked("u1",
+                com.project.whalearc.user.domain.User.Tier.BASIC, liveDeploymentWithAssets(3)));
+    }
+
+    @Test
+    void momentumLiveCountsTopNAsSymbols() {
+        LiveStrategyDeployment d = new LiveStrategyDeployment();
+        d.setDeploymentType("MOMENTUM_ROTATION");
+        d.setRotationTopN(5);                 // 초기 targetAssets는 비어 있고 topN이 실질 종목수
+        d.setTargetAssets(new ArrayList<>());
+        d.setAccountMode(LiveStrategyDeployment.AccountMode.LIVE);
+        assertThrows(IllegalArgumentException.class, () -> svc.enforceLiveTierLimitsLocked("u1",
+                com.project.whalearc.user.domain.User.Tier.BASIC, d)); // 5 > BASIC 3
+    }
+
+    @Test
+    void proLiveHasNoLimits() {
+        assertDoesNotThrow(() -> svc.enforceLiveTierLimitsLocked("u1",
+                com.project.whalearc.user.domain.User.Tier.PRO, liveDeploymentWithAssets(10)));
+        // PRO는 동시 전략 수 조회조차 하지 않음
+        org.mockito.Mockito.verify(deploymentRepo, org.mockito.Mockito.never())
+                .countByUserIdAndAccountModeAndStatusIn(anyString(), any(), any());
     }
 }

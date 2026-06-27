@@ -2,6 +2,7 @@ package com.project.whalearc.auth.login.dto.user;
 
 import com.project.whalearc.auth.login.domain.userinfo.UserInfo;
 import com.project.whalearc.user.domain.User;
+import com.project.whalearc.user.policy.TierLimits;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -23,6 +24,8 @@ public class UserProfileResponseDto {
     // 등급/권한 — 프론트 기능 게이팅·표시용
     private User.Tier tier;
     private User.Role role;
+    // 유효 등급 기준 기능 한도(ADMIN→PRO 반영) — 프론트 사전 게이팅용. 무제한=-1.
+    private TierLimits limits;
 
     // UserInfo 필드
     private String bio;

@@ -133,7 +133,17 @@ public class VirtService {
         if (cred == null || cred.getEncryptedAppkey() == null || cred.getEncryptedAppkey().isEmpty()) {
             return Map.of("connected", false);
         }
-        String appkey = CryptoUtil.decrypt(cred.getEncryptedAppkey(), encryptionKey);
+        // encryptionKey 미설정/불일치로 복호화가 실패하면 500 대신 미연결로 폴백
+        if (encryptionKey == null || encryptionKey.isBlank()) {
+            return Map.of("connected", false);
+        }
+        String appkey;
+        try {
+            appkey = CryptoUtil.decrypt(cred.getEncryptedAppkey(), encryptionKey);
+        } catch (Exception e) {
+            log.warn("[Virt] KIS 자격증명 복호화 실패(미연결 처리): userId={}, error={}", userId, e.getMessage());
+            return Map.of("connected", false);
+        }
         String maskedKey = appkey.length() >= 6
                 ? appkey.substring(0, 4) + "****" + appkey.substring(appkey.length() - 2)
                 : "****";
@@ -158,6 +168,9 @@ public class VirtService {
     @SuppressWarnings("unchecked")
     private VirtPortfolioResponse fetchKisPortfolio(String userId) {
         VirtCredential cred = getCredentialOrThrow(userId);
+        if (cred.getEncryptedAppkey() == null || cred.getEncryptedAppkey().isEmpty()) {
+            throw new RuntimeException("KIS API 키가 등록되지 않았습니다.");
+        }
         String appkey = CryptoUtil.decrypt(cred.getEncryptedAppkey(), encryptionKey);
         String appsecret = CryptoUtil.decrypt(cred.getEncryptedAppsecret(), encryptionKey);
 
@@ -229,7 +242,8 @@ public class VirtService {
 
                     holdings.add(VirtPortfolioResponse.VirtHolding.builder()
                             .stockCode(item.getOrDefault("pdno", ""))
-                            .stockName(item.getOrDefault("pdno", ""))
+                            // 종목명은 prdt_name 우선, 없을 때만 종목코드(pdno)로 폴백 (국내잔고와 동일 규약)
+                            .stockName(item.getOrDefault("prdt_name", item.getOrDefault("pdno", "")))
                             .quantity(qty)
                             .averagePrice((long) (origAvg * rate))
                             .currentPrice((long) (origCur * rate))
@@ -252,11 +266,15 @@ public class VirtService {
                 for (Map<String, String> item : osOutput2) {
                     double frcrCash = safeDouble(item.get("frcr_dncl_amt_2"));
                     if (frcrCash == 0) continue;
+                    // 통화코드 미제공 시 해외계좌 주력 통화인 USD 로 간주
+                    String ccy = item.getOrDefault("crcy_cd", "USD");
+                    // 원화(KRW) 예수금 행은 건너뛴다. 통합증거금 계좌는 해외잔고 output2에 KRW 예수금까지 내려주는데,
+                    // 이 KRW 예수금은 이미 국내잔고 dnca_tot_amt(krwCash)로 집계되므로 더하면 예수금이 중복돼 총자산이 부풀려진다.
+                    // (외화 예수금은 정의상 비원화 — KRW 잔고의 정답은 국내잔고다.)
+                    if (ccy != null && "KRW".equalsIgnoreCase(ccy.trim())) continue;
                     double rate = safeDouble(item.get("frst_bltn_exrt"));
                     if (rate <= 0) rate = 1.0;
                     foreignCashKrw += (long) (frcrCash * rate);
-                    // 통화코드 미제공 시 해외계좌 주력 통화인 USD 로 간주
-                    String ccy = item.getOrDefault("crcy_cd", "USD");
                     if (ccy == null || ccy.isBlank() || "USD".equalsIgnoreCase(ccy)) {
                         foreignCashUsd += frcrCash;
                     }
@@ -300,9 +318,12 @@ public class VirtService {
         String appkey = CryptoUtil.decrypt(cred.getEncryptedAppkey(), encryptionKey);
         String appsecret = CryptoUtil.decrypt(cred.getEncryptedAppsecret(), encryptionKey);
 
+        // days를 1~365로 클램프 — 음수면 startDate가 endDate보다 미래가 되어 KIS에 역범위 조회가 나가는 것 방지
+        // (exchange.KisApiClient.getTransactions의 Math.max(1, days) 방어와 일관).
+        int safeDays = Math.min(Math.max(days, 1), 365);
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
         String endDate = LocalDate.now().format(fmt);
-        String startDate = LocalDate.now().minusDays(days).format(fmt);
+        String startDate = LocalDate.now().minusDays(safeDays).format(fmt);
 
         Map<String, Object> result = kisClient.getTradeHistory(
                 userId, appkey, appsecret,
@@ -340,6 +361,7 @@ public class VirtService {
         cred.setEncryptedUpbitSecretKey(CryptoUtil.encrypt(secretKey, encryptionKey));
         cred.setUpdatedAt(java.time.LocalDateTime.now());
         credentialRepo.save(cred);
+        portfolioCache.remove("upbit:" + userId); // 키 변경 시 stale 잔고 캐시 제거
         log.info("[Virt] 업비트 자격증명 저장: userId={}", userId);
     }
 
@@ -366,7 +388,16 @@ public class VirtService {
         if (cred == null || cred.getEncryptedUpbitAccessKey() == null) {
             return Map.of("connected", false);
         }
-        String ak = CryptoUtil.decrypt(cred.getEncryptedUpbitAccessKey(), encryptionKey);
+        if (encryptionKey == null || encryptionKey.isBlank()) {
+            return Map.of("connected", false);
+        }
+        String ak;
+        try {
+            ak = CryptoUtil.decrypt(cred.getEncryptedUpbitAccessKey(), encryptionKey);
+        } catch (Exception e) {
+            log.warn("[Virt] 업비트 자격증명 복호화 실패(미연결 처리): userId={}, error={}", userId, e.getMessage());
+            return Map.of("connected", false);
+        }
         String masked = ak.length() >= 6 ? ak.substring(0, 4) + "****" : "****";
         return Map.of("connected", true, "accessKey", masked);
     }
@@ -486,6 +517,7 @@ public class VirtService {
         cred.setEncryptedBitgetPassphrase(CryptoUtil.encrypt(passphrase, encryptionKey));
         cred.setUpdatedAt(java.time.LocalDateTime.now());
         credentialRepo.save(cred);
+        portfolioCache.remove("bitget:" + userId); // 키 변경 시 stale 잔고 캐시 제거
         log.info("[Virt] 비트겟 자격증명 저장: userId={}", userId);
     }
 
@@ -512,7 +544,16 @@ public class VirtService {
         if (cred == null || cred.getEncryptedBitgetApiKey() == null) {
             return Map.of("connected", false);
         }
-        String ak = CryptoUtil.decrypt(cred.getEncryptedBitgetApiKey(), encryptionKey);
+        if (encryptionKey == null || encryptionKey.isBlank()) {
+            return Map.of("connected", false);
+        }
+        String ak;
+        try {
+            ak = CryptoUtil.decrypt(cred.getEncryptedBitgetApiKey(), encryptionKey);
+        } catch (Exception e) {
+            log.warn("[Virt] 비트겟 자격증명 복호화 실패(미연결 처리): userId={}, error={}", userId, e.getMessage());
+            return Map.of("connected", false);
+        }
         String masked = ak.length() >= 6 ? ak.substring(0, 4) + "****" : "****";
         return Map.of("connected", true, "apiKey", masked);
     }
@@ -560,9 +601,10 @@ public class VirtService {
 
             if (total < 0.00000001) continue;
 
-            if ("USDT".equals(coin)) {
-                cashBalance = (long) (total * usdtKrw);
-                bitgetUsdt = total;
+            // USDT/USDC 스테이블코인은 현금으로 합산 (exchange.BitgetApiClient와 동일 규칙)
+            if ("USDT".equals(coin) || "USDC".equals(coin)) {
+                cashBalance += (long) (total * usdtKrw);
+                bitgetUsdt += total;
                 continue;
             }
 

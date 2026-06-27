@@ -220,7 +220,7 @@ body.whalearc-dark:not(.whalearc-virt):not(.whalearc-novirt) {
   --wa-select-bg: #0c1a2e;
 }
 body.whalearc-dark {
-  background-color: var(--wa-page-bg, #060d18);
+  background-color: var(--wa-page-bg, #060b1f);
   color: var(--wa-text-primary, #e2e8f0);
 }
 

@@ -197,13 +197,16 @@ const TradingChart = ({
     });
     observer.observe(containerRef.current);
 
+    // ref.current 가 cleanup 시점에 바뀌어도 안전하도록 effect 스코프에 캡처
+    const overlaySeries = overlaySeriesRef.current;
+
     return () => {
       observer.disconnect();
       chart.remove();
       chartRef.current = null;
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
-      overlaySeriesRef.current.clear();
+      overlaySeries.clear();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -303,19 +306,22 @@ const TradingChart = ({
       subChartsRef.current.set(key, { chart: subChart, series, obs });
     }
 
-    // 새 차트에 데이터 적용
-    setTimeout(() => applyIndicators(), 0);
+    // 새 차트에 데이터 적용 (빠른 토글 시 잔여 콜백 방지 위해 타이머 정리)
+    const id = setTimeout(() => applyIndicators(), 0);
+    return () => clearTimeout(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSubCharts.join(',')]);
 
   // 언마운트 시 서브차트 전체 정리
   useEffect(() => {
+    // ref.current 가 cleanup 시점에 바뀌어도 안전하도록 effect 스코프에 캡처(동일 Map 객체)
+    const subCharts = subChartsRef.current;
     return () => {
-      for (const [, info] of subChartsRef.current.entries()) {
+      for (const [, info] of subCharts.entries()) {
         info.obs.disconnect();
         info.chart.remove();
       }
-      subChartsRef.current.clear();
+      subCharts.clear();
     };
   }, []);
 
@@ -596,7 +602,7 @@ const TradingChart = ({
         {assetType === 'STOCK' ? (
           <div className="flex items-center gap-2">
             {/* 캔들 종류(정적 라벨) — 기간 선택과 다른 범주이므로 배지+구분선으로 분리 */}
-            <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${isDark ? 'text-slate-400 bg-white/[0.05]' : 'text-gray-500 bg-gray-100'}`}>일봉</span>
+            <span className={`text-[12px] font-medium px-1.5 py-0.5 rounded ${isDark ? 'text-slate-400 bg-white/[0.05]' : 'text-gray-500 bg-gray-100'}`}>일봉</span>
             <span className={`w-px h-3.5 ${isDark ? 'bg-white/10' : 'bg-gray-200'}`} />
             <div className="flex items-center space-x-1">
               {STOCK_PERIODS.map(p => (
@@ -634,7 +640,7 @@ const TradingChart = ({
         {assetType !== 'STOCK' && (
           <div className="flex items-center space-x-1.5">
             <span className={`inline-block w-1.5 h-1.5 rounded-full animate-pulse ${changeRate >= 0 ? 'bg-red-500' : 'bg-blue-500'}`} />
-            <span className="text-[10px] text-gray-400 font-medium">LIVE</span>
+            <span className="text-[11px] text-gray-400 font-medium">LIVE</span>
           </div>
         )}
       </div>
@@ -683,16 +689,16 @@ const TradingChart = ({
           <div key={key} className="mt-1">
             <div className="flex items-center justify-between px-1 mb-0.5">
               <div className="flex items-center gap-3">
-                <span className="text-[10px] font-semibold text-gray-400">{meta?.label ?? key}</span>
+                <span className="text-[11px] font-semibold text-gray-400">{meta?.label ?? key}</span>
                 {key === 'MACD' && (
                   <>
                     <div className="flex items-center gap-1">
                       <span className="w-2 h-0.5 bg-blue-500 rounded" />
-                      <span className="text-[9px] text-gray-300">MACD</span>
+                      <span className="text-[10px] text-gray-300">MACD</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <span className="w-2 h-0.5 bg-red-500 rounded" />
-                      <span className="text-[9px] text-gray-300">Signal</span>
+                      <span className="text-[10px] text-gray-300">Signal</span>
                     </div>
                   </>
                 )}
@@ -700,17 +706,17 @@ const TradingChart = ({
                   <>
                     <div className="flex items-center gap-1">
                       <span className="w-2 h-0.5 bg-blue-500 rounded" />
-                      <span className="text-[9px] text-gray-300">%K</span>
+                      <span className="text-[10px] text-gray-300">%K</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <span className="w-2 h-0.5 bg-red-500 rounded" />
-                      <span className="text-[9px] text-gray-300">%D</span>
+                      <span className="text-[10px] text-gray-300">%D</span>
                     </div>
                   </>
                 )}
               </div>
               {meta?.guide && (
-                <div className="flex gap-3 text-[9px] text-gray-300">
+                <div className="flex gap-3 text-[10px] text-gray-300">
                   {meta.guide.map(g => <span key={g}>{g}</span>)}
                 </div>
               )}
@@ -720,7 +726,7 @@ const TradingChart = ({
                 if (el) subContainersRef.current.set(key, el);
                 else subContainersRef.current.delete(key);
               }}
-              className="rounded-lg overflow-hidden border border-gray-100"
+              className={`rounded-lg overflow-hidden border ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`}
             />
           </div>
         );

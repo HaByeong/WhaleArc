@@ -81,7 +81,6 @@ public class FeedbackController {
         }
 
         List<Feedback> feedbacks = feedbackService.getFeedbacks(cat);
-        boolean admin = isAdmin(userId);
 
         List<Map<String, Object>> result = feedbacks.stream().map(f -> {
             Map<String, Object> map = new HashMap<>();
@@ -93,11 +92,11 @@ public class FeedbackController {
             map.put("status", f.getStatus().name());
             map.put("authorName", f.getAuthorName());
             map.put("upvotes", f.getUpvotes());
-            map.put("hasUpvoted", f.getUpvotedUserIds().contains(userId));
+            map.put("hasUpvoted", f.getUpvotedUserIds() != null && f.getUpvotedUserIds().contains(userId)); // 레거시/부분 데이터 null 방어 (NPE → 목록 전체 500 방지)
             map.put("isOwner", f.getUserId().equals(userId));
             map.put("imageUrls", f.getImageUrls() != null ? f.getImageUrls() : List.of());
             map.put("reviewerName", f.getReviewerName());
-            map.put("isAdmin", admin);
+            map.put("isAdmin", true); // 71행에서 비관리자는 이미 차단되므로 이 시점엔 항상 관리자
             return map;
         }).toList();
 

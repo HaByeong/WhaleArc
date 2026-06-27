@@ -52,10 +52,17 @@ public class KisApiClient {
     }
 
     // KIS 접근토큰은 발급이 1분당 1회로 제한(초과 시 EGW00133)되고 유효기간이 24h다.
-    // appkey별로 캐싱해 재사용한다(매 조회마다 새로 발급하던 EGW00133 버그 수정).
+    // (appKey,appSecret) 조합별로 캐싱해 재사용한다(매 조회마다 새로 발급하던 EGW00133 버그 수정).
+    // appKey만 키로 쓰면 같은 appKey에 appSecret만 바꿔 저장한 경우 옛 토큰이 재사용돼 혼란을 주므로
+    // appSecret 까지 포함해 구분한다.
     private final Map<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
 
     private record CachedToken(String token, long expiresAtMillis) {}
+
+    /** 토큰 캐시 키 — appKey 와 appSecret 을 함께 묶어 appSecret 변경 시 옛 토큰 재사용을 막는다. */
+    private static String tokenCacheKey(String appKey, String appSecret) {
+        return appKey + "|" + (appSecret == null ? "" : appSecret);
+    }
 
     // 잔고 짧은 캐시(폴링/동시요청 디듀프)는 ExchangeAccountService 계층에서 (userId,exchangeType)로
     // 일원화(KIS/Upbit/Bitget 공통). 여기서는 토큰만 캐시한다.
@@ -78,7 +85,8 @@ public class KisApiClient {
     }
 
     private String getAccessToken(String appKey, String appSecret) {
-        CachedToken cached = tokenCache.get(appKey);
+        String cacheKey = tokenCacheKey(appKey, appSecret);
+        CachedToken cached = tokenCache.get(cacheKey);
         if (cached != null && System.currentTimeMillis() < cached.expiresAtMillis()) {
             return cached.token();
         }
@@ -108,7 +116,7 @@ public class KisApiClient {
                     try { ttl = (long) (Double.parseDouble(String.valueOf(exp)) * 1000) - 60_000; }
                     catch (NumberFormatException ignore) { /* 기본 사용 */ }
                 }
-                tokenCache.put(appKey, new CachedToken(token, System.currentTimeMillis() + ttl));
+                tokenCache.put(cacheKey, new CachedToken(token, System.currentTimeMillis() + ttl));
                 return token;
             }
         } catch (Exception e) {
@@ -285,11 +293,14 @@ public class KisApiClient {
             for (Map<String, Object> item : output2) {
                 double frcrCash = parseDouble(item.get("frcr_dncl_amt_2"));   // 외화예수금
                 if (frcrCash == 0) continue;
+                // 통화코드 미제공 시 해외 주력 통화 USD로 간주
+                String ccy = str(item.get("crcy_cd"));
+                // 원화(KRW) 예수금 행은 건너뛴다. 통합증거금 계좌는 output2에 KRW 예수금까지 내려주는데,
+                // 이는 이미 fetchDomestic의 dnca_tot_amt(cashKrw)에 집계돼 있어, 더하면 예수금이 중복돼 총자산이 부풀려진다.
+                if (ccy != null && "KRW".equalsIgnoreCase(ccy.trim())) continue;
                 double rate = parseDouble(item.get("frst_bltn_exrt"));        // 최초고시환율
                 if (rate <= 0) rate = 1.0;
                 krw += frcrCash * rate;
-                // 통화코드 미제공 시 해외 주력 통화 USD로 간주
-                String ccy = str(item.get("crcy_cd"));
                 if (ccy == null || ccy.isBlank() || "USD".equalsIgnoreCase(ccy)) usd += frcrCash;
             }
             return new double[]{krw, usd};

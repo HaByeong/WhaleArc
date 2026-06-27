@@ -46,10 +46,16 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(e.getMessage()));
     }
 
-    // 필수 요청 파라미터 누락 / 타입 불일치 (클라이언트 요청 오류 → 400, 500 안전망으로 새지 않도록)
-    @ExceptionHandler({MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class})
-    public ResponseEntity<ApiResponse<Void>> handleBadRequestParam(Exception e) {
-        return ResponseEntity.badRequest().body(ApiResponse.error("요청 파라미터가 올바르지 않습니다: " + e.getMessage()));
+    // 필수 요청 파라미터 누락 → 400. 프레임워크 내부 메시지 대신 파라미터명만 노출(내부 구현 누출 방지).
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingParam(MissingServletRequestParameterException e) {
+        return ResponseEntity.badRequest().body(ApiResponse.error("필수 요청 파라미터가 누락되었습니다: " + e.getParameterName()));
+    }
+
+    // 요청 파라미터 타입 불일치 → 400. 변환 실패 상세(클래스명/내부 경로)는 흘리지 않고 파라미터명만 노출.
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        return ResponseEntity.badRequest().body(ApiResponse.error("요청 파라미터 '" + e.getName() + "' 형식이 올바르지 않습니다."));
     }
 
     // 예상하지 못한 모든 예외 (안전망)

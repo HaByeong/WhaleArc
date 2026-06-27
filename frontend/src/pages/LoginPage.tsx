@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
-import apiClient from '../utils/api';
+import apiClient, { getErrorMessage } from '../utils/api';
 import {
   AuthShell, AuthHero, AuthPanel, AuthCard, PrimaryButton, GoogleButton,
   AuthDivider, AuthAlert, AUTH_INPUT, AUTH_LABEL,
@@ -77,7 +77,7 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { session } = useAuth();
-  const isVirtLogin = (location.state as any)?.from?.startsWith('/virt');
+  const isVirtLogin = (location.state as { from?: string } | null)?.from?.startsWith('/virt');
 
   // 이미 로그인된 경우 목적지로 이동
   useEffect(() => {
@@ -132,15 +132,21 @@ const LoginPage = () => {
       return;
     }
 
+    // 빈 비밀번호는 클라이언트에서 즉시 차단 (불필요한 서버 왕복 방지)
+    if (!password) {
+      setError('비밀번호를 입력해주세요.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       await authService.login(trimmedEmail, password);
-      const state = location.state as { from?: string } | null;
-      const redirectTo = state?.from || '/dashboard';
-      navigate(redirectTo, { replace: true });
-    } catch (err: any) {
-      if (err?.message) {
-        setError(err.message);
-      } else if (err?.code === 'NETWORK_ERROR' || !navigator.onLine) {
+      // 로그인 성공 시 세션이 갱신되면 위의 session useEffect가 목적지로 이동시킨다 (중복 navigate 제거)
+    } catch (err) {
+      const msg = getErrorMessage(err, '');
+      if (msg) {
+        setError(msg);
+      } else if ((err as { code?: string })?.code === 'NETWORK_ERROR' || !navigator.onLine) {
         setError('네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.');
       } else {
         setError('항해를 시작할 수 없습니다. 이메일과 비밀번호를 확인해주세요.');
@@ -160,8 +166,8 @@ const LoginPage = () => {
         try { localStorage.setItem('whalearc_redirect', state.from); } catch { /* iOS Safari 개인정보 보호 모드 등 */ }
       }
       await authService.loginWithOAuth(provider);
-    } catch (err: any) {
-      setError(err.message || `${provider} 로그인에 실패했습니다.`);
+    } catch (err) {
+      setError(getErrorMessage(err, `${provider} 로그인에 실패했습니다.`));
       setOauthLoading(null);
     }
   };
@@ -170,7 +176,7 @@ const LoginPage = () => {
     <AuthShell>
       <AuthHero
         badge={isVirtLogin ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#5b9dff]/30 bg-[#5b9dff]/10 px-3 py-1 text-[11px] font-bold tracking-wide text-[#bcd6ff]">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#5b9dff]/30 bg-[#5b9dff]/10 px-3 py-1 text-[12px] font-bold tracking-wide text-[#bcd6ff]">
             VIRT · 가상 모의투자
           </span>
         ) : undefined}
@@ -208,7 +214,7 @@ const LoginPage = () => {
             <div className="mb-2">
               <GoogleButton
                 onClick={() => handleOAuthLogin('google')}
-                disabled={!!oauthLoading}
+                disabled={!!oauthLoading || isInApp}
                 label={oauthLoading === 'google' ? '연결 중...' : 'Google로 로그인'}
               />
             </div>
@@ -295,7 +301,7 @@ const LoginPage = () => {
                       return (
                         <div key={idx.code} className={`rounded-2xl p-4 sm:p-5 border ${isUp ? 'bg-[#ef4d4d]/10 border-[#ef4d4d]/15' : 'bg-[#4d8aff]/10 border-[#4d8aff]/15'}`}>
                           <div className="mb-2 flex items-center gap-1.5 sm:mb-3 sm:gap-2">
-                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold sm:px-2 sm:text-xs ${isUp ? 'bg-[#ef4d4d]/20 text-[#ff7a7a]' : 'bg-[#4d8aff]/20 text-[#8fb6ff]'}`}>
+                            <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold sm:px-2 sm:text-xs ${isUp ? 'bg-[#ef4d4d]/20 text-[#ff7a7a]' : 'bg-[#4d8aff]/20 text-[#8fb6ff]'}`}>
                               {idx.code}
                             </span>
                             <span className="text-xs font-medium text-white/45 sm:text-sm">{idx.name}</span>
@@ -310,7 +316,7 @@ const LoginPage = () => {
                                 : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />}
                             </svg>
                             <span>{Math.abs(idx.changeRate).toFixed(2)}%</span>
-                            <span className="text-[10px] font-normal text-white/35 sm:text-xs">
+                            <span className="text-[11px] font-normal text-white/35 sm:text-xs">
                               ({isUp ? '+' : ''}{idx.change.toFixed(2)})
                             </span>
                           </div>
@@ -323,7 +329,7 @@ const LoginPage = () => {
                     return (
                       <div className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300 sm:px-2 sm:text-xs">USDT</span>
+                          <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[11px] font-bold text-emerald-300 sm:px-2 sm:text-xs">USDT</span>
                           <span className="text-xs font-medium text-white/45 sm:text-sm">테더 환율</span>
                         </div>
                         <div className="flex items-center gap-3">
@@ -337,7 +343,7 @@ const LoginPage = () => {
                       </div>
                     );
                   })()}
-                  <p className="text-right text-[10px] text-white/30">
+                  <p className="text-right text-[11px] text-white/30">
                     * 지수: KIS API 기준 (15~20초 지연) · 환율: 업비트 실시간
                   </p>
                 </div>

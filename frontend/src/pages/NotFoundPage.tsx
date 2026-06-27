@@ -20,7 +20,11 @@ const NotFoundPage = () => {
         <p className="mb-8 text-slate-500">요청하신 페이지가 존재하지 않거나 이동되었습니다.</p>
         <div className="flex gap-3 justify-center">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => {
+              // 앱 내 히스토리가 없으면(외부 링크/북마크 직접 진입) 대시보드로 폴백
+              if (window.history.length <= 1) navigate(dashboardPath);
+              else navigate(-1);
+            }}
             className="px-5 py-2.5 rounded-lg text-sm font-medium transition-colors border border-white/10 text-slate-400 hover:bg-white/5"
           >
             뒤로 가기

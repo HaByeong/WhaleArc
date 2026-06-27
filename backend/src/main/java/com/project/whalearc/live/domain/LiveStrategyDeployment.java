@@ -87,7 +87,10 @@ public class LiveStrategyDeployment {
     @Indexed
     private Status status = Status.RUNNING;
 
-    private BigDecimal allocatedCash;  // 이 배포에 할당된 총 투자금 (KRW)
+    private BigDecimal allocatedCash;  // 이 배포에 할당된 총 투자금 (baseCurrency 단위)
+    // 할당금액(allocatedCash)의 기초통화: "KRW"/"USD"/"USDT". null=레거시(KRW)로 해석.
+    // 모의(PAPER)=KRW, 실거래는 자산군별(Bitget=USDT, 미국주식/ETF=USD, 국내주식=KRW). 손익 원장은 항상 KRW.
+    private String baseCurrency;
 
     // ── 리스크 파라미터 (퍼센트, null이면 미적용) ──
     private BigDecimal stopLossPct;

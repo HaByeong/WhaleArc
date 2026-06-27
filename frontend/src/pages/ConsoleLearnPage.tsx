@@ -7,10 +7,11 @@ import HelmShell from '../components/HelmShell';
 import FunnelSteps from '../components/FunnelSteps';
 import {
   quantStoreService, CATEGORY_LABELS, RISK_LABELS, assetDisplayName,
-  type QuantProduct, type PurchasePerformance, type ProductPurchase,
+  type QuantProduct, type PurchasePerformance, type ProductPurchase, type Category,
 } from '../services/quantStoreService';
 import { tradeService } from '../services/tradeService';
 import { Term } from '../components/GlossaryTerm';
+import { getErrorMessage } from '../utils/api';
 
 /* ────────────────────────────────────────────────────────────
    ConsoleLearnPage — 전략 학습 & 스토어 (/store) · 실데이터 배선
@@ -33,7 +34,7 @@ const WhaleAvatar = ({ size = 36, animated }: { size?: number; animated?: boolea
   </span>
 );
 const TagL = ({ children, color, bg, border }: { children: ReactNode; color: string; bg: string; border: string }) => (
-  <span className="whitespace-nowrap rounded-[5px] px-2 py-[3px] text-[11px] font-bold tracking-[.04em]" style={{ background: bg, color, border: `1px solid ${border}` }}>{children}</span>
+  <span className="whitespace-nowrap rounded-[5px] px-2 py-[3px] text-[12px] font-bold tracking-[.04em]" style={{ background: bg, color, border: `1px solid ${border}` }}>{children}</span>
 );
 
 const RISK_TAG: Record<string, { color: string; bg: string; border: string }> = {
@@ -93,21 +94,21 @@ const eduFor = (cat: string) => EDU[cat] || EDU.TREND_FOLLOWING;
 
 const bubble: React.CSSProperties = { padding: '12px 14px', borderRadius: 14, borderTopLeftRadius: 4, background: 'var(--ci-card)', border: `1px solid ${HAIR}` };
 const BlkView = ({ b }: { b: Blk }) => {
-  if (b.kind === 'text') return <div style={bubble}><p className="m-0 text-[13.5px] leading-relaxed" style={{ color: INK1 }}>{b.body}</p></div>;
-  if (b.kind === 'term') return <div style={{ ...bubble, padding: '8px 12px', background: SONAR_DIM, border: '1px solid rgba(91,157,255,.22)' }}><span className="text-[12px]" style={{ color: INK2 }}>관련 용어: </span><span className="text-[12.5px] font-semibold underline decoration-dotted underline-offset-2" style={{ color: SONAR }} title={b.def}>{b.name}</span><span className="mt-1 block text-[12px] leading-relaxed" style={{ color: INK2 }}>{b.def}</span></div>;
-  if (b.kind === 'easy') return <div style={{ ...bubble, background: 'rgba(245,208,97,.07)', border: '1px solid rgba(245,208,97,.24)' }} className="grid grid-cols-[auto_1fr] items-start gap-3"><span className="text-[18px]">💡</span><p className="m-0 text-[13.5px] leading-relaxed" style={{ color: INK1 }}>{b.body}</p></div>;
-  if (b.kind === 'warning') return <div style={{ ...bubble, background: 'rgba(77,138,255,.07)', border: '1px solid rgba(77,138,255,.24)' }} className="grid grid-cols-[auto_1fr] items-start gap-3"><span className="text-[16px]">⚠️</span><p className="m-0 text-[13.5px] leading-relaxed" style={{ color: INK1 }}>{b.body}</p></div>;
-  return <div style={bubble}><ol className="m-0 flex list-none flex-col gap-2.5 p-0">{(b as Extract<Blk, { kind: 'steps' }>).steps.map((s, i) => <li key={i} className="grid grid-cols-[22px_1fr] items-start gap-3"><span className="flex h-[22px] w-[22px] items-center justify-center rounded-full font-mono text-[11px] font-bold" style={{ background: SONAR_DIM, border: '1px solid rgba(91,157,255,.32)', color: SONAR }}>{i + 1}</span><span className="text-[13.5px] leading-snug" style={{ color: INK1 }}>{s}</span></li>)}</ol></div>;
+  if (b.kind === 'text') return <div style={bubble}><p className="m-0 text-[14.5px] leading-relaxed" style={{ color: INK1 }}>{b.body}</p></div>;
+  if (b.kind === 'term') return <div style={{ ...bubble, padding: '8px 12px', background: SONAR_DIM, border: '1px solid rgba(91,157,255,.22)' }}><span className="text-[13px]" style={{ color: INK2 }}>관련 용어: </span><span className="text-[13.5px] font-semibold underline decoration-dotted underline-offset-2" style={{ color: SONAR }} title={b.def}>{b.name}</span><span className="mt-1 block text-[13px] leading-relaxed" style={{ color: INK2 }}>{b.def}</span></div>;
+  if (b.kind === 'easy') return <div style={{ ...bubble, background: 'rgba(245,208,97,.07)', border: '1px solid rgba(245,208,97,.24)' }} className="grid grid-cols-[auto_1fr] items-start gap-3"><span className="text-[19.5px]">💡</span><p className="m-0 text-[14.5px] leading-relaxed" style={{ color: INK1 }}>{b.body}</p></div>;
+  if (b.kind === 'warning') return <div style={{ ...bubble, background: 'rgba(77,138,255,.07)', border: '1px solid rgba(77,138,255,.24)' }} className="grid grid-cols-[auto_1fr] items-start gap-3"><span className="text-[17.5px]">⚠️</span><p className="m-0 text-[14.5px] leading-relaxed" style={{ color: INK1 }}>{b.body}</p></div>;
+  return <div style={bubble}><ol className="m-0 flex list-none flex-col gap-2.5 p-0">{(b as Extract<Blk, { kind: 'steps' }>).steps.map((s, i) => <li key={i} className="grid grid-cols-[22px_1fr] items-start gap-3"><span className="flex h-[22px] w-[22px] items-center justify-center rounded-full font-mono text-[12px] font-bold" style={{ background: SONAR_DIM, border: '1px solid rgba(91,157,255,.32)', color: SONAR }}>{i + 1}</span><span className="text-[14.5px] leading-snug" style={{ color: INK1 }}>{s}</span></li>)}</ol></div>;
 };
 const Turn = ({ q, a, index }: { q: string; a: Blk[]; index: number }) => (
   <div className="flex flex-col gap-3" style={{ marginTop: index === 0 ? 8 : 20, animation: `message-in .3s ease ${index * 0.08}s both` }}>
-    <div className="flex justify-end"><div className="max-w-[80%] rounded-2xl px-3.5 py-2.5 text-[13.5px] font-semibold text-white" style={{ borderBottomRightRadius: 4, background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>{q}</div></div>
+    <div className="flex justify-end"><div className="max-w-[80%] rounded-2xl px-3.5 py-2.5 text-[14.5px] font-semibold text-white" style={{ borderBottomRightRadius: 4, background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>{q}</div></div>
     <div className="flex items-start gap-2.5"><WhaleAvatar size={30} /><div className="flex min-w-0 flex-1 flex-col gap-2.5">{a.map((bl, i) => <BlkView key={i} b={bl} />)}</div></div>
   </div>
 );
 
 const Metric = ({ label, value, color }: { label: ReactNode; value: string; color?: string }) => (
-  <div><div className="mb-1 text-[10.5px] tracking-[.08em]" style={{ color: INK2 }}>{label}</div><div className="font-mono text-[14px] font-bold" style={{ color: color || INK0 }}>{value}</div></div>
+  <div><div className="mb-1 text-[11.5px] tracking-[.08em]" style={{ color: INK2 }}>{label}</div><div className="font-mono text-[15px] font-bold" style={{ color: color || INK0 }}>{value}</div></div>
 );
 
 /* 전략별 맞춤 교육 — 상품명·로직·설명에서 전략 키워드를 찾아 핵심 포인트 제공 (옛 store 12전략 키워드 복원) */
@@ -175,53 +176,53 @@ const ProductModal = ({ p, purchased, onClose, onRun, onBuy, onCancel }: { p: Qu
         <button onClick={onClose} aria-label="닫기" className="absolute right-[18px] top-[18px] z-[2] flex h-8 w-8 items-center justify-center rounded-lg" style={{ border: `1px solid ${HAIR}`, background: CARD, color: INK1 }}><svg aria-hidden width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg></button>
         <header className="px-7 pb-[18px] pt-7" style={{ borderBottom: `1px solid ${HAIR}` }}>
           <div className="mb-3 flex flex-wrap gap-1.5"><TagL color={SONAR} bg={SONAR_DIM} border="rgba(91,157,255,.24)">{CATEGORY_LABELS[p.category]}</TagL><TagL color={rt.color} bg={rt.bg} border={rt.border}>{RISK_LABELS[p.riskLevel]} 리스크</TagL>{p.assetType && <TagL color={INK1} bg={CARD} border={HAIR}>{p.assetType === 'CRYPTO' ? '가상화폐' : '주식'}</TagL>}</div>
-          <h2 className="text-[22px] font-bold">{p.name}</h2>
-          <p className="mt-1.5 text-[13px] leading-relaxed" style={{ color: INK1 }}>{p.description}</p>
+          <h2 className="text-[24px] font-bold">{p.name}</h2>
+          <p className="mt-1.5 text-[14px] leading-relaxed" style={{ color: INK1 }}>{p.description}</p>
           <div className="mt-4 grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(92px, 1fr))' }}>
             <Metric label="대상 자산" value={`${p.targetAssets?.length || 0}종목`} />
             <Metric label="자산 유형" value={p.assetType === 'CRYPTO' ? '가상화폐' : '주식'} />
             <Metric label={<Term k="MDD" compact>리스크</Term>} value={RISK_LABELS[p.riskLevel]} color={rt.color} />
             <Metric label="구독자" value={`${(p.subscribers || 0).toLocaleString('ko-KR')}명`} />
           </div>
-          <div className="mt-3.5 rounded-lg px-3.5 py-2.5 text-[12px] leading-relaxed" style={{ background: 'rgba(245,208,97,.08)', border: '1px solid rgba(245,208,97,.24)', color: INK1 }}>
+          <div className="mt-3.5 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed" style={{ background: 'rgba(245,208,97,.08)', border: '1px solid rgba(245,208,97,.24)', color: INK1 }}>
             ℹ️ 수익률·샤프·승률 같은 성과는 시장·기간에 따라 달라집니다. 아래 <span style={{ color: '#f5d061', fontWeight: 700 }}>백테스트로 검증</span>에서 직접 과거 데이터로 확인해보세요.
           </div>
         </header>
         <div className="px-7 pt-5">
-          <div className="flex items-center gap-2.5"><WhaleAvatar size={32} animated /><span className="rounded-2xl px-3.5 py-2 text-[13px]" style={{ background: CARD, border: `1px solid ${HAIR}`, color: INK1 }}>{edu.tagline} 쉽게 알려드릴게요.</span></div>
+          <div className="flex items-center gap-2.5"><WhaleAvatar size={32} animated /><span className="rounded-2xl px-3.5 py-2 text-[14px]" style={{ background: CARD, border: `1px solid ${HAIR}`, color: INK1 }}>{edu.tagline} 쉽게 알려드릴게요.</span></div>
           {edu.qa.map((t, i) => <Turn key={i} index={i} q={t.q} a={t.a} />)}
         </div>
         {p.targetAssets?.length > 0 && (
           <div className="mx-7 mt-4 rounded-xl px-[18px] py-4" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
-            <div className="mb-2.5 text-[11px] font-semibold tracking-[.16em]" style={{ color: SONAR }}>대상 자산</div>
-            <div className="flex flex-wrap gap-1.5">{p.targetAssets.map(a => <span key={a} className="whitespace-nowrap rounded-[5px] px-2.5 py-1 text-[11.5px]" style={{ background: 'var(--ci-card)', border: `1px solid ${HAIR}`, color: INK1 }}>{assetDisplayName(a, p.assetType)}</span>)}</div>
+            <div className="mb-2.5 text-[12px] font-semibold tracking-[.16em]" style={{ color: SONAR }}>대상 자산</div>
+            <div className="flex flex-wrap gap-1.5">{p.targetAssets.map(a => <span key={a} className="whitespace-nowrap rounded-[5px] px-2.5 py-1 text-[12.5px]" style={{ background: 'var(--ci-card)', border: `1px solid ${HAIR}`, color: INK1 }}>{assetDisplayName(a, p.assetType)}</span>)}</div>
           </div>
         )}
         {p.strategyLogic && (
           <div className="mx-7 mt-3 rounded-xl px-[18px] py-4" style={{ background: SONAR_DIM, border: '1px solid rgba(91,157,255,.18)' }}>
-            <div className="mb-1.5 text-[11px] font-semibold tracking-[.16em]" style={{ color: SONAR }}>전략 로직</div>
-            <p className="m-0 whitespace-pre-wrap text-[12.5px] leading-relaxed" style={{ color: INK1 }}>{p.strategyLogic}</p>
+            <div className="mb-1.5 text-[12px] font-semibold tracking-[.16em]" style={{ color: SONAR }}>전략 로직</div>
+            <p className="m-0 whitespace-pre-wrap text-[13.5px] leading-relaxed" style={{ color: INK1 }}>{p.strategyLogic}</p>
           </div>
         )}
         {tips.length > 0 && (
           <div className="mx-7 mt-3 rounded-xl px-[18px] py-4" style={{ background: 'rgba(245,208,97,.07)', border: '1px solid rgba(245,208,97,.24)' }}>
-            <div className="mb-2 text-[11px] font-semibold tracking-[.16em]" style={{ color: '#f5d061' }}>💡 이 전략 핵심 포인트</div>
-            <ul className="m-0 flex flex-col gap-2 p-0" style={{ listStyle: 'none' }}>{tips.map((t, i) => <li key={i} className="flex gap-2 text-[12.5px] leading-relaxed" style={{ color: INK1 }}><span style={{ color: '#f5d061' }}>•</span><span>{t}</span></li>)}</ul>
+            <div className="mb-2 text-[12px] font-semibold tracking-[.16em]" style={{ color: '#f5d061' }}>💡 이 전략 핵심 포인트</div>
+            <ul className="m-0 flex flex-col gap-2 p-0" style={{ listStyle: 'none' }}>{tips.map((t, i) => <li key={i} className="flex gap-2 text-[13.5px] leading-relaxed" style={{ color: INK1 }}><span style={{ color: '#f5d061' }}>•</span><span>{t}</span></li>)}</ul>
           </div>
         )}
         <footer className="mt-4 flex flex-wrap items-center justify-between gap-3.5 px-7 pb-6 pt-[18px]" style={{ borderTop: `1px solid ${HAIR}` }}>
           {isManaged(p) ? (
             <>
-              <span className="text-[12px]" style={{ color: INK2 }}>{purchased ? '이 전략으로 자동 운용 중입니다.' : '구매하면 대상 자산을 매수해 규칙대로 자동 운용합니다. (모의)'}</span>
+              <span className="text-[13px]" style={{ color: INK2 }}>{purchased ? '이 전략으로 자동 운용 중입니다.' : '구매하면 대상 자산을 매수해 규칙대로 자동 운용합니다. (모의)'}</span>
               {purchased
-                ? <button onClick={onCancel} className="rounded-lg px-4 py-2.5 text-[13px] font-semibold" style={{ border: '1px solid rgba(77,138,255,.32)', background: 'rgba(77,138,255,.08)', color: DOWN }}>항해 취소</button>
-                : <button onClick={onBuy} className="inline-flex items-center gap-2 rounded-[10px] px-[18px] py-2.5 text-[13px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff 0%,#2c6fe6 62%,#2257c8 100%)', boxShadow: '0 12px 26px -12px rgba(44,111,230,.7), inset 0 1px 0 rgba(255,255,255,.38)' }}><span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}>VIRT</span>구매 · 자동 운용 →</button>}
+                ? <button onClick={onCancel} className="rounded-lg px-4 py-2.5 text-[14px] font-semibold" style={{ border: '1px solid rgba(77,138,255,.32)', background: 'rgba(77,138,255,.08)', color: DOWN }}>항해 취소</button>
+                : <button onClick={onBuy} className="inline-flex items-center gap-2 rounded-[10px] px-[18px] py-2.5 text-[14px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff 0%,#2c6fe6 62%,#2257c8 100%)', boxShadow: '0 12px 26px -12px rgba(44,111,230,.7), inset 0 1px 0 rgba(255,255,255,.38)' }}><span className="rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}>VIRT</span>구매 · 자동 운용 →</button>}
             </>
           ) : (
             <>
-              <span className="text-[12px]" style={{ color: INK2 }}>먼저 백테스트로 과거 성과를 검증한 뒤, 모의 자동매매로 이어갈 수 있어요.</span>
-              <button onClick={onRun} title="이 전략이 세팅된 채로 모의(VIRT) 백테스트 화면이 열려요" className="inline-flex items-center gap-2 rounded-[10px] px-[18px] py-2.5 text-[13px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff 0%,#2c6fe6 62%,#2257c8 100%)', boxShadow: '0 12px 26px -12px rgba(44,111,230,.7), inset 0 1px 0 rgba(255,255,255,.38)' }}>
-                <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}>VIRT</span>이 전략 백테스트 →
+              <span className="text-[13px]" style={{ color: INK2 }}>먼저 백테스트로 과거 성과를 검증한 뒤, 모의 자동매매로 이어갈 수 있어요.</span>
+              <button onClick={onRun} title="이 전략이 세팅된 채로 모의(VIRT) 백테스트 화면이 열려요" className="inline-flex items-center gap-2 rounded-[10px] px-[18px] py-2.5 text-[14px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff 0%,#2c6fe6 62%,#2257c8 100%)', boxShadow: '0 12px 26px -12px rgba(44,111,230,.7), inset 0 1px 0 rgba(255,255,255,.38)' }}>
+                <span className="rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}>VIRT</span>이 전략 백테스트 →
               </button>
             </>
           )}
@@ -237,26 +238,26 @@ const Card = ({ p, purchased, onOpen, onRun, onBuy }: { p: QuantProduct; purchas
   return (
     <div className="flex flex-col" style={panel}>
       <div className="flex flex-wrap gap-1.5 px-[22px] pt-[18px]"><TagL color={SONAR} bg={SONAR_DIM} border="rgba(91,157,255,.24)">{CATEGORY_LABELS[p.category]}</TagL><TagL color={rt.color} bg={rt.bg} border={rt.border}>{RISK_LABELS[p.riskLevel]}</TagL>{p.assetType && <TagL color={INK1} bg={CARD} border={HAIR}>{p.assetType === 'CRYPTO' ? '가상화폐' : '주식'}</TagL>}</div>
-      <h3 className="mx-[22px] my-3 text-[17.5px] font-bold">{p.name}</h3>
+      <h3 className="mx-[22px] my-3 text-[19px] font-bold">{p.name}</h3>
       <div className="mx-[22px] mb-3 grid grid-cols-[auto_1fr] items-start gap-2.5">
         <WhaleAvatar size={32} />
-        <div className="rounded-xl px-3.5 py-3" style={{ borderTopLeftRadius: 4, background: CARD, border: `1px solid ${HAIR}` }}><p className="m-0 line-clamp-3 text-[13px] leading-relaxed" style={{ color: INK1 }}>{p.description}</p></div>
+        <div className="rounded-xl px-3.5 py-3" style={{ borderTopLeftRadius: 4, background: CARD, border: `1px solid ${HAIR}` }}><p className="m-0 line-clamp-3 text-[14px] leading-relaxed" style={{ color: INK1 }}>{p.description}</p></div>
       </div>
       <div className="mx-[22px] mb-3 grid grid-cols-3 gap-2">
         <Metric label="대상 자산" value={`${p.targetAssets?.length || 0}종목`} />
         <Metric label="리스크" value={RISK_LABELS[p.riskLevel]} color={rt.color} />
         <Metric label="구독자" value={`${(p.subscribers || 0).toLocaleString('ko-KR')}명`} />
       </div>
-      <div className="flex flex-wrap gap-1.5 px-[22px] pb-4">{(p.targetAssets || []).slice(0, 5).map(a => <span key={a} className="whitespace-nowrap rounded-[5px] px-2.5 py-1 text-[11.5px]" style={{ background: 'var(--ci-card)', border: `1px solid ${HAIR}`, color: INK1 }}>{assetDisplayName(a, p.assetType)}</span>)}</div>
+      <div className="flex flex-wrap gap-1.5 px-[22px] pb-4">{(p.targetAssets || []).slice(0, 5).map(a => <span key={a} className="whitespace-nowrap rounded-[5px] px-2.5 py-1 text-[12.5px]" style={{ background: 'var(--ci-card)', border: `1px solid ${HAIR}`, color: INK1 }}>{assetDisplayName(a, p.assetType)}</span>)}</div>
       <div className="mt-auto flex items-center justify-between gap-2.5 px-[18px] py-3.5" style={{ borderTop: `1px solid ${HAIR}`, background: CARD }}>
-        <button onClick={onOpen} className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-semibold text-white" style={{ border: `1px solid ${HAIR_S}`, background: CARD }}>
+        <button onClick={onOpen} className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[14px] font-semibold text-white" style={{ border: `1px solid ${HAIR_S}`, background: CARD }}>
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="2" y="2.5" width="10" height="8" rx="1.2" stroke="currentColor" strokeWidth="1.3" /><path d="M4.5 5.5H9.5M4.5 7.5H8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>알아보기
         </button>
         {managed
           ? (purchased
-              ? <span className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-bold" style={{ background: 'rgba(63,214,160,.16)', border: '1px solid rgba(63,214,160,.32)', color: '#3fd6a0' }}><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: '#3fd6a0' }} />운용 중 ⛵</span>
-              : <button onClick={onBuy} className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}><span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}>VIRT</span>구매 →</button>)
-          : <button onClick={onRun} className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}><span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}>VIRT</span>백테스트 →</button>}
+              ? <span className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[14px] font-bold" style={{ background: 'rgba(63,214,160,.16)', border: '1px solid rgba(63,214,160,.32)', color: '#3fd6a0' }}><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: '#3fd6a0' }} />운용 중 ⛵</span>
+              : <button onClick={onBuy} className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[14px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}><span className="rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}>VIRT</span>구매 →</button>)
+          : <button onClick={onRun} className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[14px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}><span className="rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}>VIRT</span>백테스트 →</button>}
       </div>
     </div>
   );
@@ -274,11 +275,11 @@ const InvestModal = ({ p, cash, onClose, onConfirm, busy }: { p: QuantProduct; c
     <div onClick={onClose} className="fixed inset-0 z-[110] flex items-start justify-center overflow-y-auto px-6 py-12" style={{ background: 'rgba(6,11,31,.78)', backdropFilter: 'blur(6px)', animation: 'backdrop-in .2s ease' }}>
       <div onClick={e => e.stopPropagation()} className="relative w-full max-w-[440px] rounded-[18px]" style={{ background: 'var(--ci-overlay)', border: `1px solid ${HAIR_S}`, boxShadow: 'var(--ci-panel-shadow)', animation: 'modal-in .25s cubic-bezier(.2,.8,.2,1)' }}>
         <div className="wa-force-dark flex items-center justify-between rounded-t-[18px] px-6 py-4 text-white" style={{ background: 'linear-gradient(105deg,#142647 0%,#1d3c7a 52%,#2c6fe6 100%)' }}>
-          <h3 className="text-[15px] font-bold">{step === 'amount' ? '항해 시작' : '구매 확인'} · {p.name}</h3>
-          <button onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-lg text-[15px]" style={{ border: '1px solid rgba(255,255,255,.2)', background: 'rgba(255,255,255,.08)' }}><span aria-hidden>✕</span></button>
+          <h3 className="text-[16px] font-bold">{step === 'amount' ? '항해 시작' : '구매 확인'} · {p.name}</h3>
+          <button onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-lg text-[16px]" style={{ border: '1px solid rgba(255,255,255,.2)', background: 'rgba(255,255,255,.08)' }}><span aria-hidden>✕</span></button>
         </div>
         {/* 단계 표시 */}
-        <div className="flex items-center gap-2 px-6 pt-3.5 text-[11px] font-semibold">
+        <div className="flex items-center gap-2 px-6 pt-3.5 text-[12px] font-semibold">
           <span style={{ color: step === 'amount' ? SONAR : INK3 }}>① 금액 입력</span>
           <span style={{ color: INK3 }}>→</span>
           <span style={{ color: step === 'confirm' ? SONAR : INK3 }}>② 구매 확인</span>
@@ -286,37 +287,37 @@ const InvestModal = ({ p, cash, onClose, onConfirm, busy }: { p: QuantProduct; c
         {step === 'amount' ? (
           <>
             <div className="flex flex-col gap-3 p-6 pt-3">
-              <div className="flex items-center justify-between text-[12.5px]"><span style={{ color: INK2 }}>보유 잔고 (VIRT)</span><span className="font-mono font-semibold">{cash != null ? fmtKRW(cash) : '…'}</span></div>
+              <div className="flex items-center justify-between text-[13.5px]"><span style={{ color: INK2 }}>보유 잔고 (VIRT)</span><span className="font-mono font-semibold">{cash != null ? fmtKRW(cash) : '…'}</span></div>
               <div>
-                <div className="mb-1.5 text-[11.5px] font-semibold" style={{ color: INK2 }}>투자 금액</div>
-                <input value={amount} onChange={e => { const v = e.target.value.replace(/[^\d]/g, ''); setAmount(v ? Number(v).toLocaleString('ko-KR') : ''); }} placeholder="₩ 투자할 금액" inputMode="numeric" className="w-full rounded-lg px-3.5 py-2.5 text-right font-mono text-[15px] font-semibold outline-none" style={fieldStyle} />
-                <div className="mt-2 grid grid-cols-4 gap-1.5">{QUICK.map(v => <button key={v} onClick={() => setAmount(v.toLocaleString('ko-KR'))} className="rounded-md py-1.5 text-[11.5px] font-semibold" style={{ border: `1px solid ${HAIR}`, background: CARD, color: INK1 }}>{(v / 10000).toLocaleString('ko-KR')}만</button>)}</div>
-                {cash != null && <button onClick={() => setAmount(Math.floor(cash).toLocaleString('ko-KR'))} className="mt-1.5 text-[11.5px] font-semibold" style={{ color: SONAR }}>전액 ({fmtKRW(cash)})</button>}
+                <div className="mb-1.5 text-[12.5px] font-semibold" style={{ color: INK2 }}>투자 금액</div>
+                <input value={amount} onChange={e => { const v = e.target.value.replace(/[^\d]/g, ''); setAmount(v ? Number(v).toLocaleString('ko-KR') : ''); }} placeholder="₩ 투자할 금액" inputMode="numeric" className="w-full rounded-lg px-3.5 py-2.5 text-right font-mono text-[16px] font-semibold outline-none" style={fieldStyle} />
+                <div className="mt-2 grid grid-cols-4 gap-1.5">{QUICK.map(v => <button key={v} onClick={() => setAmount(v.toLocaleString('ko-KR'))} className="rounded-md py-1.5 text-[12.5px] font-semibold" style={{ border: `1px solid ${HAIR}`, background: CARD, color: INK1 }}>{(v / 10000).toLocaleString('ko-KR')}만</button>)}</div>
+                {cash != null && <button onClick={() => setAmount(Math.floor(cash).toLocaleString('ko-KR'))} className="mt-1.5 text-[12.5px] font-semibold" style={{ color: SONAR }}>전액 ({fmtKRW(cash)})</button>}
               </div>
-              {over && <div className="rounded-lg px-3 py-2 text-[12px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>잔고가 부족합니다.</div>}
-              <p className="text-[11px]" style={{ color: INK3 }}>입력한 금액으로 상품의 대상 자산을 비중대로 매수해 모의 자동 운용을 시작합니다.</p>
+              {over && <div className="rounded-lg px-3 py-2 text-[13px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>잔고가 부족합니다.</div>}
+              <p className="text-[12px]" style={{ color: INK3 }}>입력한 금액으로 상품의 대상 자산을 비중대로 매수해 모의 자동 운용을 시작합니다.</p>
             </div>
             <div className="flex justify-end gap-2 px-6 py-4" style={{ borderTop: `1px solid ${HAIR}` }}>
-              <button onClick={onClose} className="rounded-lg px-4 py-2.5 text-[13px] font-semibold" style={{ border: `1px solid ${HAIR}`, color: INK1 }}>취소</button>
-              <button onClick={() => setStep('confirm')} disabled={!canNext} className="rounded-lg px-5 py-2.5 text-[13.5px] font-bold text-white disabled:opacity-50" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>다음 →</button>
+              <button onClick={onClose} className="rounded-lg px-4 py-2.5 text-[14px] font-semibold" style={{ border: `1px solid ${HAIR}`, color: INK1 }}>취소</button>
+              <button onClick={() => setStep('confirm')} disabled={!canNext} className="rounded-lg px-5 py-2.5 text-[14.5px] font-bold text-white disabled:opacity-50" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>다음 →</button>
             </div>
           </>
         ) : (
           <>
             <div className="flex flex-col gap-3 p-6 pt-3">
-              <p className="m-0 text-[13px] leading-relaxed" style={{ color: INK1 }}>아래 내용으로 <span style={{ color: 'var(--ci-ink0)', fontWeight: 700 }}>모의 자동 운용</span>을 시작합니다. 맞나요?</p>
-              <dl className="m-0 grid gap-2.5 rounded-xl px-4 py-3.5 text-[13px]" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
+              <p className="m-0 text-[14px] leading-relaxed" style={{ color: INK1 }}>아래 내용으로 <span style={{ color: 'var(--ci-ink0)', fontWeight: 700 }}>모의 자동 운용</span>을 시작합니다. 맞나요?</p>
+              <dl className="m-0 grid gap-2.5 rounded-xl px-4 py-3.5 text-[14px]" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
                 <div className="flex justify-between"><dt style={{ color: INK2 }}>상품</dt><dd className="m-0 font-semibold">{p.name}</dd></div>
                 <div className="flex justify-between"><dt style={{ color: INK2 }}>투자 금액</dt><dd className="m-0 font-mono font-bold" style={{ color: 'var(--ci-ink0)' }}>{fmtKRW(num)}</dd></div>
                 <div className="flex justify-between"><dt style={{ color: INK2 }}>대상 자산</dt><dd className="m-0 font-semibold">{p.targetAssets?.length || 0}개 종목 분산</dd></div>
                 <div className="flex justify-between"><dt style={{ color: INK2 }}>리스크</dt><dd className="m-0 font-semibold" style={{ color: RISK_TAG[p.riskLevel].color }}>{RISK_LABELS[p.riskLevel]}</dd></div>
                 <div className="flex justify-between" style={{ borderTop: `1px solid ${HAIR}`, paddingTop: 8 }}><dt style={{ color: INK2 }}>매수 후 잔고</dt><dd className="m-0 font-mono font-semibold">{cash != null ? fmtKRW(cash - num) : '—'}</dd></div>
               </dl>
-              <p className="text-[11px]" style={{ color: INK3 }}>* 실제 자금이 아닌 모의투자(₩) 계좌에서 시장가로 매수됩니다.</p>
+              <p className="text-[12px]" style={{ color: INK3 }}>* 실제 자금이 아닌 모의투자(₩) 계좌에서 시장가로 매수됩니다.</p>
             </div>
             <div className="flex justify-end gap-2 px-6 py-4" style={{ borderTop: `1px solid ${HAIR}` }}>
-              <button onClick={() => setStep('amount')} disabled={busy} className="rounded-lg px-4 py-2.5 text-[13px] font-semibold" style={{ border: `1px solid ${HAIR}`, color: INK1 }}>← 뒤로</button>
-              <button onClick={() => onConfirm(num)} disabled={busy || !canNext} className="rounded-lg px-5 py-2.5 text-[13.5px] font-bold text-white disabled:opacity-50" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>{busy ? '구매 중…' : '구매 확정'}</button>
+              <button onClick={() => setStep('amount')} disabled={busy} className="rounded-lg px-4 py-2.5 text-[14px] font-semibold" style={{ border: `1px solid ${HAIR}`, color: INK1 }}>← 뒤로</button>
+              <button onClick={() => onConfirm(num)} disabled={busy || !canNext} className="rounded-lg px-5 py-2.5 text-[14.5px] font-bold text-white disabled:opacity-50" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>{busy ? '구매 중…' : '구매 확정'}</button>
             </div>
           </>
         )}
@@ -326,7 +327,7 @@ const InvestModal = ({ p, cash, onClose, onConfirm, busy }: { p: QuantProduct; c
 };
 
 const Toast = ({ msg }: { msg: string }) => (
-  <div className="fixed bottom-6 left-1/2 z-[130] -translate-x-1/2 rounded-xl px-5 py-3 text-[13px] font-semibold text-white" style={{ background: 'linear-gradient(180deg,#2f9e6e,#1f7d57)', boxShadow: '0 14px 32px -10px rgba(0,0,0,.55)', animation: 'message-in .25s ease' }}>{msg}</div>
+  <div className="fixed bottom-6 left-1/2 z-[130] -translate-x-1/2 rounded-xl px-5 py-3 text-[14px] font-semibold text-white" style={{ background: 'linear-gradient(180deg,#2f9e6e,#1f7d57)', boxShadow: '0 14px 32px -10px rgba(0,0,0,.55)', animation: 'message-in .25s ease' }}>{msg}</div>
 );
 
 const ConsoleLearnPage = () => {
@@ -334,6 +335,7 @@ const ConsoleLearnPage = () => {
   const { isVirt } = useRoutePrefix();
   const navigate = useNavigate();
   const userName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
+  const isPreview = import.meta.env.DEV && window.location.pathname.startsWith('/preview'); // 프리뷰(비로그인) 401 방지
 
   const [cat, setCat] = useState('all');
   const [products, setProducts] = useState<QuantProduct[]>([]);
@@ -355,16 +357,17 @@ const ConsoleLearnPage = () => {
 
   useEffect(() => {
     setLoading(true);
-    quantStoreService.getProducts(cat === 'all' ? undefined : (cat as any))
+    quantStoreService.getProducts(cat === 'all' ? undefined : (cat as Category))
       .then(ps => { setProducts(ps); setError(null); })
       .catch(() => setError('전략 상품을 불러오지 못했습니다.'))
       .finally(() => setLoading(false));
   }, [cat]);
 
   const loadMine = useCallback(() => {
+    if (isPreview) return; // 프리뷰에서는 인증 호출 생략
     quantStoreService.getMyPurchases().then(r => { setPurchasedIds(new Set(r.purchasedProductIds)); setPurchases(r.purchases || []); }).catch(() => {});
     quantStoreService.getMyPurchasesPerformance().then(list => setPerf(list.filter(pp => pp.strategyType === 'TURTLE'))).catch(() => {});
-  }, []);
+  }, [isPreview]);
   useEffect(() => { loadMine(); }, [loadMine]);
 
   // DIY 신호전략: 학습 → 백테스트 퍼널 (그 전략 로드 → 검증 → 자동매매)
@@ -372,6 +375,7 @@ const ConsoleLearnPage = () => {
   // 관리형(터틀) 상품: 구매 → 자동 운용
   const startInvest = (p: QuantProduct) => {
     setInvest(p); setOpenId(null); setCash(null);
+    if (isPreview) return; // 프리뷰에서는 인증 호출 생략
     tradeService.getPortfolio().then(pf => setCash(pf.cashBalance)).catch(() => setCash(null));
   };
   const confirmInvest = async (amount: number) => {
@@ -381,7 +385,7 @@ const ConsoleLearnPage = () => {
       await quantStoreService.purchaseProduct(invest.id, amount);
       showToast(`'${invest.name}' 자동 운용을 시작했습니다.`);
       setInvest(null); loadMine();
-    } catch (e: any) { showToast(e?.response?.data?.message || '구매에 실패했습니다.'); }
+    } catch (e) { showToast(getErrorMessage(e, '구매에 실패했습니다.')); }
     finally { setBusy(false); }
   };
   const cancelByProduct = (productId: string) => {
@@ -389,13 +393,13 @@ const ConsoleLearnPage = () => {
     if (!pur) { showToast('보유 정보를 찾을 수 없습니다.'); return; }
     setConfirmCancel({ run: async () => {
       try { await quantStoreService.cancelPurchase(pur.id); showToast('운용을 종료했습니다.'); setOpenId(null); loadMine(); }
-      catch (e: any) { showToast(e?.response?.data?.message || '취소에 실패했습니다.'); }
+      catch (e) { showToast(getErrorMessage(e, '취소에 실패했습니다.')); }
     } });
   };
   const cancelByPurchaseId = (purchaseId: string) => {
     setConfirmCancel({ run: async () => {
       try { await quantStoreService.cancelPurchase(purchaseId); showToast('운용을 종료했습니다.'); loadMine(); }
-      catch (e: any) { showToast(e?.response?.data?.message || '취소에 실패했습니다.'); }
+      catch (e) { showToast(getErrorMessage(e, '취소에 실패했습니다.')); }
     } });
   };
 
@@ -414,22 +418,22 @@ const ConsoleLearnPage = () => {
       <div className="mx-auto flex max-w-[1560px] flex-col gap-5">
         <div className="flex items-center gap-3">
           <WhaleAvatar size={40} animated />
-          <div><h1 className="text-[26px] font-bold tracking-tight">전략 가이드</h1><p className="mt-1.5 text-[13.5px]" style={{ color: INK1 }}>고래 튜터가 전략을 쉽게 설명해드려요. 마음에 들면 <b style={{ color: INK0 }}>VIRT로 돌려보기</b>로 백테스트해 검증하고, 자동매매까지 이어가보세요.</p></div>
+          <div><h1 className="text-[28px] font-bold tracking-tight">전략 가이드</h1><p className="mt-1.5 text-[14.5px]" style={{ color: INK1 }}>고래 튜터가 전략을 쉽게 설명해드려요. 마음에 들면 <b style={{ color: INK0 }}>VIRT로 돌려보기</b>로 백테스트해 검증하고, 자동매매까지 이어가보세요.</p></div>
         </div>
         {isVirt && <FunnelSteps current={1} />}
         {/* 자동 운용 중(관리형 상품 보유) */}
         {perf.length > 0 && (
           <div className="flex flex-col gap-3" style={{ ...panel, background: 'linear-gradient(135deg, rgba(91,157,255,.12), rgba(91,157,255,.02) 60%, transparent)', border: '1px solid rgba(91,157,255,.28)', padding: '20px 24px' }}>
-            <div className="text-[10.5px] font-semibold tracking-[.18em]" style={{ color: SONAR }}>ACTIVE ROUTES · 자동 운용 중</div>
+            <div className="text-[11.5px] font-semibold tracking-[.18em]" style={{ color: SONAR }}>ACTIVE ROUTES · 자동 운용 중</div>
             {perf.map(pp => { const up = pp.totalReturnRate >= 0; return (
               <div key={pp.purchaseId} className="flex flex-wrap items-center justify-between gap-4 rounded-xl px-4 py-3" style={{ background: CARD, border: `1px solid ${HAIR}` }}>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2"><span className="text-[15px] font-bold">{pp.productName}</span><span className="inline-flex items-center gap-1.5 rounded-[5px] px-2 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(63,214,160,.14)', color: '#3fd6a0', border: '1px solid rgba(63,214,160,.28)' }}><span className="h-[5px] w-[5px] rounded-full animate-pulse-dot" style={{ background: '#3fd6a0' }} />운용 중</span></div>
-                  <div className="mt-1 text-[12.5px]" style={{ color: INK1 }}>투자 <span className="font-mono font-semibold" style={{ color: INK0 }}>{fmtKRW(pp.investmentAmount)}</span><span className="mx-2" style={{ color: INK3 }}>·</span>평가 <span className="font-mono font-semibold" style={{ color: INK0 }}>{fmtKRW(pp.totalCurrentValue)}</span></div>
+                  <div className="flex items-center gap-2"><span className="text-[16px] font-bold">{pp.productName}</span><span className="inline-flex items-center gap-1.5 rounded-[5px] px-2 py-0.5 text-[12px] font-bold" style={{ background: 'rgba(63,214,160,.14)', color: '#3fd6a0', border: '1px solid rgba(63,214,160,.28)' }}><span className="h-[5px] w-[5px] rounded-full animate-pulse-dot" style={{ background: '#3fd6a0' }} />운용 중</span></div>
+                  <div className="mt-1 text-[13.5px]" style={{ color: INK1 }}>투자 <span className="font-mono font-semibold" style={{ color: INK0 }}>{fmtKRW(pp.investmentAmount)}</span><span className="mx-2" style={{ color: INK3 }}>·</span>평가 <span className="font-mono font-semibold" style={{ color: INK0 }}>{fmtKRW(pp.totalCurrentValue)}</span></div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <div className="text-right"><div className="font-mono text-[18px] font-bold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{pp.totalReturnRate.toFixed(2)}%</div><div className="font-mono text-[11.5px]" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{fmtKRW(pp.totalPnl)}</div></div>
-                  <button onClick={() => cancelByPurchaseId(pp.purchaseId)} className="rounded-[9px] px-[14px] py-2 text-[12.5px] font-semibold" style={{ border: '1px solid rgba(77,138,255,.32)', background: 'rgba(77,138,255,.08)', color: DOWN }}>운용 종료</button>
+                  <div className="text-right"><div className="font-mono text-[19.5px] font-bold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{pp.totalReturnRate.toFixed(2)}%</div><div className="font-mono text-[12.5px]" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{fmtKRW(pp.totalPnl)}</div></div>
+                  <button onClick={() => cancelByPurchaseId(pp.purchaseId)} className="rounded-[9px] px-[14px] py-2 text-[13.5px] font-semibold" style={{ border: '1px solid rgba(77,138,255,.32)', background: 'rgba(77,138,255,.08)', color: DOWN }}>운용 종료</button>
                 </div>
               </div>
             ); })}
@@ -437,7 +441,7 @@ const ConsoleLearnPage = () => {
         )}
         {/* 카테고리 */}
         <div className="flex flex-wrap gap-1.5">
-          {CATS.map(([k, l]) => { const on = k === cat; return <button key={k} onClick={() => setCat(k)} className="whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : `1px solid ${HAIR}`, background: on ? SONAR_DIM : CARD, color: on ? SONAR : INK1 }}>{l}</button>; })}
+          {CATS.map(([k, l]) => { const on = k === cat; return <button key={k} onClick={() => setCat(k)} className="whitespace-nowrap rounded-full px-4 py-2 text-[14px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : `1px solid ${HAIR}`, background: on ? SONAR_DIM : CARD, color: on ? SONAR : INK1 }}>{l}</button>; })}
         </div>
         {/* 카드 — 관리형(구매·자동운용) vs DIY(백테스트→자동매매) 두 갈래 */}
         {loading ? (
@@ -458,15 +462,15 @@ const ConsoleLearnPage = () => {
             ))}
           </div>
         )
-          : error ? <div style={{ ...panel, padding: 36, textAlign: 'center' }}><div className="text-[13px]" style={{ color: INK2 }}>{error}</div><button onClick={() => setCat(c => c)} className="mt-3 rounded-lg px-4 py-2 text-[12.5px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: SONAR }}>다시 시도</button></div>
-            : shown.length === 0 ? <div style={{ ...panel, padding: 48, textAlign: 'center' }}><div className="text-[28px]">🧭</div><div className="mt-2 text-[14px] font-semibold">{cat === 'all' ? '아직 등록된 전략이 없어요.' : '이 카테고리엔 전략이 아직 없어요.'}</div><div className="mt-1 text-[12.5px]" style={{ color: INK3 }}>{cat === 'all' ? '곧 새로운 항로가 추가됩니다.' : '다른 카테고리도 둘러보세요.'}</div>{cat !== 'all' && <button onClick={() => setCat('all')} className="mt-3.5 rounded-lg px-4 py-2 text-[12.5px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: SONAR }}>전체 전략 보기</button>}</div>
+          : error ? <div style={{ ...panel, padding: 36, textAlign: 'center' }}><div className="text-[14px]" style={{ color: INK2 }}>{error}</div><button onClick={() => setCat(c => c)} className="mt-3 rounded-lg px-4 py-2 text-[13.5px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: SONAR }}>다시 시도</button></div>
+            : shown.length === 0 ? <div style={{ ...panel, padding: 48, textAlign: 'center' }}><div className="text-[30px]">🧭</div><div className="mt-2 text-[15px] font-semibold">{cat === 'all' ? '아직 등록된 전략이 없어요.' : '이 카테고리엔 전략이 아직 없어요.'}</div><div className="mt-1 text-[13.5px]" style={{ color: INK3 }}>{cat === 'all' ? '곧 새로운 항로가 추가됩니다.' : '다른 카테고리도 둘러보세요.'}</div>{cat !== 'all' && <button onClick={() => setCat('all')} className="mt-3.5 rounded-lg px-4 py-2 text-[13.5px] font-semibold" style={{ border: `1px solid ${HAIR_S}`, color: SONAR }}>전체 전략 보기</button>}</div>
               : <div className="flex flex-col gap-9">
                   {managedList.length > 0 && (
                     <div className="flex flex-col gap-3.5">
                       <div>
-                        <div className="text-[10.5px] font-semibold tracking-[.18em]" style={{ color: '#3fd6a0' }}>MANAGED · 관리형 퀀트 상품</div>
-                        <h2 className="mt-1 text-[16px] font-bold">사면 알아서 굴러가는 전문가 전략</h2>
-                        <p className="mt-1 text-[12.5px]" style={{ color: INK2 }}>구매하면 전략 규칙대로 <b style={{ color: INK1 }}>자동 운용</b>돼요. 운용 손익은 위 ‘자동 운용 중’에서 확인합니다. (모의)</p>
+                        <div className="text-[11.5px] font-semibold tracking-[.18em]" style={{ color: '#3fd6a0' }}>MANAGED · 관리형 퀀트 상품</div>
+                        <h2 className="mt-1 text-[17.5px] font-bold">사면 알아서 굴러가는 전문가 전략</h2>
+                        <p className="mt-1 text-[13.5px]" style={{ color: INK2 }}>구매하면 전략 규칙대로 <b style={{ color: INK1 }}>자동 운용</b>돼요. 운용 손익은 위 ‘자동 운용 중’에서 확인합니다. (모의)</p>
                       </div>
                       <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                         {managedList.map(p => <Card key={p.id} p={p} purchased={purchasedIds.has(p.id)} onOpen={() => setOpenId(p.id)} onRun={() => runBacktest(p)} onBuy={() => startInvest(p)} />)}
@@ -476,9 +480,9 @@ const ConsoleLearnPage = () => {
                   {diyList.length > 0 && (
                     <div className="flex flex-col gap-3.5">
                       <div>
-                        <div className="text-[10.5px] font-semibold tracking-[.18em]" style={{ color: SONAR }}>DIY · 직접 운용 전략</div>
-                        <h2 className="mt-1 text-[16px] font-bold">백테스트로 검증하고 내가 굴리는 전략</h2>
-                        <p className="mt-1 text-[12.5px]" style={{ color: INK2 }}><b style={{ color: INK1 }}>돌려보기</b>로 과거 성과를 확인한 뒤 자동매매로 이어가요.</p>
+                        <div className="text-[11.5px] font-semibold tracking-[.18em]" style={{ color: SONAR }}>DIY · 직접 운용 전략</div>
+                        <h2 className="mt-1 text-[17.5px] font-bold">백테스트로 검증하고 내가 굴리는 전략</h2>
+                        <p className="mt-1 text-[13.5px]" style={{ color: INK2 }}><b style={{ color: INK1 }}>돌려보기</b>로 과거 성과를 확인한 뒤 자동매매로 이어가요.</p>
                       </div>
                       <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                         {diyList.map(p => <Card key={p.id} p={p} purchased={purchasedIds.has(p.id)} onOpen={() => setOpenId(p.id)} onRun={() => runBacktest(p)} onBuy={() => startInvest(p)} />)}
@@ -492,11 +496,11 @@ const ConsoleLearnPage = () => {
       {confirmCancel && (
         <div onClick={() => setConfirmCancel(null)} className="fixed inset-0 z-[120] flex items-center justify-center px-6" style={{ background: 'rgba(6,11,31,.78)', backdropFilter: 'blur(6px)', animation: 'backdrop-in .2s ease' }}>
           <div onClick={e => e.stopPropagation()} className="w-full max-w-[380px] rounded-[18px] p-6" style={{ background: 'var(--ci-overlay)', border: `1px solid ${HAIR_S}`, boxShadow: 'var(--ci-panel-shadow)', animation: 'modal-in .25s cubic-bezier(.2,.8,.2,1)' }}>
-            <h3 className="text-[16px] font-bold">운용을 종료할까요?</h3>
-            <p className="mt-2 text-[13px] leading-relaxed" style={{ color: INK1 }}>이 상품으로 매수한 모의 자산이 정리되고 현금으로 환원됩니다. 되돌릴 수 없어요.</p>
+            <h3 className="text-[17.5px] font-bold">운용을 종료할까요?</h3>
+            <p className="mt-2 text-[14px] leading-relaxed" style={{ color: INK1 }}>이 상품으로 매수한 모의 자산이 정리되고 현금으로 환원됩니다. 되돌릴 수 없어요.</p>
             <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setConfirmCancel(null)} className="rounded-lg px-4 py-2.5 text-[13px] font-semibold" style={{ border: `1px solid ${HAIR}`, color: INK1 }}>유지하기</button>
-              <button onClick={() => { const c = confirmCancel; setConfirmCancel(null); c.run(); }} className="rounded-lg px-4 py-2.5 text-[13px] font-bold text-white" style={{ background: 'linear-gradient(180deg,#e0524f,#c23b38)' }}>운용 종료</button>
+              <button onClick={() => setConfirmCancel(null)} className="rounded-lg px-4 py-2.5 text-[14px] font-semibold" style={{ border: `1px solid ${HAIR}`, color: INK1 }}>유지하기</button>
+              <button onClick={() => { const c = confirmCancel; setConfirmCancel(null); c.run(); }} className="rounded-lg px-4 py-2.5 text-[14px] font-bold text-white" style={{ background: 'linear-gradient(180deg,#e0524f,#c23b38)' }}>운용 종료</button>
             </div>
           </div>
         </div>

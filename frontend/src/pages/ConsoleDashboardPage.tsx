@@ -12,7 +12,8 @@ import { liveTradeService } from '../services/liveTradeService';
 import { marketService, type MarketPrice } from '../services/marketService';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
 import ExchangeConnectModal from '../components/ExchangeConnectModal';
-import apiClient from '../utils/api';
+import apiClient, { getErrorMessage } from '../utils/api';
+import { FALLBACK_USD_KRW } from '../utils/currency';
 import HelmShell from '../components/HelmShell';
 import GuideTour, { type TourStep } from '../components/GuideTour';
 
@@ -41,7 +42,7 @@ const panel: React.CSSProperties = { background: 'var(--ci-panel)', border: '1px
 const Panel = ({ children, style }: { children: ReactNode; style?: React.CSSProperties }) => <div style={{ ...panel, ...style }}>{children}</div>;
 const PanelHead = ({ kicker, title, right }: { kicker?: string; title: string; right?: ReactNode }) => (
   <div className="wa-force-dark flex items-center justify-between px-[22px] py-[15px] text-white" style={{ background: 'linear-gradient(105deg,#142647 0%,#1d3c7a 52%,#2c6fe6 100%)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
-    <div>{kicker && <div className="text-[10.5px] font-bold tracking-[.22em] text-white/70">{kicker}</div>}<div className="text-[16px] font-bold">{title}</div></div>
+    <div>{kicker && <div className="text-[11.5px] font-bold tracking-[.22em] text-white/70">{kicker}</div>}<div className="text-[17.5px] font-bold">{title}</div></div>
     {right}
   </div>
 );
@@ -76,7 +77,7 @@ const MiniSonar = ({ blips }: { blips: { sym: string; x: number; y: number; up: 
       <div key={b.sym + i} className="absolute" style={{ left: `${b.x}%`, top: `${b.y}%`, transform: 'translate(-50%,-50%)' }}>
         <span className="absolute left-1/2 top-1/2 h-[18px] w-[18px] rounded-full" style={{ border: `1px solid ${b.up ? UP : DOWN}`, animation: `pulse-ring 2.6s ease-out ${i * 0.5}s infinite` }} />
         <span className="block h-[7px] w-[7px] rounded-full" style={{ background: b.up ? UP : DOWN, boxShadow: `0 0 8px ${b.up ? UP : DOWN}` }} />
-        <span className="absolute left-1/2 top-[9px] -translate-x-1/2 whitespace-nowrap font-mono text-[8.5px] tracking-wide text-white/60">{b.sym}</span>
+        <span className="absolute left-1/2 top-[9px] -translate-x-1/2 whitespace-nowrap font-mono text-[9.5px] tracking-wide text-white/60">{b.sym}</span>
       </div>
     ))}
   </div>
@@ -124,8 +125,8 @@ const EXCHANGES: { key: ExchangeType; label: string; badge: string; name: string
 
 const Step = ({ n, t, s, active }: { n: string; t: string; s: string; active?: boolean }) => (
   <div className="rounded-xl p-[18px]" style={{ background: active ? 'rgba(91,157,255,.10)' : 'var(--ci-inset)', border: active ? '1px solid rgba(91,157,255,.28)' : '1px solid var(--ci-line)' }}>
-    <div className="mb-1.5 font-mono text-[11px] font-bold tracking-[.1em]" style={{ color: active ? SONAR : 'var(--ci-ink3)' }}>{n}</div>
-    <div className="mb-1 text-[14.5px] font-semibold">{t}</div><div className="text-[12.5px] leading-snug text-white/45">{s}</div>
+    <div className="mb-1.5 font-mono text-[12px] font-bold tracking-[.1em]" style={{ color: active ? SONAR : 'var(--ci-ink3)' }}>{n}</div>
+    <div className="mb-1 text-[15.5px] font-semibold">{t}</div><div className="text-[13.5px] leading-snug text-white/45">{s}</div>
   </div>
 );
 const ArrowMini = () => <div className="flex items-center justify-center text-white/30"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7H12 M8 3 L12 7 L8 11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg></div>;
@@ -134,19 +135,19 @@ const ArrowMini = () => <div className="flex items-center justify-center text-wh
 const OnboardingCard = ({ ex, onSetup }: { ex: typeof EXCHANGES[number]; onSetup: () => void }) => (
   <Panel style={{ padding: '28px 30px' }}>
     <div className="mb-1.5 flex items-center justify-between">
-      <span className="text-[11px] font-semibold tracking-[.18em]" style={{ color: 'var(--ci-sonar)' }}>STEP 1 · 계좌 연결</span>
-      <span className="rounded px-2 py-[3px] text-[11px] font-bold tracking-[.06em]" style={{ background: 'rgba(245,208,97,.12)', color: COMPASS, border: '1px solid rgba(245,208,97,.3)' }}>미연결</span>
+      <span className="text-[12px] font-semibold tracking-[.18em]" style={{ color: 'var(--ci-sonar)' }}>STEP 1 · 계좌 연결</span>
+      <span className="rounded px-2 py-[3px] text-[12px] font-bold tracking-[.06em]" style={{ background: 'rgba(245,208,97,.12)', color: COMPASS, border: '1px solid rgba(245,208,97,.3)' }}>미연결</span>
     </div>
-    <h3 className="my-2 text-[22px] font-bold">{ex.name} 키를 등록해주세요</h3>
-    <p className="m-0 max-w-[540px] text-[14.5px] leading-relaxed text-white/70">API 키를 등록하면 보유 종목과 잔고가 실시간으로 갱신됩니다. 키는 AES로 암호화되어 안전하게 보관돼요.</p>
+    <h3 className="my-2 text-[24px] font-bold">{ex.name} 키를 등록해주세요</h3>
+    <p className="m-0 max-w-[540px] text-[15.5px] leading-relaxed text-white/70">API 키를 등록하면 보유 종목과 잔고가 실시간으로 갱신됩니다. 키는 AES로 암호화되어 안전하게 보관돼요.</p>
     <div className="mt-7 grid items-stretch gap-2 sm:gap-0 grid-cols-1 sm:grid-cols-[1fr_22px_1fr_22px_1fr]">
       <Step n="01" t="API 키 발급" s={`${ex.devel}에서 발급`} />
       <ArrowMini /><Step n="02" t="WhaleArc에 등록" s="2분 안에 완료 · 암호화 저장" />
       <ArrowMini /><Step n="03" t="자동 동기화" s="실시간 시세 + 잔고" active />
     </div>
     <div className="mt-6 flex flex-wrap items-center gap-3.5">
-      <button onClick={onSetup} className="inline-flex items-center gap-2.5 rounded-xl px-6 py-[15px] text-[14.5px] font-semibold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff 0%,#2c6fe6 62%,#2257c8 100%)', boxShadow: '0 12px 28px -12px rgba(44,111,230,.7), inset 0 1px 0 rgba(255,255,255,.38)' }}>API 키 등록하기<span className="flex h-5 w-5 items-center justify-center rounded-full text-[12px]" style={{ background: 'rgba(255,255,255,.18)' }}>→</span></button>
-      <span className="ml-auto text-[12px] text-white/45">🔒 AES 암호화 · 읽기 전용 권한</span>
+      <button onClick={onSetup} className="inline-flex items-center gap-2.5 rounded-xl px-6 py-[15px] text-[15.5px] font-semibold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff 0%,#2c6fe6 62%,#2257c8 100%)', boxShadow: '0 12px 28px -12px rgba(44,111,230,.7), inset 0 1px 0 rgba(255,255,255,.38)' }}>API 키 등록하기<span className="flex h-5 w-5 items-center justify-center rounded-full text-[13px]" style={{ background: 'rgba(255,255,255,.18)' }}>→</span></button>
+      <span className="ml-auto text-[13px] text-white/45">🔒 AES 암호화 · 읽기 전용 권한</span>
     </div>
   </Panel>
 );
@@ -154,7 +155,7 @@ const LoadingCard = () => (
   <Panel style={{ padding: '60px 30px' }}>
     <div className="flex flex-col items-center gap-3 text-white/50">
       <span className="h-8 w-8 animate-spin rounded-full" style={{ border: '3px solid rgba(91,157,255,.25)', borderTopColor: SONAR }} />
-      <span className="text-[13px]">불러오는 중…</span>
+      <span className="text-[14px]">불러오는 중…</span>
     </div>
   </Panel>
 );
@@ -163,9 +164,9 @@ const ErrorCard = ({ onRetry }: { onRetry: () => void }) => (
     <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full" style={{ background: 'rgba(245,208,97,.12)', border: '1px solid rgba(245,208,97,.3)' }}>
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke={COMPASS} strokeWidth="1.6"><path d="M11 3L20 19H2z" strokeLinejoin="round" /><path d="M11 9v4M11 16v.4" strokeLinecap="round" /></svg>
     </div>
-    <h3 className="text-[17px] font-bold">자산 정보를 불러오지 못했어요</h3>
-    <p className="mx-auto mt-2 max-w-[360px] text-[13.5px] text-white/55">잠시 후 다시 시도해주세요. 문제가 계속되면 거래소 연결 상태를 확인해주세요.</p>
-    <button onClick={onRetry} className="mt-4 rounded-[10px] px-5 py-2.5 text-[13.5px] font-semibold" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.10)', color: SONAR }}>다시 시도 ↻</button>
+    <h3 className="text-[18.5px] font-bold">자산 정보를 불러오지 못했어요</h3>
+    <p className="mx-auto mt-2 max-w-[360px] text-[14.5px] text-white/55">잠시 후 다시 시도해주세요. 문제가 계속되면 거래소 연결 상태를 확인해주세요.</p>
+    <button onClick={onRetry} className="mt-4 rounded-[10px] px-5 py-2.5 text-[14.5px] font-semibold" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.10)', color: SONAR }}>다시 시도 ↻</button>
   </Panel>
 );
 
@@ -177,26 +178,26 @@ const SummaryCard = ({ kicker, title, total, pnl, returnRate, cash, equity, hold
   const sign = pnl > 0 ? 1 : pnl < 0 ? -1 : 0; // 손익 0은 이득이 아닌 '변동 없음'(중립)으로 표시
   return (
     <Panel style={{ padding: 0 }}>
-      <PanelHead kicker={kicker} title={title} right={<button onClick={onAll} className="text-[12.5px]" style={{ color: '#cfe1ff' }}>{allLabel}</button>} />
+      <PanelHead kicker={kicker} title={title} right={<button onClick={onAll} className="text-[13.5px]" style={{ color: '#cfe1ff' }}>{allLabel}</button>} />
       <div className="px-7 py-6">
-        <div className="text-[10.5px] font-semibold tracking-[.2em]" style={{ color: SONAR }}>총 자산</div>
-        <div className="mt-1.5 font-mono text-[38px] font-bold leading-none tracking-tight">{won(total)}</div>
-        <div className="mt-2.5 font-mono text-[15px] font-semibold" style={{ color: sign < 0 ? DOWN : sign > 0 ? UP : 'var(--ci-ink1)' }}>
+        <div className="text-[11.5px] font-semibold tracking-[.2em]" style={{ color: SONAR }}>총 자산</div>
+        <div className="mt-1.5 font-mono text-[41px] font-bold leading-none tracking-tight">{won(total)}</div>
+        <div className="mt-2.5 font-mono text-[16px] font-semibold" style={{ color: sign < 0 ? DOWN : sign > 0 ? UP : 'var(--ci-ink1)' }}>
           {sign !== 0 && <Tri up={sign > 0} />}{pnl > 0 ? '+' : ''}{Math.round(pnl).toLocaleString('ko-KR')} ({returnRate >= 0 ? '+' : ''}{returnRate.toFixed(2)}%)
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3.5">
           {[['현금', cash], ['보유 평가', equity]].map(([l, v]) => (
             <div key={l as string} className="rounded-xl px-4 py-3.5" style={{ background: 'var(--ci-inset)', border: '1px solid var(--ci-line)' }}>
-              <div className="text-[11px] text-white/45">{l}</div><div className="mt-1.5 font-mono text-[17px] font-semibold">{won(v as number)}</div>
+              <div className="text-[12px] text-white/45">{l}</div><div className="mt-1.5 font-mono text-[18.5px] font-semibold">{won(v as number)}</div>
             </div>
           ))}
         </div>
         {holdings.length > 0 && (
           <div className="mt-5">
-            <div className="mb-1 grid grid-cols-[1fr_auto_70px] gap-2 px-1 pb-2 text-[10.5px] uppercase tracking-[.08em] text-white/30" style={{ borderBottom: '1px solid var(--ci-line)' }}><span>종목</span><span className="text-right">평가액</span><span className="text-right">수익률</span></div>
+            <div className="mb-1 grid grid-cols-[1fr_auto_70px] gap-2 px-1 pb-2 text-[11.5px] uppercase tracking-[.08em] text-white/30" style={{ borderBottom: '1px solid var(--ci-line)' }}><span>종목</span><span className="text-right">평가액</span><span className="text-right">수익률</span></div>
             {holdings.map((h, i) => { const up = h.rate >= 0; return (
-              <div key={h.name + i} className="grid grid-cols-[1fr_auto_70px] items-center gap-2 px-1 py-2.5 text-[13px]" style={{ borderBottom: '1px solid var(--ci-line)' }}>
-                <span className="truncate font-semibold">{h.name} <span className="font-mono text-[11px] text-white/35">{h.sub}</span></span>
+              <div key={h.name + i} className="grid grid-cols-[1fr_auto_70px] items-center gap-2 px-1 py-2.5 text-[14px]" style={{ borderBottom: '1px solid var(--ci-line)' }}>
+                <span className="truncate font-semibold">{h.name} <span className="font-mono text-[12px] text-white/35">{h.sub}</span></span>
                 <span className="text-right font-mono">{won(h.value)}</span>
                 <span className="text-right font-mono font-semibold" style={{ color: up ? UP : DOWN }}><Tri up={up} />{up ? '+' : ''}{h.rate.toFixed(2)}%</span>
               </div>
@@ -220,16 +221,16 @@ const WelcomeBanner = ({ name, blips }: { name: string; blips: { sym: string; x:
     <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(40% 60% at 20% 90%, rgba(80,140,255,.18), transparent 70%)' }} />
     <div className="relative grid items-center gap-6 p-7 md:grid-cols-[1fr_auto] md:p-9">
       <div>
-        <div className="mb-3.5 flex items-center gap-2.5"><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: SONAR, boxShadow: `0 0 8px ${SONAR}` }} /><span className="text-[11.5px] font-semibold tracking-[.18em]" style={{ color: '#9cc1ff' }}>TODAY · 오늘의 항해</span></div>
-        <h1 className="text-[32px] font-bold leading-tight tracking-tight">{name}님, 다시 바다에 오셨군요.</h1>
-        <p className="mt-2.5 text-[15px] text-white/70">오늘도 시장의 바다를 유영해볼까요?</p>
+        <div className="mb-3.5 flex items-center gap-2.5"><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: SONAR, boxShadow: `0 0 8px ${SONAR}` }} /><span className="text-[12.5px] font-semibold tracking-[.18em]" style={{ color: '#9cc1ff' }}>TODAY · 오늘의 항해</span></div>
+        <h1 className="text-[34.5px] font-bold leading-tight tracking-tight">{name}님, 다시 바다에 오셨군요.</h1>
+        <p className="mt-2.5 text-[16px] text-white/70">오늘도 시장의 바다를 유영해볼까요?</p>
         <div className="mt-6 flex max-w-[520px] flex-wrap items-center gap-x-8 gap-y-3 border-t border-white/10 pt-[18px]">
           {indices.map(([n, v, d, u]) => (
-            <div key={n} className="flex flex-col gap-0.5"><span className="text-[10.5px] font-semibold tracking-[.12em] text-white/45">{n}</span><span className="font-mono text-[14px] font-semibold">{v}</span>{d && <span className="font-mono text-[11px] font-semibold" style={{ color: u ? UP : DOWN }}>{d}</span>}</div>
+            <div key={n} className="flex flex-col gap-0.5"><span className="text-[11.5px] font-semibold tracking-[.12em] text-white/45">{n}</span><span className="font-mono text-[15px] font-semibold">{v}</span>{d && <span className="font-mono text-[12px] font-semibold" style={{ color: u ? UP : DOWN }}>{d}</span>}</div>
           ))}
         </div>
       </div>
-      <div className="hidden flex-col items-center gap-2 md:flex"><MiniSonar blips={blips} /><span className="text-[10.5px] font-semibold tracking-[.16em] text-white/45">포지션 소나</span></div>
+      <div className="hidden flex-col items-center gap-2 md:flex"><MiniSonar blips={blips} /><span className="text-[11.5px] font-semibold tracking-[.16em] text-white/45">포지션 소나</span></div>
     </div>
   </section>
   );
@@ -251,10 +252,16 @@ const WatchlistPanel = ({ go }: { go: (path: string) => void }) => {
       const favs = profile?.favoriteAssets || [];
       if (!alive) return;
       if (favs.length === 0) { setItems([]); setLoaded(true); return; }
-      const [crypto, stock] = await Promise.all([marketService.getPrices('CRYPTO').catch(() => []), marketService.getPrices('STOCK').catch(() => [])]);
+      // 즐겨찾기는 모든 자산클래스(코인·국내주식·미국주식·ETF)에서 등록 가능 → 전부 조회해 합쳐서 필터
+      const [crypto, stock, usStock, etf] = await Promise.all([
+        marketService.getPrices('CRYPTO').catch(() => []),
+        marketService.getPrices('STOCK').catch(() => []),
+        marketService.getPrices('US_STOCK').catch(() => []),
+        marketService.getPrices('ETF').catch(() => []),
+      ]);
       if (!alive) return;
       const favSet = new Set(favs);
-      setItems([...crypto, ...stock].filter(p => favSet.has(p.symbol) || favSet.has(p.name)).slice(0, 8));
+      setItems([...crypto, ...stock, ...usStock, ...etf].filter(p => favSet.has(p.symbol) || favSet.has(p.name)).slice(0, 8));
       setLoaded(true);
     };
     fetchFavs();
@@ -266,14 +273,14 @@ const WatchlistPanel = ({ go }: { go: (path: string) => void }) => {
   return (
     <Panel style={{ padding: 0 }}>
       <div data-tour="watchlist">
-        <PanelHead title="관심 종목" right={<button onClick={() => go('/market')} className="text-[11px] font-semibold" style={{ color: SONAR }}>관리 →</button>} />
+        <PanelHead title="관심 종목" right={<button onClick={() => go('/market')} className="text-[12px] font-semibold" style={{ color: SONAR }}>관리 →</button>} />
         <div className="px-2.5 pb-3 pt-1">
-          {!loaded ? <div className="px-3 py-6 text-center text-[12px] text-white/40">불러오는 중…</div>
-            : merged.length === 0 ? <div className="px-3 py-6 text-center text-[12px] leading-relaxed text-white/40">시세 페이지에서 ★를 눌러<br />관심 종목을 등록해보세요.</div>
+          {!loaded ? <div className="px-3 py-6 text-center text-[13px] text-white/40">불러오는 중…</div>
+            : merged.length === 0 ? <div className="px-3 py-6 text-center text-[13px] leading-relaxed text-white/40">시세 페이지에서 ★를 눌러<br />관심 종목을 등록해보세요.</div>
               : merged.map(s => { const up = s.changeRate >= 0; return (
                 <button key={s.symbol} onClick={() => go(`/trade?code=${s.symbol}&type=${s.assetType}`)} className="grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.03]">
-                  <div className="min-w-0"><div className="truncate text-[13px] font-semibold">{s.name}</div><div className="font-mono text-[11px] text-white/40">{s.symbol}</div></div>
-                  <div className="text-right"><div className="font-mono text-[12.5px] font-semibold">{wlPrice(s)}</div><div className="font-mono text-[11px] font-semibold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{s.changeRate.toFixed(2)}%</div></div>
+                  <div className="min-w-0"><div className="truncate text-[14px] font-semibold">{s.name}</div><div className="font-mono text-[12px] text-white/40">{s.symbol}</div></div>
+                  <div className="text-right"><div className="font-mono text-[13.5px] font-semibold">{wlPrice(s)}</div><div className="font-mono text-[12px] font-semibold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{s.changeRate.toFixed(2)}%</div></div>
                 </button>
               ); })}
         </div>
@@ -297,26 +304,26 @@ const GoalPanel = ({ returnRate }: { returnRate: number | null }) => {
   const reached = target != null && cur >= target; // 목표 수익률은 양수 전용
   return (
     <Panel style={{ padding: 0 }}>
-      <PanelHead title="목표 수익률" right={target != null && !editing ? <button onClick={() => setEditing(true)} className="text-[11px] font-semibold" style={{ color: SONAR }}>수정</button> : undefined} />
+      <PanelHead title="목표 수익률" right={target != null && !editing ? <button onClick={() => setEditing(true)} className="text-[12px] font-semibold" style={{ color: SONAR }}>수정</button> : undefined} />
       <div className="px-[22px] pb-[18px] pt-3">
         {target == null || editing ? (
           <div>
-            <div className="mb-2 text-[12.5px] text-white/55">달성하고 싶은 목표 수익률(%)을 정해보세요. (0보다 큰 값)</div>
+            <div className="mb-2 text-[13.5px] text-white/55">달성하고 싶은 목표 수익률(%)을 정해보세요. (0보다 큰 값)</div>
             <div className="flex gap-2">
-              <input type="number" min={0} step="0.1" value={draft} onChange={e => setDraft(e.target.value)} placeholder="예: 10" className="w-full rounded-lg px-3 py-2 text-right font-mono text-[14px] outline-none" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink0)' }} />
-              <button onClick={save} disabled={!draftValid} className="shrink-0 rounded-lg px-4 text-[13px] font-bold text-white disabled:opacity-40" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>저장</button>
+              <input type="number" min={0} step="0.1" value={draft} onChange={e => setDraft(e.target.value)} placeholder="예: 10" className="w-full rounded-lg px-3 py-2 text-right font-mono text-[15px] outline-none" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink0)' }} />
+              <button onClick={save} disabled={!draftValid} className="shrink-0 rounded-lg px-4 text-[14px] font-bold text-white disabled:opacity-40" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>저장</button>
             </div>
           </div>
         ) : (
           <>
             <div className="flex items-baseline justify-between">
-              <span className="font-mono text-[24px] font-bold" style={{ color: cur >= 0 ? UP : DOWN }}>{cur >= 0 ? '+' : ''}{cur.toFixed(2)}%</span>
-              <span className="text-[12.5px] text-white/55">목표 <span className="font-mono font-bold text-white">{target > 0 ? '+' : ''}{target}%</span></span>
+              <span className="font-mono text-[26px] font-bold" style={{ color: cur >= 0 ? UP : DOWN }}>{cur >= 0 ? '+' : ''}{cur.toFixed(2)}%</span>
+              <span className="text-[13.5px] text-white/55">목표 <span className="font-mono font-bold text-white">{target > 0 ? '+' : ''}{target}%</span></span>
             </div>
             <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--ci-card)' }}>
               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: reached ? 'linear-gradient(90deg,#3fd6a0,#2f9e6e)' : `linear-gradient(90deg, ${SONAR}, #2c6fe6)`, transition: 'width .4s' }} />
             </div>
-            <div className="mt-2 text-[12px]" style={{ color: reached ? '#3fd6a0' : 'var(--ci-ink2)' }}>{reached ? '🎉 목표 달성! 새 목표를 세워보세요.' : `목표까지 ${Math.abs(target - cur).toFixed(2)}%p 남았어요.`}</div>
+            <div className="mt-2 text-[13px]" style={{ color: reached ? '#3fd6a0' : 'var(--ci-ink2)' }}>{reached ? '🎉 목표 달성! 새 목표를 세워보세요.' : `목표까지 ${Math.abs(target - cur).toFixed(2)}%p 남았어요.`}</div>
           </>
         )}
       </div>
@@ -334,7 +341,7 @@ const RightRail = ({ go, returnRate = null }: { go: (path: string) => void; retu
         {QUICK.map(([t, s, ic], i) => (
           <li key={t}><button onClick={() => go(QUICK_PATH[i])} className="grid w-full grid-cols-[38px_1fr_auto] items-center gap-3.5 px-[22px] py-3 text-left transition-colors hover:bg-white/[0.03]">
             <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px]" style={{ background: 'rgba(91,157,255,.10)', color: SONAR, border: '1px solid rgba(91,157,255,.22)' }}><QIcon kind={ic} /></span>
-            <span><span className="block text-[14px] font-semibold">{t}</span><span className="mt-0.5 block text-[12px] text-white/45">{s}</span></span><span className="text-white/30">→</span>
+            <span><span className="block text-[15px] font-semibold">{t}</span><span className="mt-0.5 block text-[13px] text-white/45">{s}</span></span><span className="text-white/30">→</span>
           </button></li>
         ))}
       </ul>
@@ -342,10 +349,10 @@ const RightRail = ({ go, returnRate = null }: { go: (path: string) => void; retu
     </Panel>
     <WatchlistPanel go={go} />
     <Panel style={{ padding: 0 }}>
-      <PanelHead title="투자 원칙" right={<span className="text-[11px] text-white/30">항해 수칙</span>} />
+      <PanelHead title="투자 원칙" right={<span className="text-[12px] text-white/30">항해 수칙</span>} />
       <div className="px-[22px] pb-[18px] pt-1">
         {SIGNALS.map(([tag, t, s, c]) => (
-          <div key={t} className="border-t border-white/10 py-3 first:border-t-0"><span className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-[.08em]" style={{ background: 'var(--ci-chip)', color: c }}>{tag}</span><div className="my-[7px] mb-1 text-[13.5px] font-semibold">{t}</div><div className="text-[12px] text-white/45">{s}</div></div>
+          <div key={t} className="border-t border-white/10 py-3 first:border-t-0"><span className="rounded px-1.5 py-0.5 text-[11px] font-bold tracking-[.08em]" style={{ background: 'var(--ci-chip)', color: c }}>{tag}</span><div className="my-[7px] mb-1 text-[14.5px] font-semibold">{t}</div><div className="text-[13px] text-white/45">{s}</div></div>
         ))}
       </div>
     </Panel>
@@ -353,8 +360,8 @@ const RightRail = ({ go, returnRate = null }: { go: (path: string) => void; retu
 );
 const Footer = () => (
   <footer className="mt-2 flex flex-wrap justify-between gap-3 border-t border-white/10 pt-5">
-    <span className="font-mono text-[11.5px] text-white/30">© 2026 WHALEARC · 모든 항해는 사용자의 책임 아래 진행됩니다.</span>
-    <span className="text-[11.5px] text-white/30">Built quietly, beneath the surface.</span>
+    <span className="font-mono text-[12.5px] text-white/30">© 2026 WHALEARC · 모든 항해는 사용자의 책임 아래 진행됩니다.</span>
+    <span className="text-[12.5px] text-white/30">Built quietly, beneath the surface.</span>
   </footer>
 );
 // 보유 종목이 없으면 빈 소나(가짜 포지션 표시 안 함)
@@ -402,7 +409,7 @@ const RealDashboard = () => {
   const selectedPort = ports[src] || null;
   const meta = EXCHANGES.find(e => e.key === src)!;
   // 보유 평가/평가액은 항상 KRW로 표시. KIS 해외주식(currency=USD)은 서버가 준 환율로 환산해 합산(통화 혼합 방지).
-  const usdKrw = selectedPort?.usdtKrwRate || 0;
+  const usdKrw = selectedPort?.usdtKrwRate || FALLBACK_USD_KRW; // 환율 누락 시 폴백(USD가 1:1 원화 취급되어 ~1380배 축소되던 버그 방지)
   const krwValue = (h: { marketValue: number; currency?: string }) => (h.currency === 'USD' && usdKrw > 0 ? h.marketValue * usdKrw : h.marketValue);
   const equity = selectedPort ? selectedPort.totalValue - selectedPort.cashBalance : 0;
   const holdings: SumHolding[] = selectedPort ? [...selectedPort.holdings].sort((a, b) => krwValue(b) - krwValue(a)).slice(0, 5).map(h => ({ name: h.assetName, sub: fmtQty(h.quantity, src === 'KIS'), value: krwValue(h), rate: h.returnRate })) : [];
@@ -416,14 +423,14 @@ const RealDashboard = () => {
         {/* 자산 소스 탭 (실 연결상태) */}
         <div className="flex flex-wrap items-center gap-2" data-tour="source">
           {EXCHANGES.map(e => { const on = src === e.key, c = isConn(e.key); return (
-            <button key={e.key} onClick={() => setSrc(e.key)} className="inline-flex items-center gap-2 rounded-[10px] px-4 py-[9px] text-[14px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : '1px solid var(--ci-line)', background: on ? 'rgba(91,157,255,.10)' : 'var(--ci-inset)' }}>
-              {e.label}<span className="rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: on ? 'rgba(91,157,255,.22)' : 'var(--ci-chip)', color: on ? '#cfe1ff' : 'var(--ci-ink1)' }}>{e.badge}</span>
-              <span className="text-[11px]" style={{ color: c ? '#3fd6a0' : 'var(--ci-ink3)' }}>· {c ? '연결됨' : '미연결'}</span>
+            <button key={e.key} onClick={() => setSrc(e.key)} className="inline-flex items-center gap-2 rounded-[10px] px-4 py-[9px] text-[15px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : '1px solid var(--ci-line)', background: on ? 'rgba(91,157,255,.10)' : 'var(--ci-inset)' }}>
+              {e.label}<span className="rounded px-1.5 py-0.5 text-[12px] font-bold" style={{ background: on ? 'rgba(91,157,255,.22)' : 'var(--ci-chip)', color: on ? '#cfe1ff' : 'var(--ci-ink1)' }}>{e.badge}</span>
+              <span className="text-[12px]" style={{ color: c ? '#3fd6a0' : 'var(--ci-ink3)' }}>· {c ? '연결됨' : '미연결'}</span>
             </button>
           ); })}
-          <button onClick={goConnect} className="rounded-[10px] px-3.5 py-[9px] text-[13.5px] font-medium text-white/70" style={{ border: '1px dashed var(--ci-line-strong)' }}>+ {meta.name.split(' ')[0]} 연결</button>
-          <button onClick={() => setTour(true)} className="ml-auto rounded-[10px] px-3 py-[9px] text-[13px] text-white/55" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-inset)' }} title="가이드 다시 보기">? 가이드</button>
-          <button onClick={() => loadData()} className="rounded-[10px] px-3 py-[9px] text-[13px] text-white/55" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-inset)' }} title="새로고침">↻ 새로고침</button>
+          <button onClick={goConnect} className="rounded-[10px] px-3.5 py-[9px] text-[14.5px] font-medium text-white/70" style={{ border: '1px dashed var(--ci-line-strong)' }}>+ {meta.name.split(' ')[0]} 연결</button>
+          <button onClick={() => setTour(true)} className="ml-auto rounded-[10px] px-3 py-[9px] text-[14px] text-white/55" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-inset)' }} title="가이드 다시 보기">? 가이드</button>
+          <button onClick={() => loadData()} className="rounded-[10px] px-3 py-[9px] text-[14px] text-white/55" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-inset)' }} title="새로고침">↻ 새로고침</button>
         </div>
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(300px,1fr)]">
           <div className="flex flex-col gap-5" data-tour="summary">
@@ -436,10 +443,10 @@ const RealDashboard = () => {
                 : <OnboardingCard ex={meta} onSetup={goConnect} />}
             {/* VIRT 체험 카드 */}
             <Panel style={{ padding: '26px 30px', background: 'linear-gradient(135deg, rgba(91,157,255,.14), rgba(91,157,255,.03) 60%, transparent)', border: '1px solid rgba(91,157,255,.28)' }}>
-              <div className="mb-2 flex items-center gap-2.5"><span className="rounded px-2 py-[3px] text-[10.5px] font-bold tracking-[.06em] text-white" style={{ background: SONAR }}>VIRT</span><span className="text-[11px] font-semibold tracking-[.18em]" style={{ color: 'var(--ci-sonar)' }}>가상 항해 · 체험하기</span></div>
-              <h3 className="my-1 text-[21px] font-bold">먼저 가상으로, 안전하게 연습해보세요.</h3>
-              <p className="m-0 text-[14.5px] leading-relaxed text-white/70">가상돈 <span className="font-mono font-bold text-white">₩10,000,000</span>으로 주식·코인 매매를 실험할 수 있어요.</p>
-              <button onClick={() => navigate('/virt/dashboard')} className="mt-5 inline-flex items-center gap-2.5 rounded-xl px-6 py-3.5 text-[14px] font-semibold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff 0%,#2c6fe6 62%,#2257c8 100%)', boxShadow: '0 12px 28px -12px rgba(44,111,230,.7), inset 0 1px 0 rgba(255,255,255,.38)' }}>VIRT 모드 시작하기<span className="flex h-5 w-5 items-center justify-center rounded-full text-[12px]" style={{ background: 'rgba(255,255,255,.18)' }}>→</span></button>
+              <div className="mb-2 flex items-center gap-2.5"><span className="rounded px-2 py-[3px] text-[11.5px] font-bold tracking-[.06em] text-white" style={{ background: SONAR }}>VIRT</span><span className="text-[12px] font-semibold tracking-[.18em]" style={{ color: 'var(--ci-sonar)' }}>가상 항해 · 체험하기</span></div>
+              <h3 className="my-1 text-[22.5px] font-bold">먼저 가상으로, 안전하게 연습해보세요.</h3>
+              <p className="m-0 text-[15.5px] leading-relaxed text-white/70">가상돈 <span className="font-mono font-bold text-white">₩10,000,000</span>으로 주식·코인 매매를 실험할 수 있어요.</p>
+              <button onClick={() => navigate('/virt/dashboard')} className="mt-5 inline-flex items-center gap-2.5 rounded-xl px-6 py-3.5 text-[15px] font-semibold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff 0%,#2c6fe6 62%,#2257c8 100%)', boxShadow: '0 12px 28px -12px rgba(44,111,230,.7), inset 0 1px 0 rgba(255,255,255,.38)' }}>VIRT 모드 시작하기<span className="flex h-5 w-5 items-center justify-center rounded-full text-[13px]" style={{ background: 'rgba(255,255,255,.18)' }}>→</span></button>
             </Panel>
           </div>
           <RightRail go={p => navigate(p)} returnRate={selectedConnected ? (selectedPort?.totalReturnRate ?? null) : null} />
@@ -513,8 +520,8 @@ const VirtDashboard = () => {
       await tradeService.createOrder({ stockCode: o.stockCode, stockName: o.stockName, orderType: 'BUY', orderMethod: 'MARKET', quantity: o.quantity, assetType: o.assetType });
       setQbMsg({ msg: `${o.stockName} 매수 완료! 첫 항해를 시작했어요. ⚓`, ok: true });
       loadData();
-    } catch (e: any) {
-      setQbMsg({ msg: e?.response?.data?.message || '매수에 실패했습니다. 잠시 후 다시 시도해주세요.', ok: false });
+    } catch (e) {
+      setQbMsg({ msg: getErrorMessage(e, '매수에 실패했습니다. 잠시 후 다시 시도해주세요.'), ok: false });
     } finally {
       setQbBusy(null);
       if (qbTimer.current) clearTimeout(qbTimer.current);
@@ -525,7 +532,7 @@ const VirtDashboard = () => {
   const initialCash = portfolio?.initialCash || 10_000_000;
   const total = portfolio?.totalValue ?? 0;
   // 미국주식·ETF(USD)는 환율로 KRW 환산 후 합산/정렬(통화 혼합 방지)
-  const vUsdKrw = portfolio?.usdKrwRate || 0;
+  const vUsdKrw = portfolio?.usdKrwRate || FALLBACK_USD_KRW; // 환율 누락 시 폴백(USD가 1:1 원화 취급되어 ~1380배 축소되던 버그 방지)
   const vKrw = (h: { marketValue: number; assetType?: string }) => ((h.assetType === 'US_STOCK' || h.assetType === 'ETF') && vUsdKrw > 0 ? h.marketValue * vUsdKrw : h.marketValue);
   const equity = portfolio ? portfolio.holdings.reduce((s, h) => s + vKrw(h), 0) : 0;
   const pnl = total - initialCash;
@@ -545,13 +552,13 @@ const VirtDashboard = () => {
         {/* 온보딩 가이드 — 신규 유저(3단계 미완료, 미해제) */}
         {showOnboard && (
           <Panel style={{ padding: '26px 28px', border: '1px solid rgba(91,157,255,.3)', background: 'linear-gradient(135deg,rgba(91,157,255,.08) 0%,rgba(63,214,160,.05) 60%,transparent)' }}>
-            <div className="mb-1 text-[10.5px] font-bold tracking-[.22em]" style={{ color: SONAR }}>GETTING STARTED</div>
+            <div className="mb-1 text-[11.5px] font-bold tracking-[.22em]" style={{ color: SONAR }}>GETTING STARTED</div>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 className="text-[18px] font-bold">WhaleArc, 이렇게 시작하세요</h3>
-                <p className="mt-1 text-[13px]" style={{ color: 'var(--ci-ink2)' }}>총 3단계 중 <b style={{ color: SONAR }}>{doneCount}개 완료</b> — 각 카드를 눌러 직접 해봐요. 실제 돈은 없어요, 가상 ₩1,000만입니다.</p>
+                <h3 className="text-[19.5px] font-bold">WhaleArc, 이렇게 시작하세요</h3>
+                <p className="mt-1 text-[14px]" style={{ color: 'var(--ci-ink2)' }}>총 3단계 중 <b style={{ color: SONAR }}>{doneCount}개 완료</b> — 각 카드를 눌러 직접 해봐요. 실제 돈은 없어요, 가상 ₩1,000만입니다.</p>
               </div>
-              <button onClick={dismissOnboard} className="shrink-0 rounded-lg px-3.5 py-1.5 text-[11.5px] font-semibold" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)', color: 'var(--ci-ink3)' }}>가이드 닫기 ✕</button>
+              <button onClick={dismissOnboard} className="shrink-0 rounded-lg px-3.5 py-1.5 text-[12.5px] font-semibold" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)', color: 'var(--ci-ink3)' }}>가이드 닫기 ✕</button>
             </div>
             {/* 진행 바 */}
             <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--ci-card)' }}>
@@ -564,20 +571,20 @@ const VirtDashboard = () => {
                   <button key={s.key} onClick={() => navigate(s.action)} className="group flex flex-col gap-1.5 rounded-[12px] p-4 text-left transition-colors" style={{ background: 'var(--ci-card)', border: done ? '1px solid rgba(63,214,160,.4)' : '1px solid var(--ci-line)', opacity: done ? 0.78 : 1 }}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2.5">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[17px]" style={{ background: done ? 'rgba(63,214,160,.18)' : 'rgba(91,157,255,.15)' }}>{done ? '✅' : s.icon}</span>
-                        <span className="text-[11px] font-bold tracking-[.1em]" style={{ color: done ? '#3fd6a0' : SONAR }}>STEP {i + 1}</span>
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[18.5px]" style={{ background: done ? 'rgba(63,214,160,.18)' : 'rgba(91,157,255,.15)' }}>{done ? '✅' : s.icon}</span>
+                        <span className="text-[12px] font-bold tracking-[.1em]" style={{ color: done ? '#3fd6a0' : SONAR }}>STEP {i + 1}</span>
                       </div>
-                      {done && <span className="text-[10.5px] font-semibold" style={{ color: '#3fd6a0' }}>완료</span>}
+                      {done && <span className="text-[11.5px] font-semibold" style={{ color: '#3fd6a0' }}>완료</span>}
                     </div>
-                    <div className="text-[13.5px] font-semibold" style={{ color: 'var(--ci-ink0)', textDecoration: done ? 'line-through' : 'none', textDecorationColor: 'rgba(63,214,160,.5)' }}>{s.title}</div>
-                    <div className="text-[12px] leading-relaxed" style={{ color: 'var(--ci-ink2)' }}>{s.desc}</div>
-                    <div className="mt-auto pt-1.5 text-[11.5px] font-semibold" style={{ color: done ? '#3fd6a0' : SONAR }}>{done ? `✓ ${s.doneLabel}` : s.label}</div>
+                    <div className="text-[14.5px] font-semibold" style={{ color: 'var(--ci-ink0)', textDecoration: done ? 'line-through' : 'none', textDecorationColor: 'rgba(63,214,160,.5)' }}>{s.title}</div>
+                    <div className="text-[13px] leading-relaxed" style={{ color: 'var(--ci-ink2)' }}>{s.desc}</div>
+                    <div className="mt-auto pt-1.5 text-[12.5px] font-semibold" style={{ color: done ? '#3fd6a0' : SONAR }}>{done ? `✓ ${s.doneLabel}` : s.label}</div>
                   </button>
                 );
               })}
             </div>
             {/* 학습 노트 발견 동선 — 시작 전 기초가 낯설면 */}
-            <button onClick={() => navigate('/virt/learn?tab=math')} className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold transition-opacity hover:opacity-80" style={{ color: SONAR }}>
+            <button onClick={() => navigate('/virt/learn?tab=math')} className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold transition-opacity hover:opacity-80" style={{ color: SONAR }}>
               📚 투자가 처음이라면 — 학습 노트의 '투자 계산기'로 기초 원리부터 (복리·손익비·분산)
             </button>
           </Panel>
@@ -590,31 +597,31 @@ const VirtDashboard = () => {
             {/* 첫 항해 퀵매수 — 보유 종목이 없을 때만 */}
             {!loading && !error && portfolio && portfolio.holdings.length === 0 && (
               <Panel style={{ padding: '22px 26px', border: '1px solid rgba(91,157,255,.28)', background: 'linear-gradient(135deg, rgba(91,157,255,.10), transparent 60%)' }}>
-                <div className="mb-1 text-[11px] font-semibold tracking-[.18em]" style={{ color: SONAR }}>FIRST VOYAGE</div>
-                <h3 className="text-[18px] font-bold">첫 항해, 한 번에 시작해보세요</h3>
-                <p className="mt-1 text-[13px] text-white/60">버튼 한 번이면 모의 매수로 첫 거래를 경험할 수 있어요. (가상돈 ₩1,000만 · 시장가 체결)</p>
+                <div className="mb-1 text-[12px] font-semibold tracking-[.18em]" style={{ color: SONAR }}>FIRST VOYAGE</div>
+                <h3 className="text-[19.5px] font-bold">첫 항해, 한 번에 시작해보세요</h3>
+                <p className="mt-1 text-[14px] text-white/60">버튼 한 번이면 모의 매수로 첫 거래를 경험할 수 있어요. (가상돈 ₩1,000만 · 시장가 체결)</p>
                 <div className="mt-3.5 flex flex-wrap gap-2.5">
                   {FIRST_BUYS.map(o => (
-                    <button key={o.stockCode} onClick={() => quickBuy(o)} disabled={qbBusy != null} className="rounded-[10px] px-4 py-2.5 text-[13px] font-semibold disabled:opacity-50" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.1)', color: SONAR }}>{qbBusy === o.stockCode ? '매수 중…' : `⚡ ${o.label} 사보기`}</button>
+                    <button key={o.stockCode} onClick={() => quickBuy(o)} disabled={qbBusy != null} className="rounded-[10px] px-4 py-2.5 text-[14px] font-semibold disabled:opacity-50" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.1)', color: SONAR }}>{qbBusy === o.stockCode ? '매수 중…' : `⚡ ${o.label} 사보기`}</button>
                   ))}
-                  <button onClick={() => navigate('/virt/trade')} className="rounded-[10px] px-4 py-2.5 text-[13px] font-semibold text-white/70" style={{ border: '1px solid var(--ci-line-strong)' }}>직접 골라 매수 →</button>
+                  <button onClick={() => navigate('/virt/trade')} className="rounded-[10px] px-4 py-2.5 text-[14px] font-semibold text-white/70" style={{ border: '1px solid var(--ci-line-strong)' }}>직접 골라 매수 →</button>
                 </div>
-                {qbMsg && <div className="mt-3 rounded-lg px-3.5 py-2.5 text-[12.5px] font-semibold" style={qbMsg.ok ? { background: 'rgba(63,214,160,.1)', border: '1px solid rgba(63,214,160,.28)', color: '#3fd6a0' } : { background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{qbMsg.msg}</div>}
+                {qbMsg && <div className="mt-3 rounded-lg px-3.5 py-2.5 text-[13.5px] font-semibold" style={qbMsg.ok ? { background: 'rgba(63,214,160,.1)', border: '1px solid rgba(63,214,160,.28)', color: '#3fd6a0' } : { background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{qbMsg.msg}</div>}
               </Panel>
             )}
             {/* 유리병 편지 발견 카드 */}
             <Panel style={{ padding: '22px 26px', background: 'linear-gradient(135deg, rgba(91,157,255,.10), rgba(63,214,160,.04) 60%, transparent)', border: '1px solid rgba(91,157,255,.28)' }}>
-              <div className="mb-1 text-[11px] font-semibold tracking-[.18em]" style={{ color: SONAR }}>🌊 NEW · 유리병 편지</div>
-              <h3 className="text-[18px] font-bold">흔들릴 땐, 유리병에 담아두세요</h3>
-              <p className="mt-1 text-[13.5px] leading-relaxed text-white/65">급락에 팔고 싶거나 급등에 사고 싶을 때 — 막지 않고 그 마음을 기록해뒀다가, 며칠 뒤 <b className="text-white/85">충동대로 했다면 vs 참았다면</b>을 실제 숫자로 비춰줘요.</p>
-              <button onClick={() => navigate('/virt/mirror')} className="mt-3.5 inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[13.5px] font-semibold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)', boxShadow: '0 12px 28px -12px rgba(44,111,230,.6)' }}>유리병 편지 열어보기 →</button>
+              <div className="mb-1 text-[12px] font-semibold tracking-[.18em]" style={{ color: SONAR }}>🌊 NEW · 유리병 편지</div>
+              <h3 className="text-[19.5px] font-bold">흔들릴 땐, 유리병에 담아두세요</h3>
+              <p className="mt-1 text-[14.5px] leading-relaxed text-white/65">급락에 팔고 싶거나 급등에 사고 싶을 때 — 막지 않고 그 마음을 기록해뒀다가, 며칠 뒤 <b className="text-white/85">충동대로 했다면 vs 참았다면</b>을 실제 숫자로 비춰줘요.</p>
+              <button onClick={() => navigate('/virt/mirror')} className="mt-3.5 inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[14.5px] font-semibold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)', boxShadow: '0 12px 28px -12px rgba(44,111,230,.6)' }}>유리병 편지 열어보기 →</button>
             </Panel>
             {/* 실전 모드 카드 */}
             <Panel style={{ padding: '26px 30px', background: 'linear-gradient(135deg, rgba(245,208,97,.12), rgba(245,208,97,.02) 60%, transparent)', border: '1px solid rgba(245,208,97,.26)' }}>
-              <div className="mb-2 flex items-center gap-2.5"><span className="rounded px-2 py-[3px] text-[10.5px] font-bold tracking-[.06em]" style={{ background: COMPASS, color: '#0a1230' }}>LIVE</span><span className="text-[11px] font-semibold tracking-[.18em]" style={{ color: COMPASS }}>실전 항해 · 거래소 연동</span></div>
-              <h3 className="my-1 text-[21px] font-bold">준비됐다면 실계좌로 항해하세요.</h3>
-              <p className="m-0 text-[14.5px] leading-relaxed text-white/70">KIS·업비트·비트겟 API를 연결하면 실제 보유 자산을 한 곳에서 관리할 수 있어요.</p>
-              <button onClick={() => navigate('/dashboard')} className="mt-5 inline-flex items-center gap-2.5 rounded-xl px-6 py-3.5 text-[14px] font-semibold" style={{ border: '1px solid rgba(245,208,97,.5)', background: 'linear-gradient(180deg,#f5d061 0%,#e3b73e 100%)', color: '#0a1230', boxShadow: '0 12px 28px -12px rgba(245,208,97,.5)' }}>실전 모드로 →</button>
+              <div className="mb-2 flex items-center gap-2.5"><span className="rounded px-2 py-[3px] text-[11.5px] font-bold tracking-[.06em]" style={{ background: COMPASS, color: '#0a1230' }}>LIVE</span><span className="text-[12px] font-semibold tracking-[.18em]" style={{ color: COMPASS }}>실전 항해 · 거래소 연동</span></div>
+              <h3 className="my-1 text-[22.5px] font-bold">준비됐다면 실계좌로 항해하세요.</h3>
+              <p className="m-0 text-[15.5px] leading-relaxed text-white/70">KIS·업비트·비트겟 API를 연결하면 실제 보유 자산을 한 곳에서 관리할 수 있어요.</p>
+              <button onClick={() => navigate('/dashboard')} className="mt-5 inline-flex items-center gap-2.5 rounded-xl px-6 py-3.5 text-[15px] font-semibold" style={{ border: '1px solid rgba(245,208,97,.5)', background: 'linear-gradient(180deg,#f5d061 0%,#e3b73e 100%)', color: '#0a1230', boxShadow: '0 12px 28px -12px rgba(245,208,97,.5)' }}>실전 모드로 →</button>
             </Panel>
           </div>
           <RightRail go={p => navigate(`/virt${p}`)} returnRate={portfolio?.returnRate ?? null} />

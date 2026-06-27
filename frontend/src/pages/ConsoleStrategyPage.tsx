@@ -2,18 +2,22 @@ import type { ReactNode } from 'react';
 import { useMemo, useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useRoutePrefix } from '../hooks/useRoutePrefix';
+import { useRoutePrefix, useVirtNavigate } from '../hooks/useRoutePrefix';
+import { effectiveTier, tierMeetsMin, tierLabel, isUnlimited, type UserTier, type TierLimits } from '../services/userService';
 import HelmShell from '../components/HelmShell';
 import {
   strategyService, exportBacktestCsv,
   type BacktestRequest, type BacktestResult, type Indicator, type Condition, type BacktestHistoryItem, type Strategy,
 } from '../services/strategyService';
 import { marketService } from '../services/marketService';
-import { PRESET_STRATEGIES, type PresetStrategy, TURTLE_PRESET_ID, TURTLE_DEFAULTS, buildTurtleConditions, type TurtleParams, MOMENTUM_PRESET_ID, MOMENTUM_DEFAULTS, type MomentumParams } from '../data/presetStrategies';
+import BacktestChart, { type BtMarker } from '../components/BacktestChart';
+import { formatAmountInput, parseAmountInput } from '../utils/currency';
+import { PRESET_STRATEGIES, type PresetStrategy, TURTLE_PRESET_ID, TURTLE_DEFAULTS, buildTurtleConditions, type TurtleParams, MOMENTUM_PRESET_ID, MOMENTUM_DEFAULTS, type MomentumParams, MOMENTUM_ASSET_META, type MomentumAssetType } from '../data/presetStrategies';
 import { tradeService } from '../services/tradeService';
 import { Term } from '../components/GlossaryTerm';
 import GuideTour, { type TourStep } from '../components/GuideTour';
 import FunnelSteps from '../components/FunnelSteps';
+import { getErrorMessage } from '../utils/api';
 
 const STRAT_TOUR: TourStep[] = [
   { target: 'library', title: '① 전략 고르기', description: '기본 전략(골든크로스·RSI 등)을 고르거나 "새 항로 만들기"로 직접 만들 수 있어요.\n\n내 전략 카드 아래의 버튼으로 ⚓ 모의 적용·⚡ 자동매매도 켤 수 있습니다.', position: 'right' },
@@ -39,13 +43,13 @@ const StationBar = ({ title, sub, badge }: { title: string; sub: string; badge?:
     <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px]" style={{ background: 'rgba(255,255,255,.16)' }}>
       <svg width="18" height="18" viewBox="0 0 22 22" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="17" r="2.2" /><circle cx="17" cy="5" r="2.2" /><path strokeDasharray="2 2" d="M6.5 15C12 10 9 8 15.5 6.5" /></svg>
     </span>
-    <div className="min-w-0 flex-1"><div className="text-[16px] font-bold">{title}</div><div className="truncate text-[12.5px] text-white/70">{sub}</div></div>
+    <div className="min-w-0 flex-1"><div className="text-[17.5px] font-bold">{title}</div><div className="truncate text-[13.5px] text-white/70">{sub}</div></div>
     {badge}
   </div>
 );
-const Label = ({ children }: { children: ReactNode }) => <span className="text-[11.5px] font-semibold tracking-[.06em]" style={{ color: INK2 }}>{children}</span>;
+const Label = ({ children }: { children: ReactNode }) => <span className="text-[12.5px] font-semibold tracking-[.06em]" style={{ color: INK2 }}>{children}</span>;
 
-type Strat = { id: string; name: string; cat: string; level: 'beginner' | 'intermediate' | 'advanced'; short: string; n: number; isUser?: boolean; applied?: boolean; assetCount?: number };
+type Strat = { id: string; name: string; cat: string; level: 'beginner' | 'intermediate' | 'advanced'; short: string; n: number; isUser?: boolean; applied?: boolean; assetCount?: number; minTier?: UserTier };
 const DIFF_LEVEL: Record<string, 'beginner' | 'intermediate' | 'advanced'> = { '초급': 'beginner', '중급': 'intermediate', '고급': 'advanced' };
 // 사용자 생성 전략 → 라이브러리 표시용 매핑
 const toStrat = (s: Strategy): Strat => ({
@@ -57,8 +61,11 @@ const toStrat = (s: Strategy): Strat => ({
 const presetToStrat = (s: PresetStrategy): Strat => ({
   id: s.id, name: s.name, cat: s.category, level: DIFF_LEVEL[s.difficulty || '초급'] || 'beginner',
   short: s.description, n: (s.entryConditions?.length || 0) + (s.exitConditions?.length || 0),
+  minTier: s.minTier,
 });
-const STRATEGIES: Strat[] = PRESET_STRATEGIES.map(presetToStrat);
+// 난이도순으로 정렬해 라이브러리에서 초급→중급→고급으로 묶여 보이게 한다(같은 레벨 내 기존 순서 유지=안정 정렬).
+const LEVEL_ORDER: Record<Strat['level'], number> = { beginner: 0, intermediate: 1, advanced: 2 };
+const STRATEGIES: Strat[] = PRESET_STRATEGIES.map(presetToStrat).sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]);
 
 /* 프리셋 전략별 초보 교육(beginnerTip/whyUse/strategyLogic) — presetStrategies.ts에서 파생 */
 const PRESET_EDU: Record<string, { tip?: string; why?: string; logic?: string }> = Object.fromEntries(
@@ -66,7 +73,7 @@ const PRESET_EDU: Record<string, { tip?: string; why?: string; logic?: string }>
 );
 /* 프리셋별 시각화 차트(캔버스 애니메이션) — 지연 로딩으로 번들 분리.
    import 실패 시 에러바운더리로 번지지 않도록 폴백 컴포넌트로 강등(graceful). */
-const ChartFallback = () => <div className="flex flex-col items-center justify-center gap-1 text-center text-[13px]" style={{ color: INK3, height: 200 }}><span>차트를 불러올 수 없습니다.</span><span className="text-[12px]">오른쪽 패널에서 백테스트를 바로 실행해보세요.</span></div>;
+const ChartFallback = () => <div className="flex flex-col items-center justify-center gap-1 text-center text-[14px]" style={{ color: INK3, height: 200 }}><span>차트를 불러올 수 없습니다.</span><span className="text-[13px]">오른쪽 패널에서 백테스트를 바로 실행해보세요.</span></div>;
 const lazyChart = (imp: () => Promise<{ default: React.ComponentType }>) =>
   lazy(() => imp().catch(() => ({ default: ChartFallback as React.ComponentType })));
 const PRESET_CHART: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
@@ -77,6 +84,15 @@ const PRESET_CHART: Record<string, React.LazyExoticComponent<React.ComponentType
   'preset-stochastic': lazyChart(() => import('../components/StochasticChart')),
   'preset-connors-rsi2': lazyChart(() => import('../components/ConnorsRSI2Chart')),
   'preset-volatility-breakout': lazyChart(() => import('../components/VolatilityBreakoutChart')),
+  // 공용 엔진(StrategyDemoChart) 기반 데모 — 기존에 시각화가 없던 8종
+  'preset-buy-hold': lazyChart(() => import('../components/strategyDemos').then(m => ({ default: m.BuyHoldChart }))),
+  'preset-triple-ema': lazyChart(() => import('../components/strategyDemos').then(m => ({ default: m.TripleEmaChart }))),
+  'preset-keltner-breakout': lazyChart(() => import('../components/strategyDemos').then(m => ({ default: m.KeltnerChart }))),
+  'preset-bollinger-reversion': lazyChart(() => import('../components/strategyDemos').then(m => ({ default: m.BollingerPctBChart }))),
+  'preset-oscillator-confluence': lazyChart(() => import('../components/strategyDemos').then(m => ({ default: m.OscillatorConfluenceChart }))),
+  'preset-macd-rsi-gate': lazyChart(() => import('../components/strategyDemos').then(m => ({ default: m.MacdRsiGateChart }))),
+  'preset-turtle': lazyChart(() => import('../components/strategyDemos').then(m => ({ default: m.TurtleChart }))),
+  'preset-momentum-top5': lazyChart(() => import('../components/strategyDemos').then(m => ({ default: m.MomentumRotationChart }))),
 };
 
 // 프리셋 → 백테스트 요청용 지표/조건 — presetStrategies.ts에서 파생
@@ -94,7 +110,7 @@ const PRESET_DEFS: Record<string, {
   }]),
 );
 
-const PERIODS: [string, string][] = [['6M', '6개월'], ['1Y', '1년'], ['2Y', '2년'], ['3Y', '3년'], ['5Y', '5년']];
+const PERIODS: [string, string][] = [['6M', '6개월'], ['1Y', '1년'], ['2Y', '2년'], ['3Y', '3년'], ['5Y', '5년'], ['10Y', '10년']];
 const CAPS: [number, string][] = [[1_000_000, '100만'], [5_000_000, '500만'], [10_000_000, '1000만'], [50_000_000, '5000만']];
 
 function periodDates(period: string): { startDate: string; endDate: string } {
@@ -103,6 +119,7 @@ function periodDates(period: string): { startDate: string; endDate: string } {
   else if (period === '2Y') start.setFullYear(start.getFullYear() - 2);
   else if (period === '3Y') start.setFullYear(start.getFullYear() - 3);
   else if (period === '5Y') start.setFullYear(start.getFullYear() - 5);
+  else if (period === '10Y') start.setFullYear(start.getFullYear() - 10);
   else start.setFullYear(start.getFullYear() - 1);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   return { startDate: fmt(start), endDate: fmt(end) };
@@ -155,7 +172,7 @@ const Glyph = ({ kind }: { kind: string }) => {
 };
 const catGlyph = (cat: string) => cat === 'trend' ? 'trend' : cat === 'reversal' ? 'reversal' : cat === 'volatility' ? 'volatility' : 'flat';
 
-const StrategyLibrary = ({ strats, activeId, onPick, onCreate, onEditUser, onDeleteUser, onApply }: { strats: Strat[]; activeId: string | null; onPick: (id: string) => void; onCreate: () => void; onEditUser: (id: string) => void; onDeleteUser: (id: string) => void; onApply: (id: string) => void }) => {
+const StrategyLibrary = ({ strats, activeId, onPick, onCreate, onEditUser, onDeleteUser, onApply, effTier, canUseCustomBuilder, onLocked }: { strats: Strat[]; activeId: string | null; onPick: (id: string) => void; onCreate: () => void; onEditUser: (id: string) => void; onDeleteUser: (id: string) => void; onApply: (id: string) => void; effTier: UserTier; canUseCustomBuilder: boolean; onLocked: (minTier: UserTier) => void }) => {
   const [filter, setFilter] = useState('all');
   const hasUser = strats.some(s => s.isUser);
   const filters = hasUser ? [...FILTERS, ['custom', '내 전략']] : FILTERS;
@@ -163,20 +180,22 @@ const StrategyLibrary = ({ strats, activeId, onPick, onCreate, onEditUser, onDel
   return (
     <aside style={{ ...mkCard, padding: 0, display: 'flex', flexDirection: 'column' }}>
       <div className="wa-force-dark px-[18px] py-4 text-white" style={{ background: BT_GRAD, borderBottom: '1px solid rgba(255,255,255,.14)' }}>
-        <h3 className="text-[16px] font-bold">전략 라이브러리</h3>
-        <p className="mt-0.5 text-[12.5px] text-white/70">전략을 선택하고 백테스트로 검증하세요.</p>
+        <h3 className="text-[17.5px] font-bold">전략 라이브러리</h3>
+        <p className="mt-0.5 text-[13.5px] text-white/70">전략을 선택하고 백테스트로 검증하세요.</p>
       </div>
       <div className="flex flex-wrap gap-1.5 p-3" style={{ borderBottom: `1px solid ${LINE}` }}>
-        {filters.map(([k, l]) => <button key={k} onClick={() => setFilter(k)} className="rounded-md px-2.5 py-1.5 text-[12px] font-semibold" style={{ background: filter === k ? 'rgba(91,157,255,.18)' : 'transparent', color: filter === k ? GLOW : INK1 }}>{l}</button>)}
+        {filters.map(([k, l]) => <button key={k} onClick={() => setFilter(k)} className="rounded-md px-2.5 py-1.5 text-[13px] font-semibold" style={{ background: filter === k ? 'rgba(91,157,255,.18)' : 'transparent', color: filter === k ? GLOW : INK1 }}>{l}</button>)}
       </div>
       <div className="no-scrollbar flex flex-col gap-2 overflow-y-auto p-3" style={{ maxHeight: 620 }}>
         {list.map(s => {
           const on = s.id === activeId, lv = LEVEL_META[s.level];
+          const locked = !s.isUser && !tierMeetsMin(effTier, s.minTier);
+          const pick = () => locked ? onLocked(s.minTier ?? 'BASIC') : onPick(s.id);
           return (
-            <div key={s.id} role="button" tabIndex={0} onClick={() => onPick(s.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(s.id); } }} className="shrink-0 cursor-pointer rounded-xl p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[rgba(91,157,255,.5)]" style={{ background: on ? 'rgba(91,157,255,.10)' : 'transparent', border: on ? '1px solid rgba(91,157,255,.32)' : '1px solid transparent' }}>
+            <div key={s.id} role="button" tabIndex={0} onClick={pick} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } }} className="shrink-0 cursor-pointer rounded-xl p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[rgba(91,157,255,.5)]" style={{ background: on ? 'rgba(91,157,255,.10)' : 'transparent', border: on ? '1px solid rgba(91,157,255,.32)' : '1px solid transparent', opacity: locked ? 0.62 : 1 }}>
               <div className="flex items-center gap-2">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ background: 'rgba(91,157,255,.10)', border: '1px solid rgba(91,157,255,.22)' }}><Glyph kind={catGlyph(s.cat)} /></span>
-                <span className="flex-1 text-[13.5px] font-bold leading-tight">{s.name}</span>
+                <span className="flex-1 text-[14.5px] font-bold leading-tight">{s.name}</span>
                 {s.isUser && (
                   <span className="flex shrink-0 items-center gap-0.5">
                     <button type="button" title="수정" aria-label="전략 수정" onClick={(e) => { e.stopPropagation(); onEditUser(s.id); }} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-white/10" style={{ color: INK2 }}>
@@ -189,14 +208,15 @@ const StrategyLibrary = ({ strats, activeId, onPick, onCreate, onEditUser, onDel
                 )}
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={s.isUser ? { background: 'rgba(91,157,255,.16)', color: GLOW } : { background: 'var(--ci-card)', color: INK2 }}>{s.isUser ? '내 전략' : '기본'}</span>
-                <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: lv.bg, color: lv.color }}>{lv.label}</span>
-                {s.applied && <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(63,214,160,.14)', color: '#3fd6a0', border: '1px solid rgba(63,214,160,.3)' }}>● 적용중</span>}
+                <span className="rounded px-1.5 py-0.5 text-[11px] font-bold" style={s.isUser ? { background: 'rgba(91,157,255,.16)', color: GLOW } : { background: 'var(--ci-card)', color: INK2 }}>{s.isUser ? '내 전략' : '기본'}</span>
+                <span className="rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: lv.bg, color: lv.color }}>{lv.label}</span>
+                {locked && <span className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(245,208,97,.14)', color: COMPASS, border: '1px solid rgba(245,208,97,.3)' }}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>{tierLabel(s.minTier ?? 'BASIC')}</span>}
+                {s.applied && <span className="rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(63,214,160,.14)', color: '#3fd6a0', border: '1px solid rgba(63,214,160,.3)' }}>● 적용중</span>}
               </div>
-              <p className="mt-2 line-clamp-2 text-[12px] leading-snug text-white/55">{s.short}</p>
-              <div className="mt-2 text-[10.5px]" style={{ color: INK3 }}>조건 {s.n}개{s.isUser && s.assetCount ? ` · 대상 ${s.assetCount}종목` : ''}</div>
+              <p className="mt-2 line-clamp-2 text-[13px] leading-snug text-white/55">{s.short}</p>
+              <div className="mt-2 text-[11.5px]" style={{ color: INK3 }}>조건 {s.n}개{s.isUser && s.assetCount ? ` · 대상 ${s.assetCount}종목` : ''}</div>
               {s.isUser && (
-                <button type="button" onClick={(e) => { e.stopPropagation(); onApply(s.id); }} className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[12px] font-bold transition-colors"
+                <button type="button" onClick={(e) => { e.stopPropagation(); onApply(s.id); }} className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[13px] font-bold transition-colors"
                   style={s.applied ? { background: 'rgba(63,214,160,.12)', color: '#3fd6a0', border: '1px solid rgba(63,214,160,.3)' } : { background: 'rgba(91,157,255,.14)', color: GLOW, border: '1px solid rgba(91,157,255,.28)' }}>
                   {s.applied ? '⚙ 적용 관리 · 자동매매 →' : '⚓ 적용 · 자동매매 →'}
                 </button>
@@ -204,13 +224,15 @@ const StrategyLibrary = ({ strats, activeId, onPick, onCreate, onEditUser, onDel
             </div>
           );
         })}
-        <button onClick={onCreate} className="shrink-0 rounded-xl p-3.5 text-center transition-colors hover:bg-white/5" style={{ border: `1px dashed ${LINE_S}` }}>
-          <div className="flex items-center justify-center gap-1.5 text-[13.5px] font-bold" style={{ color: GLOW }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        <button onClick={() => canUseCustomBuilder ? onCreate() : onLocked('BASIC')} className="shrink-0 rounded-xl p-3.5 text-center transition-colors hover:bg-white/5" style={{ border: `1px dashed ${LINE_S}` }}>
+          <div className="flex items-center justify-center gap-1.5 text-[14.5px] font-bold" style={{ color: canUseCustomBuilder ? GLOW : COMPASS }}>
+            {canUseCustomBuilder
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>}
             새 항로 만들기
           </div>
-          <p className="mt-1 text-[11.5px] leading-snug text-white/45">나만의 매매 조건으로 직접 항로를 설계하고 백테스트로 검증해보세요.</p>
-          <div className="mt-2 text-[10.5px]" style={{ color: INK3 }}>지표·조건 직접 작성</div>
+          <p className="mt-1 text-[12.5px] leading-snug text-white/45">나만의 매매 조건으로 직접 항로를 설계하고 백테스트로 검증해보세요.</p>
+          <div className="mt-2 text-[11.5px]" style={{ color: INK3 }}>{canUseCustomBuilder ? '지표·조건 직접 작성' : 'Basic 이상 전용 · 클릭하면 안내'}</div>
         </button>
       </div>
     </aside>
@@ -219,14 +241,14 @@ const StrategyLibrary = ({ strats, activeId, onPick, onCreate, onEditUser, onDel
 
 const BigStat = ({ n, l, muted }: { n: string; l: string; muted?: boolean }) => (
   <div style={{ ...mkCard, padding: '18px 20px', textAlign: 'center' }}>
-    <div className="font-mono text-[36px] font-bold" style={{ color: muted ? INK3 : GLOW }}>{n}</div>
-    <div className="text-[12px] tracking-[.08em]" style={{ color: INK2 }}>{l}</div>
+    <div className="font-mono text-[39px] font-bold" style={{ color: muted ? INK3 : GLOW }}>{n}</div>
+    <div className="text-[13px] tracking-[.08em]" style={{ color: INK2 }}>{l}</div>
   </div>
 );
 const GuideStep = ({ n, t, d }: { n: string; t: string; d: string }) => (
   <div className="flex gap-3.5">
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-mono text-[12px] font-bold" style={{ background: 'rgba(91,157,255,.10)', color: GLOW, border: '1px solid rgba(91,157,255,.22)' }}>{n}</span>
-    <div><p className="text-[14px] font-semibold">{t}</p><p className="mt-1 text-[12.5px] leading-snug text-white/55">{d}</p></div>
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-mono text-[13px] font-bold" style={{ background: 'rgba(91,157,255,.10)', color: GLOW, border: '1px solid rgba(91,157,255,.22)' }}>{n}</span>
+    <div><p className="text-[15px] font-semibold">{t}</p><p className="mt-1 text-[13.5px] leading-snug text-white/55">{d}</p></div>
   </div>
 );
 /* 초보자용 핵심 개념 — "백테스트가 뭔지" 등 */
@@ -244,39 +266,39 @@ const EmptyHero = ({ onGuide, running, total = PRESET_STRATEGIES.length, userCou
     <StationBar title="항로 분석 스테이션" sub="전략을 선택하고 과거 데이터로 검증하세요" />
     <div style={{ ...mkCard, padding: '40px 32px', textAlign: 'center' }}>
       <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke={GLOW} strokeWidth="1.4" className="mx-auto" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s-6-5.5-6-10a6 6 0 1 1 12 0c0 4.5-6 10-6 10Z" /><circle cx="12" cy="11" r="2" /></svg>
-      <h2 className="mt-4 text-[24px] font-bold">항로를 설정하여 항해를 시작하세요</h2>
-      <p className="mx-auto mt-2 max-w-[460px] text-[14px]" style={{ color: INK1 }}>왼쪽에서 전략을 선택하고 오른쪽에서 종목·기간을 정한 뒤 백테스트를 실행하면 결과가 여기에 표시됩니다.</p>
+      <h2 className="mt-4 text-[26px] font-bold">항로를 설정하여 항해를 시작하세요</h2>
+      <p className="mx-auto mt-2 max-w-[460px] text-[15px]" style={{ color: INK1 }}>왼쪽에서 전략을 선택하고 오른쪽에서 종목·기간을 정한 뒤 백테스트를 실행하면 결과가 여기에 표시됩니다.</p>
     </div>
 
     {/* 초보자용 핵심 개념 */}
     <div style={{ ...mkCard, padding: '24px 26px' }}>
       <div className="flex items-center gap-2.5">
         <span className="flex h-9 w-9 items-center justify-center rounded-[11px]" style={{ background: 'rgba(91,157,255,.12)', border: '1px solid rgba(91,157,255,.24)' }}><img src="/whales/beluga.png" alt="" width={22} style={{ height: 'auto' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} /></span>
-        <div><h3 className="text-[16px] font-bold">처음이신가요? 핵심 개념부터</h3><p className="mt-0.5 text-[12.5px]" style={{ color: INK2 }}>퀀트 투자가 처음이어도 괜찮아요. 아래 6가지만 알면 시작할 수 있어요.</p></div>
+        <div><h3 className="text-[17.5px] font-bold">처음이신가요? 핵심 개념부터</h3><p className="mt-0.5 text-[13.5px]" style={{ color: INK2 }}>퀀트 투자가 처음이어도 괜찮아요. 아래 6가지만 알면 시작할 수 있어요.</p></div>
       </div>
       <div className="mt-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(248px, 1fr))' }}>
         {CONCEPTS.map(c => (
           <div key={c.t} className="rounded-xl p-4" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}>
-            <div className="mb-1.5 flex items-center gap-2"><span className="text-[18px]">{c.icon}</span><span className="text-[14px] font-bold">{c.tk ? <Term k={c.tk} compact>{c.t}</Term> : c.t}</span></div>
-            <p className="m-0 text-[12.5px] leading-relaxed" style={{ color: INK1 }}>{c.d}</p>
+            <div className="mb-1.5 flex items-center gap-2"><span className="text-[19.5px]">{c.icon}</span><span className="text-[15px] font-bold">{c.tk ? <Term k={c.tk} compact>{c.t}</Term> : c.t}</span></div>
+            <p className="m-0 text-[13.5px] leading-relaxed" style={{ color: INK1 }}>{c.d}</p>
           </div>
         ))}
       </div>
-      <div className="mt-4 rounded-xl px-4 py-3.5 text-[13px] leading-relaxed" style={{ background: 'rgba(245,208,97,.07)', border: '1px solid rgba(245,208,97,.24)', color: INK1 }}>
+      <div className="mt-4 rounded-xl px-4 py-3.5 text-[14px] leading-relaxed" style={{ background: 'rgba(245,208,97,.07)', border: '1px solid rgba(245,208,97,.24)', color: INK1 }}>
         <span className="font-bold" style={{ color: COMPASS }}>💡 왜 백테스트부터?</span> 좋아 보이는 전략도 과거에 검증해보면 의외로 약한 경우가 많아요. <b>백테스트 → 모의 적용 → (선택) 자동매매</b> 순서로 단계를 밟으면, 실제 돈을 넣기 전에 안전하게 감을 잡을 수 있습니다.
       </div>
     </div>
 
     <div className="grid grid-cols-3 gap-3.5"><BigStat n={String(total)} l="전체 전략" /><BigStat n="8" l="기본 제공" /><BigStat n={String(userCount)} l="내 전략" muted={userCount === 0} /></div>
     <div style={{ ...mkCard, padding: '24px 26px' }}>
-      <h3 className="mb-4 text-[15px] font-bold">빠른 시작 가이드</h3>
+      <h3 className="mb-4 text-[16px] font-bold">빠른 시작 가이드</h3>
       <div className="flex flex-col gap-4">
         <GuideStep n="01" t="전략 선택" d="왼쪽 목록에서 기본 전략(골든크로스, RSI 등)을 선택하세요. 클릭하면 그 전략이 뭔지 쉬운 설명이 가운데 나타나요." />
         <GuideStep n="02" t="종목 & 기간 설정" d="오른쪽 패널에서 테스트할 종목(예: 비트코인)과 기간(예: 1년)을 설정하세요." />
         <GuideStep n="03" t="백테스트 실행" d={'실행 버튼을 누르면 "이 전략으로 과거에 투자했다면?" 결과(수익률·차트·매매내역)가 표시됩니다.'} />
         <GuideStep n="04" t="적용 · 자동매매 (선택)" d="마음에 들면 '내 전략'으로 저장 후, 모의 계좌에 적용하거나 ⚡자동매매를 켜서 신호 발생 시 자동으로 매매할 수 있어요." />
       </div>
-      <button onClick={onGuide} disabled={running} className="wa-force-dark mt-5 flex w-full items-center justify-center gap-2.5 rounded-2xl px-5 py-4 text-[16px] font-bold text-white disabled:opacity-60" style={{ border: '1px solid rgba(165,200,255,.6)', background: 'linear-gradient(180deg, #5690f2 0%, #3673e2 100%)', boxShadow: '0 18px 32px -14px rgba(43,110,230,.65), inset 0 1px 0 rgba(255,255,255,.45)' }}>
+      <button onClick={onGuide} disabled={running} className="wa-force-dark mt-5 flex w-full items-center justify-center gap-2.5 rounded-2xl px-5 py-4 text-[17.5px] font-bold text-white disabled:opacity-60" style={{ border: '1px solid rgba(165,200,255,.6)', background: 'linear-gradient(180deg, #5690f2 0%, #3673e2 100%)', boxShadow: '0 18px 32px -14px rgba(43,110,230,.65), inset 0 1px 0 rgba(255,255,255,.45)' }}>
         {running ? '백테스트 실행 중…' : '가이드 체험 — 골든크로스 × BTC 백테스트 →'}
       </button>
     </div>
@@ -294,49 +316,49 @@ const StrategyGuidePanel = ({ strat, userStrat, onApply, onCreate }: { strat: St
   const Chart = PRESET_CHART[strat.id];
   return (
     <section className="flex flex-col gap-[18px]">
-      <StationBar title="이 전략 이해하기" sub={strat.name} badge={<span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.16)' }}>{LEVEL_META[strat.level].label}</span>} />
+      <StationBar title="이 전략 이해하기" sub={strat.name} badge={<span className="rounded-full px-2.5 py-1 text-[12px] font-bold" style={{ background: 'rgba(255,255,255,.16)' }}>{LEVEL_META[strat.level].label}</span>} />
       <div style={{ ...mkCard, padding: '24px 26px' }}>
-        <h2 className="text-[20px] font-bold">{strat.name}</h2>
-        <p className="mt-2 text-[14px] leading-relaxed" style={{ color: INK1 }}>{desc}</p>
-        {logic && <div className="mt-3.5 rounded-lg px-3.5 py-2.5 font-mono text-[12.5px]" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: 'var(--ci-ink0)' }}>매매 규칙 · {logic}</div>}
+        <h2 className="text-[21.5px] font-bold">{strat.name}</h2>
+        <p className="mt-2 text-[15px] leading-relaxed" style={{ color: INK1 }}>{desc}</p>
+        {logic && <div className="mt-3.5 rounded-lg px-3.5 py-2.5 font-mono text-[13.5px]" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: 'var(--ci-ink0)' }}>매매 규칙 · {logic}</div>}
         {tip && (
           <div className="mt-3.5 rounded-lg px-3.5 py-3" style={{ background: 'rgba(245,208,97,.08)', border: '1px solid rgba(245,208,97,.28)' }}>
-            <div className="mb-1 text-[12px] font-bold" style={{ color: COMPASS }}>💡 초보자 한 줄 설명</div>
-            <p className="m-0 text-[13px] leading-relaxed" style={{ color: INK1 }}>{tip}</p>
+            <div className="mb-1 text-[13px] font-bold" style={{ color: COMPASS }}>💡 초보자 한 줄 설명</div>
+            <p className="m-0 text-[14px] leading-relaxed" style={{ color: INK1 }}>{tip}</p>
           </div>
         )}
         {why && (
           <div className="mt-3 rounded-lg px-3.5 py-3" style={{ background: 'rgba(91,157,255,.07)', border: '1px solid rgba(91,157,255,.22)' }}>
-            <div className="mb-1 text-[12px] font-bold" style={{ color: GLOW }}>⚓ 왜 쓰나요?</div>
-            <p className="m-0 text-[13px] leading-relaxed" style={{ color: INK1 }}>{why}</p>
+            <div className="mb-1 text-[13px] font-bold" style={{ color: GLOW }}>⚓ 왜 쓰나요?</div>
+            <p className="m-0 text-[14px] leading-relaxed" style={{ color: INK1 }}>{why}</p>
           </div>
         )}
       </div>
       {Chart ? (
         <div style={{ ...mkCard, padding: '20px 24px' }}>
-          <h3 className="mb-1 text-[15px] font-bold">전략 시각화</h3>
-          <p className="mb-3 text-[12.5px]" style={{ color: INK2 }}>이 전략이 차트에서 어떻게 매수·매도 신호를 잡는지 애니메이션으로 살펴보세요.</p>
+          <h3 className="mb-1 text-[16px] font-bold">전략 시각화</h3>
+          <p className="mb-3 text-[13.5px]" style={{ color: INK2 }}>이 전략이 차트에서 어떻게 매수·매도 신호를 잡는지 애니메이션으로 살펴보세요.</p>
           <Suspense fallback={<div className="flex items-center justify-center" style={{ height: 280 }}><span className="h-6 w-6 animate-spin rounded-full" style={{ border: '2px solid rgba(91,157,255,.3)', borderTopColor: GLOW }} /></div>}>
             <Chart />
           </Suspense>
         </div>
       ) : (
-        <div className="rounded-xl px-4 py-3 text-[12.5px]" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: INK2 }}>📊 시각화 애니메이션은 기본 제공 전략(골든크로스·RSI·볼린저 등)에서만 지원됩니다. 이 전략은 오른쪽에서 바로 백테스트로 확인해보세요.</div>
+        <div className="rounded-xl px-4 py-3 text-[13.5px]" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: INK2 }}>📊 시각화 애니메이션은 기본 제공 전략(골든크로스·RSI·볼린저 등)에서만 지원됩니다. 이 전략은 오른쪽에서 바로 백테스트로 확인해보세요.</div>
       )}
-      <div className="rounded-xl px-4 py-3 text-[13px] font-semibold" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: INK1 }}>오른쪽 패널에서 종목·기간·투자금을 설정한 뒤 <span style={{ color: GLOW }}>백테스트 실행</span>을 누르면 결과가 여기에 표시됩니다 →</div>
+      <div className="rounded-xl px-4 py-3 text-[14px] font-semibold" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: INK1 }}>오른쪽 패널에서 종목·기간·투자금을 설정한 뒤 <span style={{ color: GLOW }}>백테스트 실행</span>을 누르면 결과가 여기에 표시됩니다 →</div>
       {/* 실행: 모의 적용 · 자동매매 */}
       {userStrat ? (
         <div style={{ ...mkCard, padding: '18px 22px', border: '1px solid rgba(91,157,255,.28)', background: 'linear-gradient(135deg, rgba(91,157,255,.10), transparent 60%)' }}>
-          <div className="text-[14px] font-bold">⚓ 모의 적용 · ⚡ 자동매매</div>
-          <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>이 전략의 대상 종목을 모의 계좌에 한 번에 매수(적용)하거나, 신호가 뜰 때마다 자동으로 매매(자동매매)하도록 켤 수 있어요. <b style={{ color: 'var(--ci-ink0)' }}>모의투자 전용</b>입니다.</p>
-          <button onClick={() => onApply?.()} className="mt-3 w-full rounded-[10px] py-2.5 text-[13.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})` }}>적용 · 자동매매 →</button>
+          <div className="text-[15px] font-bold">⚓ 모의 적용 · ⚡ 자동매매</div>
+          <p className="mt-1 text-[13.5px] leading-relaxed" style={{ color: INK2 }}>이 전략의 대상 종목을 모의 계좌에 한 번에 매수(적용)하거나, 신호가 뜰 때마다 자동으로 매매(자동매매)하도록 켤 수 있어요. <b style={{ color: 'var(--ci-ink0)' }}>모의투자 전용</b>입니다.</p>
+          <button onClick={() => onApply?.()} className="mt-3 w-full rounded-[10px] py-2.5 text-[14.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})` }}>적용 · 자동매매 →</button>
         </div>
       ) : (
         <div style={{ ...mkCard, padding: '18px 22px', border: '1px solid rgba(91,157,255,.28)', background: 'linear-gradient(135deg, rgba(91,157,255,.10), transparent 60%)' }}>
-          <div className="text-[14px] font-bold">⚡ 이 전략으로 자동매매</div>
-          <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>백테스트로 검증한 이 전략을 <b style={{ color: 'var(--ci-ink0)' }}>모의 자동매매</b>로 바로 시작할 수 있어요. 신호가 뜰 때마다 자동으로 매매합니다. (모의투자 전용)</p>
-          <button onClick={() => navigate(`/virt/auto-trade?deploy=${strat.id}`)} className="mt-3 w-full rounded-[10px] py-2.5 text-[13.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})` }}>이 전략으로 자동매매 시작 →</button>
-          <button onClick={() => onCreate?.()} className="mt-2 w-full rounded-[10px] py-2 text-[12px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>조건을 수정해서 쓰려면 — 새 항로(내 전략)로 저장</button>
+          <div className="text-[15px] font-bold">⚡ 이 전략으로 자동매매</div>
+          <p className="mt-1 text-[13.5px] leading-relaxed" style={{ color: INK2 }}>백테스트로 검증한 이 전략을 <b style={{ color: 'var(--ci-ink0)' }}>모의 자동매매</b>로 바로 시작할 수 있어요. 신호가 뜰 때마다 자동으로 매매합니다. (모의투자 전용)</p>
+          <button onClick={() => navigate(`/virt/auto-trade?deploy=${strat.id}`)} className="mt-3 w-full rounded-[10px] py-2.5 text-[14.5px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})` }}>이 전략으로 자동매매 시작 →</button>
+          <button onClick={() => onCreate?.()} className="mt-2 w-full rounded-[10px] py-2 text-[13px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>조건을 수정해서 쓰려면 — 새 항로(내 전략)로 저장</button>
         </div>
       )}
     </section>
@@ -348,37 +370,19 @@ const RunningView = ({ onCancel }: { onCancel?: () => void }) => (
     <StationBar title="백테스트 실행 중" sub="과거 데이터로 전략을 검증하고 있어요" />
     <div style={{ ...mkCard, padding: '64px 32px', textAlign: 'center' }}>
       <span className="mx-auto mb-4 block h-10 w-10 animate-spin rounded-full" style={{ border: '3px solid rgba(91,157,255,.25)', borderTopColor: GLOW }} />
-      <p className="text-[14px]" style={{ color: INK1 }}>시뮬레이션 계산 중…</p>
-      <p className="mt-1 text-[12px]" style={{ color: INK3 }}>보통 몇 초 내에 끝나요. 오래 걸리면 종목·기간을 확인해보세요.</p>
-      {onCancel && <button onClick={onCancel} className="mt-5 rounded-lg px-4 py-2 text-[12.5px] font-semibold" style={{ border: `1px solid ${LINE_S}`, background: 'var(--ci-card)', color: INK1 }}>취소</button>}
+      <p className="text-[15px]" style={{ color: INK1 }}>시뮬레이션 계산 중…</p>
+      <p className="mt-1 text-[13px]" style={{ color: INK3 }}>보통 몇 초 내에 끝나요. 오래 걸리면 종목·기간을 확인해보세요.</p>
+      {onCancel && <button onClick={onCancel} className="mt-5 rounded-lg px-4 py-2 text-[13.5px] font-semibold" style={{ border: `1px solid ${LINE_S}`, background: 'var(--ci-card)', color: INK1 }}>취소</button>}
     </div>
   </section>
 );
 
-/* 차트 (실 시리즈 + 매매 마커 + 기준선) */
-const Chart = ({ pts, lines, markers, h = 220, baseline, baselineLabel }: { pts: number[]; lines: { data: number[]; color: string; dash?: boolean }[]; markers?: { i: number; buy: boolean }[]; h?: number; baseline?: number; baselineLabel?: string }) => {
-  const W = 860, padR = 48, all = [...pts, ...lines.flatMap(l => l.data), ...(baseline != null ? [baseline] : [])];
-  if (all.length === 0) return <div className="flex h-full items-center justify-center text-[13px]" style={{ color: INK3 }}>데이터 없음</div>;
-  const max = Math.max(...all), min = Math.min(...all), rng = (max - min) || 1;
-  const x = (i: number, n: number) => (i / Math.max(1, n - 1)) * (W - padR), y = (v: number) => 8 + ((max - v) / rng) * (h - 24);
-  const path = (d: number[]) => 'M ' + d.map((v, i) => `${x(i, d.length).toFixed(1)} ${y(v).toFixed(1)}`).join(' L ');
-  return (
-    <svg viewBox={`0 0 ${W} ${h}`} width="100%" height="100%" style={{ display: 'block' }}>
-      <defs><linearGradient id="bt-f" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor={GLOW} stopOpacity=".18" /><stop offset="100%" stopColor={GLOW} stopOpacity="0" /></linearGradient></defs>
-      {[0, .5, 1].map((t, i) => <line key={i} x1={0} x2={W - padR} y1={y(min + t * rng)} y2={y(min + t * rng)} stroke="var(--ci-line)" />)}
-      {baseline != null && <><line x1={0} x2={W - padR} y1={y(baseline)} y2={y(baseline)} stroke={INK3} strokeWidth="1" strokeDasharray="3 3" />{baselineLabel && <text x={4} y={y(baseline) - 4} fill={INK3} fontSize="11">{baselineLabel}</text>}</>}
-      {pts.length > 0 && <><path d={path(pts) + ` L ${(W - padR).toFixed(1)} ${h} L 0 ${h} Z`} fill="url(#bt-f)" /><path d={path(pts)} fill="none" stroke={GLOW} strokeWidth="1.6" vectorEffect="non-scaling-stroke" /></>}
-      {lines.map((l, k) => <path key={k} d={path(l.data)} fill="none" stroke={l.color} strokeWidth="1.5" strokeDasharray={l.dash ? '4 3' : undefined} vectorEffect="non-scaling-stroke" />)}
-      {pts.length > 0 && markers?.map((m, k) => m.i >= 0 && m.i < pts.length ? <circle key={k} cx={x(m.i, pts.length)} cy={y(pts[m.i])} r="3.5" fill={m.buy ? UP : DOWN} stroke="var(--ci-card)" strokeWidth="1.2" /> : null)}
-    </svg>
-  );
-};
 
 const KPI = ({ label, value, sub, color }: { label: ReactNode; value: string; sub: string; color: string }) => (
   <div style={{ ...mkCard, padding: '20px 22px' }}>
-    <div className="text-[11.5px] font-semibold tracking-[.12em]" style={{ color: INK2 }}>{label}</div>
-    <div className="mt-2 font-mono text-[30px] font-bold tracking-tight" style={{ color }}>{value}</div>
-    <div className="mt-1 text-[12px]" style={{ color: INK3 }}>{sub}</div>
+    <div className="text-[12.5px] font-semibold tracking-[.12em]" style={{ color: INK2 }}>{label}</div>
+    <div className="mt-2 font-mono text-[32.5px] font-bold tracking-tight" style={{ color }}>{value}</div>
+    <div className="mt-1 text-[13px]" style={{ color: INK3 }}>{sub}</div>
   </div>
 );
 
@@ -392,12 +396,17 @@ const ResultView = ({ result, strat, onExport }: { result: BacktestResult; strat
   const money = (v: number | undefined | null) => isUsd ? `$${fmtNum(num(v))} (₩${fmtNum(Math.round(num(v) * rate))})` : `₩${fmtNum(num(v))}`;
   const up = num(result.totalReturnRate) >= 0;
   const trades = result.trades ?? [];
-  // 가격차트 + 매매 마커 (거래 날짜 → priceData 인덱스)
+  // 가격차트 + 매매 마커 (거래 날짜 → 인덱스). 마커에 사유·손익을 실어 차트 hover에서 보여준다.
   const price = (result.priceData ?? []).map(p => p.close);
+  const priceDates = (result.priceData ?? []).map(p => p.date);
   const dateIdx = useMemo(() => { const m = new Map<string, number>(); (result.priceData ?? []).forEach((p, i) => m.set(p.date, i)); return m; }, [result.priceData]);
-  const markers = trades.map(t => ({ i: dateIdx.get(t.date) ?? -1, buy: t.type === 'BUY' || t.type === 'COVER' }));
   const equity = (result.equityCurve ?? []).map(p => p.value);
+  const equityDates = (result.equityCurve ?? []).map(p => p.date);
+  const equityIdx = useMemo(() => { const m = new Map<string, number>(); (result.equityCurve ?? []).forEach((p, i) => m.set(p.date, i)); return m; }, [result.equityCurve]);
   const bh = (result.buyHoldCurve ?? []).map(p => p.value);
+  const fmtV = (v: number) => `${cur}${fmtNum(v)}`;
+  const priceMarkers: BtMarker[] = trades.map(t => ({ i: dateIdx.get(t.date) ?? -1, type: t.type, reason: t.reason, pnl: t.pnl, pnlPercent: t.pnlPercent, price: t.price })).filter(m => m.i >= 0);
+  const equityMarkers: BtMarker[] = trades.map(t => ({ i: equityIdx.get(t.date) ?? -1, type: t.type, reason: t.reason, pnl: t.pnl, pnlPercent: t.pnlPercent })).filter(m => m.i >= 0);
 
   const sub = (v?: number, suffix = '%') => (v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(2)}${suffix}`);
 
@@ -458,38 +467,38 @@ const ResultView = ({ result, strat, onExport }: { result: BacktestResult; strat
   return (
     <section className="flex flex-col gap-[18px]">
       <StationBar title={result.strategyName || strat?.name || '백테스트 결과'} sub={`${result.stockName} · ${result.startDate} ~ ${result.endDate}`}
-        badge={<span className="rounded-full px-2.5 py-1 text-[12px] font-bold" style={{ background: up ? 'rgba(239,77,77,.16)' : 'rgba(77,138,255,.16)', color: up ? '#ffd9d9' : '#cfe1ff' }}>{up ? '수익' : '손실'} {sub(result.totalReturnRate)}</span>} />
+        badge={<span className="rounded-full px-2.5 py-1 text-[13px] font-bold" style={{ background: up ? 'rgba(239,77,77,.16)' : 'rgba(77,138,255,.16)', color: up ? '#ffd9d9' : '#cfe1ff' }}>{up ? '수익' : '손실'} {sub(result.totalReturnRate)}</span>} />
       {/* 테스트 요약 */}
       <div style={{ ...mkCard, padding: '22px 24px' }}>
-        <div className="mb-3.5 flex items-center justify-between"><h3 className="text-[14px] font-bold">테스트 요약</h3>
-          <button onClick={onExport} className="rounded-lg px-3 py-1.5 text-[12px] font-semibold" style={{ border: `1px solid ${LINE_S}`, color: GLOW }}>⤓ CSV 내보내기</button>
+        <div className="mb-3.5 flex items-center justify-between"><h3 className="text-[15px] font-bold">테스트 요약</h3>
+          <button onClick={onExport} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold" style={{ border: `1px solid ${LINE_S}`, color: GLOW }}>⤓ CSV 내보내기</button>
         </div>
         <div className="grid gap-x-6 gap-y-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           {[['전략', result.strategyName || strat?.name || '—'], ['종목', `${result.stockName} (${result.stockCode})`], ['기간', `${result.startDate} ~ ${result.endDate}`], ['초기 투자금', money(result.initialCapital)],
             ['총 거래', `${num(result.totalTrades)}회`], ['배당 재투자', result.dividendReinvest === false ? 'OFF' : (isUsd ? 'ON' : '—')],
             ...(isUsd ? [['환율 (USD/KRW)', `₩${fmtNum(rate)}`] as [string, string]] : [])].map(([l, v]) => (
-            <div key={l} className="flex items-baseline justify-between border-b border-dotted py-1.5 text-[13px]" style={{ borderColor: LINE }}><span style={{ color: INK2 }}>{l}</span><span className="font-mono font-semibold">{v}</span></div>
+            <div key={l} className="flex items-baseline justify-between border-b border-dotted py-1.5 text-[14px]" style={{ borderColor: LINE }}><span style={{ color: INK2 }}>{l}</span><span className="font-mono font-semibold">{v}</span></div>
           ))}
-          {result.monthlyContribution ? <div className="flex items-baseline justify-between border-b border-dotted py-1.5 text-[13px]" style={{ borderColor: LINE }}><span style={{ color: INK2 }}><Term k="적립식" compact>적립식</Term></span><span className="font-mono font-semibold">월 {money(result.monthlyContribution)} × {result.contributionCount ?? 0}회</span></div> : null}
-          {result.totalContribution ? <div className="flex items-baseline justify-between border-b border-dotted py-1.5 text-[13px]" style={{ borderColor: LINE }}><span style={{ color: INK2 }}>총 납입액</span><span className="font-mono font-semibold">{money(result.totalContribution)}</span></div> : null}
-          {result.totalDividendsReceived ? <div className="flex items-baseline justify-between border-b border-dotted py-1.5 text-[13px]" style={{ borderColor: LINE }}><span style={{ color: INK2 }}>받은 배당 합계</span><span className="font-mono font-semibold">{money(result.totalDividendsReceived)}</span></div> : null}
+          {result.monthlyContribution ? <div className="flex items-baseline justify-between border-b border-dotted py-1.5 text-[14px]" style={{ borderColor: LINE }}><span style={{ color: INK2 }}><Term k="적립식" compact>적립식</Term></span><span className="font-mono font-semibold">월 {money(result.monthlyContribution)} × {result.contributionCount ?? 0}회</span></div> : null}
+          {result.totalContribution ? <div className="flex items-baseline justify-between border-b border-dotted py-1.5 text-[14px]" style={{ borderColor: LINE }}><span style={{ color: INK2 }}>총 납입액</span><span className="font-mono font-semibold">{money(result.totalContribution)}</span></div> : null}
+          {result.totalDividendsReceived ? <div className="flex items-baseline justify-between border-b border-dotted py-1.5 text-[14px]" style={{ borderColor: LINE }}><span style={{ color: INK2 }}>받은 배당 합계</span><span className="font-mono font-semibold">{money(result.totalDividendsReceived)}</span></div> : null}
         </div>
       </div>
       {/* 모멘텀 로테이션 — 월별 보유 top-N 이력 */}
       {result.rotationHistory && result.rotationHistory.length > 0 && (
         <div style={{ ...mkCard, padding: '20px 22px' }}>
-          <h3 className="mb-1 text-[14px] font-bold">월별 보유 이력 (모멘텀 Top{result.rotationHistory[0]?.holdings.length || ''})</h3>
-          <p className="mb-3 text-[12px]" style={{ color: INK2 }}>매월 첫 거래일에 모멘텀 랭킹으로 교체된 보유 종목입니다. 약세장(SPY&lt;200일선)엔 노출을 줄입니다.</p>
+          <h3 className="mb-1 text-[15px] font-bold">월별 보유 이력 (모멘텀 Top{result.rotationHistory[0]?.holdings.length || ''})</h3>
+          <p className="mb-3 text-[13px]" style={{ color: INK2 }}>매월 첫 거래일에 모멘텀 랭킹으로 교체된 보유 종목입니다. 약세장(SPY&lt;200일선)엔 노출을 줄입니다.</p>
           <div className="no-scrollbar flex flex-col gap-1.5 overflow-y-auto" style={{ maxHeight: 360 }}>
             {result.rotationHistory.slice().reverse().map((snap) => (
               <div key={snap.date} className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}>
-                <span className="shrink-0 font-mono text-[12px] font-semibold" style={{ color: INK1, width: 78 }}>{snap.date.slice(0, 7)}</span>
-                {snap.regimeBear && <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(77,138,255,.16)', color: '#cfe1ff' }}>약세 ½</span>}
+                <span className="shrink-0 font-mono text-[13px] font-semibold" style={{ color: INK1, width: 78 }}>{snap.date.slice(0, 7)}</span>
+                {snap.regimeBear && <span className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(77,138,255,.16)', color: '#cfe1ff' }}>약세 ½</span>}
                 <div className="flex flex-wrap gap-1">
                   {snap.holdings.length === 0
-                    ? <span className="text-[12px]" style={{ color: INK3 }}>현금 (양수 모멘텀 없음)</span>
+                    ? <span className="text-[13px]" style={{ color: INK3 }}>현금 (양수 모멘텀 없음)</span>
                     : snap.holdings.map(h => (
-                      <span key={h.symbol} className="rounded px-1.5 py-0.5 font-mono text-[11px]" style={{ background: 'rgba(91,157,255,.12)', color: 'var(--ci-ink0)', border: '1px solid rgba(91,157,255,.2)' }}>
+                      <span key={h.symbol} className="rounded px-1.5 py-0.5 font-mono text-[12px]" style={{ background: 'rgba(91,157,255,.12)', color: 'var(--ci-ink0)', border: '1px solid rgba(91,157,255,.2)' }}>
                         {h.symbol} <span style={{ color: h.momentum >= 0 ? UP : DOWN }}>{h.momentum >= 0 ? '+' : ''}{(h.momentum * 100).toFixed(0)}%</span>
                       </span>
                     ))}
@@ -502,24 +511,24 @@ const ResultView = ({ result, strat, onExport }: { result: BacktestResult; strat
       {/* 2자산 리밸런싱 분해 */}
       {result.secondStockCode && (
         <div style={{ ...mkCard, padding: '20px 24px' }}>
-          <h3 className="mb-3.5 text-[14px] font-bold">2자산 리밸런싱</h3>
+          <h3 className="mb-3.5 text-[15px] font-bold">2자산 리밸런싱</h3>
           <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
             <div className="rounded-[10px] px-4 py-3.5" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}>
-              <div className="text-[11px]" style={{ color: INK2 }}>{result.stockName} <span className="font-mono" style={{ color: GLOW }}>{result.firstAssetWeight ?? '—'}%</span></div>
-              <div className="mt-1 font-mono text-[16px] font-bold">{cur}{fmtNum(result.firstAssetFinalValue ?? 0)}</div>
-              {isUsd && <div className="font-mono text-[11px]" style={{ color: INK3 }}>₩{fmtNum(Math.round(num(result.firstAssetFinalValue) * rate))}</div>}
-              <div className="mt-0.5 text-[11px]" style={{ color: INK3 }}>{num(result.firstAssetTradeCount)}회 거래</div>
+              <div className="text-[12px]" style={{ color: INK2 }}>{result.stockName} <span className="font-mono" style={{ color: GLOW }}>{result.firstAssetWeight ?? '—'}%</span></div>
+              <div className="mt-1 font-mono text-[17.5px] font-bold">{cur}{fmtNum(result.firstAssetFinalValue ?? 0)}</div>
+              {isUsd && <div className="font-mono text-[12px]" style={{ color: INK3 }}>₩{fmtNum(Math.round(num(result.firstAssetFinalValue) * rate))}</div>}
+              <div className="mt-0.5 text-[12px]" style={{ color: INK3 }}>{num(result.firstAssetTradeCount)}회 거래</div>
             </div>
             <div className="rounded-[10px] px-4 py-3.5" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}>
-              <div className="text-[11px]" style={{ color: INK2 }}>{result.secondStockName} <span className="font-mono" style={{ color: COMPASS }}>{result.secondAssetWeight ?? '—'}%</span></div>
-              <div className="mt-1 font-mono text-[16px] font-bold">{cur}{fmtNum(result.secondAssetFinalValue ?? 0)}</div>
-              {isUsd && <div className="font-mono text-[11px]" style={{ color: INK3 }}>₩{fmtNum(Math.round(num(result.secondAssetFinalValue) * rate))}</div>}
-              <div className="mt-0.5 text-[11px]" style={{ color: INK3 }}>{num(result.secondAssetTradeCount)}회 거래</div>
+              <div className="text-[12px]" style={{ color: INK2 }}>{result.secondStockName} <span className="font-mono" style={{ color: COMPASS }}>{result.secondAssetWeight ?? '—'}%</span></div>
+              <div className="mt-1 font-mono text-[17.5px] font-bold">{cur}{fmtNum(result.secondAssetFinalValue ?? 0)}</div>
+              {isUsd && <div className="font-mono text-[12px]" style={{ color: INK3 }}>₩{fmtNum(Math.round(num(result.secondAssetFinalValue) * rate))}</div>}
+              <div className="mt-0.5 text-[12px]" style={{ color: INK3 }}>{num(result.secondAssetTradeCount)}회 거래</div>
             </div>
             <div className="rounded-[10px] px-4 py-3.5" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}>
-              <div className="text-[11px]" style={{ color: INK2 }}>리밸런싱</div>
-              <div className="mt-1 font-mono text-[16px] font-bold">{num(result.rebalanceCount)}회</div>
-              <div className="mt-0.5 text-[11px]" style={{ color: INK3 }}>{REBAL_LABEL[result.rebalanceFrequency || 'MONTHLY']} 주기</div>
+              <div className="text-[12px]" style={{ color: INK2 }}>리밸런싱</div>
+              <div className="mt-1 font-mono text-[17.5px] font-bold">{num(result.rebalanceCount)}회</div>
+              <div className="mt-0.5 text-[12px]" style={{ color: INK3 }}>{REBAL_LABEL[result.rebalanceFrequency || 'MONTHLY']} 주기</div>
             </div>
           </div>
         </div>
@@ -534,58 +543,58 @@ const ResultView = ({ result, strat, onExport }: { result: BacktestResult; strat
       {/* 결과 자동 해석 (초보자용) */}
       <div style={{ ...mkCard, padding: '20px 24px' }}>
         <div className="mb-3 flex items-center gap-2">
-          <span className="text-[15px] font-bold">📋 결과 해석</span>
-          <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(91,157,255,.14)', color: GLOW }}>초보자용</span>
+          <span className="text-[16px] font-bold">📋 결과 해석</span>
+          <span className="rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(91,157,255,.14)', color: GLOW }}>초보자용</span>
         </div>
-        <div className="mb-3.5 rounded-lg px-3.5 py-3 text-[13.5px] font-semibold" style={{ background: `${TONE_C[headline.tone]}1f`, border: `1px solid ${TONE_C[headline.tone]}66`, color: 'var(--ci-ink0)' }}>{headline.text}</div>
+        <div className="mb-3.5 rounded-lg px-3.5 py-3 text-[14.5px] font-semibold" style={{ background: `${TONE_C[headline.tone]}1f`, border: `1px solid ${TONE_C[headline.tone]}66`, color: 'var(--ci-ink0)' }}>{headline.text}</div>
         <ul className="m-0 flex flex-col gap-2 p-0" style={{ listStyle: 'none' }}>
           {interp.map((it, i) => (
-            <li key={i} className="flex gap-2.5 text-[13px] leading-relaxed">
+            <li key={i} className="flex gap-2.5 text-[14px] leading-relaxed">
               <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full" style={{ background: TONE_C[it.tone] }} />
               <span style={{ color: INK1 }}>{it.text}</span>
             </li>
           ))}
         </ul>
-        <p className="mt-3.5 text-[11px]" style={{ color: INK3 }}>※ 과거 성과가 미래 수익을 보장하지 않습니다. 백테스트는 전략 검증을 돕는 참고 자료예요.</p>
+        <p className="mt-3.5 text-[12px]" style={{ color: INK3 }}>※ 과거 성과가 미래 수익을 보장하지 않습니다. 백테스트는 전략 검증을 돕는 참고 자료예요.</p>
       </div>
       {/* 가격 차트 */}
       <div style={{ ...mkCard, padding: '20px 24px' }}>
-        <div className="mb-3 flex items-center justify-between"><h3 className="text-[14px] font-bold">가격 차트 & 매매 포인트</h3>
-          <div className="flex flex-wrap gap-3.5 text-[11px]" style={{ color: INK1 }}><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: UP }} />매수 {trades.filter(t => t.type === 'BUY').length}</span><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: DOWN }} />매도 {trades.filter(t => t.type === 'SELL').length}</span>{trades.some(t => t.type === 'SHORT' || t.type === 'COVER') && <><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: DOWN }} />공매도 {trades.filter(t => t.type === 'SHORT').length}</span><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: UP }} />커버 {trades.filter(t => t.type === 'COVER').length}</span></>}</div>
+        <div className="mb-3 flex items-center justify-between"><h3 className="text-[15px] font-bold">가격 차트 & 매매 포인트</h3>
+          <div className="flex flex-wrap gap-3.5 text-[12px]" style={{ color: INK1 }}><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: UP }} />매수 {trades.filter(t => t.type === 'BUY').length}</span><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: DOWN }} />매도 {trades.filter(t => t.type === 'SELL').length}</span>{trades.some(t => t.type === 'SHORT' || t.type === 'COVER') && <><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: DOWN }} />공매도 {trades.filter(t => t.type === 'SHORT').length}</span><span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: UP }} />커버 {trades.filter(t => t.type === 'COVER').length}</span></>}</div>
         </div>
-        <div style={{ height: 260 }}><Chart pts={price} lines={[]} markers={markers} h={260} /></div>
+        <div style={{ height: 268 }}><BacktestChart pts={price} dates={priceDates} markers={priceMarkers} height={268} valueFmt={fmtV} glow={GLOW} upColor={UP} downColor={DOWN} /></div>
       </div>
       {/* 자산 추이 */}
       <div style={{ ...mkCard, padding: '20px 24px' }}>
-        <div className="mb-3 flex items-center justify-between"><h3 className="text-[14px] font-bold">자산 변동 추이</h3>
-          <div className="flex gap-3.5 text-[11px]" style={{ color: INK1 }}><span className="inline-flex items-center gap-1.5"><span style={{ width: 14, height: 2, background: GLOW }} />전략</span>{bh.length > 0 && <span className="inline-flex items-center gap-1.5"><span style={{ width: 14, borderTop: `2px dashed ${COMPASS}` }} /><Term k="BuyHold" compact>Buy &amp; Hold</Term> {sub(result.buyHoldReturnRate)}</span>}</div>
+        <div className="mb-3 flex items-center justify-between"><h3 className="text-[15px] font-bold">자산 변동 추이</h3>
+          <div className="flex gap-3.5 text-[12px]" style={{ color: INK1 }}><span className="inline-flex items-center gap-1.5"><span style={{ width: 14, height: 2, background: GLOW }} />전략</span>{bh.length > 0 && <span className="inline-flex items-center gap-1.5"><span style={{ width: 14, borderTop: `2px dashed ${COMPASS}` }} /><Term k="BuyHold" compact>Buy &amp; Hold</Term> {sub(result.buyHoldReturnRate)}</span>}</div>
         </div>
-        <div style={{ height: 220 }}><Chart pts={equity} lines={bh.length > 0 ? [{ data: bh, color: COMPASS, dash: true }] : []} h={220} baseline={result.totalContribution ?? result.initialCapital} baselineLabel={result.totalContribution ? '총 납입액' : '초기 자본'} /></div>
+        <div style={{ height: 228 }}><BacktestChart pts={equity} dates={equityDates} markers={equityMarkers} lines={bh.length > 0 ? [{ data: bh, color: COMPASS, dash: true, label: 'B&H' }] : []} baseline={result.totalContribution ?? result.initialCapital} baselineLabel={result.totalContribution ? '총 납입액' : '초기 자본'} height={228} valueFmt={fmtV} glow={GLOW} upColor={UP} downColor={DOWN} /></div>
       </div>
       {/* 상세 지표 */}
       <div style={{ ...mkCard, padding: '22px 24px' }}>
-        <h3 className="mb-3.5 text-[14px] font-bold">상세 성과 지표</h3>
+        <h3 className="mb-3.5 text-[15px] font-bold">상세 성과 지표</h3>
         <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-          {metrics.map(m => <div key={m.l} className="rounded-[10px] px-4 py-3.5" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}><div className="text-[11px] tracking-[.08em]" style={{ color: INK2 }}>{m.t ? <Term k={m.t} compact>{m.l}</Term> : m.l}</div><div className="mt-1 font-mono text-[18px] font-bold">{m.v}</div></div>)}
+          {metrics.map(m => <div key={m.l} className="rounded-[10px] px-4 py-3.5" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}><div className="text-[12px] tracking-[.08em]" style={{ color: INK2 }}>{m.t ? <Term k={m.t} compact>{m.l}</Term> : m.l}</div><div className="mt-1 font-mono text-[19.5px] font-bold">{m.v}</div></div>)}
         </div>
       </div>
       {/* 거래 내역 */}
       <div style={{ ...mkCard, padding: 0, overflow: 'hidden' }}>
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${LINE}` }}><h3 className="text-[14px] font-bold">거래 내역</h3><span className="text-[12px]" style={{ color: INK3 }}>{isUsd ? `USD 기준 · $1=₩${fmtNum(rate)} · ` : ''}{trades.length}건</span></div>
-        {trades.length === 0 ? <div className="px-6 py-10 text-center text-[13px]" style={{ color: INK3 }}>이 기간/전략에서 발생한 거래가 없습니다</div> : (
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${LINE}` }}><h3 className="text-[15px] font-bold">거래 내역</h3><span className="text-[13px]" style={{ color: INK3 }}>{isUsd ? `USD 기준 · $1=₩${fmtNum(rate)} · ` : ''}{trades.length}건</span></div>
+        {trades.length === 0 ? <div className="px-6 py-10 text-center text-[14px]" style={{ color: INK3 }}>이 기간/전략에서 발생한 거래가 없습니다</div> : (
           <div className="overflow-x-auto"><table className="w-full border-collapse" style={{ minWidth: 720 }}>
-            <thead><tr>{['#', '날짜', '유형', '가격', '수량', '손익', '수익률', '보유일', '사유'].map(h => <th key={h} className="px-[18px] py-2.5 text-left text-[10.5px] font-semibold uppercase tracking-[.12em]" style={{ color: INK3, borderBottom: `1px solid ${LINE}` }}>{h}</th>)}</tr></thead>
+            <thead><tr>{['#', '날짜', '유형', '가격', '수량', '손익', '수익률', '보유일', '사유'].map(h => <th key={h} className="px-[18px] py-2.5 text-left text-[11.5px] font-semibold uppercase tracking-[.12em]" style={{ color: INK3, borderBottom: `1px solid ${LINE}` }}>{h}</th>)}</tr></thead>
             <tbody>{trades.map((t, i) => { const pos = (t.pnl ?? 0) >= 0; const sell = t.type === 'SELL' || t.type === 'COVER'; return (
               <tr key={i}>
-                <td className="px-[18px] py-3 font-mono text-[13px]" style={{ borderBottom: `1px solid ${LINE}`, color: INK2 }}>{String(i + 1).padStart(2, '0')}</td>
-                <td className="px-[18px] py-3 font-mono text-[13px]" style={{ borderBottom: `1px solid ${LINE}` }}>{t.date}</td>
-                <td className="px-[18px] py-3 text-[12px] font-bold" style={{ borderBottom: `1px solid ${LINE}`, color: t.type === 'BUY' || t.type === 'COVER' ? UP : DOWN }}>{TRADE_LABEL[t.type] || t.type}</td>
-                <td className="px-[18px] py-3 font-mono text-[13px]" style={{ borderBottom: `1px solid ${LINE}` }}>{cur}{fmtNum(t.price)}</td>
-                <td className="px-[18px] py-3 font-mono text-[13px]" style={{ borderBottom: `1px solid ${LINE}`, color: INK2 }}>{t.quantity.toLocaleString('ko-KR', { maximumFractionDigits: 6 })}</td>
-                <td className="px-[18px] py-3 font-mono text-[13px] font-bold" style={{ borderBottom: `1px solid ${LINE}`, color: sell ? (pos ? UP : DOWN) : INK3 }}>{sell ? `${pos ? '+' : ''}${cur}${fmtNum(t.pnl)}` : '—'}</td>
-                <td className="px-[18px] py-3 font-mono text-[13px] font-bold" style={{ borderBottom: `1px solid ${LINE}`, color: sell && t.pnlPercent != null ? (t.pnlPercent >= 0 ? UP : DOWN) : INK3 }}>{sell && t.pnlPercent != null ? `${t.pnlPercent >= 0 ? '+' : ''}${t.pnlPercent.toFixed(2)}%` : '—'}</td>
-                <td className="px-[18px] py-3 font-mono text-[13px]" style={{ borderBottom: `1px solid ${LINE}`, color: INK2 }}>{t.holdingDays != null ? `${t.holdingDays}일` : '—'}</td>
-                <td className="px-[18px] py-3 text-[12px]" style={{ borderBottom: `1px solid ${LINE}`, color: INK3 }}>{t.reason || '—'}</td>
+                <td className="px-[18px] py-3 font-mono text-[14px]" style={{ borderBottom: `1px solid ${LINE}`, color: INK2 }}>{String(i + 1).padStart(2, '0')}</td>
+                <td className="px-[18px] py-3 font-mono text-[14px]" style={{ borderBottom: `1px solid ${LINE}` }}>{t.date}</td>
+                <td className="px-[18px] py-3 text-[13px] font-bold" style={{ borderBottom: `1px solid ${LINE}`, color: t.type === 'BUY' || t.type === 'COVER' ? UP : DOWN }}>{TRADE_LABEL[t.type] || t.type}</td>
+                <td className="px-[18px] py-3 font-mono text-[14px]" style={{ borderBottom: `1px solid ${LINE}` }}>{cur}{fmtNum(t.price)}</td>
+                <td className="px-[18px] py-3 font-mono text-[14px]" style={{ borderBottom: `1px solid ${LINE}`, color: INK2 }}>{t.quantity.toLocaleString('ko-KR', { maximumFractionDigits: 6 })}</td>
+                <td className="px-[18px] py-3 font-mono text-[14px] font-bold" style={{ borderBottom: `1px solid ${LINE}`, color: sell ? (pos ? UP : DOWN) : INK3 }}>{sell ? `${pos ? '+' : ''}${cur}${fmtNum(t.pnl)}` : '—'}</td>
+                <td className="px-[18px] py-3 font-mono text-[14px] font-bold" style={{ borderBottom: `1px solid ${LINE}`, color: sell && t.pnlPercent != null ? (t.pnlPercent >= 0 ? UP : DOWN) : INK3 }}>{sell && t.pnlPercent != null ? `${t.pnlPercent >= 0 ? '+' : ''}${t.pnlPercent.toFixed(2)}%` : '—'}</td>
+                <td className="px-[18px] py-3 font-mono text-[14px]" style={{ borderBottom: `1px solid ${LINE}`, color: INK2 }}>{t.holdingDays != null ? `${t.holdingDays}일` : '—'}</td>
+                <td className="px-[18px] py-3 text-[13px]" style={{ borderBottom: `1px solid ${LINE}`, color: INK3 }}>{t.reason || '—'}</td>
               </tr>); })}</tbody>
           </table></div>
         )}
@@ -618,18 +627,23 @@ type RunnerProps = {
   adv: AdvOpts; setAdv: (v: AdvOpts) => void; turtle: TurtleParams; setTurtle: (v: TurtleParams) => void; momentum: MomentumParams; setMomentum: (v: MomentumParams) => void;
   second: Target | null; setSecond: (v: Target | null) => void; firstWeight: number; setFirstWeight: (n: number) => void; rebalanceFreq: RebalFreq; setRebalanceFreq: (v: RebalFreq) => void;
   stratAssets: Target[]; onRun: () => void; running: boolean; historyCount: number; onShowHistory: () => void;
+  limits: TierLimits | null;
 };
+// 기간 키 → 햇수(등급 한도 비교용). 6M=0.5는 1년 한도 안이라 1로 본다.
+const PERIOD_YEARS: Record<string, number> = { '6M': 1, '1Y': 1, '2Y': 2, '3Y': 3, '5Y': 5, '10Y': 10 };
+const POS_VALUE: Record<string, number> = { auto: 1, '2': 2, '3': 3, '5': 5 };
 const BT_CLASSES: [string, string][] = [['CRYPTO', '코인'], ['STOCK', '주식'], ['US_STOCK', '미국'], ['ETF', 'ETF']];
 const condLabel = (ind: string, side: '매수' | '매도') => ind === 'RSI' ? `RSI ${side} 기준` : ind === 'BOLLINGER_PCT_B' ? `%B ${side} 기준` : ind === 'STOCH_K' ? `%K ${side} 기준` : `${side === '매수' ? '진입' : '청산'} ${ind}`;
 const THRESH_INDS = ['RSI', 'BOLLINGER_PCT_B', 'STOCH_K']; // 기준값 편집 대상(임계 지표). 크로스 지표는 value 0 고정이라 제외
 
 /* 자산 전체 검색 박스 (코인/주식/미국/ETF) — 기본 종목 + 2자산 리밸런싱 종목 공용 */
 const AssetSearchBox = ({ cryptoList, onPick }: { cryptoList: { code: string; name: string }[]; onPick: (code: string, name: string, assetType: string) => void }) => {
-  const [klass, setKlass] = useState('CRYPTO');
+  const [klass, setKlass] = useState('');   // 기본 탭 강조 없음 — 사용자가 자산유형을 직접 선택
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ code: string; name: string }[]>([]);
   useEffect(() => {
     const q = query.trim();
+    if (!klass) { setResults([]); return; }
     if (klass === 'CRYPTO') { setResults(cryptoList.filter(c => c.code.toLowerCase().includes(q.toLowerCase()) || c.name.includes(q)).slice(0, 30)); return; }
     if (q.length < 1) { setResults([]); return; }
     const t = setTimeout(async () => {
@@ -643,15 +657,26 @@ const AssetSearchBox = ({ cryptoList, onPick }: { cryptoList: { code: string; na
   const pick = (code: string, name: string) => { onPick(code, name, klass); setQuery(''); setResults([]); };
   return (
     <>
-      <div className="flex gap-1">{BT_CLASSES.map(([k, l]) => <button key={k} onClick={() => { setKlass(k); setQuery(''); setResults([]); }} className="flex-1 rounded-md py-1.5 text-[11px] font-semibold" style={seg(klass === k)}>{l}</button>)}</div>
-      <input value={query} onChange={e => setQuery(e.target.value)} aria-label="종목 검색" placeholder={klass === 'CRYPTO' ? '코인 검색 (BTC, 이더리움…)' : '종목 검색 (삼성, AAPL…)'} className="mt-1.5 w-full rounded-lg px-3 py-2 text-[12.5px] outline-none" style={fieldStyle} />
+      <div className="flex gap-1">{BT_CLASSES.map(([k, l]) => <button key={k} onClick={() => { setKlass(k); setQuery(''); setResults([]); }} className="flex-1 rounded-md py-1.5 text-[12px] font-semibold" style={seg(klass === k)}>{l}</button>)}</div>
+      <input value={query} onChange={e => setQuery(e.target.value)} disabled={!klass} aria-label="종목 검색" placeholder={!klass ? '자산유형(코인/주식/미국/ETF)을 먼저 선택하세요' : klass === 'CRYPTO' ? '코인 검색 (BTC, 이더리움…)' : '종목 검색 (삼성, AAPL…)'} className="mt-1.5 w-full rounded-lg px-3 py-2 text-[13.5px] outline-none disabled:opacity-50" style={fieldStyle} />
       {results.length > 0 && <div className="no-scrollbar mt-1 flex max-h-[176px] flex-col gap-0.5 overflow-y-auto rounded-lg p-1" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-raised)', boxShadow: '0 10px 26px -12px rgba(0,0,0,.5)' }}>
-        {results.map(r => <button key={r.code} onClick={() => pick(r.code, r.name)} className="flex items-center justify-between rounded px-2.5 py-1.5 text-left text-[12px] hover:bg-white/5"><span className="truncate font-semibold">{r.name}</span><span className="ml-2 shrink-0 font-mono" style={{ color: INK3 }}>{r.code}</span></button>)}
+        {results.map(r => <button key={r.code} onClick={() => pick(r.code, r.name)} className="flex items-center justify-between rounded px-2.5 py-1.5 text-left text-[13px] hover:bg-white/5"><span className="truncate font-semibold">{r.name}</span><span className="ml-2 shrink-0 font-mono" style={{ color: INK3 }}>{r.code}</span></button>)}
       </div>}
     </>
   );
 };
-const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, setCapital, monthly, setMonthly, editInd, setEditInd, editEntry, setEditEntry, editExit, setEditExit, adv, setAdv, turtle, setTurtle, momentum, setMomentum, second, setSecond, firstWeight, setFirstWeight, rebalanceFreq, setRebalanceFreq, stratAssets, onRun, running, historyCount, onShowHistory }: RunnerProps) => {
+const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, setCapital, monthly, setMonthly, editInd, setEditInd, editEntry, setEditEntry, editExit, setEditExit, adv, setAdv, turtle, setTurtle, momentum, setMomentum, second, setSecond, firstWeight, setFirstWeight, rebalanceFreq, setRebalanceFreq, stratAssets, onRun, running, historyCount, onShowHistory, limits }: RunnerProps) => {
+  const maxYears = limits?.maxBacktestYears ?? 1;       // 등급 기간 한도(무제한=-1)
+  const maxPos = limits?.maxBacktestPositions ?? 1;     // 등급 포지션 한도(무제한=-1)
+  const periodLocked = (k: string) => !isUnlimited(maxYears) && PERIOD_YEARS[k] > maxYears;
+  const posLocked = (k: string) => !isUnlimited(maxPos) && POS_VALUE[k] > maxPos;
+  // 직접지정(custom) 기간이 등급 한도를 초과하는지 — 백엔드 enforceBacktestTierLimits와 동일 규칙(start < end−maxYears)
+  let customExceeds = false;
+  if (adv.dateMode === 'custom' && !isUnlimited(maxYears) && adv.customStart && adv.customEnd) {
+    const limit = new Date(adv.customEnd);
+    limit.setFullYear(limit.getFullYear() - maxYears);
+    customExceeds = new Date(adv.customStart) < limit;
+  }
   const range = adv.dateMode === 'custom' && adv.customStart && adv.customEnd ? { startDate: adv.customStart, endDate: adv.customEnd } : periodDates(period);
   const today = periodDates('1Y').endDate;
   const [cryptoList, setCryptoList] = useState<{ code: string; name: string }[]>([]);
@@ -659,173 +684,186 @@ const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, 
   const isUsEtf = [target, ...(second ? [second] : [])].some(a => a.assetType === 'US_STOCK' || a.assetType === 'ETF');
   const rebalActive = !!(second && second.symbol !== target.symbol); // 2자산 모드: 손절/익절/트레일링·매매방향 백엔드 미지원
   const preset = strat ? PRESET_DEFS[strat.id] : null; // 프리셋 권장값(레버리지 등) 표시용
+  // 모멘텀 로테이션은 종목 불필요(132종목 고정). 그 외 전략은 종목 선택이 있어야 실행 가능.
+  const symbolMissing = !!strat && strat.id !== MOMENTUM_PRESET_ID && !target.symbol;
   return (
     <aside style={{ ...mkCard, padding: 0, display: 'flex', flexDirection: 'column' }}>
       <div className="wa-force-dark px-[18px] py-4 text-white" style={{ background: BT_GRAD, borderBottom: '1px solid rgba(255,255,255,.14)' }}>
-        <h3 className="text-[16px] font-bold">백테스트 실행</h3>
-        <p className="mt-0.5 truncate text-[12.5px] text-white/70">{strat ? `— ${strat.name}` : '왼쪽 라이브러리에서 전략을 선택하세요'}</p>
+        <h3 className="text-[17.5px] font-bold">백테스트 실행</h3>
+        <p className="mt-0.5 truncate text-[13.5px] text-white/70">{strat ? `— ${strat.name}` : '왼쪽 라이브러리에서 전략을 선택하세요'}</p>
       </div>
       <div className="flex flex-col gap-[18px] p-[18px]">
-        {strat && <div style={{ ...mkCard, padding: '14px 16px' }}><div className="text-[13.5px] font-bold">{strat.name}</div><div className="mt-0.5 text-[11.5px]" style={{ color: INK2 }}>진입 1개 · 청산 1개 조건</div></div>}
-        {/* 종목 (전체 검색) */}
+        {strat && <div style={{ ...mkCard, padding: '14px 16px' }}><div className="text-[14.5px] font-bold">{strat.name}</div><div className="mt-0.5 text-[12.5px]" style={{ color: INK2 }}>진입 1개 · 청산 1개 조건</div></div>}
+        {/* 종목 (전체 검색) — 모멘텀 로테이션(미국 132종목 고정)은 종목 선택이 무시되므로 숨긴다 */}
+        {strat?.id !== MOMENTUM_PRESET_ID && (
         <div><Label>종목 (전체 검색)</Label>
           <div className="mt-1.5 flex items-center justify-between rounded-lg px-3 py-2.5" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.08)' }}>
-            <span className="truncate text-[13px] font-semibold">{target.name}</span><span className="ml-2 shrink-0 font-mono text-[11px]" style={{ color: INK2 }}>{target.symbol}</span>
+            <span className="truncate text-[14px] font-semibold" style={target.symbol ? undefined : { color: INK3, fontWeight: 500 }}>{target.name || '종목을 선택하세요'}</span><span className="ml-2 shrink-0 font-mono text-[12px]" style={{ color: INK2 }}>{target.symbol}</span>
           </div>
           <div className="mt-1.5"><AssetSearchBox cryptoList={cryptoList} onPick={(c, n, a) => setTarget({ symbol: c, name: n, assetType: a })} /></div>
           {stratAssets.length > 0 && <div className="mt-2">
-            <div className="mb-1 text-[10.5px]" style={{ color: INK3 }}>이 전략의 종목</div>
-            <div className="flex flex-wrap gap-1.5">{stratAssets.map(a => <button key={a.symbol} onClick={() => setTarget(a)} className="rounded-md px-2.5 py-1 text-[11px] font-semibold" style={{ border: `1px solid ${target.symbol === a.symbol ? 'rgba(91,157,255,.32)' : LINE}`, background: target.symbol === a.symbol ? 'rgba(91,157,255,.12)' : 'var(--ci-card)', color: target.symbol === a.symbol ? GLOW : INK1 }}>{a.name}</button>)}</div>
+            <div className="mb-1 text-[11.5px]" style={{ color: INK3 }}>이 전략의 종목</div>
+            <div className="flex flex-wrap gap-1.5">{stratAssets.map(a => <button key={a.symbol} onClick={() => setTarget(a)} className="rounded-md px-2.5 py-1 text-[12px] font-semibold" style={{ border: `1px solid ${target.symbol === a.symbol ? 'rgba(91,157,255,.32)' : LINE}`, background: target.symbol === a.symbol ? 'rgba(91,157,255,.12)' : 'var(--ci-card)', color: target.symbol === a.symbol ? GLOW : INK1 }}>{a.name}</button>)}</div>
           </div>}
         </div>
+        )}
         {/* 분석 기간 (프리셋 / 직접지정) */}
         <div><div className="flex items-center justify-between"><Label>분석 기간</Label>
-          <div className="flex gap-1">{(['preset', 'custom'] as const).map(m => <button key={m} onClick={() => setAdv({ ...adv, dateMode: m })} className="rounded-md px-2 py-0.5 text-[10.5px] font-semibold" style={seg(adv.dateMode === m)}>{m === 'preset' ? '기간선택' : '직접지정'}</button>)}</div></div>
+          <div className="flex gap-1">{(['preset', 'custom'] as const).map(m => <button key={m} onClick={() => setAdv({ ...adv, dateMode: m })} className="rounded-md px-2 py-0.5 text-[11.5px] font-semibold" style={seg(adv.dateMode === m)}>{m === 'preset' ? '기간선택' : '직접지정'}</button>)}</div></div>
           {adv.dateMode === 'preset' ? <>
-            <div className="mt-1.5 grid grid-cols-5 gap-1.5">{PERIODS.map(([k, l]) => <button key={k} onClick={() => setPeriod(k)} className="rounded-lg py-2 text-[11.5px] font-semibold" style={seg(period === k)}>{l}</button>)}</div>
-            <div className="mt-2 text-center font-mono text-[11.5px]" style={{ color: INK3 }}>{range.startDate} ~ {range.endDate}</div>
-          </> : <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-            <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>시작일</span><input type="date" max={today} value={adv.customStart} onChange={e => setAdv({ ...adv, customStart: e.target.value })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-            <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>종료일</span><input type="date" max={today} value={adv.customEnd} onChange={e => setAdv({ ...adv, customEnd: e.target.value })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-          </div>}
+            <div className="mt-1.5 grid grid-cols-3 gap-1.5">{PERIODS.map(([k, l]) => { const lk = periodLocked(k); return <button key={k} disabled={lk} onClick={() => setPeriod(k)} title={lk ? `${PERIOD_YEARS[k] > 5 ? tierLabel('PRO') : tierLabel('BASIC')} 이상에서 더 긴 기간을 이용할 수 있어요` : undefined} className="rounded-lg py-2 text-[12.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-40" style={seg(period === k)}>{l}{lk ? ' 🔒' : ''}</button>; })}</div>
+            <div className="mt-2 text-center font-mono text-[12.5px]" style={{ color: INK3 }}>{range.startDate} ~ {range.endDate}</div>
+            <div className="mt-1 text-center text-[11.5px]" style={{ color: INK3 }}>{isUnlimited(maxYears) ? '현재 등급: 기간 무제한 — 더 긴 기간은 직접지정으로 설정하세요' : `현재 등급 기간 한도: ${maxYears}년`}</div>
+          </> : <>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+              <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>시작일</span><input type="date" max={today} value={adv.customStart} onChange={e => setAdv({ ...adv, customStart: e.target.value })} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>종료일</span><input type="date" max={today} value={adv.customEnd} onChange={e => setAdv({ ...adv, customEnd: e.target.value })} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+            </div>
+            {!isUnlimited(maxYears) && <div className="mt-1.5 text-center text-[11.5px]" style={{ color: customExceeds ? COMPASS : INK3 }}>{customExceeds ? `⚠️ 등급 기간 한도(${maxYears}년)를 초과했어요 — 시작일을 조정하거나 등급을 올려주세요` : `현재 등급 기간 한도: ${maxYears}년`}</div>}
+          </>}
         </div>
         {/* 초기 투자금 + 적립식 */}
         <div><Label>초기 투자금</Label>
-          <input type="number" value={capital} onChange={e => setCapital(Number(e.target.value) || 0)} className="mt-1.5 w-full rounded-lg px-3 py-2.5 text-right font-mono text-[15px] font-semibold outline-none" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: 'var(--ci-ink0)' }} />
-          <div className="mt-2 grid grid-cols-4 gap-1.5">{CAPS.map(([v, l]) => <button key={v} onClick={() => setCapital(v)} className="rounded-md py-1.5 text-[11.5px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>{l}</button>)}</div>
-          <label className="mt-3 flex items-center gap-2 text-[12.5px]" style={{ color: INK1 }}><input type="checkbox" className="accent-[#5b9dff]" checked={monthly > 0} onChange={e => setMonthly(e.target.checked ? Math.max(100_000, Math.round(capital / 12)) : 0)} /><Term k="적립식" compact>적립식 투자</Term> (매월 {monthly > 0 ? `₩${fmtNum(monthly)}` : '첫 거래일'})</label>
-          {monthly > 0 && <div className="mt-2"><input type="number" value={monthly} onChange={e => setMonthly(Math.max(0, Number(e.target.value) || 0))} className="w-full rounded-lg px-3 py-2 text-right font-mono text-[13px] outline-none" style={fieldStyle} /><div className="mt-1.5 grid grid-cols-4 gap-1.5">{[100_000, 300_000, 500_000, 1_000_000].map(v => <button key={v} onClick={() => setMonthly(v)} className="rounded-md py-1 text-[10.5px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>{fmtNum(v / 10000)}만</button>)}</div></div>}
+          <input type="text" inputMode="numeric" value={formatAmountInput(capital)} onChange={e => setCapital(Number(parseAmountInput(e.target.value)) || 0)} className="mt-1.5 w-full rounded-lg px-3 py-2.5 text-right font-mono text-[16px] font-semibold outline-none" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: 'var(--ci-ink0)' }} />
+          <div className="mt-2 grid grid-cols-4 gap-1.5">{CAPS.map(([v, l]) => <button key={v} onClick={() => setCapital(v)} className="rounded-md py-1.5 text-[12.5px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>{l}</button>)}</div>
+          <label className="mt-3 flex items-center gap-2 text-[13.5px]" style={{ color: INK1 }}><input type="checkbox" className="accent-[#5b9dff]" checked={monthly > 0} onChange={e => setMonthly(e.target.checked ? Math.max(100_000, Math.round(capital / 12)) : 0)} /><Term k="적립식" compact>적립식 투자</Term> (매월 {monthly > 0 ? `₩${fmtNum(monthly)}` : '첫 거래일'})</label>
+          {monthly > 0 && <div className="mt-2"><input type="text" inputMode="numeric" value={formatAmountInput(monthly)} onChange={e => setMonthly(Math.max(0, Number(parseAmountInput(e.target.value)) || 0))} className="w-full rounded-lg px-3 py-2 text-right font-mono text-[14px] outline-none" style={fieldStyle} /><div className="mt-1.5 grid grid-cols-4 gap-1.5">{[100_000, 300_000, 500_000, 1_000_000].map(v => <button key={v} onClick={() => setMonthly(v)} className="rounded-md py-1 text-[11.5px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>{fmtNum(v / 10000)}만</button>)}</div></div>}
         </div>
         {/* 모멘텀 로테이션 설정 — top-N·lookback·레짐 (유니버스 132종목 고정) */}
         {strat?.id === MOMENTUM_PRESET_ID && (
           <div className="rounded-lg p-3" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.06)' }}>
-            <div className="mb-2 text-[12.5px] font-bold" style={{ color: GLOW }}>📈 모멘텀 로테이션 설정</div>
-            <div className="grid grid-cols-3 gap-2">
-              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>상위 N종목</span><input type="number" min={1} max={20} step={1} value={momentum.topN} onChange={e => setMomentum({ ...momentum, topN: Number(e.target.value) || 1 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>모멘텀 기간(일)</span><input type="number" min={20} step={1} value={momentum.lookbackDays} onChange={e => setMomentum({ ...momentum, lookbackDays: Number(e.target.value) || 20 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>약세장 노출</span><input type="number" min={0} max={1} step={0.1} value={momentum.regimeFloor} onChange={e => setMomentum({ ...momentum, regimeFloor: Number(e.target.value) })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-            </div>
-            <label className="mt-2 flex items-center gap-2 text-[12px]" style={{ color: INK1 }}>
-              <input type="checkbox" className="accent-[#5b9dff]" checked={momentum.regimeFilter} onChange={e => setMomentum({ ...momentum, regimeFilter: e.target.checked })} />
-              SPY 200일선 레짐 필터 (약세장 시 노출 ×{momentum.regimeFloor})
+            <div className="mb-2 text-[13.5px] font-bold" style={{ color: GLOW }}>📈 모멘텀 로테이션 설정</div>
+            <label className="mb-2 flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>자산군</span>
+              <div className="grid grid-cols-4 gap-1.5">{(['US_STOCK', 'ETF', 'STOCK', 'CRYPTO'] as MomentumAssetType[]).map(ac => (
+                <button key={ac} onClick={() => setMomentum({ ...momentum, assetType: ac, lookbackDays: MOMENTUM_ASSET_META[ac].defaultLookback })} className="rounded-md py-1.5 text-[12.5px] font-semibold" style={{ border: `1px solid ${momentum.assetType === ac ? GLOW : LINE}`, background: momentum.assetType === ac ? 'rgba(91,157,255,.16)' : 'var(--ci-card)', color: momentum.assetType === ac ? GLOW : INK1 }}>{MOMENTUM_ASSET_META[ac].label}</button>
+              ))}</div>
             </label>
-            <div className="mt-1.5 text-[10.5px]" style={{ color: INK3 }}>미국 대형주 132종목 유니버스 고정. <b style={{ color: 'var(--ci-ink0)' }}>종목 선택은 무시</b>되고 매월 모멘텀 랭킹으로 자동 교체됩니다. 132종목 일봉 로드로 첫 실행은 수십 초 걸릴 수 있어요.</div>
+            <div className="grid grid-cols-3 gap-2">
+              <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>상위 N종목</span><input type="number" min={1} max={20} step={1} value={momentum.topN} onChange={e => setMomentum({ ...momentum, topN: Number(e.target.value) || 1 })} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>모멘텀 기간(일)</span><input type="number" min={20} step={1} value={momentum.lookbackDays} onChange={e => setMomentum({ ...momentum, lookbackDays: Number(e.target.value) || 20 })} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>약세장 노출</span><input type="number" min={0} max={1} step={0.1} value={momentum.regimeFloor} onChange={e => setMomentum({ ...momentum, regimeFloor: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+            </div>
+            <label className="mt-2 flex items-center gap-2 text-[13px]" style={{ color: INK1 }}>
+              <input type="checkbox" className="accent-[#5b9dff]" checked={momentum.regimeFilter} onChange={e => setMomentum({ ...momentum, regimeFilter: e.target.checked })} />
+              {MOMENTUM_ASSET_META[momentum.assetType].benchmark} 레짐 필터 (약세장 시 노출 ×{momentum.regimeFloor})
+            </label>
+            <div className="mt-1.5 text-[11.5px]" style={{ color: INK3 }}>{MOMENTUM_ASSET_META[momentum.assetType].label} 약 {MOMENTUM_ASSET_META[momentum.assetType].poolSize}종목 유니버스. <b style={{ color: 'var(--ci-ink0)' }}>종목 선택은 무시</b>되고 매월 모멘텀 랭킹으로 자동 교체됩니다. 일봉 로드로 첫 실행은 수십 초 걸릴 수 있어요.</div>
           </div>
         )}
         {/* 터틀 전용 설정 — 채널 기간·ADX·유닛·레버리지 (종목별로 다르게) */}
         {strat?.id === TURTLE_PRESET_ID && (
           <div className="rounded-lg p-3" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.06)' }}>
-            <div className="mb-2 text-[12.5px] font-bold" style={{ color: GLOW }}>🐢 터틀 설정 (종목별로 조정 가능)</div>
+            <div className="mb-2 text-[13.5px] font-bold" style={{ color: GLOW }}>🐢 터틀 설정 (종목별로 조정 가능)</div>
             <div className="grid grid-cols-3 gap-2">
-              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>진입 채널</span><input type="number" min={5} step={1} value={turtle.entryPeriod} onChange={e => setTurtle({ ...turtle, entryPeriod: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>청산 채널</span><input type="number" min={2} step={1} value={turtle.exitPeriod} onChange={e => setTurtle({ ...turtle, exitPeriod: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>ADX 임계</span><input type="number" min={0} step={1} value={turtle.adxThreshold} onChange={e => setTurtle({ ...turtle, adxThreshold: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>최대 유닛</span><input type="number" min={1} max={10} step={1} value={turtle.maxUnits} onChange={e => setTurtle({ ...turtle, maxUnits: Number(e.target.value) || 1 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>레버리지</span><input type="number" min={1} max={20} step={1} value={turtle.leverage} onChange={e => setTurtle({ ...turtle, leverage: Number(e.target.value) || 1 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-              <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>트레일링 %</span><input type="number" min={0} step={0.5} value={turtle.trailingStopPercent} onChange={e => setTurtle({ ...turtle, trailingStopPercent: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>진입 채널</span><input type="number" min={5} step={1} value={turtle.entryPeriod} onChange={e => setTurtle({ ...turtle, entryPeriod: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>청산 채널</span><input type="number" min={2} step={1} value={turtle.exitPeriod} onChange={e => setTurtle({ ...turtle, exitPeriod: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>ADX 임계</span><input type="number" min={0} step={1} value={turtle.adxThreshold} onChange={e => setTurtle({ ...turtle, adxThreshold: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>최대 유닛</span><input type="number" min={1} max={10} step={1} value={turtle.maxUnits} onChange={e => setTurtle({ ...turtle, maxUnits: Number(e.target.value) || 1 })} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>레버리지</span><input type="number" min={1} max={20} step={1} value={turtle.leverage} onChange={e => setTurtle({ ...turtle, leverage: Number(e.target.value) || 1 })} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+              <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>트레일링 %</span><input type="number" min={0} step={0.5} value={turtle.trailingStopPercent} onChange={e => setTurtle({ ...turtle, trailingStopPercent: Number(e.target.value) || 0 })} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <button onClick={() => setTurtle({ entryPeriod: 100, exitPeriod: 30, adxThreshold: 15, maxUnits: 5, leverage: 7, trailingStopPercent: 4 })} className="rounded-md px-2 py-1 text-[11px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>BTC 프리셋 (100/30·ADX15·7배·5유닛)</button>
-              <button onClick={() => setTurtle({ entryPeriod: 80, exitPeriod: 40, adxThreshold: 25, maxUnits: 4, leverage: 4, trailingStopPercent: 5 })} className="rounded-md px-2 py-1 text-[11px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>ETH 프리셋 (80/40·ADX25·4배·4유닛)</button>
+              <button onClick={() => setTurtle({ entryPeriod: 100, exitPeriod: 30, adxThreshold: 15, maxUnits: 5, leverage: 7, trailingStopPercent: 4 })} className="rounded-md px-2 py-1 text-[12px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>BTC 프리셋 (100/30·ADX15·7배·5유닛)</button>
+              <button onClick={() => setTurtle({ entryPeriod: 80, exitPeriod: 40, adxThreshold: 25, maxUnits: 4, leverage: 4, trailingStopPercent: 5 })} className="rounded-md px-2 py-1 text-[12px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>ETH 프리셋 (80/40·ADX25·4배·4유닛)</button>
             </div>
-            <div className="mt-1.5 text-[10.5px]" style={{ color: INK3 }}>롱·숏 양방향 + 피라미딩으로 자동 구성됩니다. 백테스트는 일봉, 라이브(Bitget 선물)는 선택한 봉 기준.</div>
+            <div className="mt-1.5 text-[11.5px]" style={{ color: INK3 }}>롱·숏 양방향 + 피라미딩으로 자동 구성됩니다. 백테스트는 일봉, 라이브(Bitget 선물)는 선택한 봉 기준.</div>
           </div>
         )}
         {/* 고급 설정 — 리스크·비용·방향·배당·지표 */}
         {strat && <details className="rounded-lg" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)' }}>
-          <summary className="cursor-pointer list-none px-3 py-2.5 text-[12.5px] font-semibold" style={{ color: INK1 }}>고급 설정 — 리스크·비용·지표</summary>
+          <summary className="cursor-pointer list-none px-3 py-2.5 text-[13.5px] font-semibold" style={{ color: INK1 }}>고급 설정 — 리스크·비용·지표</summary>
           <div className="flex flex-col gap-3.5 px-3 pb-3">
             <div>
-              <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}>리스크 관리 (%, 비우면 미적용)</div>
+              <div className="mb-1.5 text-[12px] font-bold" style={{ color: INK2 }}>리스크 관리 (%, 비우면 미적용)</div>
               <div className="grid grid-cols-3 gap-2">
-                <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}><Term k="손절" compact>손절</Term></span><input type="number" min={0} step="0.1" value={adv.stopLoss} onChange={e => setAdv({ ...adv, stopLoss: e.target.value })} placeholder="–" className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-                <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}><Term k="익절" compact>익절</Term></span><input type="number" min={0} step="0.1" value={adv.takeProfit} onChange={e => setAdv({ ...adv, takeProfit: e.target.value })} placeholder="–" className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-                <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}><Term k="트레일링스탑" compact>트레일링</Term></span><input type="number" min={0} step="0.1" value={adv.trailingStop} onChange={e => setAdv({ ...adv, trailingStop: e.target.value })} placeholder="–" className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+                <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}><Term k="손절" compact>손절</Term></span><input type="number" min={0} step="0.1" value={adv.stopLoss} onChange={e => setAdv({ ...adv, stopLoss: e.target.value })} placeholder="–" className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+                <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}><Term k="익절" compact>익절</Term></span><input type="number" min={0} step="0.1" value={adv.takeProfit} onChange={e => setAdv({ ...adv, takeProfit: e.target.value })} placeholder="–" className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+                <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}><Term k="트레일링스탑" compact>트레일링</Term></span><input type="number" min={0} step="0.1" value={adv.trailingStop} onChange={e => setAdv({ ...adv, trailingStop: e.target.value })} placeholder="–" className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
               </div>
             </div>
             <div>
-              <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}>거래 비용 (%, 기본 0.1)</div>
+              <div className="mb-1.5 text-[12px] font-bold" style={{ color: INK2 }}>거래 비용 (%, 기본 0.1)</div>
               <div className="grid grid-cols-2 gap-2">
-                <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}><Term k="슬리피지" compact>슬리피지</Term></span><input type="number" min={0} step="0.05" value={adv.slippage} onChange={e => setAdv({ ...adv, slippage: e.target.value })} placeholder="0.1" className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
-                <label className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}><Term k="수수료" compact>수수료율</Term></span><input type="number" min={0} step="0.05" value={adv.commission} onChange={e => setAdv({ ...adv, commission: e.target.value })} placeholder="0.1" className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+                <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}><Term k="슬리피지" compact>슬리피지</Term></span><input type="number" min={0} step="0.05" value={adv.slippage} onChange={e => setAdv({ ...adv, slippage: e.target.value })} placeholder="0.1" className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
+                <label className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}><Term k="수수료" compact>수수료율</Term></span><input type="number" min={0} step="0.05" value={adv.commission} onChange={e => setAdv({ ...adv, commission: e.target.value })} placeholder="0.1" className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
               </div>
             </div>
             {!rebalActive && <div>
-              <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}>레버리지 (배, 선물 — 비우면 1배/현물)</div>
-              <input type="number" min={1} max={20} step={1} value={adv.leverage} onChange={e => setAdv({ ...adv, leverage: e.target.value })} placeholder={preset?.leverage ? `${preset.leverage} (권장)` : '1'} className="w-full rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} />
-              <div className="mt-1 text-[10.5px]" style={{ color: COMPASS }}>⚠️ 손익이 배수만큼 증폭되고 증거금 소진 시 강제청산됩니다. 백테스트는 일봉 근사이며 실거래 결과와 다를 수 있어요.</div>
+              <div className="mb-1.5 text-[12px] font-bold" style={{ color: INK2 }}>레버리지 (배, 선물 — 비우면 1배/현물)</div>
+              <input type="number" min={1} max={20} step={1} value={adv.leverage} onChange={e => setAdv({ ...adv, leverage: e.target.value })} placeholder={preset?.leverage ? `${preset.leverage} (권장)` : '1'} className="w-full rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} />
+              <div className="mt-1 text-[11.5px]" style={{ color: COMPASS }}>⚠️ 손익이 배수만큼 증폭되고 증거금 소진 시 강제청산됩니다. 백테스트는 일봉 근사이며 실거래 결과와 다를 수 있어요.</div>
             </div>}
             <div style={rebalActive ? { opacity: .5 } : undefined}>
-              <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}>매매 방향</div>
-              <div className="flex gap-1">{TDIR.map(([k, l]) => <button key={k} disabled={rebalActive} onClick={() => setAdv({ ...adv, tradeDirection: k })} className="flex-1 rounded-md py-1.5 text-[11px] font-semibold disabled:cursor-not-allowed" style={seg(adv.tradeDirection === k)}>{l}</button>)}</div>
-              {rebalActive && <div className="mt-1 text-[10.5px]" style={{ color: COMPASS }}>2자산 리밸런싱은 매수(LONG)만 지원합니다.</div>}
-              {!rebalActive && adv.tradeDirection === 'LONG_SHORT_FLAT' && <div className="mt-1 text-[10.5px]" style={{ color: INK3 }}>독립 롱+숏: 청산 시 현금으로 빠져 다음 돌파를 대기합니다(전환 아님). 숏 조건은 프리셋(터틀)에서 제공됩니다.</div>}
+              <div className="mb-1.5 text-[12px] font-bold" style={{ color: INK2 }}>매매 방향</div>
+              <div className="flex gap-1">{TDIR.map(([k, l]) => <button key={k} disabled={rebalActive} onClick={() => setAdv({ ...adv, tradeDirection: k })} className="flex-1 rounded-md py-1.5 text-[12px] font-semibold disabled:cursor-not-allowed" style={seg(adv.tradeDirection === k)}>{l}</button>)}</div>
+              {rebalActive && <div className="mt-1 text-[11.5px]" style={{ color: COMPASS }}>2자산 리밸런싱은 매수(LONG)만 지원합니다.</div>}
+              {!rebalActive && adv.tradeDirection === 'LONG_SHORT_FLAT' && <div className="mt-1 text-[11.5px]" style={{ color: INK3 }}>독립 롱+숏: 청산 시 현금으로 빠져 다음 돌파를 대기합니다(전환 아님). 숏 조건은 프리셋(터틀)에서 제공됩니다.</div>}
             </div>
             {!rebalActive && <div>
-              <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}><Term k="분할매수" compact>분할 매수 (최대 동시 보유)</Term></div>
-              <div className="flex gap-1">{POS_OPTS.map(([k, l]) => <button key={k} onClick={() => setAdv({ ...adv, maxPositions: k })} className="flex-1 rounded-md py-1.5 text-[11px] font-semibold" style={seg(adv.maxPositions === k)}>{l}</button>)}</div>
+              <div className="mb-1.5 text-[12px] font-bold" style={{ color: INK2 }}><Term k="분할매수" compact>분할 매수 (최대 동시 보유)</Term></div>
+              <div className="flex gap-1">{POS_OPTS.map(([k, l]) => { const lk = posLocked(k); return <button key={k} disabled={lk} onClick={() => setAdv({ ...adv, maxPositions: k })} title={lk ? `${tierLabel('BASIC')} 이상에서 다중 포지션을 이용할 수 있어요` : undefined} className="flex-1 rounded-md py-1.5 text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-40" style={seg(adv.maxPositions === k)}>{l}{lk ? ' 🔒' : ''}</button>; })}</div>
             </div>}
             {!rebalActive && <div>
-              <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}><Term k="포지션사이징" compact>포지션 사이징</Term></div>
-              <div className="flex gap-1">{SIZING.map(([k, l]) => <button key={k} onClick={() => setAdv({ ...adv, positionSizing: k })} className="flex-1 rounded-md py-1.5 text-[11px] font-semibold" style={seg(adv.positionSizing === k)}>{l}</button>)}</div>
-              {adv.positionSizing !== 'ALL_IN' && <input type="number" min={0} value={adv.positionValue} onChange={e => setAdv({ ...adv, positionValue: e.target.value })} placeholder={adv.positionSizing === 'PERCENT' ? '1회 매수 자본 비율 % (예: 50)' : '1회 매수 금액'} className="mt-1.5 w-full rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} />}
+              <div className="mb-1.5 text-[12px] font-bold" style={{ color: INK2 }}><Term k="포지션사이징" compact>포지션 사이징</Term></div>
+              <div className="flex gap-1">{SIZING.map(([k, l]) => <button key={k} onClick={() => setAdv({ ...adv, positionSizing: k })} className="flex-1 rounded-md py-1.5 text-[12px] font-semibold" style={seg(adv.positionSizing === k)}>{l}</button>)}</div>
+              {adv.positionSizing !== 'ALL_IN' && <input type="number" min={0} value={adv.positionValue} onChange={e => setAdv({ ...adv, positionValue: e.target.value })} placeholder={adv.positionSizing === 'PERCENT' ? '1회 매수 자본 비율 % (예: 50)' : '1회 매수 금액'} className="mt-1.5 w-full rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} />}
             </div>}
-            {isUsEtf && <label className="flex items-center justify-between text-[12px]" style={{ color: INK1 }}><span className="font-semibold"><Term k="배당재투자" compact>배당 자동 재투자 (DRIP)</Term></span><input type="checkbox" className="accent-[#5b9dff]" checked={adv.dividendReinvest} onChange={e => setAdv({ ...adv, dividendReinvest: e.target.checked })} /></label>}
+            {isUsEtf && <label className="flex items-center justify-between text-[13px]" style={{ color: INK1 }}><span className="font-semibold"><Term k="배당재투자" compact>배당 자동 재투자 (DRIP)</Term></span><input type="checkbox" className="accent-[#5b9dff]" checked={adv.dividendReinvest} onChange={e => setAdv({ ...adv, dividendReinvest: e.target.checked })} /></label>}
             {editInd.length > 0 && <div>
-              <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}>지표 파라미터</div>
+              <div className="mb-1.5 text-[12px] font-bold" style={{ color: INK2 }}>지표 파라미터</div>
               <div className="grid grid-cols-2 gap-2">
                 {editInd.flatMap((ind, idx) => {
                   const sameType = editInd.filter(i => i.type === ind.type).length;
                   const sameIdx = editInd.slice(0, idx).filter(i => i.type === ind.type).length;
                   const pre = sameType > 1 ? (sameIdx === 0 ? '단기 ' : '장기 ') : '';
                   return Object.entries(ind.parameters).map(([k, v]) => (
-                    <label key={`${idx}-${k}`} className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>{pre}{PARAM_LABEL[k] || `${ind.type} ${k}`}</span><input type="number" min={1} value={v} onChange={e => setEditInd(editInd.map((x, i) => i === idx ? { ...x, parameters: { ...x.parameters, [k]: e.target.value === '' ? 1 : Number(e.target.value) } } : x))} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label>
+                    <label key={`${idx}-${k}`} className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>{pre}{PARAM_LABEL[k] || `${ind.type} ${k}`}</span><input type="number" min={1} value={v} onChange={e => setEditInd(editInd.map((x, i) => i === idx ? { ...x, parameters: { ...x.parameters, [k]: e.target.value === '' ? 1 : Number(e.target.value) } } : x))} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label>
                   ));
                 })}
               </div>
             </div>}
             {(editEntry.some(c => THRESH_INDS.includes(c.indicator) && !c.valueExpression) || editExit.some(c => THRESH_INDS.includes(c.indicator) && !c.valueExpression)) && <div>
-              <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}>매매 기준값</div>
+              <div className="mb-1.5 text-[12px] font-bold" style={{ color: INK2 }}>매매 기준값</div>
               <div className="grid grid-cols-2 gap-2">
-                {editEntry.map((c, idx) => THRESH_INDS.includes(c.indicator) && !c.valueExpression ? <label key={`en-${idx}`} className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>{condLabel(c.indicator, '매수')}</span><input type="number" value={c.value} onChange={e => setEditEntry(editEntry.map((x, i) => i === idx ? { ...x, value: e.target.value === '' ? 0 : Number(e.target.value) } : x))} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label> : null)}
-                {editExit.map((c, idx) => THRESH_INDS.includes(c.indicator) && !c.valueExpression ? <label key={`ex-${idx}`} className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>{condLabel(c.indicator, '매도')}</span><input type="number" value={c.value} onChange={e => setEditExit(editExit.map((x, i) => i === idx ? { ...x, value: e.target.value === '' ? 0 : Number(e.target.value) } : x))} className="rounded px-2 py-1.5 text-[12px] outline-none" style={fieldStyle} /></label> : null)}
+                {editEntry.map((c, idx) => THRESH_INDS.includes(c.indicator) && !c.valueExpression ? <label key={`en-${idx}`} className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>{condLabel(c.indicator, '매수')}</span><input type="number" value={c.value} onChange={e => setEditEntry(editEntry.map((x, i) => i === idx ? { ...x, value: e.target.value === '' ? 0 : Number(e.target.value) } : x))} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label> : null)}
+                {editExit.map((c, idx) => THRESH_INDS.includes(c.indicator) && !c.valueExpression ? <label key={`ex-${idx}`} className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>{condLabel(c.indicator, '매도')}</span><input type="number" value={c.value} onChange={e => setEditExit(editExit.map((x, i) => i === idx ? { ...x, value: e.target.value === '' ? 0 : Number(e.target.value) } : x))} className="rounded px-2 py-1.5 text-[13px] outline-none" style={fieldStyle} /></label> : null)}
               </div>
             </div>}
             {(editEntry.some(c => c.valueExpression) || editExit.some(c => c.valueExpression)) && <div>
-              <div className="mb-1.5 text-[11px] font-bold" style={{ color: INK2 }}>수식 조건 <span className="font-normal" style={{ color: INK3 }}>(OPEN·PREV_HIGH·PREV_LOW)</span></div>
+              <div className="mb-1.5 text-[12px] font-bold" style={{ color: INK2 }}>수식 조건 <span className="font-normal" style={{ color: INK3 }}>(OPEN·PREV_HIGH·PREV_LOW)</span></div>
               <div className="flex flex-col gap-2">
-                {editEntry.map((c, idx) => c.valueExpression != null ? <label key={`enx-${idx}`} className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>진입 수식</span><input value={c.valueExpression} onChange={e => setEditEntry(editEntry.map((x, i) => i === idx ? { ...x, valueExpression: e.target.value } : x))} className="rounded px-2 py-1.5 font-mono text-[11px] outline-none" style={fieldStyle} /></label> : null)}
-                {editExit.map((c, idx) => c.valueExpression != null ? <label key={`exx-${idx}`} className="flex flex-col gap-1"><span className="text-[10.5px]" style={{ color: INK3 }}>청산 수식</span><input value={c.valueExpression} onChange={e => setEditExit(editExit.map((x, i) => i === idx ? { ...x, valueExpression: e.target.value } : x))} className="rounded px-2 py-1.5 font-mono text-[11px] outline-none" style={fieldStyle} /></label> : null)}
+                {editEntry.map((c, idx) => c.valueExpression != null ? <label key={`enx-${idx}`} className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>진입 수식</span><input value={c.valueExpression} onChange={e => setEditEntry(editEntry.map((x, i) => i === idx ? { ...x, valueExpression: e.target.value } : x))} className="rounded px-2 py-1.5 font-mono text-[12px] outline-none" style={fieldStyle} /></label> : null)}
+                {editExit.map((c, idx) => c.valueExpression != null ? <label key={`exx-${idx}`} className="flex flex-col gap-1"><span className="text-[11.5px]" style={{ color: INK3 }}>청산 수식</span><input value={c.valueExpression} onChange={e => setEditExit(editExit.map((x, i) => i === idx ? { ...x, valueExpression: e.target.value } : x))} className="rounded px-2 py-1.5 font-mono text-[12px] outline-none" style={fieldStyle} /></label> : null)}
               </div>
             </div>}
           </div>
         </details>}
         {/* 2자산 리밸런싱 */}
         {strat && <details className="rounded-lg" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)' }}>
-          <summary className="cursor-pointer list-none px-3 py-2.5 text-[12.5px] font-semibold" style={{ color: INK1 }}>2자산 <Term k="리밸런싱" compact>리밸런싱</Term> {second ? '· ON' : '(선택)'}</summary>
+          <summary className="cursor-pointer list-none px-3 py-2.5 text-[13.5px] font-semibold" style={{ color: INK1 }}>2자산 <Term k="리밸런싱" compact>리밸런싱</Term> {second ? '· ON' : '(선택)'}</summary>
           <div className="flex flex-col gap-2.5 px-3 pb-3">
-            <p className="text-[11px]" style={{ color: INK3 }}>두 번째 자산을 추가하면 비중대로 주기적으로 리밸런싱합니다.</p>
+            <p className="text-[12px]" style={{ color: INK3 }}>두 번째 자산을 추가하면 비중대로 주기적으로 리밸런싱합니다.</p>
             {second ? <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.08)' }}>
-              <span className="truncate text-[12.5px] font-semibold">{second.name} <span className="font-mono text-[10.5px]" style={{ color: INK3 }}>{second.symbol}</span></span>
-              <button onClick={() => setSecond(null)} className="ml-2 shrink-0 text-[11px] font-semibold" style={{ color: UP }}>제거</button>
+              <span className="truncate text-[13.5px] font-semibold">{second.name} <span className="font-mono text-[11.5px]" style={{ color: INK3 }}>{second.symbol}</span></span>
+              <button onClick={() => setSecond(null)} className="ml-2 shrink-0 text-[12px] font-semibold" style={{ color: UP }}>제거</button>
             </div> : <AssetSearchBox cryptoList={cryptoList} onPick={(c, n, a) => setSecond({ symbol: c, name: n, assetType: a })} />}
             {second && <>
               <div>
-                <div className="mb-1 flex items-center justify-between text-[11px]"><span style={{ color: GLOW }}>{target.name}</span><span style={{ color: COMPASS }}>{second.name}</span></div>
+                <div className="mb-1 flex items-center justify-between text-[12px]"><span style={{ color: GLOW }}>{target.name}</span><span style={{ color: COMPASS }}>{second.name}</span></div>
                 <input type="range" min={5} max={95} step={5} value={firstWeight} onChange={e => setFirstWeight(Number(e.target.value))} className="w-full accent-[#5b9dff]" />
-                <div className="mt-0.5 flex items-center justify-between font-mono text-[12px] font-bold"><span style={{ color: GLOW }}>{firstWeight}%</span><span style={{ color: COMPASS }}>{100 - firstWeight}%</span></div>
+                <div className="mt-0.5 flex items-center justify-between font-mono text-[13px] font-bold"><span style={{ color: GLOW }}>{firstWeight}%</span><span style={{ color: COMPASS }}>{100 - firstWeight}%</span></div>
               </div>
               <div>
-                <div className="mb-1 text-[11px]" style={{ color: INK2 }}>리밸런싱 주기</div>
-                <div className="flex gap-1">{REBAL.map(([k, l]) => <button key={k} onClick={() => setRebalanceFreq(k)} className="flex-1 rounded-md py-1.5 text-[11px] font-semibold" style={seg(rebalanceFreq === k)}>{l}</button>)}</div>
+                <div className="mb-1 text-[12px]" style={{ color: INK2 }}>리밸런싱 주기</div>
+                <div className="flex gap-1">{REBAL.map(([k, l]) => <button key={k} onClick={() => setRebalanceFreq(k)} className="flex-1 rounded-md py-1.5 text-[12px] font-semibold" style={seg(rebalanceFreq === k)}>{l}</button>)}</div>
               </div>
             </>}
           </div>
         </details>}
-        <button onClick={onRun} disabled={!strat || running} className="flex items-center justify-center gap-2 rounded-lg py-3.5 text-[14px] font-bold disabled:cursor-not-allowed" style={strat && !running ? { background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})`, color: '#fff', boxShadow: '0 10px 24px -10px rgba(60,120,255,.5)' } : { background: 'var(--ci-card)', color: INK3 }}>
-          {running ? '실행 중…' : `▶ ${strat ? '백테스트 실행' : '전략을 선택해주세요'}`}
+        <button onClick={onRun} disabled={!strat || running || symbolMissing || customExceeds} className="flex items-center justify-center gap-2 rounded-lg py-3.5 text-[15px] font-bold disabled:cursor-not-allowed" style={strat && !running && !symbolMissing && !customExceeds ? { background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})`, color: '#fff', boxShadow: '0 10px 24px -10px rgba(60,120,255,.5)' } : { background: 'var(--ci-card)', color: INK3 }}>
+          {running ? '실행 중…' : `▶ ${!strat ? '전략을 선택해주세요' : symbolMissing ? '종목을 선택해주세요' : customExceeds ? '기간 한도 초과' : '백테스트 실행'}`}
         </button>
-        <button onClick={onShowHistory} disabled={historyCount === 0} className="flex items-center justify-center gap-2 rounded-lg px-3.5 py-2.5 text-[13px] font-semibold disabled:opacity-50" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>🕓 이전 결과 <span style={{ color: INK3 }}>({historyCount})</span></button>
+        <button onClick={onShowHistory} disabled={historyCount === 0} className="flex items-center justify-center gap-2 rounded-lg px-3.5 py-2.5 text-[14px] font-semibold disabled:opacity-50" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>🕓 이전 결과 <span style={{ color: INK3 }}>({historyCount})</span></button>
       </div>
     </aside>
   );
@@ -834,37 +872,37 @@ const BacktestRunner = ({ strat, target, setTarget, period, setPeriod, capital, 
 /* ────────────── 전략 빌더 (새 항로 만들기 / 항로 수정) ────────────── */
 const SectionNum = ({ n, title, sub, active }: { n: number; title: string; sub?: string; active?: boolean }) => (
   <div className="flex items-center gap-2.5">
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono text-[12px] font-bold" style={{ background: active ? 'rgba(91,157,255,.18)' : 'var(--ci-card)', color: active ? GLOW : INK2, border: `1px solid ${active ? 'rgba(91,157,255,.32)' : LINE}` }}>{n}</span>
-    <div className="min-w-0"><div className="text-[13.5px] font-bold">{title}</div>{sub && <div className="text-[11px]" style={{ color: INK3 }}>{sub}</div>}</div>
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono text-[13px] font-bold" style={{ background: active ? 'rgba(91,157,255,.18)' : 'var(--ci-card)', color: active ? GLOW : INK2, border: `1px solid ${active ? 'rgba(91,157,255,.32)' : LINE}` }}>{n}</span>
+    <div className="min-w-0"><div className="text-[14.5px] font-bold">{title}</div>{sub && <div className="text-[12px]" style={{ color: INK3 }}>{sub}</div>}</div>
   </div>
 );
 
 const ConditionEditor = ({ title, accent, conds, setConds, addDefault }: { title: string; accent: string; conds: Condition[]; setConds: (c: Condition[]) => void; addDefault: Condition }) => (
   <div>
     <div className="flex items-center justify-between">
-      <span className="text-[12.5px] font-bold" style={{ color: accent }}>{title}</span>
-      <button onClick={() => setConds([...conds, { ...addDefault }])} className="rounded-md px-2 py-1 text-[11.5px] font-semibold" style={{ border: `1px solid ${LINE}`, color: accent }}>+ 조건 추가</button>
+      <span className="text-[13.5px] font-bold" style={{ color: accent }}>{title}</span>
+      <button onClick={() => setConds([...conds, { ...addDefault }])} className="rounded-md px-2 py-1 text-[12.5px] font-semibold" style={{ border: `1px solid ${LINE}`, color: accent }}>+ 조건 추가</button>
     </div>
     <div className="mt-2 flex flex-col gap-1.5">
-      {conds.length === 0 && <div className="text-[11.5px]" style={{ color: INK3 }}>조건이 없습니다. + 조건 추가를 눌러주세요.</div>}
+      {conds.length === 0 && <div className="text-[12.5px]" style={{ color: INK3 }}>조건이 없습니다. + 조건 추가를 눌러주세요.</div>}
       {conds.map((c, idx) => {
         const cross = isCrossInd(c.indicator);
         const upd = (patch: Partial<Condition>) => { const u = [...conds]; u[idx] = { ...c, ...patch }; setConds(u); };
         return (
           <div key={idx} className="flex items-center gap-1.5">
             {idx > 0 ? (
-              <select value={c.logic} onChange={e => upd({ logic: e.target.value as Condition['logic'] })} className="shrink-0 rounded px-1 py-1.5 text-[11px] outline-none" style={fieldStyle}><option value="AND">AND</option><option value="OR">OR</option></select>
+              <select value={c.logic} onChange={e => upd({ logic: e.target.value as Condition['logic'] })} className="shrink-0 rounded px-1 py-1.5 text-[12px] outline-none" style={fieldStyle}><option value="AND">AND</option><option value="OR">OR</option></select>
             ) : <span className="w-[44px] shrink-0" />}
-            <select value={c.indicator} onChange={e => upd({ indicator: e.target.value })} className={`${cross ? 'flex-[2]' : 'flex-1'} min-w-0 rounded px-1.5 py-1.5 text-[12px] outline-none`} style={fieldStyle}>
+            <select value={c.indicator} onChange={e => upd({ indicator: e.target.value })} className={`${cross ? 'flex-[2]' : 'flex-1'} min-w-0 rounded px-1.5 py-1.5 text-[13px] outline-none`} style={fieldStyle}>
               {COND_INDICATORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
             {!cross && <>
-              <select value={c.operator} onChange={e => upd({ operator: e.target.value as Condition['operator'] })} className="w-12 shrink-0 rounded px-1 py-1.5 text-[12px] outline-none" style={fieldStyle}>
+              <select value={c.operator} onChange={e => upd({ operator: e.target.value as Condition['operator'] })} className="w-12 shrink-0 rounded px-1 py-1.5 text-[13px] outline-none" style={fieldStyle}>
                 {OPERATORS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
-              <input type="number" value={c.value} onChange={e => upd({ value: parseFloat(e.target.value) || 0 })} className="w-16 shrink-0 rounded px-1.5 py-1.5 text-right text-[12px] outline-none" style={fieldStyle} />
+              <input type="number" value={c.value} onChange={e => upd({ value: parseFloat(e.target.value) || 0 })} className="w-16 shrink-0 rounded px-1.5 py-1.5 text-right text-[13px] outline-none" style={fieldStyle} />
             </>}
-            <button onClick={() => setConds(conds.filter((_, i) => i !== idx))} title="삭제" className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[15px] hover:bg-white/10" style={{ color: INK3 }}>×</button>
+            <button onClick={() => setConds(conds.filter((_, i) => i !== idx))} title="삭제" className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[16px] hover:bg-white/10" style={{ color: INK3 }}>×</button>
           </div>
         );
       })}
@@ -873,7 +911,7 @@ const ConditionEditor = ({ title, accent, conds, setConds, addDefault }: { title
 );
 
 const Toast = ({ msg, type }: { msg: string; type: 'success' | 'error' }) => (
-  <div className="fixed bottom-6 left-1/2 z-[120] -translate-x-1/2 rounded-xl px-5 py-3 text-[13px] font-semibold text-white" style={{ background: type === 'error' ? 'linear-gradient(180deg,#e0524f,#c23b38)' : 'linear-gradient(180deg,#2f9e6e,#1f7d57)', boxShadow: '0 14px 32px -10px rgba(0,0,0,.55)', animation: 'message-in .25s ease' }}>{msg}</div>
+  <div className="fixed bottom-6 left-1/2 z-[120] -translate-x-1/2 rounded-xl px-5 py-3 text-[14px] font-semibold text-white" style={{ background: type === 'error' ? 'linear-gradient(180deg,#e0524f,#c23b38)' : 'linear-gradient(180deg,#2f9e6e,#1f7d57)', boxShadow: '0 14px 32px -10px rgba(0,0,0,.55)', animation: 'message-in .25s ease' }}>{msg}</div>
 );
 
 /* 포트폴리오 적용 모달 — 사용자 전략의 대상 종목을 모의투자 계좌에 균등 시장가 매수 */
@@ -898,65 +936,65 @@ const ApplyModal = ({ strategy, cash, onClose, onDone }: { strategy: Strategy; c
       const success = r.appliedSuccessCount ?? assets.length;
       const total = r.appliedTotalCount ?? assets.length;
       onDone(success < total ? `"${strategy.name}" 적용 완료 · ${total}종목 중 ${success}종목 매수 성공` : `"${strategy.name}" 포트폴리오 적용 완료 · ${success}종목 균등 투자`, 'success');
-    } catch (e: any) {
-      onDone(e?.response?.data?.error || e?.response?.data?.message || '항로 적용에 실패했습니다.', 'error');
+    } catch (e) {
+      onDone(getErrorMessage(e, '항로 적용에 실패했습니다.'), 'error');
     } finally { setBusy(false); }
   };
   const unapply = async () => {
     if (busy) return;
     setBusy(true);
     try { await strategyService.unapplyStrategy(strategy.id); onDone(`"${strategy.name}" 적용을 해제했습니다. (이미 매수된 자산은 유지됩니다)`, 'success'); }
-    catch (e: any) { onDone(e?.response?.data?.error || '적용 해제에 실패했습니다.', 'error'); }
+    catch (e) { onDone(getErrorMessage(e, '적용 해제에 실패했습니다.'), 'error'); }
     finally { setBusy(false); }
   };
 
   return (
     <div onClick={onClose} className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto px-6 py-12" style={{ background: 'rgba(6,11,31,.72)', backdropFilter: 'blur(6px)', animation: 'backdrop-in .2s ease' }}>
       <div onClick={e => e.stopPropagation()} className="relative w-full max-w-[460px] rounded-[18px] p-6" style={{ background: 'var(--ci-overlay)', border: `1px solid ${LINE_S}`, boxShadow: 'var(--ci-panel-shadow)', animation: 'modal-in .25s cubic-bezier(.2,.8,.2,1)' }}>
-        <h3 className="text-[18px] font-bold">⚓ 항로 포트폴리오 적용</h3>
-        <p className="mt-1.5 text-[13px] leading-relaxed" style={{ color: INK1 }}>"<span style={{ color: 'var(--ci-ink0)' }}>{strategy.name}</span>" 항로의 대상 종목을 모의투자(₩) 계좌에 균등 시장가로 매수합니다.</p>
-        {strategy.applied && <div className="mt-3 rounded-lg px-3 py-2 text-[12px]" style={{ background: 'rgba(63,214,160,.1)', border: '1px solid rgba(63,214,160,.28)', color: '#3fd6a0' }}>● 이미 적용된 항로입니다. 금액을 바꿔 다시 적용하거나 아래에서 해제할 수 있습니다.</div>}
+        <h3 className="text-[19.5px] font-bold">⚓ 항로 포트폴리오 적용</h3>
+        <p className="mt-1.5 text-[14px] leading-relaxed" style={{ color: INK1 }}>"<span style={{ color: 'var(--ci-ink0)' }}>{strategy.name}</span>" 항로의 대상 종목을 모의투자(₩) 계좌에 균등 시장가로 매수합니다.</p>
+        {strategy.applied && <div className="mt-3 rounded-lg px-3 py-2 text-[13px]" style={{ background: 'rgba(63,214,160,.1)', border: '1px solid rgba(63,214,160,.28)', color: '#3fd6a0' }}>● 이미 적용된 항로입니다. 금액을 바꿔 다시 적용하거나 아래에서 해제할 수 있습니다.</div>}
         {noAssets ? (
-          <div className="mt-4 rounded-lg px-3.5 py-3 text-[13px]" style={{ background: 'rgba(245,208,97,.1)', border: '1px solid rgba(245,208,97,.3)', color: COMPASS }}>이 항로에는 대상 종목이 설정되어 있지 않습니다. 전략 수정에서 대상 종목을 추가한 뒤 적용해주세요.</div>
+          <div className="mt-4 rounded-lg px-3.5 py-3 text-[14px]" style={{ background: 'rgba(245,208,97,.1)', border: '1px solid rgba(245,208,97,.3)', color: COMPASS }}>이 항로에는 대상 종목이 설정되어 있지 않습니다. 전략 수정에서 대상 종목을 추가한 뒤 적용해주세요.</div>
         ) : (
           <>
             <div className="mt-4">
               <Label>투자 금액 (모의투자)</Label>
               <div className="relative mt-1.5">
-                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px]" style={{ color: INK2 }}>₩</span>
-                <input type="number" min={0} value={amount} onChange={e => setAmount(e.target.value)} className="w-full rounded-lg py-2.5 pl-8 pr-3 text-right font-mono text-[15px] font-semibold outline-none" style={{ border: `1px solid ${overCash ? 'rgba(239,77,77,.5)' : LINE}`, background: 'var(--ci-raised)', color: 'var(--ci-ink0)' }} />
+                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[16px]" style={{ color: INK2 }}>₩</span>
+                <input type="text" inputMode="numeric" value={formatAmountInput(amount)} onChange={e => setAmount(parseAmountInput(e.target.value))} className="w-full rounded-lg py-2.5 pl-8 pr-3 text-right font-mono text-[16px] font-semibold outline-none" style={{ border: `1px solid ${overCash ? 'rgba(239,77,77,.5)' : LINE}`, background: 'var(--ci-raised)', color: 'var(--ci-ink0)' }} />
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {QUICK_AMOUNTS.map(q => <button key={q} onClick={() => setAmount(String(q))} className="rounded-md px-2.5 py-1 text-[11.5px] font-semibold" style={{ border: `1px solid ${LINE}`, background: amt === q ? 'rgba(91,157,255,.16)' : 'var(--ci-card)', color: amt === q ? GLOW : INK1 }}>{q >= 1e8 ? `${q / 1e8}억` : `${q / 1e4}만`}</button>)}
+                {QUICK_AMOUNTS.map(q => <button key={q} onClick={() => setAmount(String(q))} className="rounded-md px-2.5 py-1 text-[12.5px] font-semibold" style={{ border: `1px solid ${LINE}`, background: amt === q ? 'rgba(91,157,255,.16)' : 'var(--ci-card)', color: amt === q ? GLOW : INK1 }}>{q >= 1e8 ? `${q / 1e8}억` : `${q / 1e4}만`}</button>)}
               </div>
             </div>
-            <dl className="mt-4 grid gap-2 rounded-lg p-3.5 text-[13px]" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}>
+            <dl className="mt-4 grid gap-2 rounded-lg p-3.5 text-[14px]" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}>
               <div className="flex justify-between"><dt style={{ color: INK2 }}>대상 종목</dt><dd className="m-0 font-mono font-semibold">{assets.length}종목</dd></div>
               <div className="flex justify-between"><dt style={{ color: INK2 }}>종목당 투자금</dt><dd className="m-0 font-mono font-semibold">₩{fmtNum(perAsset)}</dd></div>
               {cash != null && <div className="flex justify-between"><dt style={{ color: INK2 }}>모의 잔고</dt><dd className="m-0 font-mono font-semibold" style={{ color: overCash ? UP : 'var(--ci-ink0)' }}>₩{fmtNum(cash)}</dd></div>}
             </dl>
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {assets.slice(0, 8).map(code => <span key={code} className="rounded-md px-2 py-1 font-mono text-[11px]" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: INK1 }}>{strategy.targetAssetNames?.[code] || code}</span>)}
-              {assets.length > 8 && <span className="px-2 py-1 text-[11px]" style={{ color: INK3 }}>+{assets.length - 8}</span>}
+              {assets.slice(0, 8).map(code => <span key={code} className="rounded-md px-2 py-1 font-mono text-[12px]" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, color: INK1 }}>{strategy.targetAssetNames?.[code] || code}</span>)}
+              {assets.length > 8 && <span className="px-2 py-1 text-[12px]" style={{ color: INK3 }}>+{assets.length - 8}</span>}
             </div>
             {/* 자동매매 — ②(자동매매 페이지)로 통일. 여기선 안내·이동만 */}
             <div className="mt-4 rounded-xl p-3.5" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 text-[13px] font-bold">⚡ 자동매매</div>
-                  <p className="mt-1 text-[11.5px] leading-relaxed" style={{ color: INK2 }}>신호가 뜰 때마다 자동으로 사고파는 <b style={{ color: 'var(--ci-ink0)' }}>모의 자동매매</b>는 전용 화면에서 시작해요. 손절·익절·실행로그까지 한곳에서 관리합니다.</p>
+                  <div className="flex items-center gap-1.5 text-[14px] font-bold">⚡ 자동매매</div>
+                  <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: INK2 }}>신호가 뜰 때마다 자동으로 사고파는 <b style={{ color: 'var(--ci-ink0)' }}>모의 자동매매</b>는 전용 화면에서 시작해요. 손절·익절·실행로그까지 한곳에서 관리합니다.</p>
                 </div>
-                <button onClick={() => navigate(`/virt/auto-trade?deploy=${strategy.id}`)} className="shrink-0 rounded-lg px-3.5 py-2 text-[12.5px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}>자동매매 시작 →</button>
+                <button onClick={() => navigate(`/virt/auto-trade?deploy=${strategy.id}`)} className="shrink-0 rounded-lg px-3.5 py-2 text-[13.5px] font-bold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}>자동매매 시작 →</button>
               </div>
             </div>
           </>
         )}
         <div className="mt-5 flex gap-2">
-          <button onClick={onClose} disabled={busy} className="flex-1 rounded-lg py-2.5 text-[13.5px] font-semibold" style={{ border: `1px solid ${LINE_S}`, background: 'transparent', color: 'var(--ci-ink0)' }}>닫기</button>
-          {strategy.applied && <button onClick={unapply} disabled={busy} className="rounded-lg px-4 py-2.5 text-[13.5px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.4)', background: 'rgba(239,77,77,.1)', color: '#fca5a5' }}>적용 해제</button>}
-          {!noAssets && <button onClick={apply} disabled={busy || overCash} className="flex-1 rounded-lg py-2.5 text-[13.5px] font-bold disabled:opacity-50" style={{ background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})`, color: '#fff' }}>{busy ? '적용 중…' : strategy.applied ? '재적용' : '적용하기'}</button>}
+          <button onClick={onClose} disabled={busy} className="flex-1 rounded-lg py-2.5 text-[14.5px] font-semibold" style={{ border: `1px solid ${LINE_S}`, background: 'transparent', color: 'var(--ci-ink0)' }}>닫기</button>
+          {strategy.applied && <button onClick={unapply} disabled={busy} className="rounded-lg px-4 py-2.5 text-[14.5px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.4)', background: 'rgba(239,77,77,.1)', color: '#fca5a5' }}>적용 해제</button>}
+          {!noAssets && <button onClick={apply} disabled={busy || overCash} className="flex-1 rounded-lg py-2.5 text-[14.5px] font-bold disabled:opacity-50" style={{ background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})`, color: '#fff' }}>{busy ? '적용 중…' : strategy.applied ? '재적용' : '적용하기'}</button>}
         </div>
-        <p className="mt-3 text-[11px] leading-relaxed" style={{ color: INK3 }}>* 모의투자(₩) 계좌에 시장가로 매수됩니다. 실제 자금이 아닌 시뮬레이션입니다.</p>
+        <p className="mt-3 text-[12px] leading-relaxed" style={{ color: INK3 }}>* 모의투자(₩) 계좌에 시장가로 매수됩니다. 실제 자금이 아닌 시뮬레이션입니다.</p>
       </div>
     </div>
   );
@@ -967,21 +1005,21 @@ const HistoryModal = ({ history, onPick, onDelete, onClose }: { history: Backtes
   <div onClick={onClose} className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto px-6 py-12" style={{ background: 'rgba(6,11,31,.72)', backdropFilter: 'blur(6px)', animation: 'backdrop-in .2s ease' }}>
     <div onClick={e => e.stopPropagation()} className="relative w-full max-w-[560px] rounded-[18px]" style={{ background: 'var(--ci-overlay)', border: `1px solid ${LINE_S}`, boxShadow: 'var(--ci-panel-shadow)', animation: 'modal-in .25s cubic-bezier(.2,.8,.2,1)' }}>
       <div className="wa-force-dark flex items-center justify-between rounded-t-[18px] px-6 py-4 text-white" style={{ background: BT_GRAD }}>
-        <h3 className="text-[15px] font-bold">이전 백테스트 결과 <span className="text-white/60">({history.length})</span></h3>
-        <button onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-lg text-[15px]" style={{ border: '1px solid rgba(255,255,255,.2)', background: 'rgba(255,255,255,.08)' }}><span aria-hidden>✕</span></button>
+        <h3 className="text-[16px] font-bold">이전 백테스트 결과 <span className="text-white/60">({history.length})</span></h3>
+        <button onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-lg text-[16px]" style={{ border: '1px solid rgba(255,255,255,.2)', background: 'rgba(255,255,255,.08)' }}><span aria-hidden>✕</span></button>
       </div>
       <div className="max-h-[60vh] overflow-y-auto p-2">
-        {history.length === 0 ? <div className="px-4 py-10 text-center text-[13px]" style={{ color: INK3 }}>저장된 결과가 없습니다. 백테스트를 실행하면 자동 저장됩니다.</div> :
+        {history.length === 0 ? <div className="px-4 py-10 text-center text-[14px]" style={{ color: INK3 }}>저장된 결과가 없습니다. 백테스트를 실행하면 자동 저장됩니다.</div> :
           history.map(e => { const up = e.totalReturnRate >= 0; return (
             <div key={e.id} className="flex items-center gap-1 rounded-lg pr-2 hover:bg-white/5" style={{ borderBottom: `1px solid ${LINE}` }}>
               <button onClick={() => onPick(e.id)} className="flex min-w-0 flex-1 items-center justify-between px-4 py-3 text-left">
                 <div className="min-w-0">
-                  <div className="truncate text-[13px] font-semibold">{e.strategyName} <span className="font-mono text-[11px]" style={{ color: INK3 }}>{e.stockName || e.stockCode}</span></div>
-                  <div className="text-[11px]" style={{ color: INK3 }}>{e.startDate}~{e.endDate} · {new Date(e.createdAt).toLocaleString('ko-KR')}</div>
+                  <div className="truncate text-[14px] font-semibold">{e.strategyName} <span className="font-mono text-[12px]" style={{ color: INK3 }}>{e.stockName || e.stockCode}</span></div>
+                  <div className="text-[12px]" style={{ color: INK3 }}>{e.startDate}~{e.endDate} · {new Date(e.createdAt).toLocaleString('ko-KR')}</div>
                 </div>
-                <span className="ml-3 shrink-0 font-mono text-[13px] font-bold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{e.totalReturnRate.toFixed(2)}%</span>
+                <span className="ml-3 shrink-0 font-mono text-[14px] font-bold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{e.totalReturnRate.toFixed(2)}%</span>
               </button>
-              <button onClick={() => onDelete(e.id)} aria-label="삭제" title="삭제" className="shrink-0 rounded px-2 py-1 text-[14px]" style={{ color: INK3 }}><span aria-hidden>×</span></button>
+              <button onClick={() => onDelete(e.id)} aria-label="삭제" title="삭제" className="shrink-0 rounded px-2 py-1 text-[15px]" style={{ color: INK3 }}><span aria-hidden>×</span></button>
             </div>
           ); })}
       </div>
@@ -1063,8 +1101,8 @@ const BuilderModal = ({ mode, initial, onClose, onSaved }: { mode: 'create' | 'e
       if (mode === 'edit' && initial) await strategyService.updateStrategy(initial.id, payload);
       else await strategyService.createStrategy(payload);
       onSaved(mode === 'edit' ? '항로가 수정되었습니다.' : '항로가 생성되었습니다.');
-    } catch (e: any) {
-      setErr(e?.response?.data?.message || e?.response?.data?.error || '저장에 실패했습니다.');
+    } catch (e) {
+      setErr(getErrorMessage(e, '저장에 실패했습니다.'));
     } finally { setSaving(false); }
   };
 
@@ -1072,30 +1110,30 @@ const BuilderModal = ({ mode, initial, onClose, onSaved }: { mode: 'create' | 'e
     <div onClick={onClose} className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto px-6 py-10" style={{ background: 'rgba(6,11,31,.72)', backdropFilter: 'blur(6px)', animation: 'backdrop-in .2s ease' }}>
       <div onClick={e => e.stopPropagation()} className="relative w-full max-w-[760px] rounded-[18px]" style={{ background: 'var(--ci-overlay)', border: `1px solid ${LINE_S}`, boxShadow: 'var(--ci-panel-shadow)', animation: 'modal-in .25s cubic-bezier(.2,.8,.2,1)' }}>
         <div className="wa-force-dark flex items-center justify-between rounded-t-[18px] px-6 py-4 text-white" style={{ background: BT_GRAD, borderBottom: '1px solid rgba(255,255,255,.14)' }}>
-          <div><h3 className="text-[16px] font-bold">{mode === 'edit' ? '항로 수정' : '새 항로 만들기'}</h3><p className="text-[12px] text-white/70">나만의 매매 조건으로 항로를 설계하세요.</p></div>
-          <button onClick={onClose} title="닫기" className="flex h-8 w-8 items-center justify-center rounded-lg text-[15px]" style={{ border: '1px solid rgba(255,255,255,.2)', background: 'rgba(255,255,255,.08)' }}>✕</button>
+          <div><h3 className="text-[17.5px] font-bold">{mode === 'edit' ? '항로 수정' : '새 항로 만들기'}</h3><p className="text-[13px] text-white/70">나만의 매매 조건으로 항로를 설계하세요.</p></div>
+          <button onClick={onClose} title="닫기" className="flex h-8 w-8 items-center justify-center rounded-lg text-[16px]" style={{ border: '1px solid rgba(255,255,255,.2)', background: 'rgba(255,255,255,.08)' }}>✕</button>
         </div>
         <div className="flex flex-col gap-5 p-6">
           <section className="flex flex-col gap-2.5">
             <SectionNum n={1} title="기본 정보" active />
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="항로 이름 (예: BTC+ETH 균등 투자)" className="w-full rounded-lg px-3 py-2.5 text-[14px] outline-none" style={fieldStyle} />
-            <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={2} placeholder="설명 (선택)" className="w-full resize-none rounded-lg px-3 py-2.5 text-[13px] outline-none" style={fieldStyle} />
-            <textarea value={logic} onChange={e => setLogic(e.target.value)} rows={2} placeholder="항로 로직 (예: 균등 분배 매수 후 장기 보유, RSI 30 이하 추가매수)" className="w-full resize-none rounded-lg px-3 py-2.5 text-[13px] outline-none" style={fieldStyle} />
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="항로 이름 (예: BTC+ETH 균등 투자)" className="w-full rounded-lg px-3 py-2.5 text-[15px] outline-none" style={fieldStyle} />
+            <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={2} placeholder="설명 (선택)" className="w-full resize-none rounded-lg px-3 py-2.5 text-[14px] outline-none" style={fieldStyle} />
+            <textarea value={logic} onChange={e => setLogic(e.target.value)} rows={2} placeholder="항로 로직 (예: 균등 분배 매수 후 장기 보유, RSI 30 이하 추가매수)" className="w-full resize-none rounded-lg px-3 py-2.5 text-[14px] outline-none" style={fieldStyle} />
           </section>
           <section className="flex flex-col gap-2.5">
             <SectionNum n={2} title="자산 유형" active />
             <div className="grid grid-cols-4 gap-2">
-              {ASSET_TYPES.map(([v, l]) => <button key={v} onClick={() => { setAssetType(v); setAssets([]); setResults([]); setQuery(''); }} className="rounded-lg py-2.5 text-[13px] font-semibold" style={seg(assetType === v)}>{l}</button>)}
+              {ASSET_TYPES.map(([v, l]) => <button key={v} onClick={() => { setAssetType(v); setAssets([]); setResults([]); setQuery(''); }} className="rounded-lg py-2.5 text-[14px] font-semibold" style={seg(assetType === v)}>{l}</button>)}
             </div>
           </section>
           <section className="flex flex-col gap-2.5">
             <SectionNum n={3} title="투자 대상 자산" sub={`${assets.length}개 선택됨`} active={assets.length > 0} />
             {assets.length > 0 && <div className="flex flex-wrap gap-1.5">
-              {assets.map(code => <span key={code} className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-semibold" style={{ background: 'rgba(91,157,255,.12)', color: GLOW }}>{assetName(code)}<button onClick={() => removeAsset(code)} aria-label={`${assetName(code)} 제거`} className="ml-0.5 text-[13px]"><span aria-hidden>×</span></button></span>)}
+              {assets.map(code => <span key={code} className="flex items-center gap-1 rounded-md px-2 py-1 text-[13px] font-semibold" style={{ background: 'rgba(91,157,255,.12)', color: GLOW }}>{assetName(code)}<button onClick={() => removeAsset(code)} aria-label={`${assetName(code)} 제거`} className="ml-0.5 text-[14px]"><span aria-hidden>×</span></button></span>)}
             </div>}
-            <input value={query} onChange={e => setQuery(e.target.value)} aria-label="종목 검색" placeholder={assetType === 'CRYPTO' ? '코인 검색 (예: BTC, 이더리움)' : '종목 검색 (예: 삼성, AAPL)'} className="w-full rounded-lg px-3 py-2.5 text-[13px] outline-none" style={fieldStyle} />
+            <input value={query} onChange={e => setQuery(e.target.value)} aria-label="종목 검색" placeholder={assetType === 'CRYPTO' ? '코인 검색 (예: BTC, 이더리움)' : '종목 검색 (예: 삼성, AAPL)'} className="w-full rounded-lg px-3 py-2.5 text-[14px] outline-none" style={fieldStyle} />
             {results.length > 0 && <div className="no-scrollbar flex max-h-[170px] flex-col gap-0.5 overflow-y-auto rounded-lg p-1" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)' }}>
-              {results.filter(r => !assets.includes(r.code)).map(r => <button key={r.code} onClick={() => addAsset(r.code, r.name)} className="flex items-center justify-between rounded px-2.5 py-1.5 text-left text-[12.5px] hover:bg-white/5"><span className="font-semibold">{r.name}</span><span style={{ color: INK3 }}>{r.code}</span></button>)}
+              {results.filter(r => !assets.includes(r.code)).map(r => <button key={r.code} onClick={() => addAsset(r.code, r.name)} className="flex items-center justify-between rounded px-2.5 py-1.5 text-left text-[13.5px] hover:bg-white/5"><span className="font-semibold">{r.name}</span><span style={{ color: INK3 }}>{r.code}</span></button>)}
             </div>}
           </section>
           <section className="flex flex-col gap-3">
@@ -1103,20 +1141,20 @@ const BuilderModal = ({ mode, initial, onClose, onSaved }: { mode: 'create' | 'e
             <div>
               <div className="flex items-center justify-between">
                 <Label>사용 지표</Label>
-                <select value="" onChange={e => addIndicator(e.target.value)} className="rounded-md px-2 py-1 text-[12px] outline-none" style={fieldStyle}>
+                <select value="" onChange={e => addIndicator(e.target.value)} className="rounded-md px-2 py-1 text-[13px] outline-none" style={fieldStyle}>
                   <option value="">+ 지표 추가</option>
                   {INDICATOR_CATALOG.filter(i => !indicators.some(x => x.type === i.type)).map(i => <option key={i.type} value={i.type}>{i.label}</option>)}
                 </select>
               </div>
               <div className="mt-2 flex flex-col gap-1.5">
-                {indicators.length === 0 && <div className="text-[11.5px]" style={{ color: INK3 }}>지표를 추가하면 매매 조건에서 활용할 수 있어요.</div>}
+                {indicators.length === 0 && <div className="text-[12.5px]" style={{ color: INK3 }}>지표를 추가하면 매매 조건에서 활용할 수 있어요.</div>}
                 {indicators.map((ind, idx) => {
                   const meta = INDICATOR_CATALOG.find(i => i.type === ind.type);
                   return (
                     <div key={idx} className="flex flex-wrap items-center gap-2 rounded-lg px-2.5 py-2" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}>
-                      <span className="text-[12.5px] font-bold" style={{ color: GLOW }}>{meta?.label || ind.type}</span>
-                      {Object.entries(ind.parameters).map(([k, v]) => <span key={k} className="flex items-center gap-1 text-[11px]" style={{ color: INK2 }}>{PARAM_LABEL[k] || k}<input type="number" value={v} onChange={e => updIndParam(idx, k, Number(e.target.value))} className="w-14 rounded px-1.5 py-1 text-right text-[12px] outline-none" style={fieldStyle} /></span>)}
-                      <button onClick={() => removeIndicator(idx)} title="제거" className="ml-auto text-[15px] hover:opacity-80" style={{ color: INK3 }}>×</button>
+                      <span className="text-[13.5px] font-bold" style={{ color: GLOW }}>{meta?.label || ind.type}</span>
+                      {Object.entries(ind.parameters).map(([k, v]) => <span key={k} className="flex items-center gap-1 text-[12px]" style={{ color: INK2 }}>{PARAM_LABEL[k] || k}<input type="number" value={v} onChange={e => updIndParam(idx, k, Number(e.target.value))} className="w-14 rounded px-1.5 py-1 text-right text-[13px] outline-none" style={fieldStyle} /></span>)}
+                      <button onClick={() => removeIndicator(idx)} title="제거" className="ml-auto text-[16px] hover:opacity-80" style={{ color: INK3 }}>×</button>
                     </div>
                   );
                 })}
@@ -1127,16 +1165,16 @@ const BuilderModal = ({ mode, initial, onClose, onSaved }: { mode: 'create' | 'e
             {empty && <div className="flex flex-col gap-1.5">
               <Label>빠른 설정 (프리셋)</Label>
               <div className="flex gap-2">
-                <button onClick={() => applyPreset('rsi')} className="flex-1 rounded-lg py-2 text-[12px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>RSI 과매수/과매도</button>
-                <button onClick={() => applyPreset('macd')} className="flex-1 rounded-lg py-2 text-[12px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>MACD 골든/데드크로스</button>
+                <button onClick={() => applyPreset('rsi')} className="flex-1 rounded-lg py-2 text-[13px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>RSI 과매수/과매도</button>
+                <button onClick={() => applyPreset('macd')} className="flex-1 rounded-lg py-2 text-[13px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>MACD 골든/데드크로스</button>
               </div>
             </div>}
           </section>
-          {err && <div className="rounded-lg px-3 py-2 text-[12.5px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{err}</div>}
+          {err && <div className="rounded-lg px-3 py-2 text-[13.5px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{err}</div>}
         </div>
         <div className="flex items-center gap-3 px-6 py-4" style={{ borderTop: `1px solid ${LINE}` }}>
-          <button onClick={onClose} className="rounded-lg px-4 py-2.5 text-[13px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>취소</button>
-          <button onClick={save} disabled={!canSave || saving} className="flex-1 rounded-lg py-2.5 text-[14px] font-bold text-white disabled:cursor-not-allowed" style={canSave && !saving ? { background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})`, boxShadow: '0 10px 24px -10px rgba(60,120,255,.5)' } : { background: 'var(--ci-card)', color: INK3 }}>
+          <button onClick={onClose} className="rounded-lg px-4 py-2.5 text-[14px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>취소</button>
+          <button onClick={save} disabled={!canSave || saving} className="flex-1 rounded-lg py-2.5 text-[15px] font-bold text-white disabled:cursor-not-allowed" style={canSave && !saving ? { background: `linear-gradient(180deg, ${GLOW}, ${ACCENT})`, boxShadow: '0 10px 24px -10px rgba(60,120,255,.5)' } : { background: 'var(--ci-card)', color: INK3 }}>
             {saving ? '저장 중…' : `${mode === 'edit' ? '항로 수정하기' : '항로 생성하기'} (${assets.length}개 자산)`}
           </button>
         </div>
@@ -1146,11 +1184,15 @@ const BuilderModal = ({ mode, initial, onClose, onSaved }: { mode: 'create' | 'e
 };
 
 const ConsoleStrategyPage = () => {
-  const { session } = useAuth();
+  const { session, tier, role, limits } = useAuth();
   const { isVirt } = useRoutePrefix();
+  const virtNavigate = useVirtNavigate();
+  const effTier = effectiveTier(tier, role);
+  const canUseCustomBuilder = limits?.canUseCustomBuilder ?? false;
   const userName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [target, setTarget] = useState<{ symbol: string; name: string; assetType: string }>({ symbol: 'BTC', name: '비트코인', assetType: 'CRYPTO' });
+  // 종목 미선택으로 시작 — 페이지 진입 시 특정 종목(코인)을 기본 선택하지 않는다. 사용자가 직접 고른다.
+  const [target, setTarget] = useState<{ symbol: string; name: string; assetType: string }>({ symbol: '', name: '', assetType: '' });
   const [period, setPeriod] = useState('1Y');
   const [capital, setCapital] = useState(10_000_000);
   const [monthly, setMonthly] = useState(0);
@@ -1215,7 +1257,7 @@ const ConsoleStrategyPage = () => {
     if (import.meta.env.DEV && window.location.pathname.startsWith('/preview')) return;
     strategyService.getBacktestHistory().then(setHistory).catch(() => {});
   };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   useEffect(() => { refreshHistory(); }, []);
   useEffect(() => {
     if (import.meta.env.DEV && window.location.pathname.startsWith('/preview')) return; // 프리뷰(비로그인) 401 방지
@@ -1252,7 +1294,7 @@ const ConsoleStrategyPage = () => {
     } catch { showToast('항로 삭제에 실패했습니다.', 'error'); }
   };
 
-  const run = async (id: string | null = activeId) => {
+  const run = async (id: string | null = activeId, targetOverride?: Target) => {
     const s = allStrats.find(x => x.id === id);
     if (!s) { setError('전략을 선택해주세요.'); return; }
 
@@ -1266,7 +1308,7 @@ const ConsoleStrategyPage = () => {
         ? { startDate: adv.customStart, endDate: adv.customEnd } : periodDates(period);
       const mreq: BacktestRequest = {
         stockCode: 'US_MOMENTUM', stockName: s.name, startDate, endDate, initialCapital: capital, assetType: 'US_STOCK',
-        strategyName: s.name, strategyType: 'MOMENTUM_ROTATION',
+        strategyName: s.name, strategyType: 'MOMENTUM_ROTATION', momentumAssetType: momentum.assetType,
         topN: momentum.topN, lookbackDays: momentum.lookbackDays, regimeFilter: momentum.regimeFilter,
         regimeFloor: momentum.regimeFloor, rebalanceBandPct: momentum.rebalanceBandPct,
       };
@@ -1276,15 +1318,20 @@ const ConsoleStrategyPage = () => {
         const r = await strategyService.runBacktest(mreq);
         if (runIdRef.current !== myRun) return;
         r.strategyName = s.name; setResult(r); refreshHistory();
-      } catch (e: any) {
+      } catch (e) {
         if (runIdRef.current !== myRun) return;
-        const status = e?.response?.status;
-        const raw = e?.response?.data?.message || e?.message || '';
+        const status = (e as { response?: { status?: number } })?.response?.status;
+        const raw = getErrorMessage(e, '');
         setError(status === 429 ? '요청이 너무 많습니다. 잠시 후 다시 시도해주세요. (분당 5회 제한)'
           : (raw || '백테스트 실행에 실패했습니다. 132종목 데이터 로드에 시간이 걸릴 수 있어요(잠시 후 재시도).'));
       } finally { if (runIdRef.current === myRun) setRunning(false); }
       return;
     }
+
+    // 모멘텀 외 전략은 백테스트할 종목이 필요 — 미선택이면 안내(기본 종목을 자동 선택하지 않으므로)
+    // targetOverride: 가이드 체험처럼 setTarget 직후 즉시 실행할 때(비동기 state 반영 전) 명시 종목 전달용
+    const tgt = targetOverride ?? target;
+    if (!tgt.symbol) { setError('백테스트할 종목을 먼저 선택해주세요.'); return; }
 
     const isTurtle = s.id === TURTLE_PRESET_ID;
     // 터틀은 설정 패널 파라미터로 지표·조건을 즉석 생성(채널 기간·ADX·유닛·레버리지·트레일링 반영)
@@ -1301,9 +1348,9 @@ const ConsoleStrategyPage = () => {
     }
     const { startDate, endDate } = adv.dateMode === 'custom'
       ? { startDate: adv.customStart, endDate: adv.customEnd } : periodDates(period);
-    const rebalActive = !!(second && second.symbol !== target.symbol); // 2자산 모드: 백엔드가 손절/익절/트레일링·매매방향·maxPositions 미지원
+    const rebalActive = !!(second && second.symbol !== tgt.symbol); // 2자산 모드: 백엔드가 손절/익절/트레일링·매매방향·maxPositions 미지원
     const req: BacktestRequest = {
-      stockCode: target.symbol, stockName: target.name, startDate, endDate, initialCapital: capital, assetType: target.assetType,
+      stockCode: tgt.symbol, stockName: tgt.name, startDate, endDate, initialCapital: capital, assetType: tgt.assetType,
       strategyName: s.name, // 서버 저장 히스토리에 올바른 전략명 보관(직접조건 경로에서 "종목 분석"으로 저장되던 문제 수정)
       indicators: useEdit ? editInd : (preset?.indicators || us?.indicators || []),
       entryConditions: useEdit ? editEntry : (preset?.entryConditions || us?.entryConditions || []),
@@ -1358,10 +1405,10 @@ const ConsoleStrategyPage = () => {
       r.strategyName = s.name; // explicit 조건 경로에선 백엔드가 "종목 분석"으로 덮어쓰므로 선택 전략명으로 보정 (결과 표시 + 이전결과 재선택)
       setResult(r);
       refreshHistory(); // 서버가 결과를 자동 저장 → 목록 갱신
-    } catch (e: any) {
+    } catch (e) {
       if (runIdRef.current !== myRun) return; // 취소됨 → 에러 무시
-      const status = e?.response?.status;
-      const raw = e?.response?.data?.message || e?.message || '';
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      const raw = getErrorMessage(e, '');
       const msg = status === 429 ? '요청이 너무 많습니다. 잠시 후 다시 시도해주세요. (분당 5회 제한)'
         : /캔들스틱|데이터를 가져올 수 없|찾을 수 없/.test(raw) ? '해당 종목의 시세 데이터를 가져올 수 없습니다. 종목/자산유형을 확인해주세요.'
         : /충분한 데이터|데이터가 없/.test(raw) ? '선택한 기간에 데이터가 부족합니다. 기간을 늘리거나 상장 이후 구간으로 조정해주세요.'
@@ -1377,7 +1424,10 @@ const ConsoleStrategyPage = () => {
   const pickHistory = async (id: string) => {
     try {
       const r = await strategyService.getSavedBacktest(id);
-      setResult(r); const s = allStrats.find(x => x.name === r.strategyName); setActiveId(s ? s.id : null); setError(null); setHistOpen(false);
+      setResult(r);
+      // id가 있으면 id로 우선 매칭(이름 중복·개명 시 엉뚱한 전략 활성화 방지), 없을 때만 이름 폴백
+      const s = r.strategyId ? allStrats.find(x => x.id === r.strategyId) : allStrats.find(x => x.name === r.strategyName);
+      setActiveId(s ? s.id : null); setError(null); setHistOpen(false);
     } catch { setError('저장된 결과를 불러오지 못했습니다.'); }
   };
   const deleteHistory = async (id: string) => {
@@ -1389,30 +1439,32 @@ const ConsoleStrategyPage = () => {
       <div className="flex flex-col gap-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           {isVirt ? <FunnelSteps current={2} /> : <span />}
-          <button onClick={() => setTour(true)} className="inline-flex items-center gap-1.5 rounded-[10px] px-3.5 py-2 text-[13px] font-bold" style={{ border: '1px solid rgba(91,157,255,.4)', background: 'rgba(91,157,255,.14)', color: GLOW }} title="사용법 가이드 투어 다시 보기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="10" /><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .8-1 1.7" strokeLinecap="round" /><circle cx="12" cy="17" r=".6" fill="currentColor" /></svg>가이드 투어 다시 보기</button>
+          <button onClick={() => setTour(true)} className="inline-flex items-center gap-1.5 rounded-[10px] px-3.5 py-2 text-[14px] font-bold" style={{ border: '1px solid rgba(91,157,255,.4)', background: 'rgba(91,157,255,.14)', color: GLOW }} title="사용법 가이드 투어 다시 보기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="10" /><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .8-1 1.7" strokeLinecap="round" /><circle cx="12" cy="17" r=".6" fill="currentColor" /></svg>가이드 투어 다시 보기</button>
         </div>
-        {error && <div className="rounded-xl px-4 py-3 text-[13px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{error}</div>}
+        {error && <div className="rounded-xl px-4 py-3 text-[14px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{error}</div>}
         <div className="grid items-start gap-5 grid-cols-1 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)_minmax(0,320px)]">
           <div data-tour="library" className="min-w-0">
           <StrategyLibrary strats={allStrats} activeId={activeId} onPick={(id) => { setActiveId(id); setResult(null); setError(null); }}
             onCreate={() => setBuilder({ mode: 'create' })}
             onEditUser={(id) => { const st = userStrats.find(s => s.id === id); if (st) setBuilder({ mode: 'edit', strategy: st }); }}
             onDeleteUser={handleDeleteUser}
-            onApply={(id) => { const st = userStrats.find(s => s.id === id); if (st) setApplyFor(st); }} />
+            onApply={(id) => { const st = userStrats.find(s => s.id === id); if (st) setApplyFor(st); }}
+            effTier={effTier} canUseCustomBuilder={canUseCustomBuilder}
+            onLocked={(minTier) => { showToast(`${tierLabel(minTier)} 이상 등급에서 이용할 수 있어요. 요금제를 확인해보세요.`, 'error'); virtNavigate('/billing'); }} />
           </div>
           <div className="min-w-0" data-tour="result">
             {running ? <RunningView onCancel={() => { runIdRef.current++; setRunning(false); }} />
               : result ? <ResultView result={result} strat={strat} onExport={onExport} />
                 : strat ? <StrategyGuidePanel strat={strat} userStrat={userStrats.find(s => s.id === strat.id)} onApply={() => { const st = userStrats.find(s => s.id === strat.id); if (st) setApplyFor(st); }} onCreate={() => setBuilder({ mode: 'create' })} />
-                  : <EmptyHero running={running} total={allStrats.length} userCount={userStrats.length} onGuide={() => { setActiveId('preset-golden-cross'); setTarget({ symbol: 'BTC', name: '비트코인', assetType: 'CRYPTO' }); run('preset-golden-cross'); }} />}
+                  : <EmptyHero running={running} total={allStrats.length} userCount={userStrats.length} onGuide={() => { setActiveId('preset-golden-cross'); setTarget({ symbol: 'BTC', name: '비트코인', assetType: 'CRYPTO' }); run('preset-golden-cross', { symbol: 'BTC', name: '비트코인', assetType: 'CRYPTO' }); }} />}
           </div>
           <div data-tour="runner" className="min-w-0">
-          <BacktestRunner strat={strat} target={target} setTarget={setTarget} period={period} setPeriod={setPeriod} capital={capital} setCapital={setCapital} monthly={monthly} setMonthly={setMonthly} editInd={editInd} setEditInd={setEditInd} editEntry={editEntry} setEditEntry={setEditEntry} editExit={editExit} setEditExit={setEditExit} adv={adv} setAdv={setAdv} turtle={turtle} setTurtle={setTurtle} momentum={momentum} setMomentum={setMomentum} second={second} setSecond={setSecond} firstWeight={firstWeight} setFirstWeight={setFirstWeight} rebalanceFreq={rebalanceFreq} setRebalanceFreq={setRebalanceFreq} stratAssets={stratAssets} onRun={() => run()} running={running} historyCount={history.length} onShowHistory={() => setHistOpen(true)} />
+          <BacktestRunner strat={strat} target={target} setTarget={setTarget} period={period} setPeriod={setPeriod} capital={capital} setCapital={setCapital} monthly={monthly} setMonthly={setMonthly} editInd={editInd} setEditInd={setEditInd} editEntry={editEntry} setEditEntry={setEditEntry} editExit={editExit} setEditExit={setEditExit} adv={adv} setAdv={setAdv} turtle={turtle} setTurtle={setTurtle} momentum={momentum} setMomentum={setMomentum} second={second} setSecond={setSecond} firstWeight={firstWeight} setFirstWeight={setFirstWeight} rebalanceFreq={rebalanceFreq} setRebalanceFreq={setRebalanceFreq} stratAssets={stratAssets} onRun={() => run()} running={running} historyCount={history.length} onShowHistory={() => setHistOpen(true)} limits={limits} />
           </div>
         </div>
         <footer className="flex flex-wrap items-center justify-between gap-3.5 pt-6" style={{ borderTop: `1px solid ${LINE}` }}>
-          <span className="font-mono text-[12px]" style={{ color: INK3 }}>© 2026 WhaleArc · 모든 항해는 사용자의 책임 아래 진행됩니다.</span>
-          <div className="flex gap-[18px] text-[12.5px]" style={{ color: INK2 }}><a>도움말</a><a>상태</a><a>API</a><a>의견 보내기</a></div>
+          <span className="font-mono text-[13px]" style={{ color: INK3 }}>© 2026 WhaleArc · 모든 항해는 사용자의 책임 아래 진행됩니다.</span>
+          <div className="flex gap-[18px] text-[13.5px]" style={{ color: INK2 }}><a>도움말</a><a>상태</a><a>API</a><a>의견 보내기</a></div>
         </footer>
       </div>
       {builder && <BuilderModal key={`${builder.mode}:${builder.strategy?.id ?? 'new'}`} mode={builder.mode} initial={builder.strategy} onClose={() => setBuilder(null)} onSaved={(msg) => { setBuilder(null); refreshUserStrats(); showToast(msg); }} />}

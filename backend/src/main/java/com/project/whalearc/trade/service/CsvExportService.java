@@ -1,5 +1,6 @@
 package com.project.whalearc.trade.service;
 
+import com.project.whalearc.market.service.ExchangeRateService;
 import com.project.whalearc.trade.domain.Holding;
 import com.project.whalearc.trade.domain.Portfolio;
 import com.project.whalearc.trade.domain.TradeRecord;
@@ -21,6 +22,7 @@ public class CsvExportService {
 
     private final TradeRecordRepository tradeRecordRepository;
     private final PortfolioService portfolioService;
+    private final ExchangeRateService exchangeRateService;
 
     private static final String BOM = "\uFEFF";
     private static final DateTimeFormatter KST_FMT =
@@ -61,14 +63,18 @@ public class CsvExportService {
     public String generatePortfolioReportCsv(String userId) {
         Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
 
+        // 미국주식/ETF(USD)는 환율을 적용해 KRW로 환산한 뒤 합산한다(PortfolioSnapshot·PortfolioController와 동일).
+        // 미환산 시 총자산·평가금액·총손익·수익률이 약 1/환율로 과소 집계된다.
+        double usdKrwRate = exchangeRateService.getUsdKrwRate();
+
         BigDecimal initialCash = portfolio.getInitialCash().compareTo(BigDecimal.ZERO) > 0
                 ? portfolio.getInitialCash() : BigDecimal.valueOf(10_000_000);
-        double totalValue = portfolio.getTotalValue().doubleValue();
+        double totalValue = portfolio.getTotalValueWithExchangeRate(usdKrwRate).doubleValue();
         double totalPnl = totalValue - initialCash.doubleValue();
-        double returnRate = portfolio.getReturnRate().doubleValue();
+        double returnRate = portfolio.getReturnRateWithExchangeRate(usdKrwRate).doubleValue();
         double turtleAllocated = portfolio.getTurtleAllocated().doubleValue();
         double holdingsValue = portfolio.getHoldings().stream()
-                .mapToDouble(h -> h.getMarketValue().doubleValue()).sum();
+                .mapToDouble(h -> marketValueKrw(h, usdKrwRate).doubleValue()).sum();
 
         StringBuilder sb = new StringBuilder(BOM);
 
@@ -99,8 +105,9 @@ public class CsvExportService {
             sb.append(formatQty(h.getQuantity(), assetType)).append(',');
             sb.append(csvEscape(numFmt().format(roundBd(h.getAveragePrice())))).append(',');
             sb.append(csvEscape(numFmt().format(roundBd(h.getCurrentPrice())))).append(',');
-            sb.append(csvEscape(numFmt().format(roundBd(h.getMarketValue())))).append(',');
-            sb.append(csvEscape(signedNum(h.getProfitLoss().doubleValue()))).append(',');
+            // 평가금액/평가손익은 요약(총자산)과 동일하게 KRW 기준으로 출력(USD 자산은 환산).
+            sb.append(csvEscape(numFmt().format(roundBd(marketValueKrw(h, usdKrwRate))))).append(',');
+            sb.append(csvEscape(signedNum(pnlKrw(h, usdKrwRate).doubleValue()))).append(',');
             sb.append(signedPct(h.getReturnRate().doubleValue())).append('\n');
         }
 
@@ -130,6 +137,18 @@ public class CsvExportService {
         return "가상화폐";
     }
 
+    /** 보유 평가금액을 KRW 기준으로. 미국주식/ETF(USD)는 환율을 곱해 환산한다. */
+    private BigDecimal marketValueKrw(Holding h, double usdKrwRate) {
+        BigDecimal mv = h.getMarketValue();
+        return (h.isUsStock() || h.isEtf()) ? mv.multiply(BigDecimal.valueOf(usdKrwRate)) : mv;
+    }
+
+    /** 보유 평가손익을 KRW 기준으로. 미국주식/ETF(USD)는 환율을 곱해 환산한다. */
+    private BigDecimal pnlKrw(Holding h, double usdKrwRate) {
+        BigDecimal pnl = h.getProfitLoss();
+        return (h.isUsStock() || h.isEtf()) ? pnl.multiply(BigDecimal.valueOf(usdKrwRate)) : pnl;
+    }
+
     private long roundBd(BigDecimal value) {
         return value.setScale(0, RoundingMode.HALF_UP).longValue();
     }
@@ -140,7 +159,8 @@ public class CsvExportService {
     }
 
     private String signedPct(double value) {
-        String formatted = String.format("%.2f", value);
+        // 로케일을 US로 고정 — JVM 기본 로케일(de/fr 등)에서 소수점이 콤마가 되어 CSV 컬럼이 밀리는 것을 방지.
+        String formatted = String.format(Locale.US, "%.2f", value);
         return value > 0 ? "+" + formatted : formatted;
     }
 }

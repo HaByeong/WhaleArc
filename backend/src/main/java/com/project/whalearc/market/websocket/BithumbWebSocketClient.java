@@ -14,6 +14,7 @@ import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Component
@@ -31,6 +32,9 @@ public class BithumbWebSocketClient {
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private int reconnectAttempts = 0;
     private volatile boolean running = true;
+    // 한 번의 연결 실패에 onClose·onError·connect catch가 모두 재연결을 걸어 중복 예약되는 것 방지.
+    // 지연 실행되는 doConnect 직전에 false로 리셋해 순차 재시도는 그대로 유지한다.
+    private final AtomicBoolean reconnecting = new AtomicBoolean(false);
 
     @PostConstruct
     public void connect() {
@@ -41,8 +45,14 @@ public class BithumbWebSocketClient {
     public void shutdown() {
         running = false;
         scheduler.shutdownNow();
-        if (webSocket != null) {
-            webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "shutdown");
+        // 이미 닫힌(stale) 핸들에 sendClose가 불려도 예외로 종료가 막히지 않도록 방어한다.
+        WebSocket ws = webSocket;
+        if (ws != null) {
+            try {
+                ws.sendClose(WebSocket.NORMAL_CLOSURE, "shutdown");
+            } catch (Exception e) {
+                log.debug("빗썸 WebSocket 종료 중 무시 가능한 예외: {}", e.getMessage());
+            }
         }
     }
 
@@ -86,6 +96,7 @@ public class BithumbWebSocketClient {
                         @Override
                         public CompletionStage<?> onClose(WebSocket ws, int statusCode, String reason) {
                             log.warn("빗썸 WebSocket 종료: {} - {}", statusCode, reason);
+                            webSocket = null; // 죽은 핸들 참조 정리
                             scheduleReconnect();
                             return null;
                         }
@@ -93,6 +104,7 @@ public class BithumbWebSocketClient {
                         @Override
                         public void onError(WebSocket ws, Throwable error) {
                             log.error("빗썸 WebSocket 에러: {}", error.getMessage());
+                            webSocket = null; // 죽은 핸들 참조 정리
                             scheduleReconnect();
                         }
                     })
@@ -112,7 +124,7 @@ public class BithumbWebSocketClient {
                 "ATOM_KRW","UNI_KRW","APT_KRW","ARB_KRW","OP_KRW",
                 "NEAR_KRW","EOS_KRW","BCH_KRW","LTC_KRW","ETC_KRW",
                 "SHIB_KRW","SUI_KRW","SEI_KRW","STX_KRW","PEPE_KRW",
-                "WLD_KRW","MATIC_KRW","POL_KRW","AAVE_KRW","SAND_KRW","MANA_KRW"
+                "WLD_KRW","POL_KRW","AAVE_KRW","SAND_KRW","MANA_KRW"
                 ],"tickTypes":["MID"]}
                 """;
         ws.sendText(subscribeMsg, true);
@@ -153,11 +165,14 @@ public class BithumbWebSocketClient {
 
     private void scheduleReconnect() {
         if (!running) return;
+        // 이미 재연결이 예약돼 있으면(같은 실패의 onClose+onError 중복 호출) 무시.
+        if (!reconnecting.compareAndSet(false, true)) return;
         if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
             log.error("빗썸 WebSocket 재연결 최대 횟수 초과 ({}회)", MAX_RECONNECT_ATTEMPTS);
             // 잠시 후 카운터 리셋하고 재시도
             scheduler.schedule(() -> {
                 reconnectAttempts = 0;
+                reconnecting.set(false);
                 doConnect();
             }, 60, TimeUnit.SECONDS);
             return;
@@ -166,6 +181,9 @@ public class BithumbWebSocketClient {
         reconnectAttempts++;
         long delay = (long) RECONNECT_DELAY_SEC * reconnectAttempts;
         log.info("빗썸 WebSocket 재연결 예정: {}초 후 (시도 {}/{})", delay, reconnectAttempts, MAX_RECONNECT_ATTEMPTS);
-        scheduler.schedule(this::doConnect, delay, TimeUnit.SECONDS);
+        scheduler.schedule(() -> {
+            reconnecting.set(false);
+            doConnect();
+        }, delay, TimeUnit.SECONDS);
     }
 }

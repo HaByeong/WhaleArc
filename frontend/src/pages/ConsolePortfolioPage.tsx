@@ -41,7 +41,7 @@ const panel: React.CSSProperties = { background: 'var(--ci-panel)', border: '1px
 const Panel = ({ children, style }: { children: ReactNode; style?: React.CSSProperties }) => <div style={{ ...panel, ...style }}>{children}</div>;
 const PanelHead = ({ kicker, title, right }: { kicker?: string; title: string; right?: ReactNode }) => (
   <div className="wa-force-dark flex items-center justify-between px-[22px] py-[15px] text-white" style={{ background: 'linear-gradient(105deg,#142647 0%,#1d3c7a 52%,#2c6fe6 100%)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
-    <div>{kicker && <div className="text-[10.5px] font-bold tracking-[.22em] text-white/70">{kicker}</div>}<div className="text-[16px] font-bold">{title}</div></div>
+    <div>{kicker && <div className="text-[11.5px] font-bold tracking-[.22em] text-white/70">{kicker}</div>}<div className="text-[17.5px] font-bold">{title}</div></div>
     {right}
   </div>
 );
@@ -67,10 +67,14 @@ const trendSeries = <T extends { date: string }>(snaps: T[], range: TrendRange):
   const monthly = downsampleByMonth(snaps);
   return monthly.length >= 2 ? monthly : snaps;
 };
+// 실제 표시 시계열에 맞춘 캡션 — 월/년 선택이라도 월별 점이 2개 미만이면 일별로 폴백되므로
+// 캡션도 '일별(데이터 모으는 중)'로 바꿔 표기와 실제 그래프를 일치시킨다.
+const rangeCaption = <T extends { date: string }>(snaps: T[], range: TrendRange): string =>
+  range !== 'D' && downsampleByMonth(snaps).length < 2 ? '일별 · 데이터 모으는 중' : RANGE_CAPTION[range];
 const RangeToggle = ({ range, onChange }: { range: TrendRange; onChange: (r: TrendRange) => void }) => (
   <div className="flex gap-[3px] rounded-lg p-[3px]" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
     {(Object.keys(RANGE_DAYS) as TrendRange[]).map(r => (
-      <button key={r} onClick={() => onChange(r)} className="rounded-md px-2.5 py-[5px] text-[11.5px] font-semibold"
+      <button key={r} onClick={() => onChange(r)} className="rounded-md px-2.5 py-[5px] text-[12.5px] font-semibold"
         style={{ background: range === r ? 'rgba(91,157,255,.10)' : 'transparent', color: range === r ? SONAR : 'var(--ci-ink2)' }}>{RANGE_LABEL[r]}</button>
     ))}
   </div>
@@ -80,8 +84,8 @@ const TrendChart = ({ port, kospi, mode, days = 0, real = false }: { port: numbe
   if (port.length < 2) return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
       <svg width="34" height="34" viewBox="0 0 24 24" fill="none" style={{ color: 'var(--ci-ink3)', opacity: .65 }}><path d="M3 3v16a2 2 0 0 0 2 2h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><path d="M7 14l3.5-3.5 3 3L21 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2.5 2.5" /></svg>
-      <div className="text-[13.5px] font-semibold" style={{ color: 'var(--ci-ink2)' }}>{days >= 1 ? '자산 추이를 기록하고 있어요' : '아직 자산 추이 기록이 없어요'}</div>
-      <div className="max-w-[360px] text-[12px] leading-relaxed" style={{ color: 'var(--ci-ink3)' }}>
+      <div className="text-[14.5px] font-semibold" style={{ color: 'var(--ci-ink2)' }}>{days >= 1 ? '자산 추이를 기록하고 있어요' : '아직 자산 추이 기록이 없어요'}</div>
+      <div className="max-w-[360px] text-[13px] leading-relaxed" style={{ color: 'var(--ci-ink3)' }}>
         {days >= 1
           ? <>현재 <b style={{ color: SONAR }}>{days}일치</b> 기록됐어요. 자산은 <b>하루 한 번(자정)</b> 저장되며, <b>이틀치</b>가 모이면 추이 그래프가 자동으로 그려집니다.</>
           : real
@@ -114,11 +118,11 @@ const TrendChart = ({ port, kospi, mode, days = 0, real = false }: { port: numbe
 
 const MetricCard = ({ label, value, sub, color, explain }: { label: string; value: string; sub: string; color: string; explain?: string }) => (
   <div className="flex flex-col rounded-[11px] px-3.5 py-4 text-center" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
-    <div className="text-[10.5px] font-semibold" style={{ color: 'var(--ci-ink3)' }}>{label}</div>
-    <div className="mt-2 font-mono text-[20px] font-bold leading-none" style={{ color }}>{value}</div>
-    <div className="mt-1.5 text-[10.5px]" style={{ color: 'var(--ci-ink3)' }}>{sub}</div>
+    <div className="text-[11.5px] font-semibold" style={{ color: 'var(--ci-ink3)' }}>{label}</div>
+    <div className="mt-2 font-mono text-[21.5px] font-bold leading-none" style={{ color }}>{value}</div>
+    <div className="mt-1.5 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>{sub}</div>
     {explain && (
-      <div className="mt-2.5 rounded-[7px] px-2.5 py-2 text-[10.5px] leading-snug" style={{ background: 'var(--ci-panel)', color: 'var(--ci-ink2)', border: '1px solid var(--ci-line)' }}>{explain}</div>
+      <div className="mt-2.5 rounded-[7px] px-2.5 py-2 text-[11.5px] leading-snug" style={{ background: 'var(--ci-panel)', color: 'var(--ci-ink2)', border: '1px solid var(--ci-line)' }}>{explain}</div>
     )}
   </div>
 );
@@ -176,7 +180,7 @@ const HoldingsTrades = ({ holdings, trades, holdingsValue, holdingsPnl, routeMap
     <Panel style={{ padding: 0, overflow: 'hidden' }}>
       <div className="grid grid-cols-2" style={{ borderBottom: '1px solid var(--ci-line)' }}>
         {([['holdings', '보유 종목', holdings.length], ['trades', '거래 내역', trades.length]] as const).map(([k, l, n], idx) => (
-          <button key={k} onClick={() => setTab(k)} className="relative px-4 py-[15px] text-[14px]" style={{ color: tab === k ? 'var(--ci-ink0)' : 'var(--ci-ink2)', fontWeight: tab === k ? 700 : 500, borderRight: idx === 0 ? '1px solid var(--ci-line)' : undefined }}>
+          <button key={k} onClick={() => setTab(k)} className="relative px-4 py-[15px] text-[15px]" style={{ color: tab === k ? 'var(--ci-ink0)' : 'var(--ci-ink2)', fontWeight: tab === k ? 700 : 500, borderRight: idx === 0 ? '1px solid var(--ci-line)' : undefined }}>
             {l} <span className="font-semibold text-white/48">({n})</span>
             {tab === k && <span className="absolute -bottom-px left-3.5 right-3.5 h-0.5 rounded" style={{ background: SONAR }} />}
           </button>
@@ -185,29 +189,29 @@ const HoldingsTrades = ({ holdings, trades, holdingsValue, holdingsPnl, routeMap
       {tab === 'holdings' ? (
         holdings.length === 0 ? (
           <div className="px-[22px] py-12 text-center">
-            <div className="text-[13px]" style={{ color: 'var(--ci-ink3)' }}>보유 종목이 없습니다.</div>
+            <div className="text-[14px]" style={{ color: 'var(--ci-ink3)' }}>보유 종목이 없습니다.</div>
             <div className="mt-3 flex justify-center gap-2">
-              <button onClick={navStore} className="rounded-lg px-3.5 py-2 text-[12.5px] font-semibold" style={{ border: '1px solid var(--ci-line)', color: 'var(--ci-ink1)' }}>전략 학습</button>
-              <button onClick={navTrade} className="rounded-lg px-3.5 py-2 text-[12.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>직접 거래 →</button>
+              <button onClick={navStore} className="rounded-lg px-3.5 py-2 text-[13.5px] font-semibold" style={{ border: '1px solid var(--ci-line)', color: 'var(--ci-ink1)' }}>전략 학습</button>
+              <button onClick={navTrade} className="rounded-lg px-3.5 py-2 text-[13.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>직접 거래 →</button>
             </div>
           </div>
         ) : (
           <>
             <div className="flex flex-wrap items-baseline justify-between gap-2 px-[22px] py-3.5" style={{ borderBottom: '1px solid var(--ci-line)', background: 'var(--ci-card)' }}>
-              <span className="text-[12px] text-white/48">총 평가금액 <span className="ml-2.5 font-mono text-[16px] font-bold text-white">{won(holdingsValue)}</span></span>
-              <span className="font-mono text-[13px] font-semibold" style={{ color: holdingsPnl >= 0 ? UP : DOWN }}><Tri up={holdingsPnl >= 0} />{holdingsPnl >= 0 ? '+' : ''}{Math.round(holdingsPnl).toLocaleString('ko-KR')}</span>
+              <span className="text-[13px] text-white/48">총 평가금액 <span className="ml-2.5 font-mono text-[17.5px] font-bold text-white">{won(holdingsValue)}</span></span>
+              <span className="font-mono text-[14px] font-semibold" style={{ color: holdingsPnl >= 0 ? UP : DOWN }}><Tri up={holdingsPnl >= 0} />{holdingsPnl >= 0 ? '+' : ''}{Math.round(holdingsPnl).toLocaleString('ko-KR')}</span>
             </div>
             {holdings.map((h, i) => {
               const up = h.returnRate >= 0, g = ASSET_ICON[h.stockCode], sl = stockLikeOf(h.assetType), rts = routeMap[h.stockCode];
               return (
                 <button key={h.stockCode} onClick={() => onPick(h.stockCode, h.assetType)} className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3.5 px-[22px] py-3.5 text-left transition-colors hover:bg-white/[0.03]" style={{ borderTop: i ? '1px solid var(--ci-line)' : undefined }}>
-                  <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] text-[15px] font-bold text-white" style={{ background: g?.c || '#3a4a6a' }}>{g?.t || holdingName(h).slice(0, 1)}</span>
+                  <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] text-[16px] font-bold text-white" style={{ background: g?.c || '#3a4a6a' }}>{g?.t || holdingName(h).slice(0, 1)}</span>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5"><span className="truncate text-[14px] font-semibold">{holdingName(h)}</span><span className="shrink-0 rounded px-1.5 py-0.5 text-[9.5px] font-bold" style={{ background: 'var(--ci-card)', color: 'var(--ci-ink2)' }}>{typeLabel(h.assetType)}</span></div>
-                    <div className="mt-0.5 font-mono text-[11px] text-white/48">{h.stockCode} · {fmtQty(h.quantity, sl)}</div>
-                    {rts && rts.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{rts.map((r, j) => <span key={j} className="rounded px-1.5 py-0.5 text-[9.5px] font-semibold" style={{ background: 'rgba(91,157,255,.12)', color: SONAR }}>⚓ {r}</span>)}</div>}
+                    <div className="flex items-center gap-1.5"><span className="truncate text-[15px] font-semibold">{holdingName(h)}</span><span className="shrink-0 rounded px-1.5 py-0.5 text-[10.5px] font-bold" style={{ background: 'var(--ci-card)', color: 'var(--ci-ink2)' }}>{typeLabel(h.assetType)}</span></div>
+                    <div className="mt-0.5 font-mono text-[12px] text-white/48">{h.stockCode} · {fmtQty(h.quantity, sl)}</div>
+                    {rts && rts.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{rts.map((r, j) => <span key={j} className="rounded px-1.5 py-0.5 text-[10.5px] font-semibold" style={{ background: 'rgba(91,157,255,.12)', color: SONAR }}>⚓ {r}</span>)}</div>}
                   </div>
-                  <div className="text-right"><div className="font-mono text-[14px] font-bold">{fmtHoldingValue(h)}</div><div className="mt-0.5 font-mono text-[12px] font-semibold" style={{ color: up ? UP : DOWN }}><Tri up={up} />{up ? '+' : ''}{h.returnRate.toFixed(2)}%{!isUsd(h.assetType) && <span className="ml-1 text-white/40">({h.profitLoss >= 0 ? '+' : ''}{won(h.profitLoss)})</span>}</div></div>
+                  <div className="text-right"><div className="font-mono text-[15px] font-bold">{fmtHoldingValue(h)}</div><div className="mt-0.5 font-mono text-[13px] font-semibold" style={{ color: up ? UP : DOWN }}><Tri up={up} />{up ? '+' : ''}{h.returnRate.toFixed(2)}%{!isUsd(h.assetType) && <span className="ml-1 text-white/40">({h.profitLoss >= 0 ? '+' : ''}{won(h.profitLoss)})</span>}</div></div>
                 </button>
               );
             })}
@@ -216,20 +220,20 @@ const HoldingsTrades = ({ holdings, trades, holdingsValue, holdingsPnl, routeMap
       ) : (
         trades.length === 0 ? (
           <div className="px-[22px] py-12 text-center">
-            <div className="text-[13px]" style={{ color: 'var(--ci-ink3)' }}>거래 내역이 없습니다.</div>
-            <button onClick={navTrade} className="mt-3 rounded-lg px-3.5 py-2 text-[12.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>거래하기 →</button>
+            <div className="text-[14px]" style={{ color: 'var(--ci-ink3)' }}>거래 내역이 없습니다.</div>
+            <button onClick={navTrade} className="mt-3 rounded-lg px-3.5 py-2 text-[13.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>거래하기 →</button>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse" style={{ minWidth: 520 }}>
-              <thead><tr>{['시간', '구분', '종목', '수량', '가격'].map(h => <th key={h} className="px-[18px] py-3 text-left text-[11px] font-semibold uppercase tracking-[.1em] text-white/48" style={{ borderBottom: '1px solid var(--ci-line)' }}>{h}</th>)}</tr></thead>
+              <thead><tr>{['시간', '구분', '종목', '수량', '가격'].map(h => <th key={h} className="px-[18px] py-3 text-left text-[12px] font-semibold uppercase tracking-[.1em] text-white/48" style={{ borderBottom: '1px solid var(--ci-line)' }}>{h}</th>)}</tr></thead>
               <tbody>{trades.slice(0, 20).map(t => { const buy = t.orderType === 'BUY', sl = stockLikeOf(t.assetType); return (
                 <tr key={t.id}>
-                  <td className="font-mono text-[13px]" style={td}>{(() => { try { return new Date(t.executedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return t.executedAt; } })()}</td>
-                  <td style={td}><span className="rounded px-2 py-0.5 text-[11px] font-bold" style={{ color: buy ? UP : DOWN, background: buy ? 'rgba(239,77,77,.12)' : 'rgba(77,138,255,.12)' }}>{buy ? '매수' : '매도'}</span></td>
-                  <td className="text-[13px]" style={td}><span className="inline-flex items-center gap-1.5">{holdingName({ stockName: t.stockName, stockCode: t.stockCode })}<span className="rounded px-1 py-0.5 text-[9.5px] font-bold" style={{ background: 'var(--ci-card)', color: 'var(--ci-ink3)' }}>{typeLabel(t.assetType)}</span></span></td>
-                  <td className="font-mono text-[13px]" style={td}>{fmtQty(t.quantity, sl)}</td>
-                  <td className="font-mono text-[13px]" style={td}>{isUsd(t.assetType) ? '$' + t.price.toLocaleString('en-US', { maximumFractionDigits: 2 }) : won(t.price)}</td>
+                  <td className="font-mono text-[14px]" style={td}>{(() => { try { return new Date(t.executedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return t.executedAt; } })()}</td>
+                  <td style={td}><span className="rounded px-2 py-0.5 text-[12px] font-bold" style={{ color: buy ? UP : DOWN, background: buy ? 'rgba(239,77,77,.12)' : 'rgba(77,138,255,.12)' }}>{buy ? '매수' : '매도'}</span></td>
+                  <td className="text-[14px]" style={td}><span className="inline-flex items-center gap-1.5">{holdingName({ stockName: t.stockName, stockCode: t.stockCode })}<span className="rounded px-1 py-0.5 text-[10.5px] font-bold" style={{ background: 'var(--ci-card)', color: 'var(--ci-ink3)' }}>{typeLabel(t.assetType)}</span></span></td>
+                  <td className="font-mono text-[14px]" style={td}>{fmtQty(t.quantity, sl)}</td>
+                  <td className="font-mono text-[14px]" style={td}>{isUsd(t.assetType) ? '$' + t.price.toLocaleString('en-US', { maximumFractionDigits: 2 }) : won(t.price)}</td>
                 </tr>); })}</tbody>
             </table>
           </div>
@@ -246,18 +250,18 @@ const RouteCard = ({ perf, isRep, onStar, busy, navTo }: { perf: PurchasePerform
   return (
     <div className="px-[22px] py-5" style={{ borderTop: '1px solid var(--ci-line)' }}>
       <div className="mb-1.5 flex items-center gap-2">
-        <button onClick={navTo} className="text-left text-[15px] font-bold hover:underline">{perf.productName}</button>
-        {isTurtle && <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(245,208,97,.14)', color: '#f5d061' }}>WhaleArc 독점</span>}
+        <button onClick={navTo} className="text-left text-[16px] font-bold hover:underline">{perf.productName}</button>
+        {isTurtle && <span className="rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(245,208,97,.14)', color: '#f5d061' }}>WhaleArc 독점</span>}
         <button onClick={onStar} disabled={busy} title="대표 항로" className="ml-auto flex h-7 w-7 items-center justify-center rounded-md disabled:opacity-50" style={{ color: isRep ? '#f5d061' : 'var(--ci-ink3)' }}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill={isRep ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z" strokeLinejoin="round" /></svg>
         </button>
       </div>
-      <div className="flex items-center gap-2 text-[12.5px] text-white/48">투자 <span className="font-mono font-semibold text-white">{won(perf.investmentAmount)}</span>{isRep && <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(245,208,97,.12)', color: '#f5d061' }}>대표 항로</span>}</div>
+      <div className="flex items-center gap-2 text-[13.5px] text-white/48">투자 <span className="font-mono font-semibold text-white">{won(perf.investmentAmount)}</span>{isRep && <span className="rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(245,208,97,.12)', color: '#f5d061' }}>대표 항로</span>}</div>
       <div className="mt-4 rounded-xl px-[18px] py-4" style={{ background: up ? 'rgba(239,77,77,.07)' : 'rgba(77,138,255,.07)', border: `1px solid ${up ? 'rgba(239,77,77,.22)' : 'rgba(77,138,255,.22)'}` }}>
-        <div className="font-mono text-[26px] font-bold" style={{ color: up ? UP : DOWN }}><Tri up={up} />{up ? '+' : ''}{perf.totalReturnRate.toFixed(2)}%</div>
-        <div className="mt-1 font-mono text-[12px] text-white/48">({up ? '+' : ''}{won(perf.totalPnl)})</div>
+        <div className="font-mono text-[28px] font-bold" style={{ color: up ? UP : DOWN }}><Tri up={up} />{up ? '+' : ''}{perf.totalReturnRate.toFixed(2)}%</div>
+        <div className="mt-1 font-mono text-[13px] text-white/48">({up ? '+' : ''}{won(perf.totalPnl)})</div>
       </div>
-      {perf.assets?.length > 0 && <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1.5 text-[12.5px]">
+      {perf.assets?.length > 0 && <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1.5 text-[13.5px]">
         {perf.assets.map((a, i) => { const au = a.returnRate >= 0; return (
           <span key={a.code} className="flex items-center gap-2 text-white/70">{i > 0 && <span className="text-white/30">·</span>}{a.code} <span className="font-mono font-semibold" style={{ color: au ? UP : DOWN }}>{au ? '+' : ''}{a.returnRate.toFixed(1)}%</span></span>
         ); })}
@@ -265,16 +269,16 @@ const RouteCard = ({ perf, isRep, onStar, busy, navTo }: { perf: PurchasePerform
       {isTurtle && (trades > 0 ? (
         <div className="mt-4 grid grid-cols-3 gap-2.5">
           {[['거래', `${trades}회`], ['승률', `${((wins / trades) * 100).toFixed(1)}%`], ['실현 손익', won(perf.realizedPnl || 0)]].map(([l, v]) => (
-            <div key={l} className="rounded-lg px-3 py-2.5 text-center" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}><div className="text-[10.5px] text-white/48">{l}</div><div className="mt-1 font-mono text-[13px] font-semibold">{v}</div></div>
+            <div key={l} className="rounded-lg px-3 py-2.5 text-center" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}><div className="text-[11.5px] text-white/48">{l}</div><div className="mt-1 font-mono text-[14px] font-semibold">{v}</div></div>
           ))}
         </div>
-      ) : <div className="mt-4 rounded-lg px-3 py-2.5 text-center text-[12px]" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)', color: 'var(--ci-ink3)' }}>진입 시그널 대기 중</div>)}
+      ) : <div className="mt-4 rounded-lg px-3 py-2.5 text-center text-[13px]" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)', color: 'var(--ci-ink3)' }}>진입 시그널 대기 중</div>)}
     </div>
   );
 };
 
 const Toast = ({ msg, type }: { msg: string; type: 'success' | 'error' }) => (
-  <div className="fixed bottom-6 left-1/2 z-[120] -translate-x-1/2 rounded-xl px-5 py-3 text-[13px] font-semibold text-white" style={{ background: type === 'error' ? 'linear-gradient(180deg,#e0524f,#c23b38)' : 'linear-gradient(180deg,#2f9e6e,#1f7d57)', boxShadow: '0 14px 32px -10px rgba(0,0,0,.55)', animation: 'message-in .25s ease' }}>{msg}</div>
+  <div className="fixed bottom-6 left-1/2 z-[120] -translate-x-1/2 rounded-xl px-5 py-3 text-[14px] font-semibold text-white" style={{ background: type === 'error' ? 'linear-gradient(180deg,#e0524f,#c23b38)' : 'linear-gradient(180deg,#2f9e6e,#1f7d57)', boxShadow: '0 14px 32px -10px rgba(0,0,0,.55)', animation: 'message-in .25s ease' }}>{msg}</div>
 );
 
 /* ── 페이퍼(모의투자) 포트폴리오 — virt 라우트 ── */
@@ -290,6 +294,7 @@ const PaperPortfolio = () => {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [history, setHistory] = useState<PortfolioSnapshot[]>([]);
+  const [metricsHistory, setMetricsHistory] = useState<PortfolioSnapshot[]>([]);  // 성과 지표용 전체 기간(차트 range 토글과 무관)
   const [kospiHistory, setKospiHistory] = useState<{ date: string; close: number }[]>([]);
   const [routes, setRoutes] = useState<PurchasePerformance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -336,6 +341,14 @@ const PaperPortfolio = () => {
     return () => clearInterval(t);
   }, [loadHistory, isPreview]);
 
+  // 성과 지표(MDD·Sharpe·Alpha)는 전체 기간 기준으로 일정해야 하므로 차트 range와 분리해
+  // 전체 기간(RANGE_DAYS.Y)을 한 번만 조회한다. 폴링 불필요(장기 통계, 리셋 시에만 재조회).
+  const loadMetricsHistory = useCallback(() => {
+    if (isPreview) return;
+    portfolioService.getHistory(RANGE_DAYS.Y).then(setMetricsHistory).catch(() => {});
+  }, [isPreview]);
+  useEffect(() => { loadMetricsHistory(); }, [loadMetricsHistory]);
+
   useEffect(() => {
     load();
     if (isPreview) return;
@@ -373,9 +386,9 @@ const PaperPortfolio = () => {
     if (!window.confirm('정말 모의투자를 초기화하시겠습니까?\n\n보유 종목·거래 내역·구매한 항로·적용 전략·자산 추이가 모두 삭제되고, 현금이 1,000만원으로 리셋됩니다.')) return;
     if (!window.confirm('이 작업은 되돌릴 수 없습니다. 최종 확인하시겠습니까?')) return;
     if (window.prompt('초기화하려면 "초기화"를 입력하세요.') !== '초기화') { showToast('초기화가 취소되었습니다.', 'error'); return; }
-    try { await tradeService.resetPortfolio(); showToast('새 항해가 시작되었습니다!'); load(); loadHistory(); }
+    try { await tradeService.resetPortfolio(); showToast('새 항해가 시작되었습니다!'); load(); loadHistory(); loadMetricsHistory(); }
     catch { showToast('초기화에 실패했습니다.', 'error'); }
-  }, [showToast, load, loadHistory]);
+  }, [showToast, load, loadHistory, loadMetricsHistory]);
 
   const holdings = portfolio?.holdings ?? [];
   const cash = portfolio?.cashBalance ?? 0;
@@ -404,6 +417,7 @@ const PaperPortfolio = () => {
     holdings.forEach((h, i) => { const v = krwVal(h); if (v > 0) arr.push({ c: CHART_COLORS[i % CHART_COLORS.length], label: holdingName(h), value: v }); });
     if (turtle > 0) arr.push({ c: '#f5d061', label: '터틀 전략', value: turtle });
     return mergeAllocByLabel(arr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- krwVal은 usdKrw만 읽는 렌더 로컬 헬퍼(usdKrw는 이미 dep); deps에 넣으면 memo가 매 렌더 무효화됨
   }, [holdings, cash, turtle, usdKrw]);
   const allocTotal = alloc.reduce((s, a) => s + a.value, 0);
 
@@ -437,22 +451,22 @@ const PaperPortfolio = () => {
   const port = chart ? (mode === 'pct' ? chart.portPct : chart.portValue) : [];
   const kospi = chart ? (mode === 'pct' ? chart.kospiPct : chart.kospiValue) : null;
 
-  // ── 성과 지표 계산 ──
+  // ── 성과 지표 계산 (전체 기간 metricsHistory 기준 — 차트 일/월/년 토글과 무관하게 일정) ──
   const metrics = useMemo(() => {
-    if (history.length < 2) return null;
+    if (metricsHistory.length < 2) return null;
     // MDD
-    let peak = history[0].totalValue;
+    let peak = metricsHistory[0].totalValue;
     let mdd = 0;
-    for (const s of history) {
+    for (const s of metricsHistory) {
       if (s.totalValue > peak) peak = s.totalValue;
       const dd = peak > 0 ? (peak - s.totalValue) / peak : 0;
       if (dd > mdd) mdd = dd;
     }
     // 일간 수익률 & Sharpe (무위험 수익률 3.5%/년)
     const dailyRets: number[] = [];
-    for (let i = 1; i < history.length; i++) {
-      const prev = history[i - 1].totalValue;
-      const curr = history[i].totalValue;
+    for (let i = 1; i < metricsHistory.length; i++) {
+      const prev = metricsHistory[i - 1].totalValue;
+      const curr = metricsHistory[i].totalValue;
       if (prev > 0) dailyRets.push((curr - prev) / prev);
     }
     let sharpe: number | null = null;
@@ -483,23 +497,23 @@ const PaperPortfolio = () => {
     }
     const winRate = matched.length > 0 ? (matched.filter(m => m.win).length / matched.length) * 100 : null;
     const avgHoldDays = matched.length > 0 ? matched.reduce((a, m) => a + m.holdDays, 0) / matched.length : null;
-    // Alpha vs KOSPI — 전체 기간 기준(차트 일/월/년 토글과 무관하게 일정해야 함).
-    // 이전엔 chart(range 다운샘플)에서 가져와 range 토글 시 알파만 바뀌는 불일치가 있었음.
+    // Alpha vs KOSPI — 전체 기간(metricsHistory) 기준이라 차트 일/월/년 토글과 무관하게 일정.
+    // 이전엔 range-scoped history를 써서 토글 시 알파(및 MDD·Sharpe)가 바뀌는 불일치가 있었음.
     let alpha: number | null = null;
     if (kospiHistory.length) {
-      const startVal = history[0].totalValue, endVal = history[history.length - 1].totalValue;
+      const startVal = metricsHistory[0].totalValue, endVal = metricsHistory[metricsHistory.length - 1].totalValue;
       const portPct = startVal > 0 ? ((endVal - startVal) / startVal) * 100 : 0;
       const sorted = [...kospiHistory].sort((a, b) => a.date.localeCompare(b.date));
       let startClose = 0;
-      for (const k of sorted) { if (k.date <= history[0].date) startClose = k.close; }
+      for (const k of sorted) { if (k.date <= metricsHistory[0].date) startClose = k.close; }
       if (!startClose) startClose = sorted[0].close;
       let endClose = startClose;
-      for (const k of sorted) { if (k.date <= history[history.length - 1].date) endClose = k.close; }
+      for (const k of sorted) { if (k.date <= metricsHistory[metricsHistory.length - 1].date) endClose = k.close; }
       const kospiPct = startClose > 0 ? ((endClose - startClose) / startClose) * 100 : 0;
       alpha = portPct - kospiPct;
     }
     return { mdd: mdd * 100, sharpe, winRate, avgHoldDays, alpha, closedTrades: matched.length };
-  }, [history, trades, kospiHistory]);
+  }, [metricsHistory, trades, kospiHistory]);
 
   const navTo = (p: string) => navigate(`${isVirt ? '/virt' : ''}${p}`);
   const isEmpty = !loading && !error && holdings.length === 0 && trades.length === 0;
@@ -507,10 +521,10 @@ const PaperPortfolio = () => {
     <HelmShell active="portfolio" virt={isVirt} userName={userName} session="모의투자 · 15초 갱신">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-[18px]">
         <div>
-          <h1 className="text-[26px] font-bold tracking-tight">내 포트폴리오</h1>
-          <p className="mt-2 text-[13.5px] text-white/70">{userName} 항해사님의 항해 일지</p>
+          <h1 className="text-[28px] font-bold tracking-tight">내 포트폴리오</h1>
+          <p className="mt-2 text-[14.5px] text-white/70">{userName} 항해사님의 항해 일지</p>
         </div>
-        {error && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 text-[13px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}><span>{error}</span><button onClick={() => load()} className="rounded-md px-3 py-1 text-[12px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.35)', color: '#fca5a5' }}>다시 시도</button></div>}
+        {error && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 text-[14px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}><span>{error}</span><button onClick={() => load()} className="rounded-md px-3 py-1 text-[13px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.35)', color: '#fca5a5' }}>다시 시도</button></div>}
 
         {isEmpty ? (
           <EmptyState
@@ -531,25 +545,25 @@ const PaperPortfolio = () => {
         <Panel style={{ padding: 0, overflow: 'hidden' }}>
           <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr]">
             <div className="px-8 py-[30px]" style={{ borderRight: '1px solid var(--ci-line)' }}>
-              <div className="mb-2.5 text-[10.5px] font-semibold tracking-[.2em]" style={{ color: SONAR }}>총 자산</div>
+              <div className="mb-2.5 text-[11.5px] font-semibold tracking-[.2em]" style={{ color: SONAR }}>총 자산</div>
               <div className="text-[clamp(40px,6vw,58px)] font-bold leading-none tracking-tight">{loading && !portfolio ? '—' : won(totalValue)}</div>
-              <div className="mt-3.5 font-mono text-[16px] font-semibold" style={{ color: totalPnl < 0 ? DOWN : UP }}><Tri up={totalPnl >= 0} />{totalPnl >= 0 ? '+' : '-'}{won(Math.abs(totalPnl))} ({returnRate >= 0 ? '+' : ''}{returnRate.toFixed(2)}%)</div>
+              <div className="mt-3.5 font-mono text-[17.5px] font-semibold" style={{ color: totalPnl < 0 ? DOWN : totalPnl > 0 ? UP : 'var(--ci-ink1)' }}>{totalPnl !== 0 && <Tri up={totalPnl > 0} />}{totalPnl > 0 ? '+' : totalPnl < 0 ? '-' : ''}{won(Math.abs(totalPnl))} ({returnRate >= 0 ? '+' : ''}{returnRate.toFixed(2)}%)</div>
               <div className="mt-6 grid grid-cols-3 gap-3">
                 {([['현금', won(cash)], ['보유 평가', won(holdingsValue)], ['초기 자본', won(initialCash)]] as const).map(([l, v]) => (
                   <div key={l} className="rounded-[11px] px-3.5 py-3" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
-                    <div className="text-[10.5px] text-white/48">{l}</div><div className="mt-1.5 font-mono text-[15px] font-semibold">{v}</div>
+                    <div className="text-[11.5px] text-white/48">{l}</div><div className="mt-1.5 font-mono text-[16px] font-semibold">{v}</div>
                   </div>
                 ))}
               </div>
             </div>
             <div className="px-6 py-6">
-              <div className="mb-3.5 text-[10.5px] font-semibold tracking-[.2em] text-white/48">자산 배분</div>
-              {alloc.length === 0 ? <div className="flex h-[120px] items-center justify-center text-[12.5px]" style={{ color: 'var(--ci-ink3)' }}>{loading ? '불러오는 중…' : '자산이 없습니다'}</div> : (
+              <div className="mb-3.5 text-[11.5px] font-semibold tracking-[.2em] text-white/48">자산 배분</div>
+              {alloc.length === 0 ? <div className="flex h-[120px] items-center justify-center text-[13.5px]" style={{ color: 'var(--ci-ink3)' }}>{loading ? '불러오는 중…' : '자산이 없습니다'}</div> : (
                 <div className="grid grid-cols-[152px_1fr] items-center gap-4">
                   <div style={{ width: 152, height: 152 }}><Donut items={alloc} total={allocTotal} /></div>
                   <ul className="m-0 flex list-none flex-col gap-3 p-0">
                     {alloc.map((a, i) => (
-                      <li key={i} className="flex items-center gap-2 text-[12.5px]">
+                      <li key={i} className="flex items-center gap-2 text-[13.5px]">
                         <span className="h-[9px] w-[9px] shrink-0 rounded-full" style={{ background: a.c }} />
                         <span className="truncate">{a.label}</span>
                         <span className="ml-1.5 shrink-0 font-mono font-semibold" style={{ color: 'var(--ci-ink1)' }}>{((a.value / (allocTotal || 1)) * 100).toFixed(1)}%</span>
@@ -568,25 +582,25 @@ const PaperPortfolio = () => {
             <div className="flex items-center gap-2">
               <div className="flex gap-[3px] rounded-lg p-[3px]" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
                 {([['value', '총 자산'], ['pct', '수익률 %']] as const).map(([k, l]) => (
-                  <button key={k} onClick={() => setMode(k)} className="rounded-md px-2.5 py-[5px] text-[11.5px] font-semibold" style={{ background: mode === k ? 'rgba(91,157,255,.10)' : 'transparent', color: mode === k ? SONAR : 'var(--ci-ink2)' }}>{l}</button>
+                  <button key={k} onClick={() => setMode(k)} className="rounded-md px-2.5 py-[5px] text-[12.5px] font-semibold" style={{ background: mode === k ? 'rgba(91,157,255,.10)' : 'transparent', color: mode === k ? SONAR : 'var(--ci-ink2)' }}>{l}</button>
                 ))}
               </div>
               <RangeToggle range={range} onChange={setRange} />
-              <span className="hidden text-[11.5px] text-white/48 lg:inline">{RANGE_CAPTION[range]}</span>
+              <span className="hidden text-[12.5px] text-white/48 lg:inline">{rangeCaption(history, range)}</span>
             </div>} />
-          <div className="flex justify-end gap-4 px-3.5 pb-2 pt-2.5 text-[11px] text-white/70">
+          <div className="flex justify-end gap-4 px-3.5 pb-2 pt-2.5 text-[12px] text-white/70">
             <span className="inline-flex items-center gap-1.5"><span style={{ width: 14, height: 2, background: SONAR }} />내 포트폴리오</span>
             {kospi && <span className="inline-flex items-center gap-1.5"><span style={{ width: 14, borderTop: '2px dashed var(--ci-ink3)' }} />KOSPI</span>}
           </div>
           <div className="px-3 pb-[18px]" style={{ height: 250 }}><TrendChart port={port} kospi={kospi} mode={mode} days={history.length} /></div>
-          {kospi && <div className="px-[22px] pb-3 text-[10.5px]" style={{ color: 'var(--ci-ink3)' }}>* KOSPI 수익률은 실제 지수 일봉 데이터 기반입니다.</div>}
+          {kospi && <div className="px-[22px] pb-3 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>* KOSPI 수익률은 실제 지수 일봉 데이터 기반입니다.</div>}
         </Panel>
 
         {/* 성과 지표 */}
         {metrics && (
           <Panel>
             <PanelHead kicker="PERFORMANCE" title="성과 지표" right={
-              <button onClick={() => navigate('/virt/learn?tab=glossary')} className="rounded-md px-2.5 py-1 text-[11px] font-semibold text-white/80 transition-colors hover:bg-white/10 hover:text-white" style={{ border: '1px solid rgba(255,255,255,.22)' }}>
+              <button onClick={() => navigate('/virt/learn?tab=glossary')} className="rounded-md px-2.5 py-1 text-[12px] font-semibold text-white/80 transition-colors hover:bg-white/10 hover:text-white" style={{ border: '1px solid rgba(255,255,255,.22)' }}>
                 용어가 궁금하면 → 학습 노트
               </button>
             } />
@@ -654,7 +668,7 @@ const PaperPortfolio = () => {
                 }
               />
             </div>
-            <div className="px-5 pb-4 text-[10.5px]" style={{ color: 'var(--ci-ink3)' }}>
+            <div className="px-5 pb-4 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>
               * 샤프 비율 무위험수익률 3.5%/년 기준 연환산. 승률은 FIFO 방식 청산 거래만 집계. Alpha는 보유 기간 대비 KOSPI 초과수익률입니다.
             </div>
           </Panel>
@@ -664,11 +678,11 @@ const PaperPortfolio = () => {
         <div className="grid grid-cols-1 items-start gap-[18px] lg:grid-cols-[1.5fr_1fr]">
           <HoldingsTrades holdings={holdings} trades={trades} holdingsValue={holdingsValue} holdingsPnl={holdingsPnl} routeMap={assetRouteMap} onPick={goTrade} navTrade={() => navigate(`${isVirt ? '/virt' : ''}/trade`)} navStore={() => navigate(`${isVirt ? '/virt' : ''}/store`)} />
           <Panel style={{ overflow: 'hidden' }}>
-            <PanelHead kicker="ACTIVE ROUTE" title="항해 중인 항로" right={<button onClick={() => navigate(`${isVirt ? '/virt' : ''}/store`)} className="text-[12px] text-white/80 hover:text-white">전략 학습 →</button>} />
+            <PanelHead kicker="ACTIVE ROUTE" title="항해 중인 항로" right={<button onClick={() => navigate(`${isVirt ? '/virt' : ''}/store`)} className="text-[13px] text-white/80 hover:text-white">전략 학습 →</button>} />
             {routes.length === 0 ? (
               <div className="px-[22px] py-12 text-center">
-                <div className="text-[13px]" style={{ color: 'var(--ci-ink3)' }}>적용 중인 항로가 없습니다.</div>
-                <button onClick={() => navigate(`${isVirt ? '/virt' : ''}/store`)} className="mt-3 rounded-lg px-4 py-2 text-[12.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>항로 둘러보기 →</button>
+                <div className="text-[14px]" style={{ color: 'var(--ci-ink3)' }}>적용 중인 항로가 없습니다.</div>
+                <button onClick={() => navigate(`${isVirt ? '/virt' : ''}/store`)} className="mt-3 rounded-lg px-4 py-2 text-[13.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>항로 둘러보기 →</button>
               </div>
             ) : routes.map(perf => (
               <RouteCard key={perf.purchaseId} perf={perf} isRep={portfolio?.representativePurchaseId === perf.purchaseId} onStar={() => handleStar(perf.purchaseId)} busy={settingRoute === perf.purchaseId} navTo={() => navigate(`${isVirt ? '/virt' : ''}/store`)} />
@@ -679,18 +693,18 @@ const PaperPortfolio = () => {
         {/* 빠른 액션 */}
         <Panel style={{ padding: '16px 22px' }}>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-[12px] font-semibold tracking-[.08em]" style={{ color: 'var(--ci-ink2)' }}>빠른 액션</span>
+            <span className="text-[13px] font-semibold tracking-[.08em]" style={{ color: 'var(--ci-ink2)' }}>빠른 액션</span>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => handleExport('trades')} disabled={exporting !== null} className="rounded-lg px-3.5 py-2 text-[12.5px] font-semibold disabled:opacity-50" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink1)' }}>{exporting === 'trades' ? '다운로드 중…' : '거래 내역 CSV'}</button>
-              <button onClick={() => handleExport('portfolio')} disabled={exporting !== null} className="rounded-lg px-3.5 py-2 text-[12.5px] font-semibold disabled:opacity-50" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink1)' }}>{exporting === 'portfolio' ? '다운로드 중…' : '포트폴리오 CSV'}</button>
-              <button onClick={handleReset} className="rounded-lg px-3.5 py-2 text-[12.5px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.3)', color: UP }}>새 항해 시작</button>
+              <button onClick={() => handleExport('trades')} disabled={exporting !== null} className="rounded-lg px-3.5 py-2 text-[13.5px] font-semibold disabled:opacity-50" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink1)' }}>{exporting === 'trades' ? '다운로드 중…' : '거래 내역 CSV'}</button>
+              <button onClick={() => handleExport('portfolio')} disabled={exporting !== null} className="rounded-lg px-3.5 py-2 text-[13.5px] font-semibold disabled:opacity-50" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink1)' }}>{exporting === 'portfolio' ? '다운로드 중…' : '포트폴리오 CSV'}</button>
+              <button onClick={handleReset} className="rounded-lg px-3.5 py-2 text-[13.5px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.3)', color: UP }}>새 항해 시작</button>
             </div>
           </div>
         </Panel>
 
         <footer className="mt-2 flex flex-wrap justify-between gap-3 border-t border-white/10 pt-5">
-          <span className="font-mono text-[11.5px] text-white/30">© 2026 WHALEARC · 모든 항해는 사용자의 책임 아래 진행됩니다.</span>
-          <span className="text-[11.5px] text-white/30">Built quietly, beneath the surface.</span>
+          <span className="font-mono text-[12.5px] text-white/30">© 2026 WHALEARC · 모든 항해는 사용자의 책임 아래 진행됩니다.</span>
+          <span className="text-[12.5px] text-white/30">Built quietly, beneath the surface.</span>
         </footer>
         </>)}
       </div>
@@ -793,6 +807,7 @@ const RealAccountPortfolio = () => {
     if (port.cashBalance > 0) arr.push({ c: '#7a8aa8', label: isStock ? '예수금' : 'KRW', value: port.cashBalance });
     holdings.forEach((h, i) => { const v = krwVal(h); if (v > 0) arr.push({ c: CHART_COLORS[i % CHART_COLORS.length], label: h.assetName, value: v }); });
     return mergeAllocByLabel(arr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- krwVal은 usdKrw만 읽는 렌더 로컬 헬퍼(usdKrw는 이미 dep); deps에 넣으면 memo가 매 렌더 무효화됨
   }, [port, holdings, isStock, usdKrw]);
   const allocTotal = alloc.reduce((s, a) => s + a.value, 0);
 
@@ -807,25 +822,25 @@ const RealAccountPortfolio = () => {
     <HelmShell active="portfolio" virt={isVirt} userName={userName} session="실계좌 · 거래소 연동">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-[18px]">
         <div>
-          <h1 className="text-[26px] font-bold tracking-tight">내 실계좌</h1>
-          <p className="mt-2 text-[13.5px] text-white/70">{userName} 항해사님의 실제 거래소 자산 (KIS · 업비트 · 비트겟)</p>
+          <h1 className="text-[28px] font-bold tracking-tight">내 실계좌</h1>
+          <p className="mt-2 text-[14.5px] text-white/70">{userName} 항해사님의 실제 거래소 자산 (KIS · 업비트 · 비트겟)</p>
         </div>
-        {error && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 text-[13px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}><span>{error}</span><button onClick={() => load()} className="rounded-md px-3 py-1 text-[12px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.35)', color: '#fca5a5' }}>다시 시도</button></div>}
+        {error && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 text-[14px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}><span>{error}</span><button onClick={() => load()} className="rounded-md px-3 py-1 text-[13px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.35)', color: '#fca5a5' }}>다시 시도</button></div>}
 
         {/* 전체 실계좌 자산 */}
         {hasAny && (
           <Panel style={{ padding: '26px 28px' }}>
             <div className="mb-2.5 flex items-center justify-between">
-              <span className="text-[10.5px] font-semibold tracking-[.2em]" style={{ color: SONAR }}>전체 실계좌 자산</span>
-              <button onClick={() => load()} className="text-[11.5px]" style={{ color: 'var(--ci-ink2)' }}>↻ 새로고침</button>
+              <span className="text-[11.5px] font-semibold tracking-[.2em]" style={{ color: SONAR }}>전체 실계좌 자산</span>
+              <button onClick={() => load()} className="text-[12.5px]" style={{ color: 'var(--ci-ink2)' }}>↻ 새로고침</button>
             </div>
             <div className="text-[clamp(34px,5vw,50px)] font-bold leading-none tracking-tight">{won(totalAll)}</div>
-            <div className="mt-3 font-mono text-[15px] font-semibold" style={{ color: pnlAll >= 0 ? UP : DOWN }}><Tri up={pnlAll >= 0} />{pnlAll >= 0 ? '+' : '-'}{won(Math.abs(pnlAll))} ({returnAll >= 0 ? '+' : ''}{returnAll.toFixed(2)}%)</div>
+            <div className="mt-3 font-mono text-[16px] font-semibold" style={{ color: pnlAll >= 0 ? UP : DOWN }}><Tri up={pnlAll >= 0} />{pnlAll >= 0 ? '+' : '-'}{won(Math.abs(pnlAll))} ({returnAll >= 0 ? '+' : ''}{returnAll.toFixed(2)}%)</div>
             <div className="mt-5 grid grid-cols-3 divide-x" style={{ borderTop: '1px solid var(--ci-line)' }}>
               {EXCHANGES.map(e => { const c = isConn(e.key); return (
                 <div key={e.key} className="px-4 pt-4" style={{ borderColor: 'var(--ci-line)' }}>
-                  <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--ci-ink2)' }}>{c && <span className="h-1.5 w-1.5 rounded-full" style={{ background: '#4ade80' }} />}{e.label} {e.sub}</div>
-                  <div className="mt-1 font-mono text-[15px] font-semibold">{c ? won(portfolios[e.key]?.totalValue || 0) : <span style={{ color: 'var(--ci-ink3)' }}>미연결</span>}</div>
+                  <div className="flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--ci-ink2)' }}>{c && <span className="h-1.5 w-1.5 rounded-full" style={{ background: '#4ade80' }} />}{e.label} {e.sub}</div>
+                  <div className="mt-1 font-mono text-[16px] font-semibold">{c ? won(portfolios[e.key]?.totalValue || 0) : <span style={{ color: 'var(--ci-ink3)' }}>미연결</span>}</div>
                 </div>
               ); })}
             </div>
@@ -838,7 +853,7 @@ const RealAccountPortfolio = () => {
             <PanelHead kicker="VOYAGE LOG" title="자산 추이" right={
               <div className="flex items-center gap-2">
                 <RangeToggle range={range} onChange={setRange} />
-                <span className="hidden text-[11px] text-white/50 lg:inline">{RANGE_CAPTION[range]} · KRW</span>
+                <span className="hidden text-[12px] text-white/50 lg:inline">{rangeCaption(history, range)} · KRW</span>
               </div>} />
             <div className="px-3 pb-[18px] pt-2" style={{ height: 250 }}>
               <TrendChart port={trendSeries(history, range).map(s => s.totalValueKrw)} kospi={null} mode="value" days={history.length} real />
@@ -849,8 +864,8 @@ const RealAccountPortfolio = () => {
         {/* 거래소 탭 */}
         <div className="flex flex-wrap gap-2">
           {EXCHANGES.map(e => { const on = activeTab === e.key, c = isConn(e.key); return (
-            <button key={e.key} onClick={() => { autoPickRef.current = true; setActiveTab(e.key); }} className="inline-flex items-center gap-2 rounded-[10px] px-[18px] py-2.5 text-[14px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : '1px solid var(--ci-line)', background: on ? 'rgba(91,157,255,.12)' : 'var(--ci-card)', color: 'var(--ci-ink0)' }}>
-              {c && <span className="h-1.5 w-1.5 rounded-full" style={{ background: '#4ade80' }} />}{e.label}<span className="text-[11px] font-medium" style={{ color: on ? '#cfe1ff' : 'var(--ci-ink2)' }}>{e.sub}</span>
+            <button key={e.key} onClick={() => { autoPickRef.current = true; setActiveTab(e.key); }} className="inline-flex items-center gap-2 rounded-[10px] px-[18px] py-2.5 text-[15px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : '1px solid var(--ci-line)', background: on ? 'rgba(91,157,255,.12)' : 'var(--ci-card)', color: 'var(--ci-ink0)' }}>
+              {c && <span className="h-1.5 w-1.5 rounded-full" style={{ background: '#4ade80' }} />}{e.label}<span className="text-[12px] font-medium" style={{ color: on ? '#cfe1ff' : 'var(--ci-ink2)' }}>{e.sub}</span>
             </button>
           ); })}
         </div>
@@ -861,13 +876,13 @@ const RealAccountPortfolio = () => {
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: 'rgba(91,157,255,.1)', border: '1px solid rgba(91,157,255,.22)' }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={SONAR} strokeWidth="1.6" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></svg>
               </div>
-              <h3 className="text-[17px] font-bold">{EXCHANGES.find(e => e.key === activeTab)?.label} 계좌가 연결되지 않았습니다</h3>
-              <p className="mx-auto mt-2 max-w-[420px] text-[13px]" style={{ color: 'var(--ci-ink1)' }}>거래소 API 키를 등록하면 실제 보유 자산·잔고를 한 곳에서 확인할 수 있습니다. 키는 AES로 암호화되어 안전하게 저장됩니다.</p>
-              <button onClick={() => openSetup(activeTab)} className="mt-5 rounded-[10px] px-5 py-3 text-[13.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)`, boxShadow: '0 10px 24px -10px rgba(60,120,255,.6)' }}>API 키 등록하기</button>
+              <h3 className="text-[18.5px] font-bold">{EXCHANGES.find(e => e.key === activeTab)?.label} 계좌가 연결되지 않았습니다</h3>
+              <p className="mx-auto mt-2 max-w-[420px] text-[14px]" style={{ color: 'var(--ci-ink1)' }}>거래소 API 키를 등록하면 실제 보유 자산·잔고를 한 곳에서 확인할 수 있습니다. 키는 AES로 암호화되어 안전하게 저장됩니다.</p>
+              <button onClick={() => openSetup(activeTab)} className="mt-5 rounded-[10px] px-5 py-3 text-[14.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)`, boxShadow: '0 10px 24px -10px rgba(60,120,255,.6)' }}>API 키 등록하기</button>
             </div>
           </Panel>
         ) : !port ? (
-          <Panel style={{ padding: '48px 32px' }}><div className="text-center text-[13px]" style={{ color: 'var(--ci-ink3)' }}>{loading ? '실계좌 자산을 불러오는 중…' : '보유 자산 정보를 불러오지 못했습니다.'}</div></Panel>
+          <Panel style={{ padding: '48px 32px' }}><div className="text-center text-[14px]" style={{ color: 'var(--ci-ink3)' }}>{loading ? '실계좌 자산을 불러오는 중…' : '보유 자산 정보를 불러오지 못했습니다.'}</div></Panel>
         ) : (
           <div className="grid grid-cols-1 items-start gap-[18px] lg:grid-cols-[1.5fr_1fr]">
             <div className="flex flex-col gap-[18px]">
@@ -875,15 +890,15 @@ const RealAccountPortfolio = () => {
               {hasForeign && (
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3" style={{ ...panel }}>
                   <div className="flex items-center gap-2.5">
-                    <span className="text-[12.5px] font-semibold" style={{ color: 'var(--ci-ink1)' }}>통화 표시</span>
+                    <span className="text-[13.5px] font-semibold" style={{ color: 'var(--ci-ink1)' }}>통화 표시</span>
                     <div className="inline-flex rounded-lg p-0.5" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
                       {([['통합', false], ['원화/해외 분리', true]] as const).map(([l, v]) => (
-                        <button key={l} onClick={() => setSplitCcy(v)} className="rounded-md px-2.5 py-1 text-[11.5px] font-semibold" style={{ background: splitCcy === v ? 'rgba(91,157,255,.16)' : 'transparent', color: splitCcy === v ? SONAR : 'var(--ci-ink2)' }}>{l}</button>
+                        <button key={l} onClick={() => setSplitCcy(v)} className="rounded-md px-2.5 py-1 text-[12.5px] font-semibold" style={{ background: splitCcy === v ? 'rgba(91,157,255,.16)' : 'transparent', color: splitCcy === v ? SONAR : 'var(--ci-ink2)' }}>{l}</button>
                       ))}
                     </div>
                   </div>
                   {splitCcy && (
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[13px]">
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[14px]">
                       <span>원화 <b className="font-semibold">{won(domesticValueKrw)}</b></span>
                       <span style={{ color: SONAR }}>해외 <b className="font-semibold">${foreignValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b> <span className="text-white/40">({won(foreignValueKrw)})</span></span>
                     </div>
@@ -893,18 +908,18 @@ const RealAccountPortfolio = () => {
               {/* 지표 카드 */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[['총 자산', won(port.totalValue), 'var(--ci-ink0)'], ['총 손익', `${port.totalProfitLoss >= 0 ? '+' : ''}${won(port.totalProfitLoss)}`, port.totalProfitLoss >= 0 ? UP : DOWN], ['수익률', `${port.totalReturnRate >= 0 ? '+' : ''}${port.totalReturnRate.toFixed(2)}%`, port.totalReturnRate >= 0 ? UP : DOWN], [cashLabel, won(port.cashBalance), 'var(--ci-ink0)']].map(([l, v, c]) => (
-                  <div key={l} style={{ ...panel, padding: '16px 18px' }}><div className="text-[10.5px]" style={{ color: 'var(--ci-ink2)' }}>{l}</div><div className="mt-1.5 font-mono text-[16px] font-semibold" style={{ color: c }}>{v}</div></div>
+                  <div key={l} style={{ ...panel, padding: '16px 18px' }}><div className="text-[11.5px]" style={{ color: 'var(--ci-ink2)' }}>{l}</div><div className="mt-1.5 font-mono text-[17.5px] font-semibold" style={{ color: c }}>{v}</div></div>
                 ))}
               </div>
               {/* 보유 종목 */}
               <Panel style={{ padding: 0, overflow: 'hidden' }}>
-                <PanelHead kicker="HOLDINGS" title={`보유 ${isStock ? '종목' : '코인'}`} right={<span className="text-[12px] text-white/70">{holdings.length}개</span>} />
-                {holdings.length === 0 ? <div className="px-[22px] py-12 text-center text-[13px]" style={{ color: 'var(--ci-ink3)' }}>보유 자산이 없습니다.</div> : holdings.map((h, i) => {
+                <PanelHead kicker="HOLDINGS" title={`보유 ${isStock ? '종목' : '코인'}`} right={<span className="text-[13px] text-white/70">{holdings.length}개</span>} />
+                {holdings.length === 0 ? <div className="px-[22px] py-12 text-center text-[14px]" style={{ color: 'var(--ci-ink3)' }}>보유 자산이 없습니다.</div> : holdings.map((h, i) => {
                   const up = h.returnRate >= 0;
                   return (
                     <div key={h.assetCode} className="grid grid-cols-[1fr_auto] items-center gap-3.5 px-[22px] py-3.5" style={{ borderTop: i ? '1px solid var(--ci-line)' : undefined }}>
-                      <div className="min-w-0"><div className="truncate text-[14px] font-semibold">{h.assetName}{h.currency === 'USD' && <span className="ml-1.5 rounded px-1 py-0.5 text-[9px] font-bold align-middle" style={{ background: 'rgba(91,157,255,.16)', color: SONAR }}>USD</span>}</div><div className="mt-0.5 font-mono text-[11px] text-white/48">{h.assetCode} · {fmtQty(h.quantity, isStock)} · 평단 {exMoney(h.averagePrice, h.currency)}</div></div>
-                      <div className="text-right"><div className="font-mono text-[14px] font-bold">{exMoney(h.marketValue, h.currency)}</div><div className="mt-0.5 font-mono text-[12px] font-semibold" style={{ color: up ? UP : DOWN }}><Tri up={up} />{up ? '+' : ''}{h.returnRate.toFixed(2)}% <span className="text-white/40">({h.profitLoss >= 0 ? '+' : ''}{exMoney(h.profitLoss, h.currency)})</span></div></div>
+                      <div className="min-w-0"><div className="truncate text-[15px] font-semibold">{h.assetName}{h.currency === 'USD' && <span className="ml-1.5 rounded px-1 py-0.5 text-[10px] font-bold align-middle" style={{ background: 'rgba(91,157,255,.16)', color: SONAR }}>USD</span>}</div><div className="mt-0.5 font-mono text-[12px] text-white/48">{h.assetCode} · {fmtQty(h.quantity, isStock)} · 평단 {exMoney(h.averagePrice, h.currency)}</div></div>
+                      <div className="text-right"><div className="font-mono text-[15px] font-bold">{exMoney(h.marketValue, h.currency)}</div><div className="mt-0.5 font-mono text-[13px] font-semibold" style={{ color: up ? UP : DOWN }}><Tri up={up} />{up ? '+' : ''}{h.returnRate.toFixed(2)}% <span className="text-white/40">({h.profitLoss >= 0 ? '+' : ''}{exMoney(h.profitLoss, h.currency)})</span></div></div>
                     </div>
                   );
                 })}
@@ -914,11 +929,11 @@ const RealAccountPortfolio = () => {
               {/* 자산 배분 */}
               {alloc.length > 0 && (
                 <Panel style={{ padding: '22px' }}>
-                  <div className="mb-3.5 text-[10.5px] font-semibold tracking-[.2em] text-white/48">자산 배분</div>
+                  <div className="mb-3.5 text-[11.5px] font-semibold tracking-[.2em] text-white/48">자산 배분</div>
                   <div className="grid grid-cols-[130px_1fr] items-center gap-4">
                     <div style={{ width: 130, height: 130 }}><Donut items={alloc} total={allocTotal} /></div>
                     <ul className="m-0 flex list-none flex-col gap-2.5 p-0">{alloc.slice(0, 6).map((a, i) => (
-                      <li key={i} className="flex items-center gap-2 text-[12px]">
+                      <li key={i} className="flex items-center gap-2 text-[13px]">
                         <span className="h-[9px] w-[9px] shrink-0 rounded-full" style={{ background: a.c }} />
                         <span className="truncate">{a.label}</span>
                         <span className="ml-1.5 shrink-0 font-mono font-semibold" style={{ color: 'var(--ci-ink1)' }}>{((a.value / (allocTotal || 1)) * 100).toFixed(1)}%</span>
@@ -929,26 +944,26 @@ const RealAccountPortfolio = () => {
               )}
               {/* 연결 정보 */}
               <Panel style={{ padding: '20px 22px' }}>
-                <div className="mb-3 text-[10.5px] font-semibold tracking-[.2em] text-white/48">연결 정보</div>
-                <div className="flex items-center justify-between text-[12.5px]"><span style={{ color: 'var(--ci-ink2)' }}>API Key</span><span className="font-mono">{(accounts.find(a => a.exchangeType === activeTab)?.apiKey) || '****'}</span></div>
-                {isStock && <div className="mt-2 flex items-center justify-between text-[12.5px]"><span style={{ color: 'var(--ci-ink2)' }}>계좌번호</span><span className="font-mono">{accounts.find(a => a.exchangeType === activeTab)?.accountNumber || '—'}</span></div>}
+                <div className="mb-3 text-[11.5px] font-semibold tracking-[.2em] text-white/48">연결 정보</div>
+                <div className="flex items-center justify-between text-[13.5px]"><span style={{ color: 'var(--ci-ink2)' }}>API Key</span><span className="font-mono">{(accounts.find(a => a.exchangeType === activeTab)?.apiKey) || '****'}</span></div>
+                {isStock && <div className="mt-2 flex items-center justify-between text-[13.5px]"><span style={{ color: 'var(--ci-ink2)' }}>계좌번호</span><span className="font-mono">{accounts.find(a => a.exchangeType === activeTab)?.accountNumber || '—'}</span></div>}
                 <div className="mt-4 flex gap-2">
-                  <button onClick={() => openSetup(activeTab)} className="flex-1 rounded-lg py-2 text-[12.5px] font-semibold" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink1)' }}>키 수정</button>
-                  <button onClick={() => handleDisconnect(activeTab)} className="flex-1 rounded-lg py-2 text-[12.5px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.3)', color: UP }}>연결 해제</button>
+                  <button onClick={() => openSetup(activeTab)} className="flex-1 rounded-lg py-2 text-[13.5px] font-semibold" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink1)' }}>키 수정</button>
+                  <button onClick={() => handleDisconnect(activeTab)} className="flex-1 rounded-lg py-2 text-[13.5px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.3)', color: UP }}>연결 해제</button>
                 </div>
-                <p className="mt-3 text-[10.5px]" style={{ color: 'var(--ci-ink3)' }}>* 체결 내역은 거래 페이지에서 확인하세요. 키는 읽기 전용 권한만 사용합니다.</p>
+                <p className="mt-3 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>* 체결 내역은 거래 페이지에서 확인하세요. 키는 읽기 전용 권한만 사용합니다.</p>
               </Panel>
             </div>
           </div>
         )}
 
         {!hasAny && !loading && !error && (
-          <Panel style={{ padding: '16px 22px' }}><div className="text-center text-[12.5px]" style={{ color: 'var(--ci-ink3)' }}>연결된 실계좌가 없습니다. 위 거래소 탭에서 API 키를 등록해보세요.</div></Panel>
+          <Panel style={{ padding: '16px 22px' }}><div className="text-center text-[13.5px]" style={{ color: 'var(--ci-ink3)' }}>연결된 실계좌가 없습니다. 위 거래소 탭에서 API 키를 등록해보세요.</div></Panel>
         )}
 
         <footer className="mt-2 flex flex-wrap justify-between gap-3 border-t border-white/10 pt-5">
-          <span className="font-mono text-[11.5px] text-white/30">© 2026 WHALEARC · 실계좌 데이터는 거래소 API 기준입니다.</span>
-          <span className="text-[11.5px] text-white/30">Built quietly, beneath the surface.</span>
+          <span className="font-mono text-[12.5px] text-white/30">© 2026 WHALEARC · 실계좌 데이터는 거래소 API 기준입니다.</span>
+          <span className="text-[12.5px] text-white/30">Built quietly, beneath the surface.</span>
         </footer>
       </div>
 

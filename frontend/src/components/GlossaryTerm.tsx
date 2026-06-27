@@ -5,7 +5,7 @@ import { GLOSSARY } from './TermTooltip';
 import { useTheme } from '../contexts/ThemeContext';
 
 /* 콘솔(다크/라이트) 톤 금융용어 툴팁 — 호버 시 초보자용 설명 표시.
-   용어 데이터(GLOSSARY 48개)는 TermTooltip 재사용, 스타일만 --ci-* 토큰으로 콘솔에 맞춤.
+   용어 데이터(GLOSSARY)는 TermTooltip 재사용, 스타일만 --ci-* 토큰으로 콘솔에 맞춤.
    fixed 포지셔닝이라 패널 overflow 에 잘리지 않음. compact=좁은 라벨용(아이콘 생략·색 상속). */
 export const Term = ({ k, children, compact = false, className = '' }: { k: string; children?: ReactNode; compact?: boolean; className?: string }) => {
   const [show, setShow] = useState(false);
@@ -53,10 +53,10 @@ export const Term = ({ k, children, compact = false, className = '' }: { k: stri
         // position:fixed와 일치하게 한다. --ci-* 변수는 wa-console 래퍼로 다시 공급(테마 적응 유지).
         <div className={isDark ? 'wa-console wa-force-dark' : 'wa-console'} style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 9999 }}>
           <span style={{ ...style, zIndex: 9999, padding: '12px 14px', borderRadius: 12, background: 'var(--ci-overlay, #0e1a3d)', border: '1px solid var(--ci-line-strong, rgba(255,255,255,.18))', boxShadow: '0 18px 44px -14px rgba(0,0,0,.7)', textAlign: 'left', pointerEvents: 'none' }}>
-            <span className="block text-[12px] font-bold" style={{ color: 'var(--ci-ink0, #fff)' }}>{entry.title}</span>
-            <span className="mt-1 block text-[11.5px] leading-relaxed" style={{ color: 'var(--ci-ink2, rgba(255,255,255,.66))', whiteSpace: 'pre-wrap' }}>{entry.desc}</span>
+            <span className="block text-[13px] font-bold" style={{ color: 'var(--ci-ink0, #fff)' }}>{entry.title}</span>
+            <span className="mt-1 block text-[12.5px] leading-relaxed" style={{ color: 'var(--ci-ink2, rgba(255,255,255,.66))', whiteSpace: 'pre-wrap' }}>{entry.desc}</span>
             {entry.example && (
-              <span className="mt-1.5 flex items-start gap-1.5 border-t pt-1.5 text-[11px] leading-relaxed" style={{ borderColor: 'var(--ci-line, rgba(255,255,255,.10))' }}>
+              <span className="mt-1.5 flex items-start gap-1.5 border-t pt-1.5 text-[12px] leading-relaxed" style={{ borderColor: 'var(--ci-line, rgba(255,255,255,.10))' }}>
                 <span style={{ flexShrink: 0, fontWeight: 700, fontSize: 9.5, lineHeight: '16px', padding: '0 5px', borderRadius: 5, background: exBg, color: exColor }}>{exKind}</span>
                 <span style={{ color: exColor }}>{exBody}</span>
               </span>

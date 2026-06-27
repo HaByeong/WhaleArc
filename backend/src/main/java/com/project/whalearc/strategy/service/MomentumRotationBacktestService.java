@@ -1,10 +1,11 @@
 package com.project.whalearc.strategy.service;
 
 import com.project.whalearc.market.dto.CandlestickResponse;
+import com.project.whalearc.market.service.BacktestDataProvider;
 import com.project.whalearc.market.service.ExchangeRateService;
 import com.project.whalearc.market.service.IndicatorCalculator;
 import com.project.whalearc.market.service.MomentumDataCache;
-import com.project.whalearc.market.service.MomentumUniverse;
+import com.project.whalearc.market.service.MomentumUniverses;
 import com.project.whalearc.strategy.dto.BacktestRequest;
 import com.project.whalearc.strategy.dto.BacktestResponse;
 import lombok.RequiredArgsConstructor;
@@ -36,8 +37,23 @@ import java.util.TreeMap;
 @RequiredArgsConstructor
 public class MomentumRotationBacktestService {
 
-    private final MomentumDataCache momentumDataCache;   // 디스크 영구 캐시(백그라운드 워밍) — 버스트 429 회피
+    private final MomentumDataCache momentumDataCache;   // 미국주식 디스크 영구 캐시(백그라운드 워밍) — 버스트 429 회피
+    private final BacktestDataProvider backtestDataProvider;   // 비-US 자산군(ETF·한국주식·코인) 일봉 온디맨드 조회
     private final ExchangeRateService exchangeRateService;
+
+    /** 자산군별 일봉 조회 — 미국주식은 사전워밍 디스크 캐시(빠름), 그 외는 백테스트 데이터 프로바이더. */
+    private List<CandlestickResponse> fetchDaily(String symbol, String assetType, String fetchStart, String reqEnd) {
+        if ("US_STOCK".equalsIgnoreCase(assetType)) {
+            List<CandlestickResponse> c = momentumDataCache.get(symbol);
+            if (c != null && !c.isEmpty()) return c;
+        }
+        try {
+            return backtestDataProvider.getBacktestCandles(symbol, assetType, fetchStart, reqEnd, true);
+        } catch (Exception e) {
+            log.debug("모멘텀 일봉 조회 실패: {} ({}) — {}", symbol, assetType, e.getMessage());
+            return List.of();
+        }
+    }
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -58,27 +74,35 @@ public class MomentumRotationBacktestService {
                 + (req.getSlippagePercent() != null ? req.getSlippagePercent() / 100.0 : 0.0);
         double initialCapitalKrw = req.getInitialCapital();
 
+        // 자산군(US_STOCK·ETF·STOCK 한국·CRYPTO) — 유니버스·레짐 벤치마크·통화를 결정.
+        String ac = MomentumUniverses.normalize(req.getMomentumAssetType());
+        boolean usd = MomentumUniverses.isUsd(ac);
+        String benchSym = MomentumUniverses.regimeSymbol(ac);
+        String benchAc = MomentumUniverses.regimeAssetType(ac);
         List<String> universe = (req.getUniverse() != null && !req.getUniverse().isEmpty())
-                ? req.getUniverse() : MomentumUniverse.symbols();
+                ? req.getUniverse() : MomentumUniverses.defaultUniverse(ac);
 
         String reqStart = req.getStartDate();
         String reqEnd = req.getEndDate();
         String fetchStart = LocalDate.parse(reqStart).minusDays(FETCH_LEAD_DAYS).format(DATE_FMT);
 
-        // ── 1) 디스크 영구 캐시에서 SPY + 유니버스 일봉 로드 (백그라운드에서 천천히 워밍됨 → 버스트 429 회피) ──
+        // ── 1) 레짐 벤치마크 + 유니버스 일봉 로드 (미국주식=사전워밍 디스크 캐시, 그 외=온디맨드) ──
         LocalDate fetchStartD = LocalDate.parse(fetchStart);
         LocalDate reqEndD = LocalDate.parse(reqEnd);
-        List<CandlestickResponse> spy = clip(momentumDataCache.get(MomentumUniverse.SPY_SYMBOL), fetchStartD, reqEndD);
+        List<CandlestickResponse> spy = clip(fetchDaily(benchSym, benchAc, fetchStart, reqEnd), fetchStartD, reqEndD);
         if (spy.size() < lookback + 30) {
-            momentumDataCache.triggerWarmAsync();   // 캐시 워밍 시작(이미 진행 중이면 무시)
-            long left = momentumDataCache.staleCount();
-            throw new IllegalArgumentException("미국주식 일봉을 준비 중입니다(백그라운드 캐시 워밍, 종목당 ~2.5초로 천천히 수집). "
-                    + (left > 0 ? "남은 종목 약 " + left + "개 — " : "") + "수 분 후 다시 시도해주세요. (한 번 받아두면 이후엔 즉시 실행됩니다)");
+            if ("US_STOCK".equals(ac)) {
+                momentumDataCache.triggerWarmAsync();   // 캐시 워밍 시작(이미 진행 중이면 무시)
+                long left = momentumDataCache.staleCount();
+                throw new IllegalArgumentException("미국주식 일봉을 준비 중입니다(백그라운드 캐시 워밍, 종목당 ~2.5초로 천천히 수집). "
+                        + (left > 0 ? "남은 종목 약 " + left + "개 — " : "") + "수 분 후 다시 시도해주세요. (한 번 받아두면 이후엔 즉시 실행됩니다)");
+            }
+            throw new IllegalArgumentException(MomentumUniverses.label(ac) + " 벤치마크(" + benchSym + ") 일봉이 부족합니다. 기간을 줄이거나 잠시 후 다시 시도해주세요.");
         }
         Map<String, List<CandlestickResponse>> raw = new HashMap<>();
         for (String sym : universe) {
-            List<CandlestickResponse> c = momentumDataCache.get(sym);
-            if (!c.isEmpty()) raw.put(sym, c);
+            List<CandlestickResponse> c = fetchDaily(sym, ac, fetchStart, reqEnd);
+            if (c != null && !c.isEmpty()) raw.put(sym, c);
         }
 
         // ── 2) 마스터 거래일축 = SPY 거래일 ──
@@ -124,10 +148,10 @@ public class MomentumRotationBacktestService {
             throw new IllegalArgumentException("모멘텀 계산에 필요한 과거 데이터가 부족합니다. 시작일을 늦추거나 lookback을 줄이세요.");
         }
 
-        // ── 4) USD 시뮬레이션 ──
-        double usdKrw = exchangeRateService.getUsdKrwRate();
-        if (usdKrw <= 0) usdKrw = 1400;
-        double initialCapital = initialCapitalKrw / usdKrw;   // USD 단위
+        // ── 4) 시뮬레이션 (미국주식·ETF=USD, 한국주식·코인=KRW) ──
+        double usdKrw = usd ? exchangeRateService.getUsdKrwRate() : 1.0;
+        if (usd && usdKrw <= 0) usdKrw = 1400;
+        double initialCapital = usd ? initialCapitalKrw / usdKrw : initialCapitalKrw;   // USD면 환산, KRW면 그대로
         double cash = initialCapital;
         Map<String, Position> holdings = new HashMap<>();
 
@@ -182,6 +206,12 @@ public class MomentumRotationBacktestService {
             prevEquity = equity;
         }
 
+        // 백테스트 종료 시 잔존 보유분을 마지막 가격에 강제 청산 — 승률·ProfitFactor·avgWin/avgLoss 통계에
+        // 종료 시점 보유 종목(보통 topN개)의 실현손익까지 반영한다(다른 엔진의 종료 강제청산 규약과 일치).
+        for (String sym : new ArrayList<>(holdings.keySet())) {
+            cash = sell(sym, holdings.get(sym).shares, n - 1, dates[n - 1], cost, cash, holdings, ffillClose, trades, winAmts, lossAmts, "백테스트 종료 청산");
+        }
+
         // ── 5) 최종 평가 + 지표 ──
         double finalValue = cash + holdingsValue(holdings, ffillClose, n - 1);
         double totalReturnRate = (finalValue / initialCapital - 1) * 100;
@@ -202,8 +232,8 @@ public class MomentumRotationBacktestService {
 
         return BacktestResponse.builder()
                 .strategyId(req.getStrategyId())
-                .strategyName(req.getStrategyName() != null ? req.getStrategyName() : "미국주식 모멘텀 Top" + topN)
-                .stockCode("US_MOMENTUM_TOP" + topN).stockName("미국주식 모멘텀 로테이션")
+                .strategyName(req.getStrategyName() != null ? req.getStrategyName() : MomentumUniverses.label(ac) + " 모멘텀 Top" + topN)
+                .stockCode("MOMENTUM_TOP" + topN).stockName(MomentumUniverses.label(ac) + " 모멘텀 로테이션")
                 .startDate(reqStart).endDate(reqEnd)
                 .initialCapital(initialCapital).finalValue(finalValue)
                 .totalReturn(finalValue - initialCapital).totalReturnRate(round2(totalReturnRate))
@@ -214,7 +244,7 @@ public class MomentumRotationBacktestService {
                 .avgWin(round2(avgWin)).avgLoss(round2(avgLoss))
                 .dailyReturns(dailyReturns).equityCurve(equityCurve).drawdownCurve(drawdownCurve).trades(trades)
                 .buyHoldReturnRate(round2(buyHoldReturnRate)).buyHoldCurve(buyHoldCurve)
-                .currency("USD").exchangeRate(usdKrw)
+                .currency(usd ? "USD" : "KRW").exchangeRate(usd ? usdKrw : 1.0)
                 .rotationHistory(rotationHistory)
                 .build();
     }
@@ -256,7 +286,9 @@ public class MomentumRotationBacktestService {
             } else if (diffVal < 0 && held) {
                 double execPrice = price * (1 - cost);
                 double sellShares = Math.min(pos.shares, (-diffVal) / execPrice);
-                if (sellShares > 0) cash = sellAt(sym, sellShares, execPrice, i, date, cash, holdings, trades, winAmts, lossAmts, "비중 조정");
+                // 비중 조정 트림은 재량 청산이 아니므로 승률·ProfitFactor·손익비 통계에서 제외(거래내역엔 투명 기록).
+                // 단일자산 simulateRebalance() 경로와 일관성 유지.
+                if (sellShares > 0) cash = sellAt(sym, sellShares, execPrice, i, date, cash, holdings, trades, winAmts, lossAmts, "비중 조정", false);
             }
         }
         return cash;
@@ -285,12 +317,13 @@ public class MomentumRotationBacktestService {
         double[] p = ffill.get(sym);
         double price = (p != null && i < p.length && !Double.isNaN(p[i])) ? p[i] : 0;
         if (price <= 0) { holdings.remove(sym); return cash; }   // 가격 결측 → 장부상 제거(평가 0)
-        return sellAt(sym, shares, price * (1 - cost), i, date, cash, holdings, trades, winAmts, lossAmts, reason);
+        return sellAt(sym, shares, price * (1 - cost), i, date, cash, holdings, trades, winAmts, lossAmts, reason, true);
     }
 
+    // countStats=true: 전량 청산(로테이션 탈락/종료)만 승률·손익 통계에 적립. 비중 조정 트림은 false로 제외.
     private double sellAt(String sym, double shares, double execPrice, int i, LocalDate date, double cash,
                           Map<String, Position> holdings, List<BacktestResponse.TradeDto> trades,
-                          List<Double> winAmts, List<Double> lossAmts, String reason) {
+                          List<Double> winAmts, List<Double> lossAmts, String reason, boolean countStats) {
         Position pos = holdings.get(sym);
         if (pos == null || shares <= 0) return cash;
         shares = Math.min(shares, pos.shares);
@@ -299,7 +332,9 @@ public class MomentumRotationBacktestService {
         cash += proceeds;
         pos.shares -= shares;
         if (pos.shares <= 1e-9) holdings.remove(sym);
-        if (pnl >= 0) winAmts.add(pnl); else lossAmts.add(-pnl);
+        // 본전(pnl==0)은 승/패 어느 풀에도 넣지 않는다 — 최종 집계가 w>0만 profitable로 세므로,
+        // winAmts에 0을 넣으면 totalTrades(=profitable+losing)에서 누락돼 건수가 어긋난다. simulate() 규약과 일치.
+        if (countStats) { if (pnl > 0) winAmts.add(pnl); else if (pnl < 0) lossAmts.add(-pnl); }
         trades.add(BacktestResponse.TradeDto.builder().date(date.format(DATE_FMT)).type("SELL")
                 .price(round4(execPrice)).quantity(round4(shares)).pnl(round2(pnl))
                 .pnlPercent(pos.avgCost > 0 ? round2((execPrice / pos.avgCost - 1) * 100) : 0)

@@ -57,7 +57,7 @@ class BacktestLeverageShortPyramidTest {
         req.setEntryConditions(entry);
         req.setExitConditions(exit);
 
-        BacktestService svc = new BacktestService(null, null, null, null, null, null, null);
+        BacktestService svc = new BacktestService(null, null, null, null, null, null, null, null, null);
         Method m = BacktestService.class.getDeclaredMethod(
                 "simulate", String.class, String.class, List.class, List.class,
                 List.class, Map.class, int.class, BacktestRequest.class, String.class,

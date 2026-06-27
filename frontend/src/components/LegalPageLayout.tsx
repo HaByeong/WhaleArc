@@ -38,7 +38,7 @@ const LegalPageLayout = ({ title, updatedDate, children }: LegalPageLayoutProps)
               <span className="text-slate-700">|</span>
               <Link to="/disclaimer" className="hover:text-white transition-colors">투자 면책 고지</Link>
             </div>
-            <p className="text-xs text-slate-600 mt-4">&copy; 2025 WhaleArc. All rights reserved.</p>
+            <p className="text-xs text-slate-600 mt-4">&copy; 2026 WhaleArc. All rights reserved.</p>
           </div>
         </div>
       </div>

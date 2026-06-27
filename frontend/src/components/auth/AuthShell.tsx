@@ -23,7 +23,7 @@ const panelStyle: React.CSSProperties = {
 
 /** 입력 필드 공용 클래스 (글로우 포커스 링) */
 export const AUTH_INPUT =
-  'w-full rounded-xl px-4 py-3 text-[15px] text-white placeholder-white/30 transition-colors ' +
+  'w-full rounded-xl px-4 py-3 text-[16px] text-white placeholder-white/30 transition-colors ' +
   'bg-white/[0.04] border border-white/10 focus:outline-none focus:border-[#5b9dff]/70 ' +
   'focus:ring-2 focus:ring-[#5b9dff]/25';
 
@@ -66,13 +66,13 @@ export function AuthHero({
       </Link>
       {badge && <div className="mb-3">{badge}</div>}
       <h1 className="whalearc-text text-3xl font-extrabold tracking-tighter md:text-4xl">{title}</h1>
-      {subtitle && <p className="mt-2 break-keep text-[15px] text-white/70">{subtitle}</p>}
+      {subtitle && <p className="mt-2 break-keep text-[16px] text-white/70">{subtitle}</p>}
       {/* note: 데스크톱에선 한 줄로, 좁은 화면에선 단어 단위로만 줄바꿈 */}
       {note && <p className="mt-2 break-keep px-4 text-sm text-white/45 md:whitespace-nowrap">{note}</p>}
       {connectors && connectors.length > 0 && (
         <div className="mt-5 flex items-center justify-center gap-2">
           {connectors.map((name) => (
-            <span key={name} className="rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-1 text-[11px] text-white/45">
+            <span key={name} className="rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-1 text-[12px] text-white/45">
               {name}
             </span>
           ))}
@@ -128,7 +128,7 @@ export function PrimaryButton({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[15px] font-semibold text-white transition-transform duration-200 hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`inline-flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[16px] font-semibold text-white transition-transform duration-200 hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       style={{
         background: 'linear-gradient(180deg,#4d8aff,#2c6fe6 62%,#2257c8)',
         border: '1px solid rgba(140,190,255,.5)',

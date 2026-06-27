@@ -26,6 +26,8 @@ const RealtimeChart = ({ symbol, price, className = '', isDark = false }: Realti
   const prevIntervalRef = useRef<string>('');
   const [interval, setInterval] = useState('10m');
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -103,6 +105,7 @@ const RealtimeChart = ({ symbol, price, className = '', isDark = false }: Realti
       chartRef.current = null;
       seriesRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isDark는 최초 생성 색상에만 사용; deps에 넣으면 테마 토글마다 차트 전체가 재생성되어 의도적으로 제외
   }, []);
 
   useEffect(() => {
@@ -111,6 +114,7 @@ const RealtimeChart = ({ symbol, price, className = '', isDark = false }: Realti
     prevIntervalRef.current = interval;
     dataRef.current = [];
     setHistoryLoaded(false);
+    setLoadError(false);
     if (seriesRef.current) seriesRef.current.setData([]);
 
     marketService.getCandlesticks(symbol, interval)
@@ -121,13 +125,19 @@ const RealtimeChart = ({ symbol, price, className = '', isDark = false }: Realti
           if (acc.length === 0 || acc[acc.length - 1].time !== item.time) acc.push(item);
           return acc;
         }, []);
+        // 이력이 0건이면 실시간 점만 외롭게 찍히는 깨진 차트가 되므로 에러 상태로 처리(historyLoaded 비활성 유지).
+        if (uniqueData.length === 0) {
+          setLoadError(true);
+          return;
+        }
         dataRef.current = uniqueData;
         seriesRef.current.setData(uniqueData);
         chartRef.current?.timeScale().scrollToRealTime();
         setHistoryLoaded(true);
       })
-      .catch(() => setHistoryLoaded(true));
-  }, [symbol, interval]);
+      // 실패 시 historyLoaded를 켜지 않아(실시간 점 추가 차단) 빈 차트에 점 하나만 찍히지 않게 하고, 오버레이로 안내.
+      .catch(() => setLoadError(true));
+  }, [symbol, interval, retryNonce]);
 
   useEffect(() => {
     if (!seriesRef.current || !historyLoaded || !price || price === 0) return;
@@ -141,6 +151,7 @@ const RealtimeChart = ({ symbol, price, className = '', isDark = false }: Realti
       const forcedTime = ((lastPoint.time as number) + 1) as Time;
       const forcedPoint: AreaData<Time> = { time: forcedTime, value: price };
       dataRef.current.push(forcedPoint);
+      if (dataRef.current.length > 2000) dataRef.current = dataRef.current.slice(-2000);
       seriesRef.current.update(forcedPoint);
       return;
     } else {
@@ -172,13 +183,24 @@ const RealtimeChart = ({ symbol, price, className = '', isDark = false }: Realti
         </div>
         <div className="flex items-center space-x-1.5">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-          <span className={`text-[10px] font-medium ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>LIVE</span>
+          <span className={`text-[11px] font-medium ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>LIVE</span>
         </div>
       </div>
 
       {/* 차트 */}
       <div className="relative">
         <div ref={containerRef} className={`rounded-xl overflow-hidden border ${isDark ? 'border-white/[0.06]' : 'border-gray-100'}`} />
+        {loadError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-black/40 backdrop-blur-sm">
+            <span className={`text-[13px] ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>데이터를 불러오지 못했어요</span>
+            <button
+              onClick={() => { prevSymbolRef.current = ''; setLoadError(false); setRetryNonce((n) => n + 1); }}
+              className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-whale-action text-white hover:opacity-90"
+            >
+              다시 시도
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

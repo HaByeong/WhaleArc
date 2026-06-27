@@ -51,7 +51,7 @@ const SelectCard = ({ selected, img, label, whale, desc, onClick }: { selected: 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
           <span className="font-bold text-sm" style={{ color: selected ? 'var(--ci-sonar)' : INK1 }}>{label}</span>
-          <span className="text-[11px] italic" style={{ color: INK3 }}>{whale}</span>
+          <span className="text-[12px] italic" style={{ color: INK3 }}>{whale}</span>
         </div>
         <div className="text-xs mt-1" style={{ color: INK2 }}>{desc}</div>
       </div>
@@ -178,15 +178,27 @@ const UserPage = () => {
   };
 
   const saveFavorites = (next: string[]) => {
+    const prev = favoriteAssets;
     setFavoriteAssets(next);
-    userService.saveUserInfo({ favoriteAssets: next }).catch(() => {});
+    userService.saveUserInfo({ favoriteAssets: next }).catch(() => {
+      // 즉시저장 실패: 낙관적 업데이트를 직전 상태로 롤백하고 안내
+      setFavoriteAssets(prev);
+      setSaveMessage({ type: 'error', text: '관심 종목 저장에 실패했어요. 잠시 후 다시 시도해주세요.' });
+    });
   };
 
   const addAsset = (asset: string) => {
     const normalized = asset.toUpperCase().trim();
-    if (normalized && !favoriteAssets.includes(normalized) && favoriteAssets.length < 20) {
-      saveFavorites([...favoriteAssets, normalized]);
+    if (!normalized) return;
+    if (favoriteAssets.includes(normalized)) {
+      setCustomAsset('');
+      return;
     }
+    if (favoriteAssets.length >= 20) {
+      setSaveMessage({ type: 'error', text: '관심 종목은 최대 20개까지 추가할 수 있어요.' });
+      return;
+    }
+    saveFavorites([...favoriteAssets, normalized]);
     setCustomAsset('');
   };
 
@@ -208,9 +220,9 @@ const UserPage = () => {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full" style={{ background: 'rgba(239,77,77,.12)', border: '1px solid rgba(239,77,77,.28)' }}>
             <svg className="w-7 h-7" style={{ color: '#ef4d4d' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           </div>
-          <h2 className="text-[18px] font-bold">데이터를 불러오지 못했어요</h2>
-          <p className="mt-2 text-[13px]" style={{ color: INK2 }}>{error}</p>
-          <button onClick={() => window.location.reload()} className="mt-5 rounded-lg px-5 py-2.5 text-[13px] font-semibold" style={{ background: 'rgba(91,157,255,.12)', border: '1px solid rgba(91,157,255,.32)', color: SONAR }}>다시 시도</button>
+          <h2 className="text-[19.5px] font-bold">데이터를 불러오지 못했어요</h2>
+          <p className="mt-2 text-[14px]" style={{ color: INK2 }}>{error}</p>
+          <button onClick={() => window.location.reload()} className="mt-5 rounded-lg px-5 py-2.5 text-[14px] font-semibold" style={{ background: 'rgba(91,157,255,.12)', border: '1px solid rgba(91,157,255,.32)', color: SONAR }}>다시 시도</button>
         </div>
       </HelmShell>
     );
@@ -274,7 +286,7 @@ const UserPage = () => {
 
                   <div>
                     <label htmlFor="edit-name" className="block text-sm font-medium mb-2" style={{ color: INK2 }}>닉네임</label>
-                    <input id="edit-name" type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className={DARK_INPUT} placeholder="닉네임을 입력하세요" maxLength={50} />
+                    <input id="edit-name" type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className={DARK_INPUT} placeholder="닉네임을 입력하세요" maxLength={12} />
                     <p className="mt-1 text-xs" style={{ color: INK3 }}>랭킹 등에 표시되는 이름입니다</p>
                   </div>
 
@@ -348,7 +360,7 @@ const UserPage = () => {
                     ))}
                   </div>
                 )}
-                {favoriteAssets.length > 0 && <p className="mt-2 text-[11px]" style={{ color: INK3 }}>* 관심 종목은 선택 즉시 자동 저장됩니다</p>}
+                {favoriteAssets.length > 0 && <p className="mt-2 text-[12px]" style={{ color: INK3 }}>* 관심 종목은 선택 즉시 자동 저장됩니다</p>}
               </div>
             </div>
 

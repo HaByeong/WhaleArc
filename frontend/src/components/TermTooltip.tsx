@@ -113,7 +113,7 @@ export const Term = ({ k, children, className = '' }: { k: string; children?: Re
           <span className="block text-xs font-bold text-whale-dark mb-1">{entry.title}</span>
           <span className="block text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{entry.desc}</span>
           {entry.example && (
-            <span className="block text-[11px] text-whale-light mt-1.5 pt-1.5 border-t border-gray-100 leading-relaxed">{entry.example}</span>
+            <span className="block text-[12px] text-whale-light mt-1.5 pt-1.5 border-t border-gray-100 leading-relaxed">{entry.example}</span>
           )}
           <span className={`absolute left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-whale-light/20 rotate-45 ${arrowPos === 'top' ? 'bottom-[-5px] border-r border-b' : 'top-[-5px] border-l border-t'}`} />
         </span>

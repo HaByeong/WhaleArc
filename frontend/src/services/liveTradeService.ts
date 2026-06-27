@@ -42,7 +42,8 @@ export interface Deployment {
   marketType?: MarketType;
   leverage?: number;
   status: DeploymentStatus;
-  allocatedCash: number;
+  allocatedCash: number;           // baseCurrency 단위
+  baseCurrency?: string;           // 할당금액 기초통화: KRW/USD/USDT (레거시는 KRW)
   stopLossPct?: number;
   takeProfitPct?: number;
   trailingStopPct?: number;

@@ -6,8 +6,10 @@ import Toast, { type ToastItem } from '../components/Toast';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { formatAmountInput, parseAmountInput } from '../utils/currency';
+import { marketService } from '../services/marketService';
 import { strategyService, type Strategy, type BacktestHistoryItem } from '../services/strategyService';
-import { PRESET_STRATEGIES, type PresetStrategy, TURTLE_PRESET_ID, TURTLE_DEFAULTS, buildTurtleConditions, type TurtleParams, MOMENTUM_PRESET_ID, MOMENTUM_DEFAULTS, type MomentumParams } from '../data/presetStrategies';
+import { PRESET_STRATEGIES, type PresetStrategy, TURTLE_PRESET_ID, TURTLE_DEFAULTS, buildTurtleConditions, type TurtleParams, MOMENTUM_PRESET_ID, MOMENTUM_DEFAULTS, type MomentumParams, MOMENTUM_ASSET_META, type MomentumAssetType } from '../data/presetStrategies';
 import {
   liveTradeService,
   type Deployment,
@@ -21,6 +23,25 @@ const formatKRW = (n?: number) =>
 
 const formatNum = (n?: number, digits = 4) =>
   n === undefined || n === null ? '-' : new Intl.NumberFormat('ko-KR', { maximumFractionDigits: digits }).format(n);
+
+// 기초통화 금액 표기: KRW=₩, USD=$, USDT=금액+USDT
+const fmtNative = (amt?: number, ccy?: string): string => {
+  const a = amt ?? 0;
+  const c = ccy || 'KRW';
+  if (c === 'KRW') return `₩${new Intl.NumberFormat('ko-KR').format(Math.round(a))}`;
+  if (c === 'USD') return `$${new Intl.NumberFormat('en-US').format(a)}`;
+  return `${new Intl.NumberFormat('en-US').format(a)} ${c}`; // USDT 등
+};
+// 실거래 자금 기초통화 결정 — 프론트 모달 미리보기용(백엔드 resolveBaseCurrency와 동일 규칙). 모의는 KRW.
+const resolveBaseCcy = (isLive: boolean, brokerType: string, assetType?: string): string => {
+  if (!isLive) return 'KRW';
+  if (brokerType === 'BITGET') return 'USDT';
+  if (assetType === 'US_STOCK' || assetType === 'ETF') return 'USD';
+  return 'KRW';
+};
+
+// 전략 드롭다운 난이도순 정렬(초급→중급→고급). 같은 난이도 내 기존 순서 유지(안정 정렬).
+const DIFF_ORDER: Record<string, number> = { '초급': 0, '중급': 1, '고급': 2 };
 
 
 const INTERVAL_LABELS: Record<string, string> = {
@@ -178,7 +199,8 @@ const AutoTradePage = () => {
   const isLive = !isVirt;                 // 일반 섹션=실거래(실제 돈), /virt=모의(가상자금)
   const modeLabel = isLive ? '실거래' : '모의';
   const { isDark } = useTheme();
-  const { session, canAutoTrade, onboardingDone } = useAuth();
+  const { session, role, canAutoTrade, onboardingDone } = useAuth();
+  const isAdmin = role === 'ADMIN';   // 전역 킬스위치 POST는 운영자 전용(백엔드 403). 비운영자에겐 미노출.
   const userName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
 
   const [pageLoading, setPageLoading] = useState(true);
@@ -203,6 +225,10 @@ const AutoTradePage = () => {
   const [fromBacktest, setFromBacktest] = useState<string | null>(null);   // 백테스트 딥링크로 가져온 전략명(도착 안내용)
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [creating, setCreating] = useState(false);
+  const [usdKrw, setUsdKrw] = useState(1380);   // 예상 KRW 표시·환산용 환율(USDT/KRW는 USD/KRW로 근사)
+  // 배포 할당금액을 KRW로 환산(카드 수익률·합계용). 네이티브(USD/USDT)는 환율 적용.
+  const allocKrw = (d: Deployment) => (d.baseCurrency && d.baseCurrency !== 'KRW')
+    ? (d.allocatedCash || 0) * usdKrw : (d.allocatedCash || 0);
   const [form, setForm] = useState({
     strategyId: '',
     accountKind: 'PAPER',
@@ -265,10 +291,27 @@ const AutoTradePage = () => {
     strategyService.getBacktestHistory().then(setBacktestHistory).catch(() => {});
   }, []);
 
-  // 백테스트 → "자동매매 시작" 딥링크(?deploy=<전략id>): 그 전략이 선택된 채로 생성 모달 자동 오픈
+  // 환율 로드(예상 KRW 표시·환산용). 실패해도 폴백(1380) 사용.
   useEffect(() => {
+    marketService.getExchangeRate().then(r => { if (r?.usdKrw > 0) setUsdKrw(r.usdKrw); }).catch(() => {});
+  }, []);
+
+  // 백테스트 → "자동매매 시작" 딥링크(?deploy=<전략id>): 그 전략이 선택된 채로 생성 모달 자동 오픈.
+  // 등급 게이트(canAutoTrade)가 해결된 뒤에만 처리해, 잠긴 실거래에서 전략 fetch/토스트/모달이 새지 않게 한다.
+  const deployHandledRef = useRef(false);
+  useEffect(() => {
+    if (deployHandledRef.current) return;
     const deployId = new URLSearchParams(window.location.search).get('deploy');
-    if (!deployId) return;
+    if (!deployId) { deployHandledRef.current = true; return; }
+    if (isLive) {
+      if (onboardingDone === null) return;            // 등급 로딩 중 — 다음 렌더에서 재평가
+      if (!canAutoTrade) {                              // 잠김: 딥링크만 소비하고 모달은 열지 않음
+        deployHandledRef.current = true;
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
+    }
+    deployHandledRef.current = true;
     (async () => {
       let strats = strategies;
       if (strats.length === 0) {
@@ -289,9 +332,9 @@ const AutoTradePage = () => {
       setShowCreate(true);
       window.history.replaceState({}, '', window.location.pathname);   // 새로고침 시 재오픈 방지
     })();
-    // 마운트 시 1회만 (deploy 파라미터 처리)
+    // deployHandledRef로 1회만 실행. 게이트 상태(canAutoTrade/onboardingDone)가 풀리면 재평가하기 위해 deps에 포함.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isLive, canAutoTrade, onboardingDone]);
 
   // 실행 로그 lazy 로드 (이미 로드됐으면 토글만)
   const loadOrders = async (deploymentId: string) => {
@@ -342,6 +385,14 @@ const AutoTradePage = () => {
   };
 
   const allStrategies = [...PRESET_STRATEGIES, ...strategies];
+  // 모멘텀 실거래 브로커는 자산군이 결정: 코인=Bitget, 주식류(미국·ETF·한국)=KIS.
+  const momentumBroker = momentum.assetType === 'CRYPTO' ? 'BITGET' : 'KIS';
+  const isMomentumForm = form.strategyId === MOMENTUM_PRESET_ID;
+  // 생성 모달 기초통화(미리보기) — 백엔드 resolveBaseCurrency와 동일 규칙(전략 assetType까지 반영). 모의=KRW.
+  const modalStrat = allStrategies.find(s => s.id === form.strategyId);
+  const modalAssetType = isMomentumForm ? momentum.assetType : (form.assetType || modalStrat?.assetType);
+  const modalCcy = resolveBaseCcy(isLive, isMomentumForm ? momentumBroker : form.brokerType, modalAssetType);
+  const modalAllocNum = Number(parseAmountInput(form.allocatedCash)) || 0;
 
   const onSelectStrategy = (strategyId: string) => {
     const s = allStrategies.find(st => st.id === strategyId);
@@ -351,8 +402,8 @@ const AutoTradePage = () => {
       strategyId,
       targetAssetsText: s ? s.targetAssets.join(', ') : prev.targetAssetsText,
       assetType: s ? (s.assetType === 'MIXED' ? '' : s.assetType) : prev.assetType,
-      // 모멘텀 로테이션 실거래는 KIS(해외주식) 고정
-      brokerType: isMomentumSel ? 'KIS' : prev.brokerType,
+      // 모멘텀 로테이션 실거래 브로커는 자산군이 결정(코인=Bitget, 그 외=KIS)
+      brokerType: isMomentumSel ? momentumBroker : prev.brokerType,
     }));
   };
 
@@ -378,8 +429,8 @@ const AutoTradePage = () => {
       || pctErr('익절률', form.takeProfitPct, false);
     if (riskError) { pushToast('error', '리스크 값 확인', riskError); return; }
 
-    // 선물 레버리지 검증 (Bitget 선물에서만)
-    if (isLive && form.brokerType === 'BITGET' && form.marketType === 'FUTURES') {
+    // 선물 레버리지 검증 (Bitget 선물에서만 — 모멘텀은 항상 현물이라 제외)
+    if (isLive && form.brokerType === 'BITGET' && form.marketType === 'FUTURES' && form.strategyId !== MOMENTUM_PRESET_ID) {
       const lev = Number(form.leverage);
       if (!Number.isInteger(lev) || lev < 1 || lev > 10) {
         pushToast('error', '레버리지 확인', '레버리지는 1~10배의 정수로 입력해주세요.');
@@ -402,7 +453,7 @@ const AutoTradePage = () => {
       const turtleCond = isTurtle ? buildTurtleConditions(turtle) : null;
       await liveTradeService.createDeployment(isMomentum
         ? {
-            // 모멘텀 로테이션: 지표-조건 없이 전용 엔진. 실거래는 KIS(해외주식)·US_STOCK 고정, 종목은 첫 로테이션이 채움.
+            // 모멘텀 로테이션: 지표-조건 없이 전용 엔진. 자산군(assetType)으로 유니버스·레짐·브로커 결정, 종목은 첫 로테이션이 채움.
             strategyName: selected?.name,
             deploymentType: 'MOMENTUM_ROTATION',
             rotationTopN: momentum.topN,
@@ -411,10 +462,10 @@ const AutoTradePage = () => {
             rotationRegimeFloor: momentum.regimeFloor,
             rotationFullInvest: momentum.fullInvest,
             allocatedCash,
-            assetType: 'US_STOCK',
+            assetType: momentum.assetType,
             interval: '1d',
             accountMode: isLive ? 'LIVE' : 'PAPER',
-            brokerType: isLive ? 'KIS' : 'MOCK',
+            brokerType: isLive ? momentumBroker : 'MOCK',
             stopLossPct: form.stopLossPct ? Number(form.stopLossPct) : undefined,
             takeProfitPct: form.takeProfitPct ? Number(form.takeProfitPct) : undefined,
             trailingStopPct: form.trailingStopPct ? Number(form.trailingStopPct) : undefined,
@@ -549,7 +600,7 @@ const AutoTradePage = () => {
   const sectionDeployments = deployments.filter(d => (isLive ? d.accountMode === 'LIVE' : d.accountMode === 'PAPER'));
   // AUTOPILOT 관제 덱 집계 (이 섹션 기준)
   const runningCount = sectionDeployments.filter(d => d.status === 'RUNNING').length;
-  const totalAlloc = sectionDeployments.reduce((a, d) => a + (d.allocatedCash || 0), 0) || 1;
+  const totalAlloc = sectionDeployments.reduce((a, d) => a + allocKrw(d), 0) || 1;   // 통화 혼재 → KRW로 합산
   const totalPnl = sectionDeployments.reduce((a, d) => a + (d.realizedPnl || 0), 0);
   const aggPct = (totalPnl / totalAlloc) * 100;          // 할당금 가중 평가손익률
   const todayFills = sectionDeployments.reduce((a, d) => a + (d.todayFilledCount || 0), 0);  // 오늘(KST) 체결 수 합
@@ -639,7 +690,8 @@ const AutoTradePage = () => {
                 <DeckStat label="오늘 체결" value={`${todayFills}회`} mono />
               </div>
             </div>
-            {/* 우 — 전역 킬스위치 */}
+            {/* 우 — 전역 킬스위치 (운영자 전용: POST가 ADMIN만 허용되어 일반 유저에겐 미노출) */}
+            {isAdmin && (
             <div style={{ padding: '24px 26px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14 }}>
               <div className="flex items-center gap-2.5">
                 <span aria-hidden style={{ fontSize: 15 }}>🛑</span>
@@ -659,6 +711,7 @@ const AutoTradePage = () => {
                 </button>
               )}
             </div>
+            )}
           </div>
         </section>
 
@@ -683,8 +736,8 @@ const AutoTradePage = () => {
           <div className="grid gap-[18px]" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
             {sectionDeployments.map(d => {
               const pnlPositive = (d.realizedPnl ?? 0) > 0;
-              const liveReturn = (d.allocatedCash ?? 0) > 0
-                ? ((d.realizedPnl ?? 0) / (d.allocatedCash ?? 1)) * 100 : 0;
+              const liveReturn = allocKrw(d) > 0
+                ? ((d.realizedPnl ?? 0) / allocKrw(d)) * 100 : 0;   // realizedPnl은 KRW → 분모도 KRW
               const liveWinRate = (d.tradeCount ?? 0) > 0
                 ? ((d.winCount ?? 0) / (d.tradeCount ?? 1)) * 100 : null;
               // 백테스트 히스토리에서 이 배포의 전략명과 매칭되는 가장 최근 결과
@@ -726,7 +779,7 @@ const AutoTradePage = () => {
                       {d.deploymentType === 'MOMENTUM_ROTATION'
                         ? <Chip>모멘텀 Top{d.rotationTopN ?? 5} · 월간{d.rotationFullInvest ? ' · 최대활용' : ''}</Chip>
                         : <Chip>{INTERVAL_LABELS[d.interval] ?? d.interval}</Chip>}
-                      <Chip>{isLive ? '실거래' : '모의'} {formatKRW(d.allocatedCash)}</Chip>
+                      <Chip>{isLive ? '실거래' : '모의'} {fmtNative(d.allocatedCash, d.baseCurrency)}{d.baseCurrency && d.baseCurrency !== 'KRW' ? ` (≈${formatKRW(allocKrw(d))})` : ''}</Chip>
                       {isLive && <Chip>{modeBadge}</Chip>}
                       {d.assetType && <Chip>{d.assetType}</Chip>}
                     </div>
@@ -737,7 +790,7 @@ const AutoTradePage = () => {
                         <div className="flex items-center justify-between mb-1.5">
                           <span style={{ fontSize: 10.5, letterSpacing: '.12em', color: 'var(--ci-ink3)', fontWeight: 600 }}>현재 보유 (Top{d.rotationTopN ?? 5})</span>
                           {d.regimeBear != null && (
-                            <span className="rounded-full px-2 py-0.5 text-[10.5px] font-bold"
+                            <span className="rounded-full px-2 py-0.5 text-[11.5px] font-bold"
                               style={d.regimeBear
                                 ? { background: 'rgba(245,158,11,.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,.35)' }
                                 : { background: 'rgba(52,211,153,.13)', color: '#34d399', border: '1px solid rgba(52,211,153,.32)' }}>
@@ -748,7 +801,7 @@ const AutoTradePage = () => {
                         {(d.currentTopHoldings?.length ?? 0) > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {d.currentTopHoldings!.map(sym => (
-                              <span key={sym} className="font-mono rounded-md px-1.5 py-0.5 text-[11px] font-bold"
+                              <span key={sym} className="font-mono rounded-md px-1.5 py-0.5 text-[12px] font-bold"
                                 style={{ background: 'var(--ci-sonar-dim)', color: 'var(--ci-sonar)', border: '1px solid rgba(91,157,255,.25)' }}>{sym}</span>
                             ))}
                           </div>
@@ -766,10 +819,10 @@ const AutoTradePage = () => {
                       {firstRun ? (
                         <div>
                           <div style={{ fontSize: 10.5, letterSpacing: '.14em', color: 'var(--ci-ink3)', fontWeight: 600, marginBottom: 6 }}>{isLive ? '실현손익' : '모의 실현손익'}</div>
-                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-bold" style={{ background: 'var(--ci-sonar-dim)', color: 'var(--ci-sonar)', border: '1px solid rgba(91,157,255,.32)' }}>
+                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12.5px] font-bold" style={{ background: 'var(--ci-sonar-dim)', color: 'var(--ci-sonar)', border: '1px solid rgba(91,157,255,.32)' }}>
                             <span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: 'var(--ci-sonar)' }} />가동 중 · 첫 신호 대기
                           </span>
-                          <div className="text-[11px] leading-snug" style={{ color: 'var(--ci-ink3)', marginTop: 7 }}>첫 거래가 체결되면 손익이 여기 표시됩니다.</div>
+                          <div className="text-[12px] leading-snug" style={{ color: 'var(--ci-ink3)', marginTop: 7 }}>첫 거래가 체결되면 손익이 여기 표시됩니다.</div>
                         </div>
                       ) : (
                       <div>
@@ -817,7 +870,7 @@ const AutoTradePage = () => {
                     const near = ratio >= 0.8;
                     return (
                       <div>
-                        <div className="flex items-center justify-between text-[11px] mb-1">
+                        <div className="flex items-center justify-between text-[12px] mb-1">
                           <span className={subText}>오늘 손익 / 일일 손실한도</span>
                           <span className={`font-semibold ${today < 0 ? 'text-blue-500' : today > 0 ? 'text-red-500' : (isDark ? 'text-slate-300' : 'text-gray-600')}`}>
                             {today > 0 ? '+' : ''}{formatKRW(today)} / -{formatKRW(d.dailyLossLimit)}
@@ -865,8 +918,8 @@ const AutoTradePage = () => {
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                           <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
                         </svg>
-                        <span className={`text-[11px] font-semibold ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>백테스트 예상 vs 실전 성과</span>
-                        <span className={`ml-auto text-[10px] ${subText}`}>백테스트 {matchedBt.stockCode}</span>
+                        <span className={`text-[12px] font-semibold ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>백테스트 예상 vs 실전 성과</span>
+                        <span className={`ml-auto text-[11px] ${subText}`}>백테스트 {matchedBt.stockCode}</span>
                       </div>
                       <div className={`grid grid-cols-3 divide-x ${divBorder}`}>
                         {[
@@ -890,21 +943,21 @@ const AutoTradePage = () => {
                           },
                         ].map(col => (
                           <div key={col.label} className="px-3 py-2.5">
-                            <p className={`text-[10px] mb-2 text-center ${subText}`}>{col.label}</p>
+                            <p className={`text-[11px] mb-2 text-center ${subText}`}>{col.label}</p>
                             <div className="flex flex-col gap-1">
                               <div className="flex items-baseline justify-between gap-1.5">
-                                <span className={`text-[9px] ${subText}`}>백테스트</span>
-                                <span className={`text-[11px] font-medium tabular-nums ${subText}`}>{col.bt}</span>
+                                <span className={`text-[10px] ${subText}`}>백테스트</span>
+                                <span className={`text-[12px] font-medium tabular-nums ${subText}`}>{col.bt}</span>
                               </div>
                               <div className="flex items-baseline justify-between gap-1.5">
-                                <span className={`text-[9px] font-medium ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>실전</span>
-                                <span className={`text-[13.5px] font-bold tabular-nums ${col.liveColor}`}>{col.live}</span>
+                                <span className={`text-[10px] font-medium ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>실전</span>
+                                <span className={`text-[14.5px] font-bold tabular-nums ${col.liveColor}`}>{col.live}</span>
                               </div>
                             </div>
                           </div>
                         ))}
                       </div>
-                      <p className={`px-3 py-1.5 text-[9px] leading-snug ${subText}`} style={{ borderTop: '1px solid var(--ci-line)' }}>
+                      <p className={`px-3 py-1.5 text-[10px] leading-snug ${subText}`} style={{ borderTop: '1px solid var(--ci-line)' }}>
                         백테스트는 전체 기간 누적, 실전은 배포 후 누적이라 기간이 달라 직접 비교가 아닙니다.
                       </p>
                     </div>
@@ -916,7 +969,7 @@ const AutoTradePage = () => {
                       onClick={() => loadOrders(d.id)}
                       aria-expanded={logsOpen}
                       aria-label={`실행 로그 ${logsOpen ? '접기' : '펼치기'}`}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-[11px] font-semibold transition-colors ${isDark ? 'text-slate-300 hover:bg-white/[0.03]' : 'text-gray-600 hover:bg-gray-50'}`}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-[12px] font-semibold transition-colors ${isDark ? 'text-slate-300 hover:bg-white/[0.03]' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
                       <span className="flex items-center gap-1.5">
                         <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -942,15 +995,15 @@ const AutoTradePage = () => {
                                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isFilled ? 'bg-emerald-400' : 'bg-red-400'}`} />
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className={`text-[11px] font-bold ${isBuySide ? 'text-red-500' : 'text-blue-500'}`}>{sideKr(log.side) || (isBuySide ? '매수' : '매도')}</span>
-                                    <span className={`text-[11px] font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>{log.symbol}</span>
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDark ? 'bg-white/[0.06] text-slate-400' : 'bg-gray-100 text-gray-500'}`}>{REASON_LABEL[log.reason] ?? log.reason}</span>
+                                    <span className={`text-[12px] font-bold ${isBuySide ? 'text-red-500' : 'text-blue-500'}`}>{sideKr(log.side) || (isBuySide ? '매수' : '매도')}</span>
+                                    <span className={`text-[12px] font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>{log.symbol}</span>
+                                    <span className={`text-[11px] px-1.5 py-0.5 rounded ${isDark ? 'bg-white/[0.06] text-slate-400' : 'bg-gray-100 text-gray-500'}`}>{REASON_LABEL[log.reason] ?? log.reason}</span>
                                   </div>
-                                  <div className={`text-[10px] mt-0.5 ${subText}`}>
+                                  <div className={`text-[11px] mt-0.5 ${subText}`}>
                                     {formatNum(log.quantity, 4)}개 · {formatKRW(log.price)} · {isFilled ? '체결' : '미체결'}
                                   </div>
                                 </div>
-                                <span className={`text-[10px] shrink-0 ${subText}`}>{formatLogTime(log.createdAt)}</span>
+                                <span className={`text-[11px] shrink-0 ${subText}`}>{formatLogTime(log.createdAt)}</span>
                               </div>
                             );
                           })
@@ -1020,9 +1073,9 @@ const AutoTradePage = () => {
             onClick={e => e.stopPropagation()}
           >
             <div className={`px-6 py-5 border-b ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
-              <div className={`text-[10.5px] font-bold tracking-[.18em] mb-1 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>BEFORE YOU START</div>
-              <h2 className={`text-[18px] font-bold ${isDark ? 'text-white' : 'text-gray-800'}`}>자동매매, 이것만 알고 시작해요</h2>
-              <p className={`text-[12px] mt-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{isLive ? '3분이면 충분합니다. 실제 자금이 오가니 꼭 확인하세요.' : '3분이면 충분합니다. 모의투자라 돈 걱정은 없어요.'}</p>
+              <div className={`text-[11.5px] font-bold tracking-[.18em] mb-1 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>BEFORE YOU START</div>
+              <h2 className={`text-[19.5px] font-bold ${isDark ? 'text-white' : 'text-gray-800'}`}>자동매매, 이것만 알고 시작해요</h2>
+              <p className={`text-[13px] mt-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{isLive ? '3분이면 충분합니다. 실제 자금이 오가니 꼭 확인하세요.' : '3분이면 충분합니다. 모의투자라 돈 걱정은 없어요.'}</p>
             </div>
             <div className="px-6 py-4 space-y-3.5">
               {[
@@ -1054,10 +1107,10 @@ const AutoTradePage = () => {
                 },
               ].map((item, i) => (
                 <div key={i} className={`flex gap-3 rounded-[10px] p-3.5 ${isDark ? 'bg-white/[0.04]' : 'bg-gray-50'}`}>
-                  <span className="text-[22px] shrink-0 mt-0.5">{item.icon}</span>
+                  <span className="text-[24px] shrink-0 mt-0.5">{item.icon}</span>
                   <div>
-                    <div className={`text-[13px] font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>{item.title}</div>
-                    <div className={`text-[11.5px] mt-0.5 leading-relaxed ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{item.body}</div>
+                    <div className={`text-[14px] font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>{item.title}</div>
+                    <div className={`text-[12.5px] mt-0.5 leading-relaxed ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{item.body}</div>
                   </div>
                 </div>
               ))}
@@ -1065,25 +1118,25 @@ const AutoTradePage = () => {
             <div className={`px-6 py-4 border-t ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
               <label className="flex items-center gap-2.5 cursor-pointer mb-1.5">
                 <input type="checkbox" checked={guideChecked} onChange={e => setGuideChecked(e.target.checked)} className="w-4 h-4 rounded accent-blue-500" />
-                <span className={`text-[13px] ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>위 내용을 읽고 이해했습니다</span>
+                <span className={`text-[14px] ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>위 내용을 읽고 이해했습니다</span>
               </label>
               {!guideChecked && (
-                <p className={`mb-3 ml-[26px] text-[11.5px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>시작하려면 위 항목에 체크해 주세요.</p>
+                <p className={`mb-3 ml-[26px] text-[12.5px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>시작하려면 위 항목에 체크해 주세요.</p>
               )}
               <div className="flex gap-2.5">
-                <button onClick={() => setShowGuide(false)} className={`flex-1 rounded-lg py-2.5 text-[13px] font-semibold ${isDark ? 'text-slate-300 border border-white/10 hover:bg-white/5' : 'text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+                <button onClick={() => setShowGuide(false)} className={`flex-1 rounded-lg py-2.5 text-[14px] font-semibold ${isDark ? 'text-slate-300 border border-white/10 hover:bg-white/5' : 'text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
                   나중에
                 </button>
                 <button
                   onClick={() => confirmGuide(guideChecked)}
                   disabled={!guideChecked}
-                  className="flex-[2] rounded-lg py-2.5 text-[13px] font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex-[2] rounded-lg py-2.5 text-[14px] font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ background: guideChecked ? 'linear-gradient(135deg,#3b82f6,#2563eb)' : undefined, border: guideChecked ? 'none' : '1px solid var(--ci-line)' }}
                 >
                   자동매매 시작 →
                 </button>
               </div>
-              <button onClick={() => navigate('/virt/learn?tab=mistakes')} className={`mt-3.5 text-[12px] font-semibold transition-opacity hover:opacity-80 ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>
+              <button onClick={() => navigate('/virt/learn?tab=mistakes')} className={`mt-3.5 text-[13px] font-semibold transition-opacity hover:opacity-80 ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>
                 📚 자동매매가 처음이면 — 학습 노트 '흔한 실수'에서 손절·리스크 더 보기 →
               </button>
             </div>
@@ -1111,7 +1164,7 @@ const AutoTradePage = () => {
             {fromBacktest && (
               <div className="mx-5 mt-4 flex items-start gap-2.5 rounded-xl px-3.5 py-3" style={{ background: 'rgba(63,214,160,.10)', border: '1px solid rgba(63,214,160,.30)' }}>
                 <span style={{ fontSize: 15, lineHeight: '20px' }}>✓</span>
-                <p className="m-0 text-[12.5px] leading-relaxed" style={{ color: isDark ? 'rgba(255,255,255,.85)' : '#0f5132' }}>
+                <p className="m-0 text-[13.5px] leading-relaxed" style={{ color: isDark ? 'rgba(255,255,255,.85)' : '#0f5132' }}>
                   백테스트에서 <b style={{ color: '#3fd6a0' }}>‘{fromBacktest}’</b> 전략을 가져왔어요. 종목·금액·리스크만 확인하고 바로 시작하세요.
                 </p>
               </div>
@@ -1127,7 +1180,7 @@ const AutoTradePage = () => {
                 >
                   <option value="">전략을 선택하세요</option>
                   <optgroup label="기본 제공 전략">
-                    {PRESET_STRATEGIES.map(s => (
+                    {[...PRESET_STRATEGIES].sort((a, b) => (DIFF_ORDER[a.difficulty ?? '초급'] ?? 0) - (DIFF_ORDER[b.difficulty ?? '초급'] ?? 0)).map(s => (
                       <option key={s.id} value={s.id}>{s.name}{s.difficulty ? ` · ${s.difficulty}` : ''}</option>
                     ))}
                   </optgroup>
@@ -1139,7 +1192,7 @@ const AutoTradePage = () => {
                     </optgroup>
                   )}
                 </select>
-                <p className={`text-[11px] mt-1 ${subText}`}>기본 제공 전략은 바로 가동할 수 있고, '전략' 페이지에서 만든 내 전략도 선택할 수 있어요.</p>
+                <p className={`text-[12px] mt-1 ${subText}`}>기본 제공 전략은 바로 가동할 수 있고, '전략' 페이지에서 만든 내 전략도 선택할 수 있어요.</p>
               </div>
 
               {/* 터틀 전용 설정 — 채널 기간·ADX·유닛 (종목별로 조정) */}
@@ -1149,7 +1202,7 @@ const AutoTradePage = () => {
                   <div className="grid grid-cols-2 gap-2">
                     {([['entryPeriod', '진입 채널', 5], ['exitPeriod', '청산 채널', 2], ['adxThreshold', 'ADX 임계', 0], ['maxUnits', '최대 유닛', 1]] as const).map(([k, label, min]) => (
                       <label key={k} className="flex flex-col gap-1">
-                        <span className={`text-[10.5px] ${subText}`}>{label}</span>
+                        <span className={`text-[11.5px] ${subText}`}>{label}</span>
                         <input type="number" min={min} step={1} value={turtle[k]}
                           onChange={e => setTurtle({ ...turtle, [k]: Number(e.target.value) || min })}
                           className={`rounded-lg border px-2 py-1.5 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`} />
@@ -1157,10 +1210,10 @@ const AutoTradePage = () => {
                     ))}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    <button type="button" onClick={() => setTurtle({ ...turtle, entryPeriod: 100, exitPeriod: 30, adxThreshold: 15, maxUnits: 5 })} className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${isDark ? 'border-white/10 text-slate-200' : 'border-gray-300 text-gray-700'}`}>BTC (100/30·ADX15·5유닛)</button>
-                    <button type="button" onClick={() => setTurtle({ ...turtle, entryPeriod: 80, exitPeriod: 40, adxThreshold: 25, maxUnits: 4 })} className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${isDark ? 'border-white/10 text-slate-200' : 'border-gray-300 text-gray-700'}`}>ETH (80/40·ADX25·4유닛)</button>
+                    <button type="button" onClick={() => setTurtle({ ...turtle, entryPeriod: 100, exitPeriod: 30, adxThreshold: 15, maxUnits: 5 })} className={`rounded-md border px-2 py-1 text-[12px] font-semibold ${isDark ? 'border-white/10 text-slate-200' : 'border-gray-300 text-gray-700'}`}>BTC (100/30·ADX15·5유닛)</button>
+                    <button type="button" onClick={() => setTurtle({ ...turtle, entryPeriod: 80, exitPeriod: 40, adxThreshold: 25, maxUnits: 4 })} className={`rounded-md border px-2 py-1 text-[12px] font-semibold ${isDark ? 'border-white/10 text-slate-200' : 'border-gray-300 text-gray-700'}`}>ETH (80/40·ADX25·4유닛)</button>
                   </div>
-                  <p className={`text-[10.5px] mt-1.5 ${subText}`}>롱·숏 양방향 + 피라미딩 자동 구성. 레버리지·트레일링·손절은 아래 항목에서 설정하세요. 숏은 Bitget 선물(FUTURES)에서만 동작합니다.</p>
+                  <p className={`text-[11.5px] mt-1.5 ${subText}`}>롱·숏 양방향 + 피라미딩 자동 구성. 레버리지·트레일링·손절은 아래 항목에서 설정하세요. 숏은 Bitget 선물(FUTURES)에서만 동작합니다.</p>
                 </div>
               )}
 
@@ -1168,15 +1221,36 @@ const AutoTradePage = () => {
               {form.strategyId === MOMENTUM_PRESET_ID && (
                 <div className={`rounded-lg border p-3 ${isDark ? 'border-cyan-400/30 bg-cyan-400/[0.06]' : 'border-cyan-300 bg-cyan-50'}`}>
                   <div className={`text-xs font-bold mb-2 ${isDark ? 'text-cyan-300' : 'text-cyan-700'}`}>📈 모멘텀 Top-N 로테이션 설정</div>
+                  {/* 자산군 선택 — 유니버스·레짐 벤치마크·통화·브로커를 결정 */}
+                  <div className="mb-2">
+                    <span className={`text-[11.5px] ${subText}`}>자산군</span>
+                    <div className="grid grid-cols-4 gap-1 mt-1">
+                      {(['US_STOCK', 'ETF', 'STOCK', 'CRYPTO'] as MomentumAssetType[]).map(ac => {
+                        const active = momentum.assetType === ac;
+                        return (
+                          <button key={ac} type="button"
+                            onClick={() => {
+                              setMomentum({ ...momentum, assetType: ac, lookbackDays: MOMENTUM_ASSET_META[ac].defaultLookback });
+                              setForm(prev => ({ ...prev, brokerType: ac === 'CRYPTO' ? 'BITGET' : 'KIS' }));
+                            }}
+                            className={`rounded-lg border px-2 py-1.5 text-[12px] font-semibold transition ${active
+                              ? (isDark ? 'border-cyan-400 bg-cyan-400/20 text-cyan-200' : 'border-cyan-500 bg-cyan-100 text-cyan-800')
+                              : (isDark ? 'border-white/10 bg-white/[0.03] text-slate-300' : 'border-gray-300 bg-white text-gray-600')}`}>
+                            {MOMENTUM_ASSET_META[ac].label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <label className="flex flex-col gap-1">
-                      <span className={`text-[10.5px] ${subText}`}>보유 종목 수 (top-N)</span>
+                      <span className={`text-[11.5px] ${subText}`}>보유 종목 수 (top-N)</span>
                       <input type="number" min={1} max={20} step={1} value={momentum.topN}
                         onChange={e => setMomentum({ ...momentum, topN: Number(e.target.value) || 1 })}
                         className={`rounded-lg border px-2 py-1.5 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`} />
                     </label>
                     <label className="flex flex-col gap-1">
-                      <span className={`text-[10.5px] ${subText}`}>모멘텀 룩백 (거래일)</span>
+                      <span className={`text-[11.5px] ${subText}`}>모멘텀 룩백 (거래일)</span>
                       <input type="number" min={20} max={500} step={1} value={momentum.lookbackDays}
                         onChange={e => setMomentum({ ...momentum, lookbackDays: Number(e.target.value) || 252 })}
                         className={`rounded-lg border px-2 py-1.5 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`} />
@@ -1185,19 +1259,19 @@ const AutoTradePage = () => {
                   <label className="flex items-center gap-2 mt-2 cursor-pointer">
                     <input type="checkbox" checked={momentum.regimeFilter}
                       onChange={e => setMomentum({ ...momentum, regimeFilter: e.target.checked })} />
-                    <span className={`text-[11px] ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>SPY 200일선 레짐 필터 (약세장에서 노출 ×{momentum.regimeFloor})</span>
+                    <span className={`text-[12px] ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>{MOMENTUM_ASSET_META[momentum.assetType].benchmark} 레짐 필터 (약세장에서 노출 ×{momentum.regimeFloor})</span>
                   </label>
                   <label className="flex items-start gap-2 mt-1.5 cursor-pointer">
                     <input type="checkbox" className="mt-0.5" checked={!!momentum.fullInvest}
                       onChange={e => setMomentum({ ...momentum, fullInvest: e.target.checked })} />
-                    <span className={`text-[11px] ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
+                    <span className={`text-[12px] ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
                       자본 최대 활용 (소액용) — 균등비중 대신 살 수 있는 만큼 매수해 할당금을 최대한 소진.
                       <b className={isDark ? 'text-amber-300' : 'text-amber-600'}> 단 소액이면 싼 종목에 집중</b>돼 검증된 균등비중과 거동이 달라집니다.
                     </span>
                   </label>
-                  <p className={`text-[10.5px] mt-1.5 ${subText}`}>
-                    매월 첫 거래일, 미국 대형주 132종목을 {momentum.lookbackDays}거래일 모멘텀으로 랭킹해 상위 {momentum.topN}종목을 각 {(100 / momentum.topN).toFixed(0)}%씩 보유(양수 모멘텀만, 없으면 현금). KIS 해외주식 1배·월간 리밸런싱.
-                    {isLive ? ' 실거래는 KIS(해외주식)로 고정됩니다.' : ' 모의(가상자금)로 안전하게 검증하세요.'}
+                  <p className={`text-[11.5px] mt-1.5 ${subText}`}>
+                    매월 첫 거래일, {MOMENTUM_ASSET_META[momentum.assetType].label} {MOMENTUM_ASSET_META[momentum.assetType].poolSize}종목을 {momentum.lookbackDays}거래일 모멘텀으로 랭킹해 상위 {momentum.topN}종목을 각 {(100 / momentum.topN).toFixed(0)}%씩 보유(양수 모멘텀만, 없으면 현금). 월간 리밸런싱.
+                    {isLive ? ` 실거래는 ${momentum.assetType === 'CRYPTO' ? 'Bitget(코인)' : 'KIS'}로 자동 연결됩니다.` : ' 모의(가상자금)로 안전하게 검증하세요.'}
                   </p>
                 </div>
               )}
@@ -1206,18 +1280,25 @@ const AutoTradePage = () => {
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>{isLive ? '거래소 (브로커)' : '계좌'}</label>
                 {isLive ? (
                   <>
-                    <select
-                      value={form.brokerType}
-                      onChange={e => setForm(prev => ({ ...prev, brokerType: e.target.value }))}
-                      className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700'}`}
-                    >
-                      <option value="KIS">KIS 한국투자증권 — 국내·미국주식 (실제 자금 ⚠️)</option>
-                      {form.strategyId !== MOMENTUM_PRESET_ID && (
+                    {isMomentumForm ? (
+                      // 모멘텀은 자산군이 브로커를 결정 — 읽기 전용 표시(코인=Bitget, 그 외=KIS)
+                      <div className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                        {momentumBroker === 'BITGET'
+                          ? 'Bitget — 코인 현물 (자산군: 가상자산, 실제 자금 ⚠️)'
+                          : `KIS 한국투자증권 — ${MOMENTUM_ASSET_META[momentum.assetType].label} (실제 자금 ⚠️)`}
+                      </div>
+                    ) : (
+                      <select
+                        value={form.brokerType}
+                        onChange={e => setForm(prev => ({ ...prev, brokerType: e.target.value }))}
+                        className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700'}`}
+                      >
+                        <option value="KIS">KIS 한국투자증권 — 국내·미국주식 (실제 자금 ⚠️)</option>
                         <option value="BITGET">Bitget — 코인 현물·선물 (실제 자금 ⚠️)</option>
-                      )}
-                    </select>
+                      </select>
+                    )}
                     {form.brokerType === 'KIS' ? (
-                      <p className={`text-[11px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
+                      <p className={`text-[12px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
                         ⚠️ KIS <b>실전 계좌</b>에 직접 주문합니다 — <b>실제 돈이 나갑니다.</b>
                         거래소 연동에서 KIS 키를 먼저 등록하세요. <b>국내주식(예: 005930)</b>과 <b>미국주식(예: JOBY)</b> 모두 가능하며,
                         미국주식은 <b>미국 장중(22:30~05:00 KST)</b>에만 체결됩니다(시장가 없어 현재가 지정가로 발주).
@@ -1225,7 +1306,7 @@ const AutoTradePage = () => {
                         <b>처음엔 1주 극소액으로 검증</b>하길 권장합니다.
                       </p>
                     ) : (
-                      <p className={`text-[11px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
+                      <p className={`text-[12px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
                         ⚠️ Bitget <b>현물(Spot) 계좌</b>에 직접 주문합니다 — <b>실제 돈이 나갑니다.</b>
                         거래소 연동에서 Bitget 키(<b>apiKey·secretKey·passphrase</b>)를 먼저 등록하세요. <b>코인(예: BTC, ETH)</b>만 거래하며
                         가격·신호는 <b>Bitget USDT 시세</b> 기준입니다. 할당 금액(원)은 <b>USDT로 환산</b>되어 주문되고,
@@ -1239,13 +1320,13 @@ const AutoTradePage = () => {
                     <div className={`rounded-lg border px-3 py-2 text-sm font-semibold ${isDark ? 'bg-blue-500/10 border-blue-500/30 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
                       모의투자 (가상자금)
                     </div>
-                    <p className={`text-[11px] mt-1 ${subText}`}>가상자금으로 안전하게 연습하는 자동매매입니다. <b>실제 돈은 나가지 않습니다.</b> 실거래는 일반(실계좌) 모드의 자동매매에서 진행하세요.</p>
+                    <p className={`text-[12px] mt-1 ${subText}`}>가상자금으로 안전하게 연습하는 자동매매입니다. <b>실제 돈은 나가지 않습니다.</b> 실거래는 일반(실계좌) 모드의 자동매매에서 진행하세요.</p>
                   </>
                 )}
               </div>
 
               {/* Bitget 전용: 현물/선물 + 레버리지 */}
-              {isLive && form.brokerType === 'BITGET' && (
+              {isLive && form.brokerType === 'BITGET' && !isMomentumForm && (
                 <div>
                   <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>거래 시장</label>
                   <div className="grid grid-cols-2 gap-2">
@@ -1263,7 +1344,7 @@ const AutoTradePage = () => {
                               : (isDark ? 'bg-white/[0.04] border-white/10 text-slate-300' : 'bg-white border-gray-300 text-gray-700')
                           }`}>
                           <div className="text-sm font-semibold">{m.label}</div>
-                          <div className={`text-[10.5px] ${active ? '' : subText}`}>{m.desc}</div>
+                          <div className={`text-[11.5px] ${active ? '' : subText}`}>{m.desc}</div>
                         </button>
                       );
                     })}
@@ -1274,7 +1355,7 @@ const AutoTradePage = () => {
                       <input type="number" min={1} max={10} step={1} value={form.leverage}
                         onChange={e => setForm(prev => ({ ...prev, leverage: e.target.value }))}
                         className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`} />
-                      <p className={`text-[11px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
+                      <p className={`text-[12px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
                         ⚠️ 레버리지 {form.leverage || '?'}배 — 손익이 {form.leverage || '?'}배로 증폭됩니다. 청산(원금 전액 손실) 위험이 커지니
                         <b> 반드시 손절을 설정</b>하고 <b>극소액</b>으로 시작하세요. (1~10배, isolated 마진)
                       </p>
@@ -1298,7 +1379,7 @@ const AutoTradePage = () => {
                   <option value="ETF">미국 ETF</option>
                   <option value="CRYPTO">코인</option>
                 </select>
-                <p className={`text-[11px] mt-1 ${subText}`}>미국주식(JOBY 등)은 <b>미국주식</b>으로 지정하세요. 비워두면 종목 코드로 자동 판별합니다.</p>
+                <p className={`text-[12px] mt-1 ${subText}`}>미국주식(JOBY 등)은 <b>미국주식</b>으로 지정하세요. 비워두면 종목 코드로 자동 판별합니다.</p>
               </div>
               )}
 
@@ -1311,19 +1392,26 @@ const AutoTradePage = () => {
                   placeholder="예: BTC, ETH 또는 005930, AAPL"
                   className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`}
                 />
-                <p className={`text-[11px] mt-1 ${subText}`}>비워두면 전략의 기본 종목을 사용합니다.</p>
+                <p className={`text-[12px] mt-1 ${subText}`}>비워두면 전략의 기본 종목을 사용합니다.</p>
               </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>할당 금액 (원) *</label>
+                  <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>할당 금액 ({modalCcy === 'KRW' ? '원' : modalCcy}) *</label>
                   <input
-                    type="number"
-                    value={form.allocatedCash}
-                    onChange={e => setForm(prev => ({ ...prev, allocatedCash: e.target.value }))}
+                    type="text"
+                    inputMode="numeric"
+                    value={formatAmountInput(form.allocatedCash)}
+                    onChange={e => setForm(prev => ({ ...prev, allocatedCash: parseAmountInput(e.target.value) }))}
+                    placeholder={modalCcy === 'KRW' ? '1,000,000' : modalCcy === 'USDT' ? '100' : '100'}
                     className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-800'}`}
                   />
+                  {modalCcy !== 'KRW' && (
+                    <p className={`text-[12px] mt-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                      {modalCcy} 기준 · 예상 ≈ {formatKRW(Math.round(modalAllocNum * usdKrw))} <span className="opacity-60">(환율 {Math.round(usdKrw).toLocaleString('ko-KR')}원 적용, 체결 시점 환율로 달라질 수 있어요)</span>
+                    </p>
+                  )}
                 </div>
                 {form.strategyId !== MOMENTUM_PRESET_ID ? (
                 <div>
@@ -1345,12 +1433,14 @@ const AutoTradePage = () => {
                 )}
               </div>
 
+              {/* 리스크 관리 — 모멘텀 로테이션은 손절/익절/트레일링/일일손실한도를 지원하지 않으므로(월간 리밸런싱·레짐 필터로 관리) 숨긴다 */}
+              {form.strategyId !== MOMENTUM_PRESET_ID && (<>
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className={`block text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>리스크 관리 (%, 선택)</label>
                   <button type="button"
                     onClick={() => setForm(prev => ({ ...prev, stopLossPct: '5', takeProfitPct: '10' }))}
-                    className={`text-[11px] font-semibold rounded-md px-2 py-1 ${isDark ? 'bg-blue-500/15 text-blue-300 hover:bg-blue-500/25' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>
+                    className={`text-[12px] font-semibold rounded-md px-2 py-1 ${isDark ? 'bg-blue-500/15 text-blue-300 hover:bg-blue-500/25' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>
                     💡 초보자 추천값 (손절 5%·익절 10%)
                   </button>
                 </div>
@@ -1361,25 +1451,26 @@ const AutoTradePage = () => {
                     { k: 'trailingStopPct', name: '트레일링', ph: '예: 3', max: 100 },
                   ] as const).map(f => (
                     <div key={f.k}>
-                      <div className={`text-[10.5px] font-semibold text-center mb-0.5 ${subText}`}>{f.name}</div>
+                      <div className={`text-[11.5px] font-semibold text-center mb-0.5 ${subText}`}>{f.name}</div>
                       <input type="number" min={0} max={f.max} step="any" placeholder={f.ph} value={form[f.k]}
                         onChange={e => setForm(prev => ({ ...prev, [f.k]: e.target.value }))}
                         className={`w-full rounded-lg border px-2 py-2 text-sm text-center ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`} />
                     </div>
                   ))}
                 </div>
-                <div className={`mt-1.5 text-[11px] leading-relaxed ${subText}`}>
+                <div className={`mt-1.5 text-[12px] leading-relaxed ${subText}`}>
                   <b>손절</b> 5% = 매수가보다 5% 떨어지면 자동 매도(손실 제한) · <b>익절</b> 10% = 10% 오르면 차익실현 · <b>트레일링</b> = 최고가 대비 % 떨어지면 매도. 비워두면 미적용됩니다.
                 </div>
               </div>
 
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>일일 손실한도 (원, 선택)</label>
-                <input type="number" placeholder="예: 100000" value={form.dailyLossLimit}
-                  onChange={e => setForm(prev => ({ ...prev, dailyLossLimit: e.target.value }))}
+                <input type="text" inputMode="numeric" placeholder="예: 100,000" value={formatAmountInput(form.dailyLossLimit)}
+                  onChange={e => setForm(prev => ({ ...prev, dailyLossLimit: parseAmountInput(e.target.value) }))}
                   className={`w-full rounded-lg border px-3 py-2 text-sm ${isDark ? 'bg-white/[0.04] border-white/10 text-white placeholder-slate-500' : 'bg-white border-gray-300 text-gray-800'}`} />
-                <p className={`text-[11px] mt-1 ${subText}`}>오늘 실현손실이 이 금액에 도달하면 자동으로 일시정지됩니다.</p>
+                <p className={`text-[12px] mt-1 ${subText}`}>오늘 실현손실이 이 금액에 도달하면 자동으로 일시정지됩니다.</p>
               </div>
+              </>)}
             </div>
 
             <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-white/10' : 'border-gray-100'}`}>

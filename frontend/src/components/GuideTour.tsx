@@ -38,7 +38,8 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
   const updatePosition = useCallback(() => {
     if (!step) return;
     const el = document.querySelector(`[data-tour="${step.target}"]`);
-    if (!el) return;
+    // 대상이 없으면 직전 스텝의 스포트라이트가 잘못된 위치에 남지 않도록 비운다
+    if (!el) { setSpotlight(null); return; }
 
     const rect = el.getBoundingClientRect();
     // 콘솔 본문(.wa-console-dense)의 zoom 보정 — 타깃은 zoom 안, 스포트라이트는 body 포털(시각 뷰포트)이라
@@ -73,7 +74,7 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
     // 툴팁은 강조 영역을 가리지 않게 화면 상/하단 중앙에 크게 고정 (항상 잘 보이게)
     const spotCenterY = sp.top + sp.height / 2;
     setPlacement(spotCenterY < window.innerHeight * 0.52 ? 'bottom' : 'top');
-  }, [step, currentStep]);
+  }, [step]);
 
   useEffect(() => {
     if (!isActive) { setCurrentStep(0); return; }
@@ -163,18 +164,18 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
               background: i === currentStep ? '#4a90e2' : i < currentStep ? t.dotDone : t.dotIdle,
             }} />
           ))}
-          <span className="ml-auto rounded-full px-2.5 py-1 text-[12.5px] font-bold" style={{ background: t.chip, color: t.chipText }}>{currentStep + 1} / {steps.length}</span>
+          <span className="ml-auto rounded-full px-2.5 py-1 text-[13.5px] font-bold" style={{ background: t.chip, color: t.chipText }}>{currentStep + 1} / {steps.length}</span>
         </div>
 
         {/* 내용 */}
-        <h4 className="mb-2.5 text-[23px] font-extrabold leading-tight" style={{ color: t.title }}>{step.title}</h4>
-        <div className="mb-6 whitespace-pre-line text-[16px] font-medium leading-relaxed" style={{ color: t.desc }}>{step.description}</div>
+        <h4 className="mb-2.5 text-[25px] font-extrabold leading-tight" style={{ color: t.title }}>{step.title}</h4>
+        <div className="mb-6 whitespace-pre-line text-[17.5px] font-medium leading-relaxed" style={{ color: t.desc }}>{step.description}</div>
 
         {/* 버튼 */}
         <div className="flex items-center justify-between">
           <button
             onClick={(e) => { e.stopPropagation(); onFinish(); }}
-            className="text-[14px] font-semibold transition-colors hover:opacity-80"
+            className="text-[15px] font-semibold transition-colors hover:opacity-80"
             style={{ color: t.skip }}
           >
             건너뛰기
@@ -183,7 +184,7 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
             {currentStep > 0 && (
               <button
                 onClick={(e) => { e.stopPropagation(); handlePrev(); }}
-                className="rounded-xl px-5 py-2.5 text-[15px] font-bold transition-colors hover:opacity-85"
+                className="rounded-xl px-5 py-2.5 text-[16px] font-bold transition-colors hover:opacity-85"
                 style={{ background: t.prevBg, color: t.prevText }}
               >
                 이전
@@ -191,7 +192,7 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
             )}
             <button
               onClick={(e) => { e.stopPropagation(); handleNext(); }}
-              className="rounded-xl px-6 py-2.5 text-[15px] font-bold text-white bg-whale-light hover:bg-whale-dark transition-colors shadow-md"
+              className="rounded-xl px-6 py-2.5 text-[16px] font-bold text-white bg-whale-light hover:bg-whale-dark transition-colors shadow-md"
             >
               {isLast ? '시작하기 →' : '다음 →'}
             </button>

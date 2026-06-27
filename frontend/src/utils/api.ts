@@ -3,6 +3,20 @@ import { supabase } from '../lib/supabase';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
+/**
+ * 에러 객체(unknown)에서 사용자 표시용 메시지를 안전하게 추출한다.
+ * axios 에러는 response.data.message / .error 를, 일반 Error 는 message 를 쓰고,
+ * 그 외엔 fallback 을 반환한다. (catch (e: any) 대신 catch (e) + 이 헬퍼 사용)
+ */
+export function getErrorMessage(e: unknown, fallback = '오류가 발생했습니다.'): string {
+  if (axios.isAxiosError(e)) {
+    const data = e.response?.data as { message?: string; error?: string } | undefined;
+    return data?.message || data?.error || e.message || fallback;
+  }
+  if (e instanceof Error) return e.message || fallback;
+  return fallback;
+}
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000, // 15초 타임아웃 (주식 캔들 조회 시 시간 소요)
@@ -28,11 +42,15 @@ async function getCachedToken(): Promise<string | null> {
   const sessionPromise = supabase.auth.getSession()
     .then(({ data: { session } }) => {
       if (session?.access_token) {
-        _cachedToken = session.access_token;
         const sessionExpiry = session.expires_at ? session.expires_at * 1000 - 60_000 : 0;
-        _tokenExpiresAt = sessionExpiry > Date.now()
-          ? Math.min(sessionExpiry, Date.now() + 4 * 60_000)
-          : Date.now() + 4 * 60_000;
+        // 이미 만료된 세션 토큰은 캐시하지 않는다(만료 토큰을 4분간 재사용해 401→refresh 왕복이 반복되는 문제 방지).
+        if (sessionExpiry <= Date.now()) {
+          _cachedToken = null;
+          _tokenExpiresAt = 0;
+          return null;
+        }
+        _cachedToken = session.access_token;
+        _tokenExpiresAt = Math.min(sessionExpiry, Date.now() + 4 * 60_000);
         return _cachedToken;
       }
       _cachedToken = null;

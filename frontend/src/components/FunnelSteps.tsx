@@ -28,7 +28,7 @@ const FunnelSteps = ({ current }: { current: 1 | 2 | 3 }) => {
                 ? { background: 'var(--ci-sonar-dim)', color: 'var(--ci-sonar)', border: '1px solid rgba(91,157,255,.4)' }
                 : { background: 'var(--ci-card)', color: done ? 'var(--ci-ink1)' : 'var(--ci-ink3)', border: '1px solid var(--ci-line)' }}
             >
-              <span className="flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold"
+              <span className="flex h-4 w-4 items-center justify-center rounded-full text-[11px] font-bold"
                 style={active
                   ? { background: 'var(--ci-sonar)', color: '#fff' }
                   : { background: done ? 'rgba(63,214,160,.2)' : 'var(--ci-chip)', color: done ? '#3fd6a0' : 'var(--ci-ink3)' }}>

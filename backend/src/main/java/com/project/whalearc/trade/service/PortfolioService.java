@@ -54,7 +54,9 @@ public class PortfolioService {
     private final CryptoPriceProvider cryptoPriceProvider;
     private final StockPriceProvider stockPriceProvider;
     private final UsStockPriceProvider usStockPriceProvider;
+    private final UsEtfPriceProvider usEtfPriceProvider;
     private final KisApiClient kisApiClient;
+    private final ExchangeRateService exchangeRateService;
     private final PortfolioSnapshotRepository snapshotRepository;
     private final OrderRepository orderRepository;
     private final TradeRecordRepository tradeRecordRepository;
@@ -131,6 +133,17 @@ public class PortfolioService {
                 }
             }
 
+            // 미국 ETF 시세 맵 (USD 단위, 캐시된 카탈로그)
+            Map<String, BigDecimal> etfPriceMap = Map.of();
+            boolean hasEtf = portfolio.getHoldings().stream().anyMatch(Holding::isEtf);
+            if (hasEtf) {
+                List<MarketPriceResponse> etfPrices = usEtfPriceProvider.getAllEtfPrices();
+                if (!etfPrices.isEmpty()) {
+                    etfPriceMap = etfPrices.stream()
+                            .collect(Collectors.toMap(MarketPriceResponse::getSymbol, p -> BigDecimal.valueOf(p.getPrice()), (a, b) -> a));
+                }
+            }
+
             // 시세 갱신 시 0 이하(시세 조회 실패/레이트리밋)는 직전 정상가를 유지한다.
             // KIS 레이트리밋(EGW00201)으로 일시적 0이 들어와 평가액이 0원으로 깜빡이던 문제 방지.
             for (Holding holding : portfolio.getHoldings()) {
@@ -155,6 +168,11 @@ public class PortfolioService {
                     if (price != null && price.signum() > 0) {
                         holding.setCurrentPrice(price); // USD 단위
                     }
+                } else if (holding.isEtf()) {
+                    BigDecimal price = etfPriceMap.get(holding.getStockCode());
+                    if (price != null && price.signum() > 0) {
+                        holding.setCurrentPrice(price); // USD 단위
+                    }
                 } else {
                     BigDecimal price = cryptoPriceMap.get(holding.getStockCode());
                     if (price != null && price.signum() > 0) {
@@ -174,7 +192,10 @@ public class PortfolioService {
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
         if (snapshotRepository.findByUserIdAndDate(portfolio.getUserId(), today).isEmpty()) {
             try {
-                snapshotRepository.save(new PortfolioSnapshot(portfolio.getUserId(), today, portfolio));
+                // 자정 스케줄러(PortfolioSnapshotScheduler)와 동일하게 환율을 적용해 미국주식/ETF(USD)를
+                // 환산한 뒤 저장한다. 환율 인자 없는 생성자는 USD 자산을 미환산으로 합산해 history가 어긋난다.
+                double usdKrwRate = exchangeRateService.getUsdKrwRate();
+                snapshotRepository.save(new PortfolioSnapshot(portfolio.getUserId(), today, portfolio, usdKrwRate));
             } catch (Exception e) {
                 log.debug("스냅샷 저장 스킵 [{}]: {}", portfolio.getUserId(), e.getMessage());
             }

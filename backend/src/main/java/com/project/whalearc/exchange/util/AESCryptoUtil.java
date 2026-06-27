@@ -3,6 +3,7 @@ package com.project.whalearc.exchange.util;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.AEADBadTagException;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -77,8 +78,12 @@ public class AESCryptoUtil {
             byte[] decrypted = cipher.doFinal(encrypted);
 
             return new String(decrypted, StandardCharsets.UTF_8);
+        } catch (AEADBadTagException e) {
+            // GCM 태그 불일치 = 암호화 키 불일치(EXCHANGE_ENCRYPTION_KEY 회전/환경 차이) 또는 데이터 손상.
+            // '데이터 손상'과 구분해 운영자가 키 불일치를 식별할 수 있게 사유를 명시하고 원인을 보존한다.
+            throw new RuntimeException("복호화 실패: 암호화 키 불일치 또는 데이터 손상(GCM 태그 검증 실패)", e);
         } catch (Exception e) {
-            throw new RuntimeException("복호화 실패", e);
+            throw new RuntimeException("복호화 실패: " + e.getClass().getSimpleName(), e);
         }
     }
 }

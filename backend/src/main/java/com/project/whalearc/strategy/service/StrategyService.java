@@ -15,6 +15,9 @@ import com.project.whalearc.trade.domain.Order;
 import com.project.whalearc.trade.domain.Portfolio;
 import com.project.whalearc.trade.service.OrderService;
 import com.project.whalearc.trade.service.PortfolioService;
+import com.project.whalearc.user.domain.User;
+import com.project.whalearc.user.policy.TierPolicy;
+import com.project.whalearc.user.policy.TierResolver;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +42,7 @@ public class StrategyService {
     private final StockMasterService stockMasterService;
     private final PortfolioService portfolioService;
     private final NotificationService notificationService;
+    private final TierResolver tierResolver;
 
     /**
      * 서버 시작 시: applied=true인 전략 중 ProductPurchase가 없는 경우 자동 생성 (마이그레이션)
@@ -91,6 +95,12 @@ public class StrategyService {
     }
 
     public Strategy createStrategy(String userId, StrategyRequest request) {
+        User.Tier tier = tierResolver.effectiveTier(userId);
+        // 커스텀 전략 빌더(직접 지표·조건 조합)는 BASIC 이상. FREE는 프리셋만 사용(프리셋 적용은 applyStrategy/copyStrategy 경로).
+        if (!TierPolicy.canUseCustomBuilder(tier)) {
+            throw new IllegalArgumentException("커스텀 전략 빌더는 Basic 이상 등급에서 이용할 수 있습니다. Free 등급은 프리셋 전략을 사용해주세요.");
+        }
+        enforceSavedStrategyLimit(userId, tier);
         Strategy strategy = new Strategy(
                 userId,
                 request.getName(),
@@ -108,8 +118,18 @@ public class StrategyService {
         return strategyRepository.save(strategy);
     }
 
+    /** 저장 전략 개수 한도 검사 — 신규 저장(생성·복사) 직전 호출. FREE 3 / BASIC 20 / PRO 무제한. */
+    private void enforceSavedStrategyLimit(String userId, User.Tier tier) {
+        int max = TierPolicy.maxSavedStrategies(tier);
+        if (max != TierPolicy.UNLIMITED && strategyRepository.countByUserId(userId) >= max) {
+            throw new IllegalArgumentException("저장 가능한 전략 개수(" + max + "개)를 초과했습니다. 기존 전략을 삭제하거나 등급을 올려주세요.");
+        }
+    }
+
     /** 공유된 항로(전략)를 현재 사용자 라이브러리로 복사 — 커뮤니티 "항로 따라가기". */
     public Strategy copyStrategy(String userId, String sourceStrategyId) {
+        // 복사는 커스텀 빌더가 아니므로 빌더 게이트는 미적용하되, 저장 개수 한도는 적용(우회 경로 차단).
+        enforceSavedStrategyLimit(userId, tierResolver.effectiveTier(userId));
         Strategy src = strategyRepository.findById(sourceStrategyId)
                 .orElseThrow(() -> new IllegalArgumentException("원본 항로를 찾을 수 없습니다. 작성자가 삭제했을 수 있어요."));
         Strategy copy = new Strategy(
@@ -334,7 +354,7 @@ public class StrategyService {
         return saved;
     }
 
-    /** VIRT 자동매매 ON/OFF (종목당 매수 금액 설정) */
+    /** VIRT 자동매매 ON/OFF (종목당 매수 금액 설정). VIRT 모의는 전 등급 무제한 — 의도적으로 tier 게이팅 없음(실거래 LIVE만 제한). */
     public Strategy setAutoTrading(String userId, String strategyId, boolean enabled, java.math.BigDecimal amount) {
         Strategy strategy = strategyRepository.findById(strategyId)
                 .orElseThrow(() -> new IllegalArgumentException("전략을 찾을 수 없습니다."));

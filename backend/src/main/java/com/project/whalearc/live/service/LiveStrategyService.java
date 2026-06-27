@@ -11,10 +11,11 @@ import com.project.whalearc.live.repository.LiveDeploymentEquitySnapshotReposito
 import com.project.whalearc.live.repository.LiveStrategyDeploymentRepository;
 import com.project.whalearc.exchange.service.client.BitgetApiClient;
 import com.project.whalearc.market.dto.CandlestickResponse;
+import com.project.whalearc.market.service.BacktestDataProvider;
 import com.project.whalearc.market.service.CandlestickService;
 import com.project.whalearc.market.service.ExchangeRateService;
 import com.project.whalearc.market.service.MomentumDataCache;
-import com.project.whalearc.market.service.MomentumUniverse;
+import com.project.whalearc.market.service.MomentumUniverses;
 import com.project.whalearc.market.service.UsEtfCatalog;
 import com.project.whalearc.market.service.UsStockPriceProvider;
 import com.project.whalearc.notification.domain.Notification;
@@ -30,6 +31,9 @@ import com.project.whalearc.trade.domain.Order;
 import com.project.whalearc.trade.domain.Portfolio;
 import com.project.whalearc.trade.service.PortfolioService;
 import com.project.whalearc.trade.service.UserLockRegistry;
+import com.project.whalearc.user.domain.User;
+import com.project.whalearc.user.policy.TierPolicy;
+import com.project.whalearc.user.policy.TierResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,7 +44,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
-import java.util.Objects;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -81,6 +84,8 @@ public class LiveStrategyService {
     private final LiveDeploymentEquitySnapshotRepository equitySnapshotRepository;
     private final UserLockRegistry userLockRegistry;
     private final MomentumDataCache momentumDataCache;
+    private final BacktestDataProvider backtestDataProvider;   // 비-US 모멘텀(ETF·한국주식·코인) 일봉 온디맨드 조회
+    private final TierResolver tierResolver;
 
     /** 전역 킬스위치 — 켜지면 스케줄러가 모든 평가를 건너뛴다. */
     private final AtomicBoolean killSwitch = new AtomicBoolean(false);
@@ -178,12 +183,15 @@ public class LiveStrategyService {
         // 처리 가능한 게이트웨이가 없으면 거부 (MOCK 외 미지원이면 실계좌 자동 차단)
         resolveGateway(brokerType);
 
+        // 기초통화 결정(모의=KRW, 실거래는 자산군별 USDT/USD/KRW). 상한은 KRW 기준이라 KRW로 환산해 검사한다.
+        String baseCurrency = resolveBaseCurrency(accountMode, brokerType, assetType);
+        BigDecimal allocatedCashKrw = toKrwAtCreate(allocatedCash, baseCurrency, brokerType);
         // KIS 1건당 할당 상한 가드 — 모드별(실전=소액, 모의=크게)
-        if (brokerType == LiveStrategyDeployment.BrokerType.KIS) checkKisCap(allocatedCash);
+        if (brokerType == LiveStrategyDeployment.BrokerType.KIS) checkKisCap(allocatedCashKrw);
         // 실거래(Bitget) 1건당 할당 상한 가드 — KIS와 동일
         if (brokerType == LiveStrategyDeployment.BrokerType.BITGET
                 && bitgetMaxAllocatedKrw != null
-                && allocatedCash.compareTo(bitgetMaxAllocatedKrw) > 0) {
+                && allocatedCashKrw.compareTo(bitgetMaxAllocatedKrw) > 0) {
             throw new IllegalArgumentException(
                     "실거래(Bitget) 1건당 할당 한도(" + bitgetMaxAllocatedKrw + "원)를 초과했습니다. 소액으로 먼저 검증한 뒤 한도를 올리세요.");
         }
@@ -244,6 +252,7 @@ public class LiveStrategyService {
         d.setLeverage(leverage);
         d.setStatus(LiveStrategyDeployment.Status.RUNNING);
         d.setAllocatedCash(allocatedCash);
+        d.setBaseCurrency(baseCurrency);
         d.setStopLossPct(req.getStopLossPct());
         d.setTakeProfitPct(req.getTakeProfitPct());
         d.setTrailingStopPct(req.getTrailingStopPct());
@@ -273,7 +282,7 @@ public class LiveStrategyService {
 
         // 자금 예약 가드(over-allocation 방지) + 저장을 유저 락 안에서 원자적으로 수행한다.
         // 활성(RUNNING/PAUSED) 배포들의 할당금 합 + 신규 할당이 가용 현금을 넘지 않게 한다. 현금을 별도
-        return reserveAndSave(userId, d, allocatedCash);
+        return reserveAndSave(userId, d);
     }
 
     /**
@@ -292,18 +301,22 @@ public class LiveStrategyService {
         }
     }
 
-    private LiveStrategyDeployment reserveAndSave(String userId, LiveStrategyDeployment d, BigDecimal allocatedCash) {
+    private LiveStrategyDeployment reserveAndSave(String userId, LiveStrategyDeployment d) {
         return userLockRegistry.withLock(userId, () -> {
+            // 등급 한도(실거래 전략수·종목수)는 자금 예약과 같은 유저 락 안에서 — 동시 2건 생성 우회 방지. LIVE만 적용.
+            if (d.getAccountMode() == LiveStrategyDeployment.AccountMode.LIVE) {
+                enforceLiveTierLimitsLocked(userId, tierResolver.effectiveTier(userId), d);
+            }
             Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
             BigDecimal cash = portfolio.getCashBalance() != null ? portfolio.getCashBalance() : BigDecimal.ZERO;
             BigDecimal reserved = deploymentRepository
                     .findByUserIdAndStatusIn(userId, List.of(
                             LiveStrategyDeployment.Status.RUNNING, LiveStrategyDeployment.Status.PAUSED))
                     .stream()
-                    .map(LiveStrategyDeployment::getAllocatedCash)
-                    .filter(Objects::nonNull)
+                    .map(this::allocatedKrwOf)   // 배포마다 기초통화가 달라도 KRW로 환산해 합산
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            if (reserved.add(allocatedCash).compareTo(cash) > 0) {
+            BigDecimal allocKrw = allocatedKrwOf(d);   // 신규 배포 할당금액의 KRW 환산
+            if (reserved.add(allocKrw).compareTo(cash) > 0) {
                 throw new IllegalArgumentException(
                         "할당 금액이 가용 현금을 초과합니다(이미 자동매매에 예약된 금액 포함). 가용=" + cash + ", 기예약=" + reserved);
             }
@@ -314,61 +327,101 @@ public class LiveStrategyService {
         });
     }
 
+    /**
+     * 실거래(LIVE) 등급 한도 검사 — 종목 수, 동시 전략(배포) 수. 반드시 유저 락 안에서 호출.
+     * 종목 수는 일반 경로=targetAssets, 모멘텀 로테이션=topN(초기 targetAssets가 비어 있으므로)으로 센다.
+     */
+    void enforceLiveTierLimitsLocked(String userId, User.Tier tier, LiveStrategyDeployment d) {
+        int maxSymbols = TierPolicy.maxLiveSymbols(tier);
+        if (maxSymbols != TierPolicy.UNLIMITED) {
+            int symbolCount = "MOMENTUM_ROTATION".equals(d.getDeploymentType())
+                    ? (d.getRotationTopN() != null ? d.getRotationTopN() : 0)
+                    : (d.getTargetAssets() != null ? d.getTargetAssets().size() : 0);
+            if (symbolCount > maxSymbols) {
+                throw new IllegalArgumentException("실거래 종목 수가 등급 한도(" + maxSymbols + "개)를 초과합니다.");
+            }
+        }
+        int maxStrategies = TierPolicy.maxLiveStrategies(tier);
+        if (maxStrategies != TierPolicy.UNLIMITED) {
+            long activeLive = deploymentRepository.countByUserIdAndAccountModeAndStatusIn(
+                    userId, LiveStrategyDeployment.AccountMode.LIVE,
+                    List.of(LiveStrategyDeployment.Status.RUNNING, LiveStrategyDeployment.Status.PAUSED));
+            if (activeLive + 1 > maxStrategies) {
+                throw new IllegalArgumentException(
+                        "동시 실거래 전략 수가 등급 한도(" + maxStrategies + "개)를 초과합니다. 기존 전략을 정지하거나 등급을 올려주세요.");
+            }
+        }
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     //  미국주식 모멘텀 Top-N 로테이션 (월간 리밸런싱 + 일간 레짐) — 신규 격리 경로
     //  시그널 기반 evaluateDeployment 와 독립. MomentumRotationScheduler 가 일 1회 호출한다.
     // ══════════════════════════════════════════════════════════════════════════
 
-    /** 모멘텀 로테이션 배포 생성 — assetType=US_STOCK 고정, 포지션은 첫 리밸런싱이 채운다(초기 빈 보유). */
+    /**
+     * 모멘텀 로테이션 배포 생성 — 자산군(req.assetType)으로 유니버스·레짐·통화·브로커를 결정한다.
+     * 미국주식/ETF=KIS(USD), 한국주식=KIS 국내(KRW), 코인=Bitget(USDT). 모의는 항상 MOCK.
+     * 포지션은 첫 리밸런싱이 채운다(초기 빈 보유).
+     */
     private LiveStrategyDeployment createMomentumDeployment(String userId, CreateDeploymentRequest req) {
         BigDecimal allocatedCash = req.getAllocatedCash();
         if (allocatedCash == null || allocatedCash.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("할당 금액은 0보다 커야 합니다.");
         }
-        validateRiskParams(req);
+        // 손절/익절/트레일링/일일손실한도는 모멘텀 로테이션 경로(월간 리밸런싱·레짐 필터)가 읽지 않아 무동작이다.
+        // 검증·저장하지 않고 조용히 무시한다 → 미저장이므로 DeploymentResponse/카드에도 노출되지 않아 잘못된 안전감을 주지 않는다.
+        // (거부하지 않는 이유: 프론트 모멘텀 폼이 이 값들을 함께 전송하므로 거부하면 배포 생성이 깨진다.)
+        // 다만 사용자가 값을 입력했는데 무시되는 경우는 흔적을 남긴다(특히 LIVE에서 위험 — 추후 UI 경고 노출 필요).
+        if (req.getStopLossPct() != null || req.getTakeProfitPct() != null
+                || req.getTrailingStopPct() != null || req.getDailyLossLimit() != null) {
+            log.warn("모멘텀 로테이션 배포는 손절/익절/트레일링/일일손실한도를 적용하지 않습니다 — 입력값 무시됨. userId={}, mode={}",
+                    userId, req.getAccountMode());
+        }
 
         LiveStrategyDeployment.AccountMode accountMode =
                 req.getAccountMode() != null ? req.getAccountMode() : LiveStrategyDeployment.AccountMode.PAPER;
+        // 자산군 — 모멘텀은 req.assetType으로 자산군을 받는다(US_STOCK/ETF/STOCK/CRYPTO). 기본 미국주식.
+        String assetType = MomentumUniverses.normalize(req.getAssetType());
+        // 실거래 브로커는 자산군이 결정한다: 코인=Bitget, 주식류(미국·ETF·한국)=KIS. 모의는 항상 MOCK.
         LiveStrategyDeployment.BrokerType brokerType =
-                req.getBrokerType() != null ? req.getBrokerType() : LiveStrategyDeployment.BrokerType.MOCK;
-        if (accountMode == LiveStrategyDeployment.AccountMode.PAPER
-                && brokerType != LiveStrategyDeployment.BrokerType.MOCK) {
-            throw new IllegalArgumentException("모의(PAPER) 모드는 MOCK 브로커만 사용할 수 있습니다.");
-        }
-        if (accountMode == LiveStrategyDeployment.AccountMode.LIVE) {
-            if (brokerType == LiveStrategyDeployment.BrokerType.MOCK) {
-                throw new IllegalArgumentException("실계좌(LIVE) 모드는 실거래 브로커가 필요합니다.");
-            }
-            if (brokerType != LiveStrategyDeployment.BrokerType.KIS) {
-                throw new IllegalArgumentException("모멘텀 로테이션 실거래는 KIS(해외주식)만 지원합니다.");
-            }
-        }
-        resolveGateway(brokerType);   // 게이트웨이 없으면(예: KIS 비활성) 거부
+                accountMode == LiveStrategyDeployment.AccountMode.PAPER
+                        ? LiveStrategyDeployment.BrokerType.MOCK
+                        : ("CRYPTO".equals(assetType)
+                                ? LiveStrategyDeployment.BrokerType.BITGET
+                                : LiveStrategyDeployment.BrokerType.KIS);
+        resolveGateway(brokerType);   // 게이트웨이 없으면(예: KIS/Bitget 비활성) 거부
 
-        if (brokerType == LiveStrategyDeployment.BrokerType.KIS) checkKisCap(allocatedCash);
+        // 기초통화: 모의=KRW, 실거래는 자산군별(미국·ETF=USD, 한국=KRW, 코인=USDT). 상한은 KRW 기준이라 KRW로 환산해 검사.
+        String baseCurrency = resolveBaseCurrency(accountMode, brokerType, assetType);
+        if (brokerType != LiveStrategyDeployment.BrokerType.MOCK) {
+            checkKisCap(toKrwAtCreate(allocatedCash, baseCurrency, brokerType));
+        }
 
         int topN = req.getRotationTopN() != null && req.getRotationTopN() > 0 ? req.getRotationTopN() : 5;
         if (topN < 1 || topN > 20) throw new IllegalArgumentException("top-N은 1~20 사이여야 합니다.");
         int lookback = req.getRotationLookbackDays() != null && req.getRotationLookbackDays() > 0
                 ? req.getRotationLookbackDays() : 252;
         if (lookback < 20 || lookback > 500) throw new IllegalArgumentException("룩백은 20~500거래일 사이여야 합니다.");
+        double regimeFloor = req.getRotationRegimeFloor() != null ? req.getRotationRegimeFloor() : 0.5;
+        // floor는 약세장 노출 배수(0<floor<=1). 1 초과면 약세 진입에서 오히려 포지션을 늘리는 역방향 거동이 된다.
+        if (regimeFloor <= 0 || regimeFloor > 1) throw new IllegalArgumentException("약세장 노출 배수(floor)는 0 초과 1 이하여야 합니다.");
 
         LiveStrategyDeployment d = new LiveStrategyDeployment();
         d.setUserId(userId);
         d.setStrategyId(null);
-        d.setStrategyName(req.getStrategyName() != null ? req.getStrategyName() : "미국주식 모멘텀 Top" + topN + " 로테이션");
+        d.setStrategyName(req.getStrategyName() != null ? req.getStrategyName()
+                : MomentumUniverses.label(assetType) + " 모멘텀 Top" + topN + " 로테이션");
         d.setDeploymentType("MOMENTUM_ROTATION");
         d.setRotationTopN(topN);
         d.setRotationLookbackDays(lookback);
         d.setRotationRegimeFilter(req.getRotationRegimeFilter() == null || req.getRotationRegimeFilter());
-        d.setRotationRegimeFloor(req.getRotationRegimeFloor() != null && req.getRotationRegimeFloor() > 0
-                ? req.getRotationRegimeFloor() : 0.5);
+        d.setRotationRegimeFloor(regimeFloor);
         d.setRotationFullInvest(Boolean.TRUE.equals(req.getRotationFullInvest()));
         d.setRotationUniverse(req.getRotationUniverse() != null && !req.getRotationUniverse().isEmpty()
                 ? new ArrayList<>(req.getRotationUniverse()) : null);
         d.setTargetAssets(new ArrayList<>());        // 첫 로테이션이 채움
         d.setPositions(new ArrayList<>());
-        d.setAssetType("US_STOCK");
+        d.setAssetType(assetType);
         d.setInterval("1d");
         d.setTradeDirection("LONG_ONLY");
         d.setAccountMode(accountMode);
@@ -376,16 +429,14 @@ public class LiveStrategyService {
         d.setMarketType(LiveStrategyDeployment.MarketType.SPOT);
         d.setStatus(LiveStrategyDeployment.Status.RUNNING);
         d.setAllocatedCash(allocatedCash);
-        d.setStopLossPct(req.getStopLossPct());
-        d.setTakeProfitPct(req.getTakeProfitPct());
-        d.setTrailingStopPct(req.getTrailingStopPct());
-        d.setDailyLossLimit(req.getDailyLossLimit());
+        d.setBaseCurrency(baseCurrency);
+        // 손절/익절/트레일링/일일손실한도는 모멘텀 경로가 읽지 않으므로 저장하지 않는다(위에서 입력도 거부).
         d.setDayKey(LocalDate.now(KST).toString());
         Instant now = Instant.now();
         d.setCreatedAt(now);
         d.setUpdatedAt(now);
 
-        return reserveAndSave(userId, d, allocatedCash);
+        return reserveAndSave(userId, d);
     }
 
     /** 월간 리밸런싱(멱등: lastRotationMonth). 스케줄러가 매일 호출 → 이번 달 첫 호출만 실행. */
@@ -418,29 +469,31 @@ public class LiveStrategyService {
     private void doRebalanceMomentumLocked(String deploymentId, boolean force) {
         LiveStrategyDeployment d = deploymentRepository.findById(deploymentId).orElse(null);
         if (d == null || d.getStatus() != LiveStrategyDeployment.Status.RUNNING || !d.isMomentumRotation()) return;
+        resetDailyPnlIfNewDay(d);   // 일별 손익 리셋(KST 자정 경계) — 모멘텀은 doEvaluateLocked를 안 타므로 여기서
         String month = YearMonth.now(KST).toString();   // yyyy-MM
         if (!force && month.equals(d.getLastRotationMonth())) return;   // 이번 달 이미 처리(멱등)
 
         int topN = d.effectiveRotationTopN();
         int lookback = d.effectiveRotationLookback();
+        String assetType = MomentumUniverses.normalize(d.getAssetType());
         List<String> universe = (d.getRotationUniverse() != null && !d.getRotationUniverse().isEmpty())
-                ? d.getRotationUniverse() : MomentumUniverse.symbols();
+                ? d.getRotationUniverse() : MomentumUniverses.defaultUniverse(assetType);
 
-        // 1) 캐시 일봉으로 상대모멘텀 랭킹 (백테스트와 동일한 MomentumRanker)
+        // 1) 일봉으로 상대모멘텀 랭킹 (백테스트와 동일한 MomentumRanker). 미국주식=디스크 캐시, 그 외=온디맨드.
         Map<String, double[]> closes = new HashMap<>();
         for (String s : universe) {
-            double[] arr = recentCloses(s, lookback + 1);
+            double[] arr = recentCloses(assetType, s, lookback + 1);
             if (arr != null) closes.put(s, arr);
         }
         if (closes.isEmpty()) {
-            log.warn("모멘텀 리밸런싱 보류(데이터 없음): deploymentId={} — 다음 사이클 재시도", deploymentId);
-            momentumDataCache.triggerWarmAsync();
+            log.warn("모멘텀 리밸런싱 보류(데이터 없음): deploymentId={}, 자산군={} — 다음 사이클 재시도", deploymentId, assetType);
+            if ("US_STOCK".equals(assetType)) momentumDataCache.triggerWarmAsync();
             return;
         }
         List<MomentumRanker.Ranked> ranked = MomentumRanker.rank(closes, lookback, lookback, topN);
 
-        // 2) 레짐(SPY 200SMA) — 약세면 노출 ×floor
-        boolean bear = d.effectiveRegimeFilter() && isRegimeBear();
+        // 2) 레짐(벤치마크 200SMA: 미국·ETF=SPY, 한국=069500, 코인=BTC) — 약세면 노출 ×floor
+        boolean bear = d.effectiveRegimeFilter() && isRegimeBear(assetType);
         double regimeMult = bear ? d.effectiveRegimeFloor() : 1.0;
 
         OrderGateway gateway = resolveGateway(d.getBrokerType());
@@ -449,15 +502,16 @@ public class LiveStrategyService {
         for (MomentumRanker.Ranked r : ranked) targetSymbols.add(r.symbol());
 
         // 3) 정수주 균등비중 배분(Hamilton 최대잉여 + 예산 풀링). 종목당 1주값(KRW) 산정.
-        double usdKrw = exchangeRateService.getUsdKrwRate();
-        double investKrw = nz(d.getAllocatedCash()).doubleValue() * regimeMult;   // 레짐 반영 총 투입액
-        Map<String, Double> pxBySymbol = new HashMap<>();        // 심볼 → 현재가(USD)
+        //    가격은 네이티브 통화(미국·ETF=USD, 한국=KRW, 코인=USDT/Bitget·KRW/모의). 외화면 ×환율로 KRW 환산.
+        double nativeRate = priceInForeign(d, assetType) ? nativeKrwRate(d, assetType) : 1.0;
+        double investKrw = allocatedKrwOf(d).doubleValue() * regimeMult;   // 레짐 반영 총 투입액(기초통화→KRW 환산)
+        Map<String, Double> pxBySymbol = new HashMap<>();        // 심볼 → 현재가(네이티브 통화)
         Map<String, Double> krwPerShare = new HashMap<>();       // 심볼 → 1주값(KRW)
         for (MomentumRanker.Ranked r : ranked) {
             LivePosition pos = findOrCreatePosition(d, r.symbol());
             double px = momentumPrice(d, pos);
             pxBySymbol.put(r.symbol(), px);
-            krwPerShare.put(r.symbol(), px > 0 ? px * usdKrw : 0.0);
+            krwPerShare.put(r.symbol(), px > 0 ? px * nativeRate : 0.0);
         }
         boolean fullInvest = d.isRotationFullInvest();
         Map<String, Integer> targetShares = allocateShares(ranked, investKrw, krwPerShare, fullInvest);
@@ -533,11 +587,15 @@ public class LiveStrategyService {
     private void doApplyRegimeLocked(String deploymentId) {
         LiveStrategyDeployment d = deploymentRepository.findById(deploymentId).orElse(null);
         if (d == null || d.getStatus() != LiveStrategyDeployment.Status.RUNNING || !d.isMomentumRotation()) return;
+        boolean dayReset = resetDailyPnlIfNewDay(d);   // 일별 손익 리셋(KST 자정 경계) — lastRegimeDay 멱등 스킵 전에 수행
         String today = LocalDate.now(KST).toString();
-        if (today.equals(d.getLastRegimeDay())) return;        // 오늘 이미 처리(멱등; 리밸런싱도 갱신함)
+        if (today.equals(d.getLastRegimeDay())) {
+            if (dayReset) deploymentRepository.save(d);   // 자정 경계 리셋이 있었을 때만 영속(불필요한 쓰기 회피)
+            return;        // 오늘 이미 처리(멱등; 리밸런싱도 갱신함)
+        }
         if (!d.effectiveRegimeFilter()) { d.setLastRegimeDay(today); deploymentRepository.save(d); return; }
 
-        boolean bear = isRegimeBear();
+        boolean bear = isRegimeBear(MomentumUniverses.normalize(d.getAssetType()));
         boolean wasBear = d.isRegimeBear();
         if (bear != wasBear) {
             OrderGateway gateway = resolveGateway(d.getBrokerType());
@@ -640,13 +698,13 @@ public class LiveStrategyService {
         return shares;
     }
 
-    /** 심볼의 LivePosition 조회(없으면 US_STOCK으로 생성·추가). */
+    /** 심볼의 LivePosition 조회(없으면 배포 자산군으로 생성·추가). */
     private LivePosition findOrCreatePosition(LiveStrategyDeployment d, String symbol) {
         for (LivePosition p : d.getPositions()) {
             if (p.getSymbol().equalsIgnoreCase(symbol)) return p;
         }
         LivePosition p = new LivePosition(symbol, BigDecimal.ZERO);
-        p.setAssetType("US_STOCK");
+        p.setAssetType(MomentumUniverses.normalize(d.getAssetType()));
         d.getPositions().add(p);
         return p;
     }
@@ -658,13 +716,13 @@ public class LiveStrategyService {
     private boolean momentumBuy(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
                              double px, BigDecimal qty, String reason, long bar) {
         if (qty == null || qty.compareTo(BigDecimal.ZERO) <= 0) return true;
-        String clientOrderId = clientOrderId(d, pos, "BUY", bar);
+        String clientOrderId = momentumClientOrderId(d, pos, "BUY", reason, bar);
         if (orderLogRepository.existsByClientOrderId(clientOrderId)) return true;   // 이미 발주됨(멱등)
         BigDecimal price = BigDecimal.valueOf(px);
         Order order;
         try {
             order = gateway.placeMarketOrder(d, d.getUserId(), pos.getSymbol(), pos.getSymbol(),
-                    Order.OrderType.BUY, qty, price, "US_STOCK", clientOrderId);
+                    Order.OrderType.BUY, qty, price, pos.getAssetType(), clientOrderId);
         } catch (Exception e) {
             log.warn("모멘텀 매수 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
             return false;
@@ -686,7 +744,7 @@ public class LiveStrategyService {
         pos.setQuantity(newQty);
         pos.setUnits(1);
         pos.setLastEntryPrice(fill);
-        notifyTrade(d, "모멘텀 매수 (" + reason + ")", pos.getSymbol(), fill, "ENTRY", null);
+        notifyTrade(d, "모멘텀 매수 (" + reason + ")", pos.getSymbol(), fill, "ENTRY", null, pos.getAssetType());
         return true;
     }
 
@@ -699,22 +757,25 @@ public class LiveStrategyService {
         BigDecimal have = nz(pos.getQuantity());
         BigDecimal sellQty = qty.min(have);
         if (sellQty.compareTo(BigDecimal.ZERO) <= 0) return true;
-        String clientOrderId = clientOrderId(d, pos, "SELL", bar);
+        String clientOrderId = momentumClientOrderId(d, pos, "SELL", reason, bar);
         if (orderLogRepository.existsByClientOrderId(clientOrderId)) return true;
         BigDecimal price = BigDecimal.valueOf(px);
         Order order;
         try {
             order = gateway.placeMarketOrder(d, d.getUserId(), pos.getSymbol(), pos.getSymbol(),
-                    Order.OrderType.SELL, sellQty, price, "US_STOCK", clientOrderId);
+                    Order.OrderType.SELL, sellQty, price, pos.getAssetType(), clientOrderId);
         } catch (Exception e) {
             log.warn("모멘텀 매도 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
             return false;
         }
         if (order == null || order.getStatus() != Order.OrderStatus.FILLED) return false;
         BigDecimal fill = order.getFilledPrice() != null ? order.getFilledPrice() : price;
-        BigDecimal pnlUsd = pos.getAvgPrice() != null
+        // 실현손익은 네이티브 통화로 산정 후 KRW로 환산해 누적(원장은 항상 KRW). 국내·모의코인은 ×1.
+        BigDecimal pnlNative = pos.getAvgPrice() != null
                 ? fill.subtract(pos.getAvgPrice()).multiply(sellQty) : BigDecimal.ZERO;
-        BigDecimal pnl = pnlUsd.multiply(BigDecimal.valueOf(exchangeRateService.getUsdKrwRate()));
+        BigDecimal pnl = priceInForeign(d, pos.getAssetType())
+                ? pnlNative.multiply(BigDecimal.valueOf(nativeKrwRate(d, pos.getAssetType())))
+                : pnlNative;
         recordOrder(d, pos, "SELL", sellQty, fill, clientOrderId, order.getId(), reason);
 
         pos.setRealizedPnl(nz(pos.getRealizedPnl()).add(pnl));
@@ -728,25 +789,43 @@ public class LiveStrategyService {
         BigDecimal remain = have.subtract(sellQty);
         pos.setQuantity(remain);
         if (remain.compareTo(BigDecimal.ZERO) <= 0) resetPosition(pos);
-        notifyTrade(d, "모멘텀 매도 (" + reason + ")", pos.getSymbol(), fill, "EXIT", pnl);
+        notifyTrade(d, "모멘텀 매도 (" + reason + ")", pos.getSymbol(), fill, "EXIT", pnl, pos.getAssetType());
         return true;
     }
 
     /**
-     * 모멘텀 주문 가격(USD). 실시간(KIS 일봉)을 우선하되, 0이면(미국장 마감·KIS rate-limit EGW00201 등)
-     * 모멘텀 캐시의 최근 종가로 폴백한다 — 랭킹이 쓰는 바로 그 데이터라 일관적이고, 시세 throttle에도
-     * 리밸런싱이 조용히 스킵되지 않는다. KIS 지정가는 ±1% 버퍼가 붙으므로 며칠 내 종가면 체결에 충분.
+     * 모멘텀 주문 가격(네이티브 통화). 실시간(KIS/Bitget 일봉)을 우선하되, 0이면(장 마감·rate-limit 등)
+     * 일봉 종가로 폴백한다 — 랭킹이 쓰는 바로 그 데이터라 일관적이고, 시세 throttle에도 리밸런싱이 조용히
+     * 스킵되지 않는다. 단 <b>주식류(미국·ETF·한국)만</b> 폴백 — 일봉 통화가 주문 통화와 같다. 코인은 일봉
+     * 소스(Binance·KRW 환산)와 주문 시세(Bitget USDT/빗썸 KRW)가 달라 폴백하지 않고 0(스킵·다음 사이클 재시도).
      */
     private double momentumPrice(LiveStrategyDeployment d, LivePosition pos) {
         double px = latestPrice(d, pos);
         if (px > 0) return px;
-        double[] c = recentCloses(pos.getSymbol(), 1);
+        String assetType = MomentumUniverses.normalize(pos.getAssetType() != null ? pos.getAssetType() : d.getAssetType());
+        if (!isStockLike(assetType)) return 0;
+        double[] c = recentCloses(assetType, pos.getSymbol(), 1);
         return c != null ? c[0] : 0;
     }
 
-    /** 캐시에서 심볼의 최근 n개 (수정)종가를 시간 오름차순으로. n개 미만이면 null(상장 초기·누락 → 후보 제외). */
-    private double[] recentCloses(String symbol, int n) {
-        List<CandlestickResponse> c = momentumDataCache.get(symbol);
+    /** 자산군별 일봉 — 미국주식=사전워밍 디스크 캐시(빠름), 그 외(ETF·한국·코인)=온디맨드 프로바이더. */
+    private List<CandlestickResponse> momentumDailyCandles(String assetType, String symbol) {
+        if ("US_STOCK".equalsIgnoreCase(assetType)) {
+            return momentumDataCache.get(symbol);
+        }
+        try {
+            String end = LocalDate.now(KST).toString();
+            String start = LocalDate.now(KST).minusDays(1000).toString();   // 500거래일 모멘텀 + 200SMA 워밍업 여유
+            return backtestDataProvider.getBacktestCandles(symbol, assetType, start, end, true);
+        } catch (Exception e) {
+            log.debug("모멘텀 일봉 조회 실패: {} ({}) — {}", symbol, assetType, e.getMessage());
+            return null;
+        }
+    }
+
+    /** 심볼의 최근 n개 (수정)종가를 시간 오름차순으로. n개 미만이면 null(상장 초기·누락 → 후보 제외). */
+    private double[] recentCloses(String assetType, String symbol, int n) {
+        List<CandlestickResponse> c = momentumDailyCandles(assetType, symbol);
         if (c == null || c.size() < n) return null;
         c = new ArrayList<>(c);
         c.sort(Comparator.comparingLong(CandlestickResponse::getTime));
@@ -756,17 +835,22 @@ public class LiveStrategyService {
         return out;
     }
 
-    /** SPY가 200일 SMA 아래면 약세 레짐(true). 데이터 부족 시 강세로 간주(false, 보수적 미축소). */
-    private boolean isRegimeBear() {
-        List<CandlestickResponse> spy = momentumDataCache.get(MomentumUniverse.SPY_SYMBOL);
-        if (spy == null || spy.size() < 200) return false;
-        spy = new ArrayList<>(spy);
-        spy.sort(Comparator.comparingLong(CandlestickResponse::getTime));
-        int n = spy.size();
+    /**
+     * 벤치마크가 200일 SMA 아래면 약세 레짐(true). 데이터 부족 시 강세로 간주(false, 보수적 미축소).
+     * 벤치마크는 자산군별: 미국·ETF=SPY, 한국=069500(KODEX200), 코인=BTC.
+     */
+    private boolean isRegimeBear(String assetType) {
+        String benchSym = MomentumUniverses.regimeSymbol(assetType);
+        String benchAc = MomentumUniverses.regimeAssetType(assetType);
+        List<CandlestickResponse> bench = momentumDailyCandles(benchAc, benchSym);
+        if (bench == null || bench.size() < 200) return false;
+        bench = new ArrayList<>(bench);
+        bench.sort(Comparator.comparingLong(CandlestickResponse::getTime));
+        int n = bench.size();
         double sum = 0;
-        for (int i = n - 200; i < n; i++) sum += spy.get(i).getClose();
+        for (int i = n - 200; i < n; i++) sum += bench.get(i).getClose();
         double sma = sum / 200.0;
-        return spy.get(n - 1).getClose() < sma;
+        return bench.get(n - 1).getClose() < sma;
     }
 
     private static long ymToEpoch(String yyyymm) {
@@ -817,7 +901,7 @@ public class LiveStrategyService {
      * 현재가 조회가 발생하므로 일별 스냅샷 산정용으로만 쓰고 핫패스(목록 조회)에서는 호출하지 않는다.
      */
     public double currentPnlPct(LiveStrategyDeployment d) {
-        BigDecimal alloc = nz(d.getAllocatedCash());
+        BigDecimal alloc = allocatedKrwOf(d);   // 손익(unreal)은 KRW라 분모도 KRW로 환산
         if (alloc.compareTo(BigDecimal.ZERO) <= 0) return 0;
         BigDecimal unreal = BigDecimal.ZERO;
         for (LivePosition pos : d.getPositions()) {
@@ -882,13 +966,11 @@ public class LiveStrategyService {
                 throw new IllegalArgumentException(
                         "보유 중인 포지션이 있어 삭제할 수 없습니다. 먼저 '지금 청산'으로 포지션을 닫은 뒤 삭제하세요.");
             }
+            // 부속 컬렉션(주문 로그·스냅샷)을 배포보다 '먼저' 정리한다 — 여기서 실패하면 배포가 남아
+            // 재시도가 가능하고, 배포만 사라진 채 고아 레코드가 남는 상황을 막는다.
+            orderLogRepository.deleteByDeploymentId(deploymentId);
+            equitySnapshotRepository.deleteByDeploymentId(deploymentId);
             deploymentRepository.delete(d);
-            try {
-                orderLogRepository.deleteByDeploymentId(deploymentId);
-                equitySnapshotRepository.deleteByDeploymentId(deploymentId);
-            } catch (Exception e) {
-                log.warn("배포 삭제 시 주문 로그/스냅샷 정리 실패: deploymentId={}, error={}", deploymentId, e.getMessage());
-            }
             log.info("라이브 배포 삭제: userId={}, deploymentId={}", userId, deploymentId);
         });
     }
@@ -954,12 +1036,14 @@ public class LiveStrategyService {
         if (d == null) return;
         OrderGateway gateway = resolveGateway(d.getBrokerType());
         boolean closedAny = false;
+        List<String> failedSymbols = new ArrayList<>();   // 시세 미수신/예외로 청산 못 한 심볼 — 부분 청산 통지용
         for (LivePosition pos : d.getPositions()) {
             if (pos.getDirection() == LivePosition.Direction.NONE) continue;   // 롱·숏 모두 청산(무포지션만 스킵)
             try {
                 double price = latestPrice(d, pos);
                 if (price <= 0) {
                     log.warn("지금 청산 스킵(현재가 0 이하): deploymentId={}, symbol={}", d.getId(), pos.getSymbol());
+                    failedSymbols.add(pos.getSymbol());
                     continue;
                 }
                 // 멱등 barTime은 현재 초 — 같은 초 더블클릭은 디듀프, 청산 후 direction=NONE이라 재청산도 방지.
@@ -972,13 +1056,20 @@ public class LiveStrategyService {
                 closedAny = true;
             } catch (Exception e) {
                 log.error("지금 청산 실패: deploymentId={}, symbol={}, error={}", d.getId(), pos.getSymbol(), e.getMessage());
+                failedSymbols.add(pos.getSymbol());
             }
         }
-        if (!closedAny) {
+        if (!closedAny && failedSymbols.isEmpty()) {
             throw new IllegalArgumentException("청산할 보유 포지션이 없습니다.");
         }
         d.setUpdatedAt(Instant.now());
-        deploymentRepository.save(d);
+        deploymentRepository.save(d);   // 성공한 청산은 먼저 영속화(장부-실보유 동기화) 후 부분 실패를 알린다.
+        // 일부라도 청산하지 못한 포지션이 있으면 명확히 통지 — 전량 성공이 아님을 사용자가 알 수 있게.
+        if (!failedSymbols.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "일부 포지션 청산 실패(시세 조회 불가): " + String.join(", ", failedSymbols)
+                    + ". 잠시 후 다시 시도하세요.");
+        }
     }
 
     /** 포지션의 최신 현재가(네이티브 통화) — 브로커별 캔들 출처에서 마지막 종가. 청산가 산정용. */
@@ -1013,17 +1104,35 @@ public class LiveStrategyService {
         userLockRegistry.withLock(d.getUserId(), () -> doEvaluateLocked(d.getId()));
     }
 
+    /**
+     * 일별 실현손익 리셋(KST 자정 경계). dayKey가 오늘과 다르면 오늘 키로 갱신하고 todayRealizedPnl을 0으로.
+     * 시그널 경로(doEvaluateLocked)와 모멘텀 경로(doRebalanceMomentumLocked/doApplyRegimeLocked)가 공유해
+     * 카드의 '오늘 손익'이 날짜가 바뀌어도 누적되지 않게 한다.
+     * @return 실제로 리셋이 발생했으면 true(영속 필요), 같은 날이라 변화 없으면 false.
+     */
+    private boolean resetDailyPnlIfNewDay(LiveStrategyDeployment d) {
+        String today = LocalDate.now(KST).toString();
+        if (!today.equals(d.getDayKey())) {
+            d.setDayKey(today);
+            d.setTodayRealizedPnl(BigDecimal.ZERO);
+            return true;
+        }
+        return false;
+    }
+
+    /** 일일 손실한도 도달 여부 — 한도가 설정돼 있고 오늘 실현손익이 -한도 이하. 신규 진입 차단·자동정지 판정 공용. */
+    private boolean dailyLossLimitHit(LiveStrategyDeployment d) {
+        return d.getDailyLossLimit() != null
+                && d.getDailyLossLimit().compareTo(BigDecimal.ZERO) > 0
+                && nz(d.getTodayRealizedPnl()).compareTo(d.getDailyLossLimit().negate()) <= 0;
+    }
+
     private void doEvaluateLocked(String deploymentId) {
         LiveStrategyDeployment d = deploymentRepository.findById(deploymentId).orElse(null);
         if (d == null || d.getStatus() != LiveStrategyDeployment.Status.RUNNING) return;
         OrderGateway gateway = resolveGateway(d.getBrokerType());
 
-        // 일별 손익 리셋(KST 자정 경계)
-        String today = LocalDate.now(KST).toString();
-        if (!today.equals(d.getDayKey())) {
-            d.setDayKey(today);
-            d.setTodayRealizedPnl(BigDecimal.ZERO);
-        }
+        resetDailyPnlIfNewDay(d);   // 일별 손익 리셋(KST 자정 경계)
 
         for (LivePosition pos : d.getPositions()) {
             try {
@@ -1036,10 +1145,7 @@ public class LiveStrategyService {
 
         // 일일 손실한도 도달 시 자동 일시정지(엔진 결정). 락 안에서 최신본을 읽어 평가하므로 status는
         // 이미 권위 있는 값(전이도 같은 락으로 직렬화됨). 한도 도달 시에만 PAUSED로 전환한다.
-        boolean lossLimitHit = d.getDailyLossLimit() != null
-                && d.getDailyLossLimit().compareTo(BigDecimal.ZERO) > 0
-                && nz(d.getTodayRealizedPnl()).compareTo(d.getDailyLossLimit().negate()) <= 0;
-        if (lossLimitHit) {
+        if (dailyLossLimitHit(d)) {
             d.setStatus(LiveStrategyDeployment.Status.PAUSED);
             log.warn("일일 손실한도 도달 → 자동 일시정지: deploymentId={}, todayPnl={}, limit={}",
                     d.getId(), d.getTodayRealizedPnl(), d.getDailyLossLimit());
@@ -1102,6 +1208,8 @@ public class LiveStrategyService {
     }
 
     private void openPosition(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway, double currentPrice, long barTime) {
+        // 일일 손실한도 도달 후에는 같은 평가 주기에서도 신규 진입(추가 노출)을 막는다(청산은 계속 허용).
+        if (dailyLossLimitHit(d)) { log.info("일일 손실한도 도달 — 신규 매수 진입 차단: deploymentId={}, symbol={}", d.getId(), pos.getSymbol()); return; }
         BigDecimal alloc = pos.getAllocatedCash();
         if (alloc == null || alloc.compareTo(BigDecimal.ZERO) <= 0) return;
 
@@ -1111,24 +1219,20 @@ public class LiveStrategyService {
 
         String assetType = pos.getAssetType();
         BigDecimal price = BigDecimal.valueOf(currentPrice);   // 네이티브 통화(미국주식/ETF=USD, Bitget 코인=USDT, 그 외 KRW)
-        // allocatedCash는 KRW 기준. 외화 표시 자산(미국주식/ETF=USD, Bitget=USDT)은 KRW 환산 단가로 나눠 수량을 산정한다.
-        BigDecimal krwPerUnit = priceInForeign(d, assetType)
-                ? price.multiply(BigDecimal.valueOf(nativeKrwRate(d, assetType)))
-                : price;
-        if (krwPerUnit.compareTo(BigDecimal.ZERO) <= 0) {
-            log.warn("라이브 매수 불가(환산 단가 0 이하): deploymentId={}, symbol={}, price={}", d.getId(), pos.getSymbol(), price);
+        if (price.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("라이브 매수 불가(현재가 0 이하): deploymentId={}, symbol={}, price={}", d.getId(), pos.getSymbol(), price);
             return;
         }
         int scale = isStockLike(assetType) ? 0 : 8;   // 주식류는 정수 수량, 코인은 소수 8자리
-        // 1유닛 증거금 = 할당금 / 최대유닛(피라미딩). maxUnits=1이면 전액(기존과 동일).
-        // 선물은 레버리지만큼 노출(수량)을 키운다: 수량 = (1유닛증거금 × 레버리지) / 단가. 현물은 레버리지=1.
+        // 1유닛 증거금 = 할당금 / 최대유닛(피라미딩). maxUnits=1이면 전액. 선물은 레버리지만큼 노출(수량)을 키운다.
+        // alloc은 기초통화 단위 → 가격 통화로 환산한 뒤 단가로 나눠 수량을 산정(수량 = (1유닛 × 레버리지) / 단가).
         BigDecimal unitAlloc = alloc.divide(BigDecimal.valueOf(d.effectiveMaxUnits()), 10, RoundingMode.HALF_UP);
-        BigDecimal exposure = unitAlloc.multiply(BigDecimal.valueOf(d.effectiveLeverage()));
-        BigDecimal quantity = exposure.divide(krwPerUnit, scale, RoundingMode.DOWN);
+        BigDecimal exposure = toPriceCcy(d, assetType, unitAlloc.multiply(BigDecimal.valueOf(d.effectiveLeverage())));
+        BigDecimal quantity = exposure.divide(price, scale, RoundingMode.DOWN);
         if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
             // 분배 금액이 1주(또는 최소 단위) 가격보다 작아 수량이 0이 됨 — 조용한 무동작 방지용 경고
-            log.warn("라이브 매수 불가(분배 자금으로 수량 0): deploymentId={}, symbol={}, alloc={}, krwPerUnit={}",
-                    d.getId(), pos.getSymbol(), alloc, krwPerUnit);
+            log.warn("라이브 매수 불가(분배 자금으로 수량 0): deploymentId={}, symbol={}, alloc={}, price={}",
+                    d.getId(), pos.getSymbol(), alloc, price);
             return;
         }
 
@@ -1158,11 +1262,13 @@ public class LiveStrategyService {
         pos.setLastEntryPrice(fill);
         // 거래수는 청산(왕복 완료) 시에만 1회 카운트 — 백테스트 totalTrades(왕복)와 단위 일치. 진입에선 세지 않음.
 
-        notifyTrade(d, "자동매매 매수 진입", pos.getSymbol(), fill, "ENTRY", null);
+        notifyTrade(d, "자동매매 매수 진입", pos.getSymbol(), fill, "ENTRY", null, pos.getAssetType());
     }
 
     /** 숏 개시(독립 양방향 전용). openPosition의 거울상 — side=SHORT, 손절선=상단(pctAbove). */
     private void openShort(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway, double currentPrice, long barTime) {
+        // 일일 손실한도 도달 후 신규 진입 차단(청산은 계속 허용).
+        if (dailyLossLimitHit(d)) { log.info("일일 손실한도 도달 — 신규 숏 진입 차단: deploymentId={}, symbol={}", d.getId(), pos.getSymbol()); return; }
         BigDecimal alloc = pos.getAllocatedCash();
         if (alloc == null || alloc.compareTo(BigDecimal.ZERO) <= 0) return;
         String clientOrderId = clientOrderId(d, pos, "SHORT", barTime);
@@ -1170,12 +1276,12 @@ public class LiveStrategyService {
 
         String assetType = pos.getAssetType();
         BigDecimal price = BigDecimal.valueOf(currentPrice);
-        BigDecimal krwPerUnit = priceInForeign(d, assetType) ? price.multiply(BigDecimal.valueOf(nativeKrwRate(d, assetType))) : price;
-        if (krwPerUnit.compareTo(BigDecimal.ZERO) <= 0) return;
+        if (price.compareTo(BigDecimal.ZERO) <= 0) return;   // 현재가 0 이하면 스킵
         int scale = isStockLike(assetType) ? 0 : 8;
         BigDecimal unitAlloc = alloc.divide(BigDecimal.valueOf(d.effectiveMaxUnits()), 10, RoundingMode.HALF_UP);
-        BigDecimal exposure = unitAlloc.multiply(BigDecimal.valueOf(d.effectiveLeverage()));
-        BigDecimal quantity = exposure.divide(krwPerUnit, scale, RoundingMode.DOWN);
+        // alloc(기초통화)을 가격 통화로 환산한 뒤 단가로 나눠 수량 산정.
+        BigDecimal exposure = toPriceCcy(d, assetType, unitAlloc.multiply(BigDecimal.valueOf(d.effectiveLeverage())));
+        BigDecimal quantity = exposure.divide(price, scale, RoundingMode.DOWN);
         if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
             log.warn("라이브 숏 불가(분배 자금으로 수량 0): deploymentId={}, symbol={}", d.getId(), pos.getSymbol());
             return;
@@ -1204,11 +1310,13 @@ public class LiveStrategyService {
         pos.setUnits(1);
         pos.setLastEntryPrice(fill);
         // 거래수는 청산 시에만 카운트(왕복 기준) — 진입에선 세지 않음.
-        notifyTrade(d, "자동매매 숏 진입", pos.getSymbol(), fill, "ENTRY", null);
+        notifyTrade(d, "자동매매 숏 진입", pos.getSymbol(), fill, "ENTRY", null, pos.getAssetType());
     }
 
     /** 추가 진입(피라미딩) — 롱/숏 공통. 가중평균가·수량·유닛·lastEntryPrice 갱신. */
     private void addUnit(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway, double currentPrice, long barTime, boolean isLong) {
+        // 일일 손실한도 도달 후 피라미딩(추가 진입)도 차단.
+        if (dailyLossLimitHit(d)) { log.info("일일 손실한도 도달 — 피라미딩 차단: deploymentId={}, symbol={}", d.getId(), pos.getSymbol()); return; }
         BigDecimal alloc = pos.getAllocatedCash();
         if (alloc == null || alloc.compareTo(BigDecimal.ZERO) <= 0) return;
         String side = isLong ? "BUY" : "SHORT";
@@ -1217,12 +1325,12 @@ public class LiveStrategyService {
 
         String assetType = pos.getAssetType();
         BigDecimal price = BigDecimal.valueOf(currentPrice);
-        BigDecimal krwPerUnit = priceInForeign(d, assetType) ? price.multiply(BigDecimal.valueOf(nativeKrwRate(d, assetType))) : price;
-        if (krwPerUnit.compareTo(BigDecimal.ZERO) <= 0) return;
+        if (price.compareTo(BigDecimal.ZERO) <= 0) return;   // 현재가 0 이하면 스킵
         int scale = isStockLike(assetType) ? 0 : 8;
         BigDecimal unitAlloc = alloc.divide(BigDecimal.valueOf(d.effectiveMaxUnits()), 10, RoundingMode.HALF_UP);
-        BigDecimal exposure = unitAlloc.multiply(BigDecimal.valueOf(d.effectiveLeverage()));
-        BigDecimal quantity = exposure.divide(krwPerUnit, scale, RoundingMode.DOWN);
+        // alloc(기초통화)을 가격 통화로 환산한 뒤 단가로 나눠 수량 산정.
+        BigDecimal exposure = toPriceCcy(d, assetType, unitAlloc.multiply(BigDecimal.valueOf(d.effectiveLeverage())));
+        BigDecimal quantity = exposure.divide(price, scale, RoundingMode.DOWN);
         if (quantity.compareTo(BigDecimal.ZERO) <= 0) return;
 
         Order order;
@@ -1250,7 +1358,7 @@ public class LiveStrategyService {
         pos.setUnits(pos.getUnits() + 1);
         pos.setLastEntryPrice(fill);
         // 피라미딩은 같은 왕복의 추가진입 — 거래수에 포함하지 않음(청산 시 1회만).
-        notifyTrade(d, "자동매매 추가 진입 (피라미딩 " + pos.getUnits() + "유닛)", pos.getSymbol(), fill, "ENTRY", null);
+        notifyTrade(d, "자동매매 추가 진입 (피라미딩 " + pos.getUnits() + "유닛)", pos.getSymbol(), fill, "ENTRY", null, pos.getAssetType());
     }
 
     /** +ATR 피라미딩 트리거: 직전 진입가 대비 ATR 이상 유리하게 움직였는지. */
@@ -1381,7 +1489,7 @@ public class LiveStrategyService {
         if (pnl.compareTo(BigDecimal.ZERO) > 0) d.setWinCount(d.getWinCount() + 1);
 
         resetPosition(pos);
-        notifyTrade(d, "자동매매 숏 청산 (" + reason + ")", pos.getSymbol(), fill, "EXIT", pnl);
+        notifyTrade(d, "자동매매 숏 청산 (" + reason + ")", pos.getSymbol(), fill, "EXIT", pnl, pos.getAssetType());
     }
 
     private void closePosition(LiveStrategyDeployment d, LivePosition pos, OrderGateway gateway,
@@ -1427,7 +1535,7 @@ public class LiveStrategyService {
         if (pnl.compareTo(BigDecimal.ZERO) > 0) d.setWinCount(d.getWinCount() + 1);
 
         resetPosition(pos);
-        notifyTrade(d, "자동매매 청산 (" + reason + ")", pos.getSymbol(), fill, "EXIT", pnl);
+        notifyTrade(d, "자동매매 청산 (" + reason + ")", pos.getSymbol(), fill, "EXIT", pnl, pos.getAssetType());
     }
 
     private void resetPosition(LivePosition pos) {
@@ -1465,14 +1573,31 @@ public class LiveStrategyService {
         return d.getId() + ":" + pos.getSymbol() + ":" + side + ":" + barTime;
     }
 
-    /** 체결 주문을 원장에 기록(감사 + 멱등성 키 영속). 기록 실패가 매매를 막지 않도록 흡수. */
+    /**
+     * 모멘텀 주문 멱등키 — 작업 종류(월간 ROTATION / 일간 REGIME)를 side 세그먼트에 섞어 네임스페이스를 분리한다.
+     * 매달 1일엔 월(ymToEpoch)·일(dayToEpoch) 봉 경계가 같은 epoch라, 같은 심볼+side의 레짐 주문과 리밸런싱
+     * 주문이 동일 clientOrderId를 갖고 한쪽이 조용히 디듀프되는 충돌을 막는다.
+     */
+    private String momentumClientOrderId(LiveStrategyDeployment d, LivePosition pos, String side, String reason, long barTime) {
+        String ns = (reason != null && reason.startsWith("REGIME")) ? "REGIME" : "ROTATION";
+        return clientOrderId(d, pos, ns + ":" + side, barTime);
+    }
+
+    /**
+     * 체결 주문을 원장에 기록(감사 + 멱등성 키 영속).
+     * ⚠️ 멱등성은 existsByClientOrderId 선검사 + 이 save 로 보장된다. 따라서 save 가 실패하면
+     * 멱등키가 DB에 남지 않아, 다음 봉 재평가에서 동일 주문이 '실제로' 재발주될 수 있다(실거래 중복 체결 위험).
+     * 근본 해결은 주문 전 clientOrderId 를 unique 인덱스로 SUBMITTED 선저장하는 방식(별도 작업 필요).
+     * 여기서는 실패를 ERROR 로 크게 남겨 즉시 탐지 가능하게 하되, 이미 체결된 주문 흐름은 막지 않는다.
+     */
     private void recordOrder(LiveStrategyDeployment d, LivePosition pos, String side,
                              BigDecimal quantity, BigDecimal fill, String clientOrderId, String brokerOrderId, String reason) {
         try {
             orderLogRepository.save(new LiveOrderLog(d.getId(), d.getUserId(), pos.getSymbol(), pos.getAssetType(),
                     side, quantity, fill, clientOrderId, brokerOrderId, "FILLED", reason));
         } catch (Exception e) {
-            log.warn("주문 원장 기록 실패: clientOrderId={}, error={}", clientOrderId, e.getMessage());
+            log.error("주문 원장 기록 실패 — 멱등키 미영속으로 다음 주기 중복 발주 위험! deploymentId={}, symbol={}, side={}, clientOrderId={}, error={}",
+                    d.getId(), pos.getSymbol(), side, clientOrderId, e.getMessage(), e);
         }
     }
 
@@ -1483,14 +1608,25 @@ public class LiveStrategyService {
                 .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 브로커입니다: " + brokerType));
     }
 
-    private void notifyTrade(LiveStrategyDeployment d, String title, String symbol, BigDecimal price, String action, BigDecimal pnl) {
+    /** 체결가를 네이티브 통화로 표기한다. KRW=원, 미국주식/ETF=$, Bitget 코인=USDT. */
+    private String formatTradePrice(LiveStrategyDeployment d, String assetType, BigDecimal price) {
+        if (d.getBrokerType() == LiveStrategyDeployment.BrokerType.BITGET) {
+            return String.format("%,.2f USDT", price.doubleValue());
+        }
+        if (isUsd(assetType)) {
+            return "$" + String.format("%,.2f", price.doubleValue());
+        }
+        return String.format("%,.0f원", price.doubleValue());
+    }
+
+    private void notifyTrade(LiveStrategyDeployment d, String title, String symbol, BigDecimal price, String action, BigDecimal pnl, String assetType) {
         Map<String, String> meta = new HashMap<>();
         meta.put("deploymentId", d.getId());
         meta.put("symbol", symbol);
         meta.put("action", action);
         meta.put("price", String.valueOf(price));
         if (pnl != null) meta.put("pnl", String.valueOf(pnl));
-        String message = symbol + " " + String.format("%,.0f", price.doubleValue()) + "원 ("
+        String message = symbol + " " + formatTradePrice(d, assetType, price) + " ("
                 + ("ENTRY".equals(action) ? "매수" : "매도") + ")";
         try {
             notificationService.createNotificationWithMeta(
@@ -1523,6 +1659,49 @@ public class LiveStrategyService {
     /** USD 표시 자산(미국주식/ETF) 여부 — KRW 환산이 필요한 자산. */
     private static boolean isUsd(String assetType) {
         return "US_STOCK".equalsIgnoreCase(assetType) || "ETF".equalsIgnoreCase(assetType);
+    }
+
+    // ── 기초통화(baseCurrency) 헬퍼 ──
+    // allocatedCash는 baseCurrency 단위로 저장된다. 손익 원장은 항상 KRW다.
+
+    /** 배포의 기초통화 — null(레거시)은 KRW로 본다. */
+    private String baseCcy(LiveStrategyDeployment d) {
+        return d.getBaseCurrency() != null && !d.getBaseCurrency().isBlank() ? d.getBaseCurrency() : "KRW";
+    }
+
+    /** 기초통화 결정 — 모의(PAPER)는 항상 KRW. 실거래는 Bitget=USDT, 미국주식/ETF=USD, 국내주식=KRW. */
+    private String resolveBaseCurrency(LiveStrategyDeployment.AccountMode mode, LiveStrategyDeployment.BrokerType broker, String assetType) {
+        if (mode == LiveStrategyDeployment.AccountMode.PAPER) return "KRW";
+        if (broker == LiveStrategyDeployment.BrokerType.BITGET) return "USDT";
+        if (isUsd(assetType)) return "USD";
+        return "KRW";
+    }
+
+    /** 생성 시점(아직 d 없음) — 기초통화 금액을 KRW로 환산. 상한 검사용. */
+    private BigDecimal toKrwAtCreate(BigDecimal amt, String baseCurrency, LiveStrategyDeployment.BrokerType broker) {
+        if (amt == null || "KRW".equals(baseCurrency)) return amt;
+        double rate = (broker == LiveStrategyDeployment.BrokerType.BITGET)
+                ? bitgetApiClient.getUsdtKrwRate() : exchangeRateService.getUsdKrwRate();
+        return amt.multiply(BigDecimal.valueOf(rate));
+    }
+
+    /** 배포 할당금액을 KRW로 환산(예약·손익% 분모 등 KRW 기준 비교용). 레거시(KRW)는 그대로. */
+    private BigDecimal allocatedKrwOf(LiveStrategyDeployment d) {
+        BigDecimal a = nz(d.getAllocatedCash());
+        if ("KRW".equals(baseCcy(d))) return a;
+        return a.multiply(BigDecimal.valueOf(nativeKrwRate(d, d.getAssetType())));
+    }
+
+    /**
+     * 기초통화 금액을 '가격 통화'로 환산(수량 사이징용). 가격은 자산의 네이티브 통화(미국=USD, Bitget=USDT, 국내=KRW).
+     * - 신규 네이티브(base==가격통화) 또는 국내 KRW → 그대로
+     * - 레거시(base=KRW인데 가격이 외화) → ÷환율로 네이티브 환산(기존 krwPerUnit 분모 방식과 동일 결과)
+     */
+    private BigDecimal toPriceCcy(LiveStrategyDeployment d, String assetType, BigDecimal amt) {
+        if (priceInForeign(d, assetType) && "KRW".equals(baseCcy(d))) {
+            return amt.divide(BigDecimal.valueOf(nativeKrwRate(d, assetType)), 10, RoundingMode.HALF_UP);
+        }
+        return amt;
     }
 
     /**

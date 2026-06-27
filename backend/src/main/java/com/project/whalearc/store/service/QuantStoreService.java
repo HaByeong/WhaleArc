@@ -418,6 +418,7 @@ public class QuantStoreService {
             turtleStrategyService.initializePositions(userId, purchase.getId(), targetAssets, investBd);
             log.info("터틀 항로 구매: userId={}, investment={}, assets={}", userId, investmentAmount, targetAssets);
         } else {
+            // ── 도달 불가(375행 가드에서 TURTLE 외 전략은 이미 예외) — 레거시 참고용 ──
             // ── 일반 전략: 균등 분배 즉시 매수 (가상화폐 or 주식) ──
             boolean isStockProduct = product.isStock();
             String assetType = isStockProduct ? "STOCK" : "CRYPTO";
@@ -559,11 +560,8 @@ public class QuantStoreService {
         purchase.setStatus(ProductPurchase.Status.REFUNDED);
         purchase = purchaseRepository.save(purchase);
 
-        // 구독자 수 감소
-        productRepository.findById(purchase.getProductId()).ifPresent(p -> {
-            p.setSubscribers(Math.max(0, p.getSubscribers() - 1));
-            productRepository.save(p);
-        });
+        // 구독자 수 원자적 감소($inc:-1) — 증가 경로와 동일하게 동시 취소/구매 경합 시 lost-update 방지
+        productRepository.decrementSubscribers(purchase.getProductId());
 
         log.info("항로 구매 취소 완료: userId={}, product={}", userId, purchase.getProductName());
         return purchase;

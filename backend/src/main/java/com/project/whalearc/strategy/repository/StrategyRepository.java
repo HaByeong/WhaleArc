@@ -11,4 +11,5 @@ public interface StrategyRepository extends MongoRepository<Strategy, String> {
     List<Strategy> findByUserIdOrderByCreatedAtDesc(String userId);
     List<Strategy> findByAppliedTrue();
     List<Strategy> findByAutoTradingEnabledTrue();
+    long countByUserId(String userId);
 }

@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("users")
+@RequestMapping("/users")
 public class UserProfileController {
 
     private final UserInfoServiceInterface userInfoService;

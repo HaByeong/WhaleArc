@@ -5,7 +5,7 @@ import com.project.whalearc.community.domain.CommunityPost;
 import com.project.whalearc.community.dto.*;
 import com.project.whalearc.community.repository.CommunityCommentRepository;
 import com.project.whalearc.community.repository.CommunityPostRepository;
-import com.project.whalearc.ranking.service.RankingService;
+import com.project.whalearc.trade.service.PortfolioService;
 import com.project.whalearc.strategy.domain.Strategy;
 import com.project.whalearc.strategy.service.StrategyService;
 import lombok.RequiredArgsConstructor;
@@ -24,8 +24,9 @@ public class CommunityService {
 
     private final CommunityPostRepository postRepository;
     private final CommunityCommentRepository commentRepository;
-    private final RankingService rankingService;
+    private final PortfolioService portfolioService;
     private final StrategyService strategyService;
+    private final CommunityImageService communityImageService;
 
     /** 수익률 → 고래등급 (ConsoleStatusPage tierOf 와 동일 임계). */
     private String tierFromReturn(double ret) {
@@ -35,10 +36,11 @@ public class CommunityService {
         return "beluga";
     }
 
-    /** 작성자의 현재 수익률 기준 고래등급 스냅샷. 랭킹 조회 실패 시 흰고래. */
+    /** 작성자의 현재 수익률 기준 고래등급 스냅샷. 조회 실패 시 흰고래.
+     *  전체 랭킹(findAll 풀스캔) 대신 본인 포트폴리오 수익률만 조회 — 등급은 수익률 버킷이라 동일 결과. */
     private String resolveTier(String userId) {
         try {
-            return tierFromReturn(rankingService.getMyRanking(userId).getTotalReturn());
+            return tierFromReturn(portfolioService.getOrCreatePortfolio(userId).getReturnRate().doubleValue());
         } catch (Exception e) {
             log.debug("tier 계산 실패(userId={}) → beluga 기본값", userId, e);
             return "beluga";
@@ -123,10 +125,12 @@ public class CommunityService {
     }
 
     public PostResponse incrementShare(String userId, String postId) {
-        CommunityPost p = postRepository.findById(postId)
+        postRepository.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("게시글을 찾을 수 없습니다."));
         postRepository.incrementShareCount(postId); // 원자적 $inc (lost-update 방지)
-        p.setShareCount(p.getShareCount() + 1);     // 응답 표시용 (DB는 이미 증가됨)
+        // $inc 후 최신 문서를 다시 읽어 응답 shareCount를 DB 실제값과 일치시킨다(동시 공유 시 어긋남 방지)
+        CommunityPost p = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("게시글을 찾을 수 없습니다."));
         return PostResponse.from(p, userId);
     }
 
@@ -147,10 +151,12 @@ public class CommunityService {
         if (!p.getUserId().equals(userId)) throw new IllegalArgumentException("본인 게시글만 삭제할 수 있습니다.");
         commentRepository.deleteByPostId(postId);
         postRepository.delete(p);
+        // 업로드 이미지 고아 방지 — best-effort 정리(실패해도 삭제는 이미 완료)
+        if (p.getImageUrls() != null) p.getImageUrls().forEach(communityImageService::deleteImageByUrl);
     }
 
     public List<CommentResponse> getComments(String postId, String currentUserId) {
-        return commentRepository.findByPostIdOrderByCreatedAtAsc(postId).stream()
+        return commentRepository.findTop100ByPostIdOrderByCreatedAtAsc(postId).stream()
                 .map(c -> CommentResponse.from(c, currentUserId)).toList();
     }
 

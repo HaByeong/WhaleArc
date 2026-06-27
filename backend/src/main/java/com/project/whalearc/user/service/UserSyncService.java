@@ -60,7 +60,8 @@ public class UserSyncService {
                     } catch (DuplicateKeyException e) {
                         // 동시 요청으로 중복 생성 시도 — 이미 생성된 레코드 반환
                         log.debug("User already created by concurrent request: {}", supabaseId);
-                        return userRepository.findBySupabaseId(supabaseId).orElseThrow();
+                        return userRepository.findBySupabaseId(supabaseId)
+                                .orElseThrow(() -> new IllegalStateException("동시 생성 후 사용자 조회 실패: " + supabaseId));
                     }
                 });
 

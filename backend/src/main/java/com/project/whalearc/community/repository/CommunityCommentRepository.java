@@ -9,6 +9,8 @@ import java.util.List;
 @Repository
 public interface CommunityCommentRepository extends MongoRepository<CommunityComment, String> {
     List<CommunityComment> findByPostIdOrderByCreatedAtAsc(String postId);
+    // 댓글도 상한 100건 (게시글 피드와 동일하게 전체 반환 방지 — 확장성). 초과분은 향후 '더 보기'로.
+    List<CommunityComment> findTop100ByPostIdOrderByCreatedAtAsc(String postId);
     long countByPostId(String postId);
     void deleteByPostId(String postId);
 }

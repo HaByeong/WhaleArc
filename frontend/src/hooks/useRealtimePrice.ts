@@ -31,7 +31,13 @@ export function useRealtimePrice({ symbol = null, enabled = true }: UseRealtimeP
     };
 
     const onMessage = (message: { body: string }) => {
-      const data: MarketPrice = JSON.parse(message.body);
+      let data: MarketPrice;
+      try {
+        data = JSON.parse(message.body);
+      } catch {
+        // 비정상/빈 프레임은 해당 메시지만 건너뛴다
+        return;
+      }
       pricesMap.set(data.symbol, data);
       dirty = true;
       // requestAnimationFrame으로 브라우저 프레임마다 한 번만 업데이트

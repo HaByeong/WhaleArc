@@ -3,6 +3,7 @@ package com.project.whalearc.auth.login.controller.user;
 import com.project.whalearc.auth.login.dto.user.UserProfileResponseDto;
 import com.project.whalearc.auth.login.dto.user.UserUpdateRequestDto;
 import com.project.whalearc.auth.login.service.user.UserUpdateServiceInterface;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,7 +28,7 @@ public class UserUpdateController {
     }
 
     @PutMapping
-    public ResponseEntity changeUser(@RequestBody UserUpdateRequestDto userUpdateDto) {
+    public ResponseEntity<String> changeUser(@Valid @RequestBody UserUpdateRequestDto userUpdateDto) {
         userUpdateService.updateUser(userUpdateDto);
         return ResponseEntity.ok("사용자 개인정보 변경이 완료되었습니다.");
     }

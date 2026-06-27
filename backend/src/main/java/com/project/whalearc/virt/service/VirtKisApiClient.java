@@ -9,8 +9,11 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -25,6 +28,7 @@ public class VirtKisApiClient {
     private static final String REAL_BASE_URL = "https://openapi.koreainvestment.com:9443";
     private static final int MAX_RETRIES = 3;
     private static final long RETRY_DELAY_MS = 500;
+    private static final int MAX_PAGES = 10;   // 잔고 연속조회(페이지네이션) 상한 — 무한루프 방지
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -108,20 +112,49 @@ public class VirtKisApiClient {
     @SuppressWarnings("unchecked")
     public Map<String, Object> getAccountBalance(String userId, String appkey, String appsecret,
                                                   String accountNo, String productCode) {
-        String url = REAL_BASE_URL + "/uapi/domestic-stock/v1/trading/inquire-balance"
-                + "?CANO=" + accountNo
-                + "&ACNT_PRDT_CD=" + productCode
-                + "&AFHR_FLPR_YN=N"
-                + "&OFL_YN="
-                + "&INQR_DVSN=02"
-                + "&UNPR_DVSN=01"
-                + "&FUND_STTL_ICLD_YN=N"
-                + "&FNCG_AMT_AUTO_RDPT_YN=N"
-                + "&PRCS_DVSN=00"
-                + "&CTX_AREA_FK100="
-                + "&CTX_AREA_NK100=";
+        // KIS 국내잔고(TTTC8434R)는 보유종목이 많으면 여러 페이지로 내려온다. tr_cont(F/M) 연속조회로
+        // 전 페이지의 output1(보유내역)을 병합한다(첫 페이지만 읽으면 종목·평가금액 누락). output2/output3(예수금·합계)은 첫 페이지 값 사용.
+        Map<String, Object> first = null;
+        List<Map<String, Object>> mergedOutput1 = new ArrayList<>();
+        Set<String> seen = new HashSet<>();   // 페이지 간 같은 종목(pdno) 중복 적재 방지
+        String fk = "", nk = "", trCont = "";
+        for (int page = 0; page < MAX_PAGES; page++) {
+            String url = REAL_BASE_URL + "/uapi/domestic-stock/v1/trading/inquire-balance"
+                    + "?CANO=" + accountNo
+                    + "&ACNT_PRDT_CD=" + productCode
+                    + "&AFHR_FLPR_YN=N"
+                    + "&OFL_YN="
+                    + "&INQR_DVSN=02"
+                    + "&UNPR_DVSN=01"
+                    + "&FUND_STTL_ICLD_YN=N"
+                    + "&FNCG_AMT_AUTO_RDPT_YN=N"
+                    + "&PRCS_DVSN=00"
+                    + "&CTX_AREA_FK100=" + fk
+                    + "&CTX_AREA_NK100=" + nk;
 
-        return executeWithRetry(userId, appkey, appsecret, url, "TTTC8434R", "잔고조회");
+            KisPage pg = executeWithRetryPage(userId, appkey, appsecret, url, "TTTC8434R", trCont, "잔고조회");
+            Map<String, Object> b = pg.body();
+            if (first == null) first = b;
+
+            Object o1 = b.get("output1");
+            if (o1 instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> m) {
+                        String pdno = String.valueOf(m.get("pdno"));
+                        if (!seen.add(pdno)) continue;   // 이미 담은 종목(페이지 중복) 스킵
+                        mergedOutput1.add((Map<String, Object>) item);
+                    }
+                }
+            }
+
+            String resp = pg.trCont();
+            if (!"F".equals(resp) && !"M".equals(resp)) break;   // 더 이상 연속 페이지 없음
+            fk = String.valueOf(b.getOrDefault("ctx_area_fk100", "")).trim();
+            nk = String.valueOf(b.getOrDefault("ctx_area_nk100", "")).trim();
+            trCont = "N";
+        }
+        if (first != null) first.put("output1", mergedOutput1);   // 전체 페이지 보유내역으로 교체
+        return first;
     }
 
     /* ───── 해외주식 체결기준현재잔고 (통합잔고조회) ───── */
@@ -179,11 +212,24 @@ public class VirtKisApiClient {
     @SuppressWarnings("unchecked")
     private Map<String, Object> executeWithRetry(String userId, String appkey, String appsecret,
                                                    String url, String trId, String apiName) {
+        return executeWithRetryPage(userId, appkey, appsecret, url, trId, "", apiName).body();
+    }
+
+    /** KIS 연속조회 한 페이지 결과: 파싱된 본문 + 응답 tr_cont 헤더(F/M=연속 페이지 있음). */
+    private record KisPage(Map<String, Object> body, String trCont) {}
+
+    /**
+     * executeWithRetry의 페이지네이션 인식 버전 — 요청 tr_cont 헤더를 실어 보내고,
+     * 응답 본문과 함께 응답 tr_cont 헤더를 돌려준다(연속조회 판정용).
+     */
+    private KisPage executeWithRetryPage(String userId, String appkey, String appsecret,
+                                          String url, String trId, String trContReq, String apiName) {
         Exception lastException = null;
 
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 HttpHeaders headers = buildHeaders(userId, appkey, appsecret, trId);
+                if (trContReq != null && !trContReq.isEmpty()) headers.set("tr_cont", trContReq);
                 HttpEntity<Void> request = new HttpEntity<>(headers);
 
                 ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
@@ -198,7 +244,7 @@ public class VirtKisApiClient {
                 if (attempt > 1) {
                     log.info("[Virt] {} 성공 ({}번째 시도)", apiName, attempt);
                 }
-                return result;
+                return new KisPage(result, response.getHeaders().getFirst("tr_cont"));
             } catch (RuntimeException e) {
                 if (e.getMessage() != null && e.getMessage().contains("실패:")) {
                     throw e; // API 비즈니스 에러는 리트라이하지 않음

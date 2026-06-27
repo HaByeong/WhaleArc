@@ -37,7 +37,9 @@ export const marketService = {
   },
 
   getCandlesticks: async (symbol: string, interval: string = '10m', assetType?: AssetType): Promise<Candlestick[]> => {
-    const cacheKey = `${symbol}:${interval}:${assetType ?? 'CRYPTO'}`;
+    // assetType 미지정 호출은 params에서 아예 빠지므로(아래 46-48행) 'CRYPTO' 명시 호출과
+    // 캐시 키가 충돌하지 않도록 별도 토큰('NONE')을 쓴다.
+    const cacheKey = `${symbol}:${interval}:${assetType ?? 'NONE'}`;
     const cached = candleCache.get(cacheKey);
     if (cached && Date.now() < cached.expireAt) {
       return cached.data;

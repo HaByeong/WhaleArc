@@ -130,7 +130,9 @@ public class MomentumDataCache {
             String[] p = line.split(",");
             if (p.length < 5 || p[0].equalsIgnoreCase("time")) continue;
             try {
-                long t = LocalDate.parse(p[0].trim()).atStartOfDay(KST).toEpochSecond();
+                // 거래일 epoch는 UTC 자정 기준 — Yahoo/KIS 캔들 경로(CandlestickService·BacktestDataProvider)와
+                // 동일 규약으로 맞춰, 로컬 시드 종목과 페치 종목이 같은 거래일에 9시간 어긋나지 않게 한다.
+                long t = LocalDate.parse(p[0].trim()).atStartOfDay(java.time.ZoneOffset.UTC).toEpochSecond();
                 double close = Double.parseDouble(p[4].trim());
                 if (close > 0) out.add(new CandlestickResponse(t, close, close, close, close, 0));
             } catch (Exception ignore) { /* 손상 라인 스킵 */ }

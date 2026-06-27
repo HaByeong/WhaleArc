@@ -1,6 +1,7 @@
 package com.project.whalearc.strategy.service;
 
 import com.project.whalearc.market.dto.CandlestickResponse;
+import com.project.whalearc.market.service.BacktestDataProvider;
 import com.project.whalearc.market.service.ExchangeRateService;
 import com.project.whalearc.market.service.MomentumDataCache;
 import com.project.whalearc.strategy.dto.BacktestRequest;
@@ -54,7 +55,7 @@ class MomentumRotationBacktestServiceTest {
         ExchangeRateService fx = mock(ExchangeRateService.class);
         when(fx.getUsdKrwRate()).thenReturn(1400.0);
 
-        MomentumRotationBacktestService svc = new MomentumRotationBacktestService(cache, fx);
+        MomentumRotationBacktestService svc = new MomentumRotationBacktestService(cache, mock(BacktestDataProvider.class), fx);
 
         BacktestRequest req = new BacktestRequest();
         req.setStrategyType("MOMENTUM_ROTATION");
@@ -94,7 +95,7 @@ class MomentumRotationBacktestServiceTest {
         ExchangeRateService fx = mock(ExchangeRateService.class);
         when(fx.getUsdKrwRate()).thenReturn(1400.0);
 
-        MomentumRotationBacktestService svc = new MomentumRotationBacktestService(cache, fx);
+        MomentumRotationBacktestService svc = new MomentumRotationBacktestService(cache, mock(BacktestDataProvider.class), fx);
         BacktestRequest req = new BacktestRequest();
         req.setStrategyType("MOMENTUM_ROTATION");
         req.setStartDate("2023-01-02"); req.setEndDate("2024-01-01");

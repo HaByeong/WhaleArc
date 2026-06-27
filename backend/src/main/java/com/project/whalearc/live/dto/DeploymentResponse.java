@@ -26,7 +26,8 @@ public class DeploymentResponse {
     private final String marketType;
     private final Integer leverage;
     private final String status;
-    private final BigDecimal allocatedCash;
+    private final BigDecimal allocatedCash;       // baseCurrency 단위
+    private final String baseCurrency;            // 할당금액 기초통화: KRW/USD/USDT (레거시 null은 KRW)
     private final BigDecimal stopLossPct;
     private final BigDecimal takeProfitPct;
     private final BigDecimal trailingStopPct;
@@ -66,6 +67,7 @@ public class DeploymentResponse {
         this.leverage = d.getLeverage();
         this.status = d.getStatus() != null ? d.getStatus().name() : null;
         this.allocatedCash = d.getAllocatedCash();
+        this.baseCurrency = d.getBaseCurrency() != null && !d.getBaseCurrency().isBlank() ? d.getBaseCurrency() : "KRW";
         this.stopLossPct = d.getStopLossPct();
         this.takeProfitPct = d.getTakeProfitPct();
         this.trailingStopPct = d.getTrailingStopPct();

@@ -1,11 +1,13 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, type NavigateOptions } from 'react-router-dom';
 import { useCallback } from 'react';
 
 const AUTH_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password', '/auth'];
 
 export function useRoutePrefix() {
   const location = useLocation();
-  const isVirt = location.pathname.startsWith('/virt');
+  // 정확한 세그먼트 경계로 비교 — '/virtual' 등이 virt 섹션으로 오인되지 않게.
+  const p = location.pathname;
+  const isVirt = p === '/virt' || p.startsWith('/virt/');
   const prefix = isVirt ? '/virt' : '';
 
   return { prefix, isVirt };
@@ -16,7 +18,7 @@ export function useVirtNavigate() {
   const { prefix } = useRoutePrefix();
 
   const virtNavigate = useCallback(
-    (path: string, options?: any) => {
+    (path: string, options?: NavigateOptions) => {
       if (!prefix || !path.startsWith('/') || path.startsWith(prefix) || AUTH_PATHS.some(p => path.startsWith(p))) {
         navigate(path, options);
         return;

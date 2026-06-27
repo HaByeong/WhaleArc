@@ -42,7 +42,8 @@ function readMode(key: string, fallback: Mode): Mode {
 
 function resolveSection(pathname: string): Section {
   if (PUBLIC_ROUTES.includes(pathname)) return 'public';
-  if (pathname.startsWith('/virt')) return 'virt';
+  // 정확한 세그먼트 경계로 비교 — '/virtual' 등이 virt 섹션으로 오인되지 않게.
+  if (pathname === '/virt' || pathname.startsWith('/virt/')) return 'virt';
   return 'novirt';
 }
 

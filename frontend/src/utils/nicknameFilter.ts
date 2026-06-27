@@ -61,7 +61,6 @@ function normalize(text: string): string {
     .toLowerCase()
     .replace(/[\s_\-·.!@#$%^&*()0-9]/g, '')
     .replace(/[ㅣl1|]/g, 'i')
-    .replace(/[o0]/g, 'o')
     .replace(/[3]/g, 'e');
 }
 
@@ -92,7 +91,7 @@ export function validateNickname(nickname: string): NicknameValidation {
   }
 
   // 허용 문자: 한글, 영문, 숫자, _, -
-  if (!/^[가-힣a-zA-Z0-9_\-]+$/.test(trimmed)) {
+  if (!/^[가-힣a-zA-Z0-9_-]+$/.test(trimmed)) {
     return { valid: false, message: '한글, 영문, 숫자, _, - 만 사용할 수 있습니다.' };
   }
 

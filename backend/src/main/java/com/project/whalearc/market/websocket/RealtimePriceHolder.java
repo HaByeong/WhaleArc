@@ -25,7 +25,7 @@ public class RealtimePriceHolder {
             Map.entry("BTC", "비트코인"), Map.entry("ETH", "이더리움"),
             Map.entry("XRP", "리플"), Map.entry("SOL", "솔라나"),
             Map.entry("DOGE", "도지코인"), Map.entry("ADA", "에이다"),
-            Map.entry("DOT", "폴카닷"), Map.entry("MATIC", "폴리곤"), Map.entry("POL", "폴리곤"),
+            Map.entry("DOT", "폴카닷"), Map.entry("POL", "폴리곤"),
             Map.entry("AVAX", "아발란체"), Map.entry("LINK", "체인링크"),
             Map.entry("TRX", "트론"), Map.entry("ATOM", "코스모스"),
             Map.entry("UNI", "유니스왑"), Map.entry("APT", "앱토스"),
@@ -103,14 +103,6 @@ public class RealtimePriceHolder {
             return Double.parseDouble(value);
         } catch (Exception e) {
             return 0.0;
-        }
-    }
-
-    private long parseLongSafe(String value) {
-        try {
-            return value.contains(".") ? (long) Double.parseDouble(value) : Long.parseLong(value);
-        } catch (Exception e) {
-            return 0L;
         }
     }
 

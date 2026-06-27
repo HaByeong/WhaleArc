@@ -143,11 +143,6 @@ public class OrderService {
      * 매수/매도 사전 검증
      */
     private void validateOrder(Order.OrderType orderType, String stockCode, String stockName,
-                                BigDecimal quantity, BigDecimal executionPrice, Portfolio portfolio) {
-        validateOrder(orderType, stockCode, stockName, quantity, executionPrice, portfolio, null);
-    }
-
-    private void validateOrder(Order.OrderType orderType, String stockCode, String stockName,
                                 BigDecimal quantity, BigDecimal executionPrice, Portfolio portfolio, String assetType) {
         if (orderType == Order.OrderType.BUY) {
             BigDecimal totalCost = executionPrice.multiply(quantity).multiply(BigDecimal.ONE.add(TradeRecord.COMMISSION_RATE));
@@ -231,11 +226,25 @@ public class OrderService {
                     Notification.NotificationType.MARKET_ORDER_FILLED,
                     typeLabel + " 체결 완료",
                     order.getStockName() + " " + order.getQuantity().stripTrailingZeros().toPlainString()
-                            + "주를 " + currencyUnit + "에 " + typeLabel + "했습니다.",
+                            + unitLabel(order) + "를 " + currencyUnit + "에 " + typeLabel + "했습니다.",
                     Map.of("orderId", order.getId(), "stockCode", order.getStockCode(),
                            "assetType", order.getAssetType() != null ? order.getAssetType() : "CRYPTO")
             );
         }
+    }
+
+    /** 자산유형별 수량 단위: 주식/미국주식/ETF는 '주', 가상화폐는 '개'. 시장가·지정가 알림이 공유한다. */
+    private String unitLabel(Order order) {
+        return (order.isStock() || order.isUsStock() || order.isEtf()) ? "주" : "개";
+    }
+
+    /** 자산유형별 체결가 표기: 미국주식/ETF(USD)는 '$X.XX (약 ₩Y)', 그 외는 'Z원'. 시장가·지정가 알림이 공유한다. */
+    private String priceLabel(Order order, BigDecimal price) {
+        if (order.isUsStock() || order.isEtf()) {
+            return "$" + price.setScale(2, RoundingMode.HALF_UP).toPlainString()
+                    + " (약 ₩" + exchangeRateService.usdToKrw(price).toPlainString() + ")";
+        }
+        return price.setScale(0, RoundingMode.HALF_UP).toPlainString() + "원";
     }
 
     private void addOrUpdateHolding(Portfolio portfolio, String stockCode, String stockName,
@@ -434,9 +443,10 @@ public class OrderService {
                     fresh.getUserId(),
                     Notification.NotificationType.LIMIT_ORDER_FILLED,
                     "지정가 주문 체결",
-                    fresh.getStockName() + " " + fresh.getQuantity().toPlainString() + "개 "
+                    fresh.getStockName() + " " + fresh.getQuantity().stripTrailingZeros().toPlainString()
+                            + unitLabel(fresh) + " "
                             + (fresh.getOrderType() == Order.OrderType.BUY ? "매수" : "매도")
-                            + " 체결 (" + fresh.getFilledPrice().toPlainString() + "원)",
+                            + " 체결 (" + priceLabel(fresh, fresh.getFilledPrice()) + ")",
                     Map.of("orderId", fresh.getId(), "stockCode", fresh.getStockCode(), "assetType", fresh.getAssetType())
             );
 
@@ -461,16 +471,21 @@ public class OrderService {
     }
 
     public void cancelOrder(String userId, String orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다."));
-        if (!order.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("본인의 주문만 취소할 수 있습니다.");
-        }
-        if (order.getStatus() != Order.OrderStatus.PENDING) {
-            throw new IllegalArgumentException("대기 중인 주문만 취소할 수 있습니다.");
-        }
-        order.setStatus(Order.OrderStatus.CANCELLED);
-        order.setUpdatedAt(Instant.now());
-        orderRepository.save(order);
+        // 지정가 자동체결 스케줄러(tryExecuteLimitOrder)와 같은 유저 락으로 직렬화한다.
+        // 락 없이 취소하면, 스케줄러가 PENDING을 읽고 FILLED 저장하기 직전에 취소가 끼어들어도
+        // 직후 executeOrder의 save가 취소를 덮어써 FILLED로 만드는 경합이 발생한다.
+        userLockRegistry.withLock(userId, () -> {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다."));
+            if (!order.getUserId().equals(userId)) {
+                throw new IllegalArgumentException("본인의 주문만 취소할 수 있습니다.");
+            }
+            if (order.getStatus() != Order.OrderStatus.PENDING) {
+                throw new IllegalArgumentException("대기 중인 주문만 취소할 수 있습니다.");
+            }
+            order.setStatus(Order.OrderStatus.CANCELLED);
+            order.setUpdatedAt(Instant.now());
+            orderRepository.save(order);
+        });
     }
 }

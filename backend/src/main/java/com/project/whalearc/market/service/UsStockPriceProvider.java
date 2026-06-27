@@ -128,23 +128,35 @@ public class UsStockPriceProvider {
         return info != null ? info[1] : "NAS";
     }
 
-    /** 인기종목 내 검색 (심볼/이름 매칭) */
+    /**
+     * 미국주식 검색 — 인기종목(친숙한 한글명) + 모멘텀 유니버스(132) + 정확한 티커 직접입력.
+     * 인기 30종목만으로는 대부분 티커(MU·WDC·FCX 등)가 안 잡혀, 유니버스/직접입력으로 확장한다.
+     */
     public List<Map<String, String>> search(String keyword) {
         if (keyword == null || keyword.trim().length() < 1) return List.of();
         String upper = keyword.trim().toUpperCase();
-        List<Map<String, String>> results = new ArrayList<>();
+        java.util.LinkedHashMap<String, Map<String, String>> byCode = new java.util.LinkedHashMap<>();
 
+        // 1) 인기 종목 (한글명 우선)
         for (Map.Entry<String, String[]> entry : POPULAR_US_STOCKS.entrySet()) {
             String symbol = entry.getKey();
             String name = entry.getValue()[0];
             String exchange = entry.getValue()[1];
-
             if (symbol.contains(upper) || name.toUpperCase().contains(upper)) {
-                results.add(Map.of("code", symbol, "name", name, "market", "NAS".equals(exchange) ? "NASDAQ" : "NYSE"));
+                byCode.put(symbol, Map.of("code", symbol, "name", name, "market", "NAS".equals(exchange) ? "NASDAQ" : "NYSE"));
             }
-            if (results.size() >= 20) break;
         }
-        return results;
+        // 2) 모멘텀 유니버스(인기목록 밖 티커도 검색·백테스트 가능하게)
+        for (String symbol : MomentumUniverse.symbols()) {
+            if (byCode.containsKey(symbol)) continue;
+            if (symbol.contains(upper)) byCode.put(symbol, Map.of("code", symbol, "name", symbol, "market", "NASDAQ"));
+        }
+        // 3) 카탈로그에 없어도 정확한 티커 형태면 직접 입력 허용 (Yahoo가 임의 미국 티커를 해석)
+        if (byCode.isEmpty() && upper.matches("[A-Z]{1,5}")) {
+            byCode.put(upper, Map.of("code", upper, "name", upper, "market", "US"));
+        }
+        List<Map<String, String>> results = new ArrayList<>(byCode.values());
+        return results.size() > 30 ? results.subList(0, 30) : results;
     }
 
     /** 종목 존재 여부 */

@@ -69,7 +69,7 @@ const GhostBtn = ({ children, onClick, lg }: { children: ReactNode; onClick?: ()
 );
 
 const VirtBadge = () => (
-  <span className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide"
+  <span className="rounded px-1.5 py-0.5 text-[11px] font-bold tracking-wide"
     style={{ background: 'rgba(180,210,255,.18)', color: '#cfe1ff', border: '1px solid rgba(91,157,255,.24)' }}>VIRT</span>
 );
 
@@ -98,25 +98,19 @@ type PriceItem = [string, boolean];
 const PRICING: { name: string; tagline: string; price: string; period?: string; cta: string; featured: boolean; groups: { h: string; items: PriceItem[] }[] }[] = [
   { name: 'Free', tagline: '무료로 시작하기', price: '무료', cta: '무료로 시작', featured: false, groups: [
     { h: '기본', items: [['시세 조회', true], ['가상매매 (VIRT)', true], ['랭킹', true], ['피드백', true], ['알림 3개', true]] },
-    { h: '백테스팅', items: [['단일 전략 · 단일 종목', true], ['최근 1년 데이터', true], ['멀티 종목 / 전략', false]] },
+    { h: '백테스팅', items: [['프리셋 전략 · 단일 종목', true], ['최근 1년 데이터', true], ['커스텀 전략 빌더', false], ['멀티 종목 / 전략', false]] },
     { h: '실거래', items: [['실거래', false], ['퀀트스토어', false]] },
   ] },
-  { name: 'Basic', tagline: '본격적인 백테스트', price: '₩9,900', period: '/월', cta: 'Basic 시작하기', featured: false, groups: [
+  { name: 'Basic', tagline: '본격적인 백테스트', price: '₩19,900', period: '/월', cta: 'Basic 시작하기', featured: false, groups: [
     { h: '기본', items: [['Free의 모든 기능', true], ['알림 20개', true]] },
-    { h: '백테스팅', items: [['최근 5년 데이터', true], ['멀티 종목 (5개)', true], ['멀티 전략 (3개)', true], ['기본 리포트', true]] },
+    { h: '백테스팅', items: [['최근 5년 데이터', true], ['멀티 종목 (5개)', true], ['커스텀 전략 빌더', true], ['기본 리포트', true]] },
     { h: '실거래 (기본)', items: [['전략 1개 · 종목 3개', true], ['리밸런싱 자동화', false]] },
   ] },
-  { name: 'Pro', tagline: '무제한 · 자동화', price: '₩29,900', period: '/월', cta: 'Pro 시작하기', featured: true, groups: [
+  { name: 'Pro', tagline: '무제한 · 자동화', price: '₩49,900', period: '/월', cta: 'Pro 시작하기', featured: true, groups: [
     { h: '기본', items: [['Basic의 모든 기능', true], ['알림 무제한', true]] },
     { h: '백테스팅', items: [['최근 10년+ 데이터', true], ['멀티 종목 무제한', true], ['멀티 전략 무제한', true], ['상세 리포트 · 파라미터 최적화', true]] },
     { h: '실거래 (고급)', items: [['전략 · 종목 무제한', true], ['리밸런싱 자동화 · 우선 체결', true], ['퀀트스토어 열람', true]] },
   ] },
-];
-
-const ADDONS = [
-  { name: '프리미엄 전략', price: '전략당 월 5,000원~', desc: '검증된 고급 전략을 구독으로 추가' },
-  { name: '실계좌 연동 (VIRT)', price: '월 4,900원', desc: '가상에서 실계좌로 전략을 그대로 이관' },
-  { name: '항로 상품 구매', price: '상품별 개별 가격', desc: '전문가가 설계한 포트폴리오 항로' },
 ];
 
 const HOLDINGS = [
@@ -222,17 +216,17 @@ const LandingPage = () => {
         <div className="relative mx-auto grid max-w-[1280px] items-center gap-10 px-6 pb-24 pt-28 md:grid-cols-[1.05fr_.95fr] md:px-14 md:pt-36">
           {/* 왼쪽 텍스트 */}
           <div>
-            <Eyebrow>실전 데이터로, 잃을 걱정 없이</Eyebrow>
+            <Eyebrow>투기를 투자로</Eyebrow>
             <h1 className="mt-6 font-extrabold" style={{ fontSize: 'clamp(40px,7vw,72px)', lineHeight: 1.06, letterSpacing: '-.025em' }}>
               고래처럼,<br />
-              <span style={{ fontWeight: 700, color: 'rgba(255,255,255,.55)' }}>시장을 유영하듯</span>
+              <span style={{ fontWeight: 700, color: 'rgba(255,255,255,.63)' }}>시장을 <span className="hero-swim">유영하듯</span></span>
             </h1>
             <p className="mt-6 text-white/70" style={{ fontSize: 18, lineHeight: 1.6, maxWidth: 480 }}>
               실시간 시세와 포트폴리오 분석으로<br />
               나만의 투자 전략을 잃을 걱정 없이 검증해보세요.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3.5">
-              <PrimaryBtn onClick={() => go('/dashboard')}>대시보드로 이동 →</PrimaryBtn>
+              <PrimaryBtn onClick={() => go('/dashboard')}>항해 시작하기 →</PrimaryBtn>
               <GhostBtn onClick={() => go('/virt/dashboard')}>처음이라면 모의투자부터 <VirtBadge /></GhostBtn>
             </div>
             <div className="mt-12 flex flex-wrap gap-6 text-white/50" style={{ fontSize: 12.5, letterSpacing: '.02em' }}>
@@ -264,9 +258,9 @@ const LandingPage = () => {
                 <div className="relative flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: 'rgba(91,157,255,.10)', border: '1px solid rgba(91,157,255,.22)' }}>
                   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke={GLOW} strokeWidth={1.8}>{f.icon}</svg>
                 </div>
-                <h3 className="relative mt-5 text-[17px] font-bold">{f.title}</h3>
-                <p className="relative mt-2 text-[13.5px] leading-relaxed text-white/55">{f.body}</p>
-                <p className="relative mt-4 text-[11.5px] font-medium" style={{ color: '#9cc1ff', letterSpacing: '.04em' }}>{f.meta}</p>
+                <h3 className="relative mt-5 text-[18.5px] font-bold">{f.title}</h3>
+                <p className="relative mt-2 text-[14.5px] leading-relaxed text-white/55">{f.body}</p>
+                <p className="relative mt-4 text-[12.5px] font-medium" style={{ color: '#9cc1ff', letterSpacing: '.04em' }}>{f.meta}</p>
               </button>
             ))}
           </div>
@@ -284,14 +278,14 @@ const LandingPage = () => {
               <span className="h-3 w-3 rounded-full" style={{ background: '#ff5f57' }} />
               <span className="h-3 w-3 rounded-full" style={{ background: '#febc2e' }} />
               <span className="h-3 w-3 rounded-full" style={{ background: '#28c840' }} />
-              <span className="ml-3 font-mono text-[11px] text-white/40">app.whalearc.io / dashboard</span>
+              <span className="ml-3 font-mono text-[12px] text-white/40">app.whalearc.io / dashboard</span>
             </div>
             {/* 본문 */}
             <div className="grid grid-cols-1 md:grid-cols-[180px_1fr] lg:grid-cols-[180px_1fr_260px]">
               {/* 사이드바 */}
               <div className="hidden flex-col gap-1 p-3 md:flex" style={{ borderRight: '1px solid rgba(255,255,255,.08)' }}>
                 {[['내 투자', true], ['포트폴리오'], ['시세'], ['거래'], ['전략'], ['전략 학습'], ['투자 현황'], ['VIRT 대시보드']].map(([label, active], i) => (
-                  <div key={i} className="flex items-center justify-between rounded-lg px-3 py-2 text-[13px]"
+                  <div key={i} className="flex items-center justify-between rounded-lg px-3 py-2 text-[14px]"
                     style={active ? { background: 'rgba(91,157,255,.12)', color: '#fff', border: '1px solid rgba(91,157,255,.25)' } : { color: 'rgba(255,255,255,.55)' }}>
                     {label}{label === 'VIRT 대시보드' && <VirtBadge />}
                   </div>
@@ -300,22 +294,22 @@ const LandingPage = () => {
               {/* 메인 */}
               <div className="p-5 md:p-6">
                 <div className="flex items-center justify-between">
-                  <span className="text-[13px] text-white/55">내 포트폴리오</span>
-                  <span className="font-mono text-[11px] text-white/35">데모 미리보기</span>
+                  <span className="text-[14px] text-white/55">내 포트폴리오</span>
+                  <span className="font-mono text-[12px] text-white/35">데모 미리보기</span>
                 </div>
                 <div className="mt-2 flex items-end gap-3">
                   <span className="font-mono font-bold" style={{ fontSize: 34 }}>₩ 9,644,546</span>
                   <VirtBadge />
                 </div>
-                <div className="mt-1 font-mono text-[14px]" style={{ color: DOWN }}>-3.55% (-₩ 356,852)</div>
+                <div className="mt-1 font-mono text-[15px]" style={{ color: DOWN }}>-3.55% (-₩ 356,852)</div>
                 {/* 차트 */}
                 <div className="mt-5 rounded-xl p-4" style={cardStyle}>
                   <div className="mb-3 flex items-center gap-1.5">
                     {['1D', '1W', '1M', '3M', '1Y', 'ALL'].map((t) => (
-                      <span key={t} className="rounded px-2 py-1 text-[11px]"
+                      <span key={t} className="rounded px-2 py-1 text-[12px]"
                         style={t === '1M' ? { background: 'rgba(91,157,255,.15)', color: '#fff' } : { color: 'rgba(255,255,255,.4)' }}>{t}</span>
                     ))}
-                    <span className="ml-auto font-mono text-[11px] text-white/35">KRW · Spot</span>
+                    <span className="ml-auto font-mono text-[12px] text-white/35">KRW · Spot</span>
                   </div>
                   <svg viewBox="0 0 600 120" className="h-24 w-full" preserveAspectRatio="none">
                     <defs>
@@ -330,15 +324,15 @@ const LandingPage = () => {
                 </div>
                 {/* 보유 종목 */}
                 <div className="mt-4">
-                  <div className="grid grid-cols-[1fr_70px_60px] gap-2 px-1 pb-2 text-[10.5px] uppercase text-white/30" style={{ letterSpacing: '.08em', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+                  <div className="grid grid-cols-[1fr_70px_60px] gap-2 px-1 pb-2 text-[11.5px] uppercase text-white/30" style={{ letterSpacing: '.08em', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
                     <span>자산</span><span className="text-right">24h</span><span className="text-right">비중</span>
                   </div>
                   {HOLDINGS.map((h) => (
-                    <div key={h.sym} className="grid grid-cols-[1fr_70px_60px] items-center gap-2 px-1 py-2.5 text-[13px]" style={{ borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+                    <div key={h.sym} className="grid grid-cols-[1fr_70px_60px] items-center gap-2 px-1 py-2.5 text-[14px]" style={{ borderBottom: '1px solid rgba(255,255,255,.06)' }}>
                       <span className="flex items-center gap-2">
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full font-mono text-[10px]" style={{ background: 'rgba(255,255,255,.06)' }}>{h.sym}</span>
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full font-mono text-[11px]" style={{ background: 'rgba(255,255,255,.06)' }}>{h.sym}</span>
                         <span className="text-white/80">{h.name}</span>
-                        <span className="font-mono text-[11px] text-white/35">{h.price}</span>
+                        <span className="font-mono text-[12px] text-white/35">{h.price}</span>
                       </span>
                       <span className="text-right font-mono" style={{ color: DOWN }}>{h.chg}</span>
                       <span className="text-right font-mono text-white/60">{h.w}</span>
@@ -349,20 +343,20 @@ const LandingPage = () => {
               {/* 레일 */}
               <div className="hidden flex-col gap-4 p-5 lg:flex" style={{ borderLeft: '1px solid rgba(255,255,255,.08)' }}>
                 <div>
-                  <p className="mb-2 text-[11px] uppercase text-white/35" style={{ letterSpacing: '.1em' }}>항해 중인 항로</p>
+                  <p className="mb-2 text-[12px] uppercase text-white/35" style={{ letterSpacing: '.1em' }}>항해 중인 항로</p>
                   <div className="rounded-xl p-4" style={cardStyle}>
                     <div className="flex items-center justify-between">
-                      <span className="text-[13px] font-semibold">골든크로스 추종 전략</span>
-                      <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ color: UP, background: 'rgba(239,77,77,.14)' }}>운항중</span>
+                      <span className="text-[14px] font-semibold">골든크로스 추종 전략</span>
+                      <span className="rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ color: '#3fd6a0', background: 'rgba(63,214,160,.14)' }}>운항중</span>
                     </div>
-                    <p className="mt-2 font-mono text-[11px] text-white/45">투자 ₩2,997,002 · BTC·ETH·SOL</p>
+                    <p className="mt-2 font-mono text-[12px] text-white/45">투자 ₩2,997,002 · BTC·ETH·SOL</p>
                   </div>
                 </div>
                 <div>
-                  <p className="mb-2 text-[11px] uppercase text-white/35" style={{ letterSpacing: '.1em' }}>빠른 액션</p>
+                  <p className="mb-2 text-[12px] uppercase text-white/35" style={{ letterSpacing: '.1em' }}>빠른 액션</p>
                   <div className="flex flex-col gap-2">
                     {['거래하기', '전략 백테스트', 'VIRT로 먼저 연습'].map((a) => (
-                      <div key={a} className="rounded-lg px-3 py-2.5 text-[12.5px] text-white/70" style={cardStyle}>{a}</div>
+                      <div key={a} className="rounded-lg px-3 py-2.5 text-[13.5px] text-white/70" style={cardStyle}>{a}</div>
                     ))}
                   </div>
                 </div>
@@ -376,7 +370,7 @@ const LandingPage = () => {
       <section className="px-6 py-28 md:px-14" style={{ background: 'linear-gradient(180deg,#060b1f,#0a1230 60%,#060b1f)' }}>
         <div className="mx-auto grid max-w-[1240px] items-center gap-14 lg:grid-cols-2">
           <div>
-            <p className="text-[11.5px] font-semibold uppercase" style={{ color: '#9cc1ff', letterSpacing: '.24em' }}>VIRT · 가상 항해</p>
+            <p className="text-[12.5px] font-semibold uppercase" style={{ color: '#9cc1ff', letterSpacing: '.24em' }}>VIRT · 가상 항해</p>
             <h2 className="mt-4 font-bold" style={{ fontSize: 'clamp(30px,5vw,52px)', lineHeight: 1.08, letterSpacing: '-.025em' }}>
               실수해도 좋아요.<br />
               <span style={{ color: 'rgba(255,255,255,.55)' }}>자산은 안전한 채로.</span>
@@ -390,43 +384,43 @@ const LandingPage = () => {
                 ['02', '전략 실행', '실시간 시세로 거래하고, 손익은 즉시 갱신됩니다.'],
                 ['03', '복기와 자동화', '결과가 만족스러우면 같은 전략을 모의 자동매매로 바로 적용해보세요.']].map(([n, t, d]) => (
                 <li key={n} className="flex gap-4">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-mono text-[13px]" style={{ background: 'rgba(91,157,255,.10)', color: GLOW, border: '1px solid rgba(91,157,255,.22)' }}>{n}</span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-mono text-[14px]" style={{ background: 'rgba(91,157,255,.10)', color: GLOW, border: '1px solid rgba(91,157,255,.22)' }}>{n}</span>
                   <div>
-                    <p className="text-[15px] font-semibold">{t}</p>
-                    <p className="mt-1 text-[13.5px] text-white/55">{d}</p>
+                    <p className="text-[16px] font-semibold">{t}</p>
+                    <p className="mt-1 text-[14.5px] text-white/55">{d}</p>
                   </div>
                 </li>
               ))}
             </ol>
             <div className="mt-10 flex flex-wrap items-center gap-5">
               <PrimaryBtn onClick={() => go('/virt/dashboard')}>VIRT 모드로 시작 →</PrimaryBtn>
-              <button onClick={() => go('/virt/dashboard')} className="text-[14px] font-medium" style={{ color: GLOW }}>가이드 보기 ↗</button>
+              <button onClick={() => go('/virt/dashboard')} className="text-[15px] font-medium" style={{ color: GLOW }}>가이드 보기 ↗</button>
             </div>
           </div>
           {/* VIRT 목업 */}
           <div className="relative">
             <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgba(91,157,255,.22), transparent 70%)' }} />
             <div className="relative rounded-[20px] p-5" style={panelStyle}>
-              <div className="flex items-center justify-between text-[12px]">
+              <div className="flex items-center justify-between text-[13px]">
                 <span className="flex items-center gap-2"><VirtBadge /><span className="font-mono text-white/50">가상 계좌 #VIRT-0042</span></span>
                 <span className="font-mono text-white/70">잔고 ₩ 10,482,310</span>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3.5">
                 <div className="rounded-xl p-4" style={{ background: 'rgba(239,77,77,.08)', border: '1px solid rgba(239,77,77,.24)' }}>
-                  <p className="text-[11px] font-semibold" style={{ color: UP }}>BUY · 매수</p>
-                  <p className="mt-2 font-mono text-[22px]">0.024 BTC</p>
-                  <p className="mt-1 font-mono text-[12px] text-white/45">@ ₩ 94,210,000</p>
+                  <p className="text-[12px] font-semibold" style={{ color: UP }}>BUY · 매수</p>
+                  <p className="mt-2 font-mono text-[24px]">0.024 BTC</p>
+                  <p className="mt-1 font-mono text-[13px] text-white/45">@ ₩ 94,210,000</p>
                 </div>
                 <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.10)' }}>
-                  <p className="font-mono text-[11px] text-white/55">LIMIT</p>
-                  <p className="mt-2 font-mono text-[22px]">₩ 93,000,000</p>
-                  <p className="mt-1 font-mono text-[12px] text-white/45">대기 시간 4h 22m</p>
+                  <p className="font-mono text-[12px] text-white/55">LIMIT</p>
+                  <p className="mt-2 font-mono text-[24px]">₩ 93,000,000</p>
+                  <p className="mt-1 font-mono text-[13px] text-white/45">대기 시간 4h 22m</p>
                 </div>
               </div>
               <div className="mt-4 rounded-xl p-4" style={cardStyle}>
                 <div className="flex items-center justify-between">
-                  <span className="text-[12px] text-white/55">VIRT 누적 수익률</span>
-                  <span className="font-mono text-[18px]" style={{ color: UP }}>+4.82%</span>
+                  <span className="text-[13px] text-white/55">VIRT 누적 수익률</span>
+                  <span className="font-mono text-[19.5px]" style={{ color: UP }}>+4.82%</span>
                 </div>
                 <svg viewBox="0 0 400 80" className="mt-2 h-20 w-full" preserveAspectRatio="none">
                   <defs>
@@ -438,7 +432,7 @@ const LandingPage = () => {
                   <path d="M0,65 C60,60 100,50 160,45 C220,40 260,25 320,20 C360,16 380,12 400,8" fill="none" stroke={UP} strokeWidth="2" />
                 </svg>
               </div>
-              <div className="mt-4 flex items-center justify-between text-[12px]">
+              <div className="mt-4 flex items-center justify-between text-[13px]">
                 <span className="flex items-center gap-2 text-white/55">
                   <span className="h-2 w-2 rounded-full animate-pulse-dot" style={{ background: UP, boxShadow: `0 0 6px ${UP}` }} />
                   시뮬레이션 진행 중 · 14일째
@@ -460,19 +454,19 @@ const LandingPage = () => {
           <div className="flex w-max animate-ticker-scroll">
             {[...ticker, ...ticker].map((t, i) => (
               <div key={i} className="flex items-center gap-3 px-7 py-5" style={{ minWidth: 220, borderRight: '1px solid rgba(255,255,255,.06)' }}>
-                <span className="font-mono text-[13px] font-semibold text-white/80">{t.s}</span>
-                <span className="font-mono text-[13px] text-white/55">{t.p}</span>
-                <span className="ml-auto font-mono text-[12px]" style={{ color: t.up ? UP : DOWN }}>{t.c}</span>
+                <span className="font-mono text-[14px] font-semibold text-white/80">{t.s}</span>
+                <span className="font-mono text-[14px] text-white/55">{t.p}</span>
+                <span className="ml-auto font-mono text-[13px]" style={{ color: t.up ? UP : DOWN }}>{t.c}</span>
               </div>
             ))}
           </div>
         </div>
         <div className="mx-auto mt-6 flex max-w-[1240px] items-center justify-between px-6 md:px-14">
-          <span className="flex items-center gap-2 text-[12.5px] text-white/50">
+          <span className="flex items-center gap-2 text-[13.5px] text-white/50">
             모의투자 · 백테스트 · 전략 학습
             {tickerTime && <span className="text-white/30">· {tickerTime} 기준 · 빗썸 · 매일 00:00 갱신</span>}
           </span>
-          <button onClick={() => go('/market')} className="text-[13px] font-medium" style={{ color: GLOW }}>전체 마켓 보기 →</button>
+          <button onClick={() => go('/market')} className="text-[14px] font-medium" style={{ color: GLOW }}>전체 마켓 보기 →</button>
         </div>
       </section>
 
@@ -488,14 +482,14 @@ const LandingPage = () => {
                   ? { background: 'linear-gradient(180deg,rgba(91,157,255,.10),rgba(91,157,255,.02))', border: '1px solid rgba(91,157,255,.45)', boxShadow: '0 30px 60px -30px rgba(44,111,230,.5)' }
                   : cardStyle}>
                 {tier.featured && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-[11px] font-bold text-white"
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-[12px] font-bold text-white"
                     style={{ background: 'linear-gradient(90deg,#4d8aff,#2c6fe6)' }}>가장 인기</span>
                 )}
-                <p className="text-[13px] text-white/55">{tier.tagline}</p>
-                <p className="mt-1 text-[20px] font-bold">{tier.name}</p>
+                <p className="text-[14px] text-white/55">{tier.tagline}</p>
+                <p className="mt-1 text-[21.5px] font-bold">{tier.name}</p>
                 <div className="mt-3 flex items-end gap-1">
-                  <span className="font-mono text-[30px] font-bold">{tier.price}</span>
-                  {tier.period && <span className="mb-1 text-[13px] text-white/45">{tier.period}</span>}
+                  <span className="font-mono text-[32.5px] font-bold">{tier.price}</span>
+                  {tier.period && <span className="mb-1 text-[14px] text-white/45">{tier.period}</span>}
                 </div>
                 <div className="mt-5">
                   {tier.featured
@@ -505,10 +499,10 @@ const LandingPage = () => {
                 <div className="mt-6 flex flex-col gap-5">
                   {tier.groups.map((g) => (
                     <div key={g.h}>
-                      <p className="mb-2 text-[11px] uppercase text-white/35" style={{ letterSpacing: '.1em' }}>{g.h}</p>
+                      <p className="mb-2 text-[12px] uppercase text-white/35" style={{ letterSpacing: '.1em' }}>{g.h}</p>
                       <ul className="flex flex-col gap-2">
                         {g.items.map(([label, ok]) => (
-                          <li key={label} className="flex items-center gap-2 text-[13px]" style={{ color: ok ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.35)' }}>
+                          <li key={label} className="flex items-center gap-2 text-[14px]" style={{ color: ok ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.35)' }}>
                             <Check ok={ok} />{label}
                           </li>
                         ))}
@@ -518,22 +512,6 @@ const LandingPage = () => {
                 </div>
               </div>
             ))}
-          </div>
-
-          {/* Add-ons */}
-          <div className="mt-16">
-            <p className="text-[11px] font-semibold uppercase" style={{ color: '#9cc1ff', letterSpacing: '.16em' }}>ADD-ON · 개별 과금</p>
-            <p className="mt-2 text-[14px] text-white/55">필요한 만큼만 추가하세요. 플랜과 별개로 개별 구매할 수 있어요.</p>
-            <div className="mt-6 grid gap-5 md:grid-cols-3">
-              {ADDONS.map((a) => (
-                <div key={a.name} className="rounded-[16px] p-6" style={cardStyle}>
-                  <p className="text-[15px] font-semibold">{a.name}</p>
-                  <p className="mt-1 font-mono text-[13px]" style={{ color: GLOW }}>{a.price}</p>
-                  <p className="mt-3 text-[13px] text-white/55">{a.desc}</p>
-                </div>
-              ))}
-            </div>
-            <p className="mt-8 text-[12px] text-white/35">모든 가격은 부가세 포함 · 언제든 해지 가능 · 실거래 연동은 VIRT 검증 후 활성화됩니다.</p>
           </div>
         </div>
       </section>
@@ -563,14 +541,14 @@ const LandingPage = () => {
                 <img src="/brand-whale.png" alt="" className="h-9 w-9 object-contain" />
                 <span className="whalearc-text text-lg">WHALEARC</span>
               </div>
-              <p className="mt-4 text-[13.5px] leading-relaxed text-white/45" style={{ maxWidth: 300 }}>
+              <p className="mt-4 text-[14.5px] leading-relaxed text-white/45" style={{ maxWidth: 300 }}>
                 조용히, 깊이 있게 투자하는 사람들을 위한 포트폴리오 플랫폼.
               </p>
               <div className="mt-5">
-                <p className="mb-2 text-[12px] text-white/30" style={{ letterSpacing: '.08em' }}>FOLLOW</p>
+                <p className="mb-2 text-[13px] text-white/30" style={{ letterSpacing: '.08em' }}>FOLLOW</p>
                 <div className="flex gap-2">
                   {['X', 'LinkedIn', 'GitHub', 'Brunch'].map((s) => (
-                    <span key={s} className="rounded-lg px-3 py-1.5 text-[12.5px] text-white/60" style={{ border: '1px solid rgba(255,255,255,.12)' }}>{s}</span>
+                    <span key={s} className="rounded-lg px-3 py-1.5 text-[13.5px] text-white/60" style={{ border: '1px solid rgba(255,255,255,.12)' }}>{s}</span>
                   ))}
                 </div>
               </div>
@@ -582,11 +560,16 @@ const LandingPage = () => {
               ['약관', [['개인정보 처리방침', () => navigate('/privacy')], ['이용약관', () => navigate('/terms')], ['보안'], ['면책 조항', () => navigate('/disclaimer')]]],
             ] as [string, [string, (() => void)?][]][]).map(([head, links]) => (
               <div key={head}>
-                <p className="mb-4 text-[12px] font-semibold uppercase text-white/30" style={{ letterSpacing: '.16em' }}>{head}</p>
+                <p className="mb-4 text-[13px] font-semibold uppercase text-white/30" style={{ letterSpacing: '.16em' }}>{head}</p>
                 <ul className="flex flex-col gap-3">
                   {links.map(([label, fn]) => (
                     <li key={label}>
-                      <button onClick={fn} className="text-[13.5px] text-white/70 transition-colors hover:text-white">{label}</button>
+                      {/* 핸들러가 없는 미구현 항목은 비활성 표시(클릭 가능한 외형 제거) */}
+                      {fn ? (
+                        <button onClick={fn} className="text-[14.5px] text-white/70 transition-colors hover:text-white">{label}</button>
+                      ) : (
+                        <span className="cursor-default text-[14.5px] text-white/30">{label}</span>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -595,18 +578,18 @@ const LandingPage = () => {
           </div>
 
           {/* 법적 고지 (유지) */}
-          <p className="mt-14 text-[11px] leading-relaxed text-white/35">
+          <p className="mt-14 text-[12px] leading-relaxed text-white/35">
             WhaleArc에서 제공하는 모든 정보는 투자 권유가 아니며, 교육 및 참고 목적으로만 제공됩니다.
             투자에 대한 최종 판단과 책임은 본인에게 있으며, WhaleArc는 투자 손실에 대해 어떠한 법적 책임도 지지 않습니다.
             과거 수익률은 미래 수익을 보장하지 않습니다.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center justify-between gap-4 pt-6" style={{ borderTop: '1px solid rgba(255,255,255,.10)' }}>
-            <p className="font-mono text-[12px] text-white/30">
+            <p className="font-mono text-[13px] text-white/30">
               © 2026 WhaleArc · 모든 항해는 사용자의 책임 아래 진행됩니다.
               <a href="mailto:khyun1109@gmail.com,jhschris8080@naver.com" className="ml-2 text-white/50 underline underline-offset-4 hover:text-white/80">문의하기</a>
             </p>
-            <p className="text-[12px] text-white/30">Built quietly, beneath the surface.</p>
+            <p className="text-[13px] text-white/30">Built quietly, beneath the surface.</p>
           </div>
         </div>
       </footer>

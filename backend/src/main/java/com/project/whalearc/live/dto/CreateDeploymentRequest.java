@@ -31,6 +31,16 @@ public class CreateDeploymentRequest {
     private List<Condition> shortEntryConditions;
     private List<Condition> shortExitConditions;
 
+    // 배포 유형: null=시그널 기반 / "MOMENTUM_ROTATION"=미국주식 모멘텀 top-N 로테이션
+    private String deploymentType;
+    // 모멘텀 로테이션 전용(선택, null이면 기본값)
+    private Integer rotationTopN;
+    private Integer rotationLookbackDays;
+    private Boolean rotationRegimeFilter;
+    private Double rotationRegimeFloor;
+    private Boolean rotationFullInvest;   // 자본 최대 활용(bin-packing) 모드, null/false=균등비중
+    private List<String> rotationUniverse;
+
     // 매매 방향: null/LONG_ONLY(롱만) / LONG_SHORT_FLAT(독립 롱+숏+flat)
     private String tradeDirection;
     // 피라미딩 최대 유닛 수 (null/1=단일). 트리거: ATR / SIGNAL.

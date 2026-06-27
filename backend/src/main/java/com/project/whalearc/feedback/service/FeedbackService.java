@@ -92,11 +92,12 @@ public class FeedbackService {
 
         if (feedback.getUpvotedUserIds().contains(userId)) {
             feedback.getUpvotedUserIds().remove(userId);
-            feedback.setUpvotes(feedback.getUpvotes() - 1);
         } else {
             feedback.getUpvotedUserIds().add(userId);
-            feedback.setUpvotes(feedback.getUpvotes() + 1);
         }
+        // 카운트를 별도로 ±1 하지 않고 항상 set 크기에서 파생 — 동시 요청·중복 클릭·레거시 데이터로 인한 드리프트 방지
+        // (커뮤니티 toggleLike와 동일한 단일 진실 원천 규약).
+        feedback.setUpvotes(feedback.getUpvotedUserIds().size());
 
         return feedbackRepository.save(feedback);
     }

@@ -134,8 +134,27 @@ public class BitgetOrderGateway implements OrderGateway {
             throw new IllegalStateException("Bitget 선물 주문 수량이 최소 단위 미만입니다: " + size
                     + " (최소 " + info.minTradeUsdt() + ")");
         }
-        bitgetApiClient.setFuturesLeverage(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol,
-                d.effectiveLeverage(), isLong ? "long" : "short");
+        // 레버리지를 확실히 적용하기 위해 개시 전 두 가지를 맞춘다(둘 다 5배→10배로 잡히던 원인):
+        //  ① 마진모드를 주문과 동일한 isolated로 — 레버리지는 (심볼,마진모드)별로 따로 보관돼, 심볼이 crossed면
+        //     set-leverage가 crossed에 적용되고 주문(isolated)은 isolated의 기존 레버리지로 체결된다.
+        //  ② 롱·숏 양쪽 레버리지를 모두 목표값으로 — 크로스 마진은 양 사이드가 같아야 하고, 한 면만 바꾸면
+        //     반대 면(기존 10배)과 불일치로 set-leverage가 거부되고 기존 레버리지로 체결된다(터틀은 롱·숏 모두 사용).
+        bitgetApiClient.setFuturesIsolatedMode(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol);
+        int targetLev = d.effectiveLeverage();
+        boolean okLong = bitgetApiClient.setFuturesLeverage(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol, targetLev, "long");
+        boolean okShort = bitgetApiClient.setFuturesLeverage(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol, targetLev, "short");
+        // 여는 방향의 레버리지 설정이 실패하면 거래소의 기존 레버리지로 체결될 수 있어 명확히 경고한다(이전엔 stderr로만 묻혔음).
+        if (isLong ? !okLong : !okShort) {
+            log.warn("Bitget 레버리지 {}x 설정 실패: symbol={}, dir={}, long={}, short={} — 거래소 기존 레버리지로 체결될 수 있음(포지션 보유 중이거나 마진모드 확인)",
+                    targetLev, symbol, isLong ? "long" : "short", okLong, okShort);
+        }
+        // set-leverage가 거래소에 전파될 때까지 짧게 확인한 뒤 개시한다.
+        // (set-leverage 응답은 성공인데, 직후 즉시 나간 개시 주문이 '옛 레버리지'로 체결되는 전파 지연 방지 —
+        //  거래소 페이지엔 5배로 보이는데 실제 포지션은 10배로 잡히던 현상.) 확인되면 즉시, 미확인이어도 최대 ~1.5s 후 진행.
+        for (int i = 0; i < 6; i++) {
+            if (bitgetApiClient.getConfiguredFuturesLeverage(cred.apiKey(), cred.secretKey(), cred.passphrase(), symbol, isLong) == targetLev) break;
+            try { Thread.sleep(250); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+        }
 
         String clientOid = sanitizeClientOid(clientOrderId);
         log.info("Bitget 선물 개시 시도: userId={}, symbol={}, dir={}, size={}코인, leverage={}x, clientOid={}",

@@ -224,7 +224,8 @@ public class RankingService {
                 .nickname(nickname)
                 .portfolioName(nickname + "의 포트폴리오") // 공개 랭킹에 이메일 로컬파트(PII) 노출 금지 — 닉네임만 사용
                 .totalReturn(Math.round(displayReturn * 100.0) / 100.0)
-                .totalValue(p.getTotalValue().doubleValue())
+                // 공개 리더보드엔 타인의 절대 자산액 비노출 — 본인 항목만 채운다(0=타인)
+                .totalValue(p.getUserId().equals(currentUserId) ? p.getTotalValue().doubleValue() : 0.0)
                 .rankChange(0)
                 .isMyRanking(p.getUserId().equals(currentUserId))
                 .routeName(routeName)
@@ -248,16 +249,24 @@ public class RankingService {
         if (baseDate == null) return null;
 
         // 기준일 스냅샷 조회 (해당 날짜에 없으면 이전 날짜로 최대 3일 탐색)
+        // 조기 종료는 '현재 포트폴리오의 userId(wanted)'를 모두 찾았을 때만 한다.
+        // (snapshotReturnMap 에는 이후 계정 삭제로 현재 portfolios 에 없는 유저도 섞이므로
+        //  size 비교로 break 하면 2~3일 전 스냅샷만 있는 일부 현재 유저가 누락될 수 있음)
+        Set<String> wanted = portfolios.stream()
+                .map(Portfolio::getUserId)
+                .collect(Collectors.toSet());
         Map<String, Double> snapshotReturnMap = new HashMap<>();
+        int matched = 0;
         for (int attempt = 0; attempt < 4; attempt++) {
             LocalDate checkDate = baseDate.minusDays(attempt);
             List<PortfolioSnapshot> snapshots = snapshotRepository.findByDate(checkDate);
             for (PortfolioSnapshot s : snapshots) {
                 if (!snapshotReturnMap.containsKey(s.getUserId())) {
                     snapshotReturnMap.put(s.getUserId(), s.getReturnRate().doubleValue());
+                    if (wanted.contains(s.getUserId())) matched++;
                 }
             }
-            if (snapshotReturnMap.size() >= portfolios.size()) break;
+            if (matched >= wanted.size()) break;
         }
 
         // 현재 수익률 - 기준일 수익률 (기준 스냅샷이 없으면 0으로 조작하지 않고 기간 랭킹에서 제외)
@@ -335,12 +344,8 @@ public class RankingService {
         String portfolioName = nickname + "의 포트폴리오"; // 이메일 로컬파트(PII) 노출 금지 — 닉네임만 사용
 
         int rank = calculateRank(portfolio);
-        BigDecimal initialCash = portfolio.getInitialCash();
-        double initialCapital = (initialCash.compareTo(BigDecimal.ZERO) > 0)
-                ? initialCash.doubleValue() : 10_000_000;
-        double totalValue = portfolio.getTotalValue().doubleValue();
+        // 타인 포트폴리오 공개 상세엔 절대 금액(원금·총자산·수익금액) 비노출 — 수익률(%)만.
         double totalReturn = portfolio.getReturnRate().doubleValue();
-        double totalReturnAmount = totalValue - initialCapital;
 
         int stockCount = (int) portfolio.getHoldings().stream().filter(h -> h.isStock()).count();
         int cryptoCount = portfolio.getHoldings().size() - stockCount;
@@ -373,9 +378,6 @@ public class RankingService {
                 .nickname(nickname)
                 .currentRank(rank)
                 .totalReturn(Math.round(totalReturn * 100.0) / 100.0)
-                .totalReturnAmount(Math.round(totalReturnAmount))
-                .initialCapital(initialCapital)
-                .totalValue(totalValue)
                 .stockCount(stockCount)
                 .cryptoCount(cryptoCount)
                 .routeName(routeName)

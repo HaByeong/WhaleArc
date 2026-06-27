@@ -144,7 +144,7 @@ export default function GoldenCrossCanvasChart() {
 
     const crossEvents: { i: number; type: 'golden' | 'dead'; price: number }[] = [];
     for (let i = LONG_P; i <= frame && i < N; i++) {
-      if (!shortMA[i] || !longMA[i] || !shortMA[i - 1] || !longMA[i - 1]) continue;
+      if (shortMA[i] === null || longMA[i] === null || shortMA[i - 1] === null || longMA[i - 1] === null) continue;
       const prev = shortMA[i - 1]! - longMA[i - 1]!, curr = shortMA[i]! - longMA[i]!;
       if (prev <= 0 && curr > 0) crossEvents.push({ i, type: 'golden', price: (shortMA[i]! + longMA[i]!) / 2 });
       else if (prev >= 0 && curr < 0) crossEvents.push({ i, type: 'dead', price: (shortMA[i]! + longMA[i]!) / 2 });
@@ -236,7 +236,7 @@ export default function GoldenCrossCanvasChart() {
 
   return (
     <div>
-      <div className="flex gap-4 flex-wrap mb-2.5 text-[12px] text-gray-500">
+      <div className="flex gap-4 flex-wrap mb-2.5 text-[13px] text-gray-500">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: '#f7a21b' }} />MA 10
         </span>
@@ -244,11 +244,11 @@ export default function GoldenCrossCanvasChart() {
           <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: '#2962ff' }} />MA 25
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[9px] text-white font-semibold" style={{ background: '#26a69a' }}>G</span>
+          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] text-white font-semibold" style={{ background: '#26a69a' }}>G</span>
           Golden cross
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[9px] text-white font-semibold" style={{ background: '#ef5350' }}>D</span>
+          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] text-white font-semibold" style={{ background: '#ef5350' }}>D</span>
           Dead cross
         </span>
       </div>
@@ -266,7 +266,7 @@ export default function GoldenCrossCanvasChart() {
           </div>
         )}
       </div>
-      <div className="mt-2.5 text-[13px] min-h-[20px]">
+      <div className="mt-2.5 text-[14px] min-h-[20px]">
         {statusText && <span style={{ color: statusColor }}>{statusLabel}</span>}
       </div>
     </div>

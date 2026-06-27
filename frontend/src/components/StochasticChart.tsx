@@ -298,7 +298,7 @@ export default function StochasticChart() {
 
   return (
     <div>
-      <div className="flex gap-4 flex-wrap mb-2.5 text-[12px] text-gray-500">
+      <div className="flex gap-4 flex-wrap mb-2.5 text-[13px] text-gray-500">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: TV.kLine }} />%K({K_P})
         </span>
@@ -306,11 +306,11 @@ export default function StochasticChart() {
           <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: TV.dLine }} />%D({D_P})
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[9px] text-white font-semibold" style={{ background: '#26a69a' }}>B</span>
+          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] text-white font-semibold" style={{ background: '#26a69a' }}>B</span>
           %K ↑ %D 매수
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[9px] text-white font-semibold" style={{ background: '#ef5350' }}>S</span>
+          <span className="w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] text-white font-semibold" style={{ background: '#ef5350' }}>S</span>
           %K ↓ %D 매도
         </span>
       </div>
@@ -328,7 +328,7 @@ export default function StochasticChart() {
           </div>
         )}
       </div>
-      <div className="mt-2.5 text-[13px] min-h-[20px]">
+      <div className="mt-2.5 text-[14px] min-h-[20px]">
         {statusText && <span style={{ color: statusColor }}>{statusLabel}</span>}
       </div>
     </div>

@@ -30,6 +30,7 @@ public class ExchangeRateService {
     private volatile double cachedUsdKrw = 0;
     private volatile long usdKrwExpireAt = 0;
     private volatile boolean usdKrwStale = true; // 권위 FX 조회 성공 전까지 true (프록시/기본값 사용 중)
+    private final Object fxRefreshLock = new Object(); // 만료 후 첫 갱신만 단일 스레드가 수행하도록 보호
 
     // 외부 FX API 호출용 (4초 타임아웃 — 느린 응답이 시세/스냅샷을 막지 않도록)
     private final RestTemplate fxClient = buildFxClient();
@@ -60,6 +61,18 @@ public class ExchangeRateService {
         if (cachedUsdKrw > 0 && now < usdKrwExpireAt) {
             return cachedUsdKrw;
         }
+        // 만료 직후 동시 다발 요청이 외부 FX/프록시를 중복 호출하지 않도록 갱신 구간을 직렬화한다.
+        // 락 안에서 캐시를 재확인(double-check)해, 먼저 갱신한 스레드의 결과를 나머지는 그대로 반환한다.
+        synchronized (fxRefreshLock) {
+            now = System.currentTimeMillis();
+            if (cachedUsdKrw > 0 && now < usdKrwExpireAt) {
+                return cachedUsdKrw;
+            }
+            return refreshUsdKrwRate(now);
+        }
+    }
+
+    private double refreshUsdKrwRate(long now) {
         // 1) 권위 있는 실제 USD/KRW FX (open.er-api.com). FX는 느리게 변하므로 1시간 캐시.
         try {
             Double fx = fetchRealFx();

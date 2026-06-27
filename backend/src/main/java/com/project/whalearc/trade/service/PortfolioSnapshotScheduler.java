@@ -32,6 +32,7 @@ public class PortfolioSnapshotScheduler {
     private final CryptoPriceProvider cryptoPriceProvider;
     private final StockPriceProvider stockPriceProvider;
     private final UsStockPriceProvider usStockPriceProvider;
+    private final UsEtfPriceProvider usEtfPriceProvider;
     private final ExchangeRateService exchangeRateService;
 
     /**
@@ -43,10 +44,11 @@ public class PortfolioSnapshotScheduler {
         LocalDate today = LocalDate.now(KST);
         List<Portfolio> all = portfolioRepository.findAll();
 
-        // 시세 1회 조회 (가상화폐 + 주식 + 미국주식)
+        // 시세 1회 조회 (가상화폐 + 주식 + 미국주식 + 미국 ETF)
         Map<String, Double> cryptoPriceMap = Map.of();
         Map<String, Double> stockPriceMap = Map.of();
         Map<String, Double> usStockPriceMap = Map.of();
+        Map<String, Double> etfPriceMap = Map.of();
         double usdKrwRate = exchangeRateService.getUsdKrwRate();
         try {
             List<MarketPriceResponse> cryptoPrices = cryptoPriceProvider.getAllKrwTickers();
@@ -78,11 +80,22 @@ public class PortfolioSnapshotScheduler {
         } catch (Exception e) {
             log.warn("스냅샷용 미국주식 시세 조회 실패: {}", e.getMessage());
         }
+        try {
+            List<MarketPriceResponse> etfPrices = usEtfPriceProvider.getAllEtfPrices();
+            etfPriceMap = etfPrices.stream()
+                    .collect(Collectors.toMap(
+                            MarketPriceResponse::getSymbol,
+                            MarketPriceResponse::getPrice,
+                            (a, b) -> a));
+        } catch (Exception e) {
+            log.warn("스냅샷용 미국 ETF 시세 조회 실패: {}", e.getMessage());
+        }
 
-        // 람다 캡처용 final 사본 (위 3개 맵은 try 안에서 재할당되므로 effectively-final 아님)
+        // 람다 캡처용 final 사본 (위 맵들은 try 안에서 재할당되므로 effectively-final 아님)
         final Map<String, Double> cryptoMap = cryptoPriceMap;
         final Map<String, Double> stockMap = stockPriceMap;
         final Map<String, Double> usMap = usStockPriceMap;
+        final Map<String, Double> etfMap = etfPriceMap;
 
         int saved = 0;
         for (Portfolio portfolio : all) {
@@ -95,6 +108,7 @@ public class PortfolioSnapshotScheduler {
                     }
                     for (Holding holding : portfolio.getHoldings()) {
                         Map<String, Double> priceMap = holding.isUsStock() ? usMap
+                                : holding.isEtf() ? etfMap
                                 : holding.isStock() ? stockMap : cryptoMap;
                         Double price = priceMap.get(holding.getStockCode());
                         if (price != null) {

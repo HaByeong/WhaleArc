@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import HelmShell from '../components/HelmShell';
 import SplashLoading from '../components/SplashLoading';
 import VirtSplashLoading from '../components/VirtSplashLoading';
-import apiClient from '../utils/api';
+import apiClient, { getErrorMessage } from '../utils/api';
 
 /* ────────────────────────────────────────────────────────────
    PortfolioDetailPage — 「디자인 개편」 톤. 공개 포트폴리오 상세(투자 현황 진입).
@@ -56,8 +56,8 @@ const PortfolioDetailPage = () => {
       setError(null);
       const res = await apiClient.get(`/api/rankings/portfolios/${portfolioId}`);
       setPortfolio(res.data.data);
-    } catch (err: any) {
-      setError(err.message || '포트폴리오 정보를 불러오는데 실패했습니다.');
+    } catch (err) {
+      setError(getErrorMessage(err, '포트폴리오 정보를 불러오는데 실패했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -74,7 +74,7 @@ const PortfolioDetailPage = () => {
   };
 
   const BackLink = () => (
-    <button onClick={() => navigate(`${prefix}/ranking`)} className="inline-flex items-center gap-1 text-[13px] transition-colors" style={{ color: INK2 }}>
+    <button onClick={() => navigate(`${prefix}/ranking`)} className="inline-flex items-center gap-1 text-[14px] transition-colors" style={{ color: INK2 }}>
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
       투자 현황
     </button>
@@ -94,9 +94,9 @@ const PortfolioDetailPage = () => {
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full" style={{ background: 'rgba(239,77,77,.12)', border: '1px solid rgba(239,77,77,.28)' }}>
               <svg className="w-7 h-7" style={{ color: UP }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </div>
-            <h2 className="text-[18px] font-bold">데이터를 불러오지 못했어요</h2>
-            <p className="mt-2 text-[13px]" style={{ color: INK2 }}>{error || '포트폴리오를 찾을 수 없습니다.'}</p>
-            <button onClick={loadDetail} className="mt-5 rounded-lg px-5 py-2.5 text-[13px] font-semibold" style={{ background: 'rgba(91,157,255,.12)', border: '1px solid rgba(91,157,255,.32)', color: SONAR }}>다시 시도</button>
+            <h2 className="text-[19.5px] font-bold">데이터를 불러오지 못했어요</h2>
+            <p className="mt-2 text-[14px]" style={{ color: INK2 }}>{error || '포트폴리오를 찾을 수 없습니다.'}</p>
+            <button onClick={loadDetail} className="mt-5 rounded-lg px-5 py-2.5 text-[14px] font-semibold" style={{ background: 'rgba(91,157,255,.12)', border: '1px solid rgba(91,157,255,.32)', color: SONAR }}>다시 시도</button>
           </div>
         </div>
       </HelmShell>
@@ -111,9 +111,9 @@ const PortfolioDetailPage = () => {
 
   const StatTile = ({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) => (
     <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,.03)', border: `1px solid ${HAIR}` }}>
-      <div className="text-[11px]" style={{ color: INK3 }}>{label}</div>
-      <div className="mt-1 font-mono text-[20px] font-bold md:text-[22px]" style={{ color: color || '#fff' }}>{value}</div>
-      {sub && <div className="mt-1 font-mono text-[11px]" style={{ color: INK3 }}>{sub}</div>}
+      <div className="text-[12px]" style={{ color: INK3 }}>{label}</div>
+      <div className="mt-1 font-mono text-[21.5px] font-bold md:text-[24px]" style={{ color: color || '#fff' }}>{value}</div>
+      {sub && <div className="mt-1 font-mono text-[12px]" style={{ color: INK3 }}>{sub}</div>}
     </div>
   );
 
@@ -128,11 +128,11 @@ const PortfolioDetailPage = () => {
             {rankBadge ? (
               <img src={rankBadge} alt="" className="h-11 w-11 object-contain" />
             ) : (
-              <span className="flex h-11 w-11 items-center justify-center rounded-full text-[18px] font-bold" style={{ background: 'rgba(255,255,255,.10)', color: '#fff' }}>{portfolio.currentRank}</span>
+              <span className="flex h-11 w-11 items-center justify-center rounded-full text-[19.5px] font-bold" style={{ background: 'rgba(255,255,255,.10)', color: '#fff' }}>{portfolio.currentRank}</span>
             )}
             <div>
-              <h1 className="text-[24px] font-bold md:text-[28px]">{portfolio.portfolioName}</h1>
-              <p className="mt-0.5 text-[13px]" style={{ color: INK1 }}>{portfolio.nickname} · {portfolio.currentRank}위</p>
+              <h1 className="text-[26px] font-bold md:text-[30px]">{portfolio.portfolioName}</h1>
+              <p className="mt-0.5 text-[14px]" style={{ color: INK1 }}>{portfolio.nickname} · {portfolio.currentRank}위</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -145,10 +145,10 @@ const PortfolioDetailPage = () => {
 
         {/* 투자 요약 */}
         <div style={{ ...panel, padding: '22px' }}>
-          <h2 className="mb-4 text-[15.5px] font-bold">투자 요약</h2>
+          <h2 className="mb-4 text-[16.5px] font-bold">투자 요약</h2>
           <div className="space-y-3">
             {portfolio.stockCount > 0 && (
-              <div className="flex items-center justify-between text-[13.5px]">
+              <div className="flex items-center justify-between text-[14.5px]">
                 <span className="flex items-center gap-2" style={{ color: INK1 }}>
                   <img src="/whales/spotted-dolphin.png" alt="" className="h-5 w-5 object-contain" />주식
                 </span>
@@ -156,14 +156,14 @@ const PortfolioDetailPage = () => {
               </div>
             )}
             {portfolio.cryptoCount > 0 && (
-              <div className="flex items-center justify-between text-[13.5px]">
+              <div className="flex items-center justify-between text-[14.5px]">
                 <span className="flex items-center gap-2" style={{ color: INK1 }}>
                   <img src="/whales/wild-cat-whale.png" alt="" className="h-5 w-5 object-contain" />가상화폐
                 </span>
                 <span className="font-semibold" style={{ color: '#5fd0a8' }}>{portfolio.cryptoCount}종목</span>
               </div>
             )}
-            {totalHoldings === 0 && <p className="py-4 text-center text-[13px]" style={{ color: INK3 }}>아직 보유 종목이 없습니다</p>}
+            {totalHoldings === 0 && <p className="py-4 text-center text-[14px]" style={{ color: INK3 }}>아직 보유 종목이 없습니다</p>}
           </div>
         </div>
 
@@ -172,42 +172,42 @@ const PortfolioDetailPage = () => {
           <div style={{ ...panel, padding: '22px' }}>
             <div className="mb-4 flex items-center gap-2">
               <svg className="h-5 w-5" style={{ color: '#f5d061' }} fill="currentColor" viewBox="0 0 24 24"><path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>
-              <h2 className="text-[15.5px] font-bold">대표 항로</h2>
+              <h2 className="text-[16.5px] font-bold">대표 항로</h2>
             </div>
             <div className="rounded-xl p-5" style={{ background: 'rgba(91,157,255,.06)', border: `1px solid ${HAIR}` }}>
               <div className="mb-3 flex items-center gap-2">
-                <span className="text-[17px] font-bold">{portfolio.routeName}</span>
+                <span className="text-[18.5px] font-bold">{portfolio.routeName}</span>
                 {portfolio.routeStrategyType === 'TURTLE' && (
-                  <span className="rounded px-1.5 py-0.5 text-[9px] font-bold" style={{ background: 'rgba(245,208,97,.16)', color: '#f5d061', border: '1px solid rgba(245,208,97,.3)' }}>WhaleArc 독점</span>
+                  <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(245,208,97,.16)', color: '#f5d061', border: '1px solid rgba(245,208,97,.3)' }}>WhaleArc 독점</span>
                 )}
               </div>
               {portfolio.routeReturnRate != null && (
                 <div className="mb-4 flex items-baseline gap-2">
-                  <span className="font-mono text-[30px] font-bold" style={{ color: retColor(portfolio.routeReturnRate) }}>{signPrefix(portfolio.routeReturnRate)}{portfolio.routeReturnRate.toFixed(2)}%</span>
-                  <span className="text-[11px]" style={{ color: INK3 }}>항로 수익률</span>
+                  <span className="font-mono text-[32.5px] font-bold" style={{ color: retColor(portfolio.routeReturnRate) }}>{signPrefix(portfolio.routeReturnRate)}{portfolio.routeReturnRate.toFixed(2)}%</span>
+                  <span className="text-[12px]" style={{ color: INK3 }}>항로 수익률</span>
                 </div>
               )}
               <div className="space-y-2 border-t pt-3" style={{ borderColor: HAIR }}>
-                <div className="flex justify-between text-[13px]">
+                <div className="flex justify-between text-[14px]">
                   <span style={{ color: INK2 }}>전략 유형</span>
                   <span className="font-medium" style={{ color: INK1 }}>{portfolio.routeStrategyType === 'TURTLE' ? '터틀 트레이딩' : '일반'}</span>
                 </div>
-                <div className="flex justify-between text-[13px]">
+                <div className="flex justify-between text-[14px]">
                   <span style={{ color: INK2 }}>포트폴리오 수익률</span>
                   <span className="font-medium" style={{ color: retColor(portfolio.totalReturn) }}>{signPrefix(portfolio.totalReturn)}{portfolio.totalReturn.toFixed(2)}%</span>
                 </div>
               </div>
               {portfolio.routeDescription && (
                 <div className="mt-4 border-t pt-3" style={{ borderColor: HAIR }}>
-                  <p className="mb-1 text-[11px]" style={{ color: INK3 }}>전략 로직</p>
-                  <p className="text-[13px] leading-relaxed" style={{ color: INK1 }}>{portfolio.routeDescription}</p>
+                  <p className="mb-1 text-[12px]" style={{ color: INK3 }}>전략 로직</p>
+                  <p className="text-[14px] leading-relaxed" style={{ color: INK1 }}>{portfolio.routeDescription}</p>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        <p className="text-center text-[11px]" style={{ color: INK3 }}>개인정보 보호를 위해 보유종목 상세 및 거래 내역은 비공개입니다</p>
+        <p className="text-center text-[12px]" style={{ color: INK3 }}>개인정보 보호를 위해 보유종목 상세 및 거래 내역은 비공개입니다</p>
       </div>
     </HelmShell>
   );

@@ -363,7 +363,7 @@ public final class IndicatorCalculator {
         double sar = isUp ? lows[0] : highs[0];
         double ep = isUp ? highs[1] : lows[1];
         double curAf = af;
-        result[0] = sar;
+        // result[0]은 실제 SAR이 아닌 추세 판정용 시드값이라 워밍업(NaN)으로 비워둔다(다른 지표와 동일).
 
         for (int i = 1; i < len; i++) {
             sar = sar + curAf * (ep - sar);

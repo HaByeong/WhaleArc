@@ -36,6 +36,7 @@ public class SavedBacktest {
     private double sharpeRatio;
     private double maxDrawdown;
     private int totalTrades;
+    private Double winRate;   // 승률(%) — nullable: 구 레코드는 미보관(=null), 신규만 채움
 
     // 전체 결과 JSON (상세 재표시용)
     private String resultJson;

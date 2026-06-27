@@ -96,6 +96,16 @@ export interface PortfolioSnapshot {
   returnRate: number;
 }
 
+export interface PriceAlert {
+  id: string;
+  stockCode: string;
+  stockName: string;
+  assetType?: string;
+  condition: string;          // ABOVE | BELOW | CHANGE_UP | CHANGE_DOWN
+  targetPrice?: number;
+  changePercent?: number;
+}
+
 export const portfolioService = {
   setRepresentativeRoute: async (purchaseId: string | null): Promise<void> => {
     await apiClient.put('/api/portfolio/representative-route', { purchaseId });
@@ -107,12 +117,16 @@ export const portfolioService = {
 };
 
 // 빗썸 마켓 데이터 → StockPrice 변환
+// 주의: change 는 '전일 대비 절대값'(원/달러)이다(changeRate 가 % 율).
+//   따라서 previousClose = price - change 는 정확하나,
+//   high/low/open 은 prices 엔드포인트가 일중 고저·시가를 주지 않아 현재가로 합성한 placeholder다.
+//   캔들/일중 고저 표시 용도로는 신뢰하지 말 것(별도 candlestick 호출 필요).
 const mapMarketToStockPrice = (item: {
   symbol: string;
   name: string;
   price: number;
-  change: number;
-  changeRate: number;
+  change: number;     // 전일 대비 절대값(원/달러)
+  changeRate: number; // 전일 대비율(%)
   volume: number;
 }, assetType: 'STOCK' | 'CRYPTO' | 'US_STOCK' | 'ETF' = 'CRYPTO'): StockPrice => ({
   stockCode: item.symbol,
@@ -121,13 +135,16 @@ const mapMarketToStockPrice = (item: {
   change: item.change,
   changeRate: item.changeRate,
   volume: item.volume,
-  high: item.price,
-  low: item.price,
-  open: item.price - item.change,
-  previousClose: item.price - item.change,
+  high: item.price,           // placeholder(일중 고가 미제공)
+  low: item.price,            // placeholder(일중 저가 미제공)
+  open: item.price - item.change,           // placeholder(시가 미제공 → 전일종가로 근사)
+  previousClose: item.price - item.change,  // 전일종가 = 현재가 - 전일대비
   timestamp: new Date().toISOString(),
   assetType,
 });
+
+// /api/market/prices 응답 항목 타입 (mapMarketToStockPrice 입력과 동일)
+type MarketPriceItem = Parameters<typeof mapMarketToStockPrice>[0];
 
 // API 서비스
 export const tradeService = {
@@ -136,7 +153,7 @@ export const tradeService = {
     const response = await apiClient.get('/api/market/prices', {
       params: { type: 'CRYPTO' },
     });
-    const list: any[] = response.data;
+    const list: MarketPriceItem[] = response.data;
     const found = list.find((p) => p.symbol === stockCode);
     if (!found) throw new Error('종목을 찾을 수 없습니다: ' + stockCode);
     return mapMarketToStockPrice(found);
@@ -147,7 +164,7 @@ export const tradeService = {
     const response = await apiClient.get('/api/market/prices', {
       params: { type: 'CRYPTO' },
     });
-    const list: any[] = response.data;
+    const list: MarketPriceItem[] = response.data;
     return list.map((item) => mapMarketToStockPrice(item, 'CRYPTO'));
   },
 
@@ -156,7 +173,7 @@ export const tradeService = {
     const response = await apiClient.get('/api/market/prices', {
       params: { type: 'STOCK' },
     });
-    const list: any[] = response.data;
+    const list: MarketPriceItem[] = response.data;
     return list.map((item) => mapMarketToStockPrice(item, 'STOCK'));
   },
 
@@ -165,7 +182,7 @@ export const tradeService = {
     const response = await apiClient.get('/api/market/prices', {
       params: { type: 'US_STOCK' },
     });
-    const list: any[] = response.data;
+    const list: MarketPriceItem[] = response.data;
     return list.map((item) => mapMarketToStockPrice(item, 'US_STOCK'));
   },
 
@@ -174,7 +191,7 @@ export const tradeService = {
     const response = await apiClient.get('/api/market/prices', {
       params: { type: 'ETF' },
     });
-    const list: any[] = response.data;
+    const list: MarketPriceItem[] = response.data;
     return list.map((item) => mapMarketToStockPrice(item, 'ETF'));
   },
 
@@ -234,7 +251,7 @@ export const tradeService = {
   },
 
   // 가격 알림 조회
-  getPriceAlerts: async () => {
+  getPriceAlerts: async (): Promise<PriceAlert[]> => {
     const response = await apiClient.get('/api/notifications/price-alerts');
     return response.data.data;
   },

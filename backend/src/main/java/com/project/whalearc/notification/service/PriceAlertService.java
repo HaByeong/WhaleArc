@@ -9,6 +9,8 @@ import com.project.whalearc.market.websocket.RealtimePriceHolder;
 import com.project.whalearc.notification.domain.Notification;
 import com.project.whalearc.notification.domain.PriceAlert;
 import com.project.whalearc.notification.repository.PriceAlertRepository;
+import com.project.whalearc.user.policy.TierPolicy;
+import com.project.whalearc.user.policy.TierResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -32,16 +34,15 @@ public class PriceAlertService {
     private final StockPriceProvider stockPriceProvider;
     private final UsStockPriceProvider usStockPriceProvider;
     private final UsEtfPriceProvider usEtfPriceProvider;
-
-    private static final int MAX_ALERTS_PER_USER = 20;
+    private final TierResolver tierResolver;
 
     /** 가격 알림 생성 */
     public PriceAlert createAlert(String userId, String stockCode, String stockName,
                                    String assetType, PriceAlert.AlertCondition condition,
                                    double targetPrice, double changePercent) {
-        long count = alertRepository.countByUserIdAndActiveTrue(userId);
-        if (count >= MAX_ALERTS_PER_USER) {
-            throw new IllegalStateException("가격 알림은 최대 " + MAX_ALERTS_PER_USER + "개까지 설정할 수 있습니다.");
+        int max = TierPolicy.maxAlerts(tierResolver.effectiveTier(userId)); // 등급별: FREE 3 / BASIC 20 / PRO 무제한
+        if (max != TierPolicy.UNLIMITED && alertRepository.countByUserIdAndActiveTrue(userId) >= max) {
+            throw new IllegalStateException("가격 알림은 최대 " + max + "개까지 설정할 수 있습니다.");
         }
 
         PriceAlert alert = new PriceAlert(userId, stockCode, stockName, assetType, condition, targetPrice, changePercent);
@@ -70,30 +71,34 @@ public class PriceAlertService {
         List<PriceAlert> activeAlerts = alertRepository.findByActiveTrueAndTriggeredFalse();
         if (activeAlerts.isEmpty()) return;
 
-        // 현재 가격 및 변동률 수집 (실시간 + REST)
+        // 현재 가격 및 변동률 수집 (실시간 + REST).
+        // 키를 "assetType:symbol" 복합 키로 적재해, 자산군이 다른 동일 심볼이 교차 트리거되지 않게 한다.
         Map<String, Double> priceMap = new HashMap<>();
         Map<String, Double> changeRateMap = new HashMap<>();
         try {
+            // 실시간(빗썸) = 크립토. REST 캐시보다 우선(put으로 덮어씀).
             List<MarketPriceResponse> realtime = realtimePriceHolder.getAllLatestPrices();
             if (realtime != null) {
                 for (MarketPriceResponse p : realtime) {
-                    priceMap.put(p.getSymbol(), p.getPrice());
-                    changeRateMap.put(p.getSymbol(), p.getChangeRate());
+                    priceMap.put("CRYPTO:" + p.getSymbol(), p.getPrice());
+                    changeRateMap.put("CRYPTO:" + p.getSymbol(), p.getChangeRate());
                 }
             }
             // 크립토 + 국내주식 + 미국주식 + ETF 시세 모두 수집 (provider는 캐시 반환이라 저렴).
             // 예전엔 크립토만 수집해 STOCK/US_STOCK/ETF 알림이 영영 트리거되지 않던 버그 수정.
-            List<List<MarketPriceResponse>> sources = List.of(
-                    cryptoPriceProvider.getAllKrwTickers(),
-                    stockPriceProvider.getAllStockPrices(),
-                    usStockPriceProvider.getAllUsStockPrices(),
-                    usEtfPriceProvider.getAllEtfPrices()
+            record PriceSrc(String assetType, List<MarketPriceResponse> prices) {}
+            List<PriceSrc> sources = List.of(
+                    new PriceSrc("CRYPTO", cryptoPriceProvider.getAllKrwTickers()),
+                    new PriceSrc("STOCK", stockPriceProvider.getAllStockPrices()),
+                    new PriceSrc("US_STOCK", usStockPriceProvider.getAllUsStockPrices()),
+                    new PriceSrc("ETF", usEtfPriceProvider.getAllEtfPrices())
             );
-            for (List<MarketPriceResponse> src : sources) {
-                if (src == null) continue;
-                for (MarketPriceResponse p : src) {
-                    priceMap.putIfAbsent(p.getSymbol(), p.getPrice());
-                    changeRateMap.putIfAbsent(p.getSymbol(), p.getChangeRate());
+            for (PriceSrc s : sources) {
+                if (s.prices() == null) continue;
+                for (MarketPriceResponse p : s.prices()) {
+                    String key = s.assetType() + ":" + p.getSymbol();
+                    priceMap.putIfAbsent(key, p.getPrice());
+                    changeRateMap.putIfAbsent(key, p.getChangeRate());
                 }
             }
         } catch (Exception e) {
@@ -105,7 +110,11 @@ public class PriceAlertService {
         int triggered = 0;
         for (PriceAlert alert : activeAlerts) {
           try {
-            Double currentPrice = priceMap.get(alert.getStockCode());
+            // 알림의 자산군과 일치하는 시세만 조회(legacy null assetType은 크립토로 간주).
+            String at = (alert.getAssetType() == null || alert.getAssetType().isBlank())
+                    ? "CRYPTO" : alert.getAssetType().toUpperCase();
+            String alertKey = at + ":" + alert.getStockCode();
+            Double currentPrice = priceMap.get(alertKey);
             if (currentPrice == null) continue;
 
             boolean hit = false;
@@ -120,14 +129,14 @@ public class PriceAlertService {
                     hit = currentPrice <= alert.getTargetPrice();
                     break;
                 case CHANGE_UP: {
-                    Double rate = changeRateMap.get(alert.getStockCode());
+                    Double rate = changeRateMap.get(alertKey);
                     if (rate != null && rate >= alert.getChangePercent()) {
                         hit = true;
                     }
                     break;
                 }
                 case CHANGE_DOWN: {
-                    Double rate = changeRateMap.get(alert.getStockCode());
+                    Double rate = changeRateMap.get(alertKey);
                     if (rate != null && rate <= -alert.getChangePercent()) {
                         hit = true;
                     }

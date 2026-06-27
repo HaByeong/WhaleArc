@@ -20,9 +20,9 @@ import java.math.BigDecimal;
  * 거부된다(안전 차단 유지). 자격증명 SSOT(virt/exchange)가 정해지고 KisCredentialResolver 구현체가
  * 붙은 뒤에만 플래그를 켠다.
  *
- * <p>현재는 주문 "접수"까지 처리한다. 접수 성공 시 엔진엔 FILLED로 보고하되 체결가(filledPrice)는 비워
- * 둔다 → LiveStrategyService가 평가 시점 현재가로 평단을 근사한다. 실제 체결가/부분체결 확정은
- * 체결 확인(주문조회 폴링) 단계에서 보강 예정.
+ * <p>현재는 주문 "접수"까지 처리한다. 접수 성공 시 엔진엔 FILLED로 보고한다. 체결가(filledPrice)는
+ * 미국 지정가 경로의 경우 버퍼 적용 지정가를 보수적 근사로 채우고(평단을 실제 체결에 더 가깝게),
+ * 국내 시장가는 비워 둬 엔진이 현재가로 근사한다. 실제 체결가/부분체결 확정은 체결 확인(주문조회 폴링)으로 보강 예정.
  */
 @Slf4j
 @Component
@@ -53,6 +53,7 @@ public class KisOrderGateway implements OrderGateway {
         }
         KisPaperCredential cred = credentialResolver.resolve(userId);
         KisOrderResult result;
+        BigDecimal filledPriceApprox = null;   // 주문조회 폴링 전까지의 체결가 근사(null이면 엔진이 현재가로 폴백)
         if (isUsd(assetType)) {
             // 미국주식/ETF: 해외 지정가 주문(시장가 미지원). 현재가 ± 버퍼를 지정가로.
             String ticker = stockCode.toUpperCase();
@@ -61,8 +62,11 @@ public class KisOrderGateway implements OrderGateway {
                                                        : usStockPriceProvider.getExchange(ticker));
             BigDecimal limit = price.multiply(side == Order.OrderType.BUY ? BUY_BUFFER : SELL_BUFFER);
             result = kisPaperTradeClient.placeOverseasOrder(cred, side, excg, ticker, quantity, limit);
+            // 버퍼 적용 지정가를 체결가 근사로 기록 → 장부 평단이 '비버퍼 현재가'보다 실제 체결에 가깝고,
+            // 보수적(매수=상단/매도=하단)이라 성과를 과대평가하지 않는다. 정확한 체결가는 추후 주문조회 폴링으로 확정.
+            filledPriceApprox = limit;
         } else {
-            // 국내주식: 시장가 현금주문
+            // 국내주식: 시장가 현금주문 (체결가 미상 → 엔진이 현재가로 근사)
             result = kisPaperTradeClient.placeMarketOrder(cred, side, stockCode, quantity);
         }
         if (!result.accepted()) {
@@ -78,6 +82,7 @@ public class KisOrderGateway implements OrderGateway {
         order.setAssetType(assetType);
         order.setStatus(Order.OrderStatus.FILLED);
         order.setFilledQuantity(quantity);
+        if (filledPriceApprox != null) order.setFilledPrice(filledPriceApprox);
         order.setId(result.brokerOrderNo());
         return order;
     }

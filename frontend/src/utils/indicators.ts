@@ -2,6 +2,7 @@
  * 기술적 지표 계산 유틸리티
  * - 캔들스틱 데이터(close, high, low)를 입력으로 받아 지표 값 배열 반환
  * - 모든 함수는 입력과 동일한 길이의 배열을 반환 (부족한 앞부분은 NaN)
+ * - 단, 누적형 지표(OBV/VWAP)는 워밍업 구간이 없어 0번 인덱스부터 값을 가진다
  */
 
 export interface Candlestick {
@@ -354,8 +355,7 @@ export function parabolicSAR(
   let ep = isUp ? highs[1] : lows[1];
   let curAf = af;
 
-  values[0] = sar;
-
+  // 0번 봉은 첫 봉만으로 SAR을 정의할 수 없어 NaN으로 둔다(표준 구현). i=1부터 채움
   for (let i = 1; i < len; i++) {
     sar = sar + curAf * (ep - sar);
 

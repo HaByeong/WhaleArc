@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
  * Portfolio·User·VirtCredential·TurtlePosition 등)에 이미 중복 데이터가 있으면 전역 활성화 시 unique 인덱스
  * 생성 실패로 <b>부팅이 깨지기</b> 때문이다.
  *
- * <p>대신 신규 컬렉션인 {@code live_order_log} 에 한해서만 부팅 시 unique 인덱스를 보장한다. 같은 봉의
+ * <p>대신 신규 컬렉션인 {@code live_order_logs} 에 한해서만 부팅 시 unique 인덱스를 보장한다. 같은 봉의
  * 중복 발주를 DB 레벨에서도 차단해(단일 인스턴스는 {@code UserLockRegistry} 로도 직렬화되지만) 수평 확장 시의
  * 이중 체결 방어선을 만든다. 인덱스 생성이 실패해도(예: 예기치 못한 기존 중복) 경고만 남기고 부팅을 막지 않는다.
  */
@@ -34,7 +34,7 @@ public class LiveIndexInitializer implements ApplicationRunner {
         try {
             mongoTemplate.indexOps(LiveOrderLog.class)
                     .ensureIndex(new Index().on("clientOrderId", Sort.Direction.ASC).unique());
-            log.info("라이브 멱등성 인덱스 보장 완료: live_order_log.clientOrderId (unique)");
+            log.info("라이브 멱등성 인덱스 보장 완료: live_order_logs.clientOrderId (unique)");
         } catch (Exception e) {
             log.warn("라이브 멱등성 인덱스 생성 실패(부팅 계속): {}", e.getMessage());
         }

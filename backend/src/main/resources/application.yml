@@ -68,3 +68,7 @@ spring.security:
     resourceserver:
       jwt:
         jwk-set-uri: ${SUPABASE_JWKS_URI:https://tkkbawoknwumqdqxypwd.supabase.co/auth/v1/.well-known/jwks.json}
+
+# 감정 거울(Emotion Mirror) — 봉인 후 개봉까지 분. test/데모는 짧게(실제 가격이 움직이는 최소 창).
+mirror:
+  reveal-minutes: ${MIRROR_REVEAL_MINUTES:3}

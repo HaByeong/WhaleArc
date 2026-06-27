@@ -22,6 +22,7 @@ public class LimitOrderScheduler {
     private final CryptoPriceProvider cryptoPriceProvider;
     private final StockPriceProvider stockPriceProvider;
     private final UsStockPriceProvider usStockPriceProvider;
+    private final UsEtfPriceProvider usEtfPriceProvider;
     private final KisApiClient kisApiClient;
 
     /**
@@ -43,9 +44,20 @@ public class LimitOrderScheduler {
             }
         }
 
+        // 미국 ETF 시세 (USD 단위, 캐시된 카탈로그)
+        Map<String, Double> etfPriceMap = Map.of();
+        boolean hasEtf = pendingOrders.stream().anyMatch(Order::isEtf);
+        if (hasEtf) {
+            List<MarketPriceResponse> etfPrices = usEtfPriceProvider.getAllEtfPrices();
+            if (!etfPrices.isEmpty()) {
+                etfPriceMap = etfPrices.stream()
+                        .collect(Collectors.toMap(MarketPriceResponse::getSymbol, MarketPriceResponse::getPrice, (a, b) -> a));
+            }
+        }
+
         // 가상화폐 시세
         Map<String, Double> cryptoPriceMap = Map.of();
-        boolean hasCrypto = pendingOrders.stream().anyMatch(o -> !o.isStock() && !o.isUsStock());
+        boolean hasCrypto = pendingOrders.stream().anyMatch(o -> !o.isStock() && !o.isUsStock() && !o.isEtf());
         if (hasCrypto) {
             List<MarketPriceResponse> prices = cryptoPriceProvider.getAllKrwTickers();
             if (!prices.isEmpty()) {
@@ -72,6 +84,8 @@ public class LimitOrderScheduler {
             Double marketPrice;
             if (order.isUsStock()) {
                 marketPrice = usStockPriceMap.get(order.getStockCode());
+            } else if (order.isEtf()) {
+                marketPrice = etfPriceMap.get(order.getStockCode());
             } else if (order.isStock()) {
                 marketPrice = stockPriceMap.get(order.getStockCode());
                 // 캐시에 없으면 개별 조회 (틱당 상한까지만; 초과분은 다음 틱에 재시도)

@@ -5,6 +5,8 @@ import com.project.whalearc.auth.login.dto.user.UserProfileResponseDto;
 import com.project.whalearc.auth.login.dto.user.UserUpdateRequestDto;
 import com.project.whalearc.auth.login.repository.userinfo.UserInfoRepository;
 import com.project.whalearc.user.domain.User;
+import com.project.whalearc.user.policy.TierLimits;
+import com.project.whalearc.user.policy.TierResolver;
 import com.project.whalearc.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -36,7 +38,8 @@ public class UserUpdateService implements UserUpdateServiceInterface {
                 .name(user.getName())
                 .authProvider(user.getAuthProvider())
                 .tier(user.getTier())
-                .role(user.getRole());
+                .role(user.getRole())
+                .limits(TierLimits.of(TierResolver.effectiveTier(user))); // ADMIN→PRO 반영된 한도
 
         if (userInfo != null) {
             builder.bio(userInfo.getBio())
@@ -54,7 +57,10 @@ public class UserUpdateService implements UserUpdateServiceInterface {
         String supabaseId = getSupabaseId();
         User user = userRepository.findBySupabaseId(supabaseId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-        user.setName(userUpdateRequestDto.getName());
+        // null/공백 이름으로 기존 프로필을 덮어쓰지 않도록 가드
+        if (userUpdateRequestDto.getName() != null && !userUpdateRequestDto.getName().isBlank()) {
+            user.setName(userUpdateRequestDto.getName().trim());
+        }
         userRepository.save(user);
     }
 }

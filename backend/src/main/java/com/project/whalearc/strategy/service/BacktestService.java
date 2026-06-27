@@ -13,6 +13,9 @@ import com.project.whalearc.market.service.ExchangeRateService;
 import com.project.whalearc.strategy.dto.BacktestRequest;
 import com.project.whalearc.strategy.dto.BacktestResponse;
 import com.project.whalearc.strategy.repository.StrategyRepository;
+import com.project.whalearc.user.domain.User;
+import com.project.whalearc.user.policy.TierPolicy;
+import com.project.whalearc.user.policy.TierResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +24,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 
 @Slf4j
@@ -34,12 +38,32 @@ public class BacktestService {
     private final ExchangeRateService exchangeRateService;
     private final UsEtfCatalog usEtfCatalog;
     private final UsStockPriceProvider usStockPriceProvider;
+    private final MomentumRotationBacktestService momentumRotationBacktestService;
+    private final TierResolver tierResolver;
+    private final DailyBacktestQuotaService dailyBacktestQuotaService;
 
     private static final double DEFAULT_COMMISSION_RATE = 0.001; // 0.1%
     private static final ZoneOffset KST = ZoneOffset.of("+09:00");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     public BacktestResponse runBacktest(BacktestRequest request, String userId) {
+        // 등급 한도(고급전략·기간·포지션·멀티종목)는 모멘텀 위임 분기보다 먼저 검사해 양 경로를 모두 커버.
+        User.Tier tier = tierResolver.effectiveTier(userId);
+        enforceBacktestTierLimits(request, tier);
+        // 일일 실행 횟수 — 가벼운 검증을 통과한 뒤(무효 요청은 미차감) 데이터 fetch 전에 차감.
+        if (!dailyBacktestQuotaService.tryConsume(userId, TierPolicy.dailyBacktestQuota(tier))) {
+            throw new IllegalArgumentException(
+                    "오늘 백테스트 실행 한도(" + TierPolicy.dailyBacktestQuota(tier) + "회)를 초과했습니다. 등급을 올리거나 내일 다시 시도해주세요.");
+        }
+
+        // 미국주식 모멘텀 로테이션 — 유니버스 랭킹 전용 엔진으로 위임(기존 단일·2자산 경로와 격리, 무회귀).
+        // 모멘텀 경로는 단일 종목코드를 쓰지 않아 validateRequest 전체를 건너뛰지만, 날짜·초기자본은
+        // 위임 전에 최소 검증해 깔끔한 400을 돌려준다(미검증 시 LocalDate.parse NPE/형식오류가 모호한 500으로 표시됨).
+        if ("MOMENTUM_ROTATION".equalsIgnoreCase(request.getStrategyType())) {
+            validateMomentumRequest(request);
+            return momentumRotationBacktestService.run(request, userId);
+        }
+
         validateRequest(request);
 
         // 전략 or 직접 조건 분기
@@ -112,7 +136,7 @@ public class BacktestService {
         }
 
         if (allCandles.size() > 50_000) {
-            throw new IllegalArgumentException("데이터 범위가 너무 큽니다. 기간을 줄여주세요. (최대 약 5년)");
+            throw new IllegalArgumentException("데이터 양이 너무 많습니다. 분석 기간을 줄여주세요.");
         }
 
         allCandles = allCandles.stream()
@@ -210,6 +234,43 @@ public class BacktestService {
 
     // ── 입력 검증 ─────────────────────────────────────────────────────────
 
+    /**
+     * 등급별 백테스트 한도 검사(고급전략·기간·포지션·멀티종목). 위반 시 {@link IllegalArgumentException}.
+     * 날짜 형식 오류는 후속 {@link #validateRequest}/{@code validateMomentumRequest}가 친화적 메시지로 처리하므로
+     * 여기선 파싱 실패 시 조용히 통과시킨다(중복 메시지 회피).
+     */
+    void enforceBacktestTierLimits(BacktestRequest request, User.Tier tier) {
+        // 고급 전략(모멘텀 로테이션 등) — PRO 전용.
+        if ("MOMENTUM_ROTATION".equalsIgnoreCase(request.getStrategyType()) && !TierPolicy.canUseAdvancedStrategy(tier)) {
+            throw new IllegalArgumentException("고급 전략 백테스트(모멘텀 로테이션 등)는 Pro 등급에서 이용할 수 있습니다.");
+        }
+        // 기간 제한.
+        int maxYears = TierPolicy.maxBacktestYears(tier);
+        if (maxYears != TierPolicy.UNLIMITED && request.getStartDate() != null && request.getEndDate() != null) {
+            try {
+                LocalDate start = LocalDate.parse(request.getStartDate());
+                LocalDate end = LocalDate.parse(request.getEndDate());
+                if (start.isBefore(end.minusYears(maxYears))) {
+                    throw new IllegalArgumentException(
+                            "백테스트 기간이 등급 한도(" + maxYears + "년)를 초과합니다. 더 짧은 기간을 선택하거나 등급을 올려주세요.");
+                }
+            } catch (DateTimeParseException ignored) {
+                // 형식 오류는 validateRequest에서 처리
+            }
+        }
+        // 멀티 종목·포지션 수.
+        int maxPos = TierPolicy.maxBacktestPositions(tier);
+        if (maxPos != TierPolicy.UNLIMITED) {
+            if (request.getMaxPositions() != null && request.getMaxPositions() > maxPos) {
+                throw new IllegalArgumentException("동시 포지션 수가 등급 한도(" + maxPos + "개)를 초과합니다.");
+            }
+            // 2자산 리밸런싱(secondStockCode)은 멀티종목 — 1종목 한도(FREE)는 불가.
+            if (maxPos < 2 && request.getSecondStockCode() != null && !request.getSecondStockCode().isBlank()) {
+                throw new IllegalArgumentException("다중 종목 백테스트는 Basic 이상 등급에서 이용할 수 있습니다.");
+            }
+        }
+    }
+
     private void validateRequest(BacktestRequest request) {
         if (request.getInitialCapital() <= 0) {
             throw new IllegalArgumentException("초기 자본금은 0보다 커야 합니다.");
@@ -292,6 +353,40 @@ public class BacktestService {
             if (request.getTradeDirection() != null && !"LONG_ONLY".equalsIgnoreCase(request.getTradeDirection())) {
                 throw new IllegalArgumentException("2자산 리밸런싱은 매수(LONG_ONLY) 전략만 지원합니다.");
             }
+        }
+    }
+
+    /**
+     * 모멘텀 로테이션 전용 경량 검증 — 단일 종목코드를 쓰지 않으므로 validateRequest 전체 대신
+     * 위임 직전에 날짜(null·형식·역전·미래) 및 초기자본만 확인한다.
+     */
+    private void validateMomentumRequest(BacktestRequest request) {
+        if (request.getInitialCapital() <= 0) {
+            throw new IllegalArgumentException("초기 자본금은 0보다 커야 합니다.");
+        }
+        if (request.getInitialCapital() > 100_000_000_000L) {
+            throw new IllegalArgumentException("초기 자본금은 1,000억원 이하로 설정해주세요.");
+        }
+        if (request.getStartDate() == null || request.getEndDate() == null) {
+            throw new IllegalArgumentException("시작일과 종료일을 입력해주세요.");
+        }
+
+        LocalDate start, end;
+        try {
+            start = LocalDate.parse(request.getStartDate());
+            end = LocalDate.parse(request.getEndDate());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("날짜 형식이 올바르지 않습니다. (yyyy-MM-dd)");
+        }
+
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException("시작일이 종료일보다 늦을 수 없습니다.");
+        }
+        if (end.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("종료일은 오늘 이후로 설정할 수 없습니다.");
+        }
+        if (start.isBefore(LocalDate.of(2000, 1, 1))) {
+            throw new IllegalArgumentException("시작일은 2000년 이후로 설정해주세요.");
         }
     }
 
@@ -546,7 +641,6 @@ public class BacktestService {
         String currentDir = "NONE"; // LONG, SHORT, NONE
         double highSinceEntry = 0;           // 롱 트레일링 스탑: 진입 후 최고가
         double lowSinceEntry = Double.MAX_VALUE; // 숏 트레일링 스탑: 진입 후 최저가
-        int firstEntryDayIndex = 0;
 
         // 매매 방향 & 다중 포지션
         String tradeDir = request.getTradeDirection() != null ? request.getTradeDirection() : "LONG_ONLY";
@@ -743,11 +837,11 @@ public class BacktestService {
                     if (longEntry) {
                         double ua = lsfUnitAlloc(pyramiding, positionSizing, cash, maxPos, posEntries.size());
                         cash = openPosition(trades, posEntries, "LONG", price, slippage, commissionRate, positionSizing, positionValue, cash, date, i, leverage, ua);
-                        if (!posEntries.isEmpty()) { currentDir = "LONG"; highSinceEntry = price; firstEntryDayIndex = i; lastEntryPrice = price; }
+                        if (!posEntries.isEmpty()) { currentDir = "LONG"; highSinceEntry = price; lastEntryPrice = price; }
                     } else if (shortEntry) {
                         double ua = lsfUnitAlloc(pyramiding, positionSizing, cash, maxPos, posEntries.size());
                         cash = openPosition(trades, posEntries, "SHORT", price, slippage, commissionRate, positionSizing, positionValue, cash, date, i, leverage, ua);
-                        if (!posEntries.isEmpty()) { currentDir = "SHORT"; lowSinceEntry = price; firstEntryDayIndex = i; lastEntryPrice = price; }
+                        if (!posEntries.isEmpty()) { currentDir = "SHORT"; lowSinceEntry = price; lastEntryPrice = price; }
                     }
                 } else if ("LONG".equals(currentDir)) {
                     boolean longExit = evaluateConditions(exitConditions, indicatorValues, gi, price, candles, globalOffset, i);
@@ -815,7 +909,6 @@ public class BacktestService {
                         if (posEntries.size() == 1) {
                             currentDir = "SHORT";
                             lowSinceEntry = price;
-                            firstEntryDayIndex = i;
                         }
                     }
                 } else {
@@ -840,7 +933,6 @@ public class BacktestService {
                         if (currentDir.equals("NONE")) {
                             currentDir = "LONG";
                             highSinceEntry = price;
-                            firstEntryDayIndex = i;
                         }
                     }
                 }
@@ -864,7 +956,6 @@ public class BacktestService {
                             positionSizing, positionValue, cash, date, i, leverage, 0);
                     currentDir = "SHORT";
                     lowSinceEntry = price;
-                    firstEntryDayIndex = i;
                 } else if ("LONG_SHORT".equals(tradeDir) && "SHORT".equals(currentDir)) {
                     // LONG_SHORT 모드: 숏 보유 중 청산 신호 → 숏 청산 + 롱 진입 (방향 전환)
                     int[] streaks = {currentStreak, maxWinStreak, maxLossStreak};
@@ -882,7 +973,6 @@ public class BacktestService {
                             positionSizing, positionValue, cash, date, i, leverage, 0);
                     currentDir = "LONG";
                     highSinceEntry = price;
-                    firstEntryDayIndex = i;
                 } else {
                     // 일반 청산 (LONG_ONLY / SHORT_ONLY)
                     int[] streaks = {currentStreak, maxWinStreak, maxLossStreak};

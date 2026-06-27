@@ -37,10 +37,7 @@ export interface PortfolioDetail {
   portfolioName: string;
   nickname: string;
   currentRank: number;
-  totalReturn: number;
-  totalReturnAmount: number;
-  initialCapital: number;
-  totalValue: number;
+  totalReturn: number;        // 절대 금액(원금·총자산·수익금액)은 프라이버시상 서버에서 비공개
   stockCount: number;
   cryptoCount: number;
   routeName: string | null;

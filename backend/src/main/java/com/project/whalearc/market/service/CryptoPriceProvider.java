@@ -155,6 +155,7 @@ public class CryptoPriceProvider {
         );
 
         List<MarketPriceResponse> result = new ArrayList<>();
+        int parseFailCount = 0; // 파싱 실패 누적(빗썸 응답 포맷 변화·부분 장애 조기 감지용)
 
         for (Map.Entry<String, Object> entry : rawData.entrySet()) {
             String symbol = entry.getKey();
@@ -186,8 +187,14 @@ public class CryptoPriceProvider {
 
                 result.add(dto);
             } catch (Exception e) {
+                parseFailCount++;
                 log.debug("가상화폐 파싱 실패 [{}]: {}", symbol, e.getMessage());
             }
+        }
+
+        // 일부 코인이 조용히 사라지는 것을 막기 위해, 파싱 실패가 있으면 한 번에 요약 경고.
+        if (parseFailCount > 0) {
+            log.warn("빗썸 시세 파싱 실패 {}건 (성공 {}건) — 응답 포맷 변화·부분 장애 점검 필요", parseFailCount, result.size());
         }
 
         result.sort(Comparator.comparingLong(MarketPriceResponse::getVolume).reversed());

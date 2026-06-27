@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { validateNickname } from '../utils/nicknameFilter';
+import { getErrorMessage } from '../utils/api';
 import {
   AuthShell, AuthHero, AuthPanel, AuthCard, PrimaryButton, GoogleButton,
   AuthDivider, AuthAlert, AUTH_INPUT, AUTH_LABEL,
@@ -35,25 +36,28 @@ const SignUpPage = () => {
     e.preventDefault();
     setError(null);
 
-    const nicknameCheck = validateNickname(name);
-    if (!nicknameCheck.valid) { setError(nicknameCheck.message); return; }
-
+    // 검증 순서를 폼 필드 시각 순(이메일 → 닉네임 → 비밀번호)과 맞춤
     const trimmedEmail = email.trim();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!trimmedEmail || !emailRegex.test(trimmedEmail)) { setError('올바른 이메일 형식을 입력해주세요.'); return; }
-    if (password !== confirmPassword) { setError('비밀번호가 일치하지 않습니다.'); return; }
+
+    const trimmedName = name.trim();
+    const nicknameCheck = validateNickname(trimmedName);
+    if (!nicknameCheck.valid) { setError(nicknameCheck.message); return; }
+
     if (password.length < 6) { setError('비밀번호는 6자 이상이어야 합니다.'); return; }
+    if (password !== confirmPassword) { setError('비밀번호가 일치하지 않습니다.'); return; }
 
     setIsLoading(true);
     try {
-      const { user } = await authService.signUp(email, password, name);
+      const { user } = await authService.signUp(trimmedEmail, password, trimmedName);
       if (user?.identities?.length === 0) {
         setError('이미 가입된 이메일입니다.');
       } else {
         navigate('/login', { state: { message: '새로운 고래가 바다에 합류했습니다! 이메일을 확인해주세요.' } });
       }
-    } catch (err: any) {
-      const msg = err.message || '';
+    } catch (err) {
+      const msg = getErrorMessage(err, '');
       if (msg.toLowerCase().includes('rate limit')) setError('이메일 발송 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
       else setError(msg || '합류에 실패했습니다. 다시 시도해주세요.');
     } finally {
@@ -67,8 +71,8 @@ const SignUpPage = () => {
     try {
       await authService.loginWithOAuth(provider);
       // 성공 시 전체 페이지 리다이렉트되므로 로딩 상태 유지(연타 방지)
-    } catch (err: any) {
-      setError(err.message || `${provider} 로그인에 실패했습니다.`);
+    } catch (err) {
+      setError(getErrorMessage(err, `${provider} 로그인에 실패했습니다.`));
       setOauthLoading(false);
     }
   };
@@ -106,15 +110,15 @@ const SignUpPage = () => {
             <form onSubmit={handleSubmit} className="space-y-4" aria-label="회원가입 폼">
               <div>
                 <label htmlFor="email" className={AUTH_LABEL}>이메일 *</label>
-                <input type="email" id="email" value={email} onChange={(e) => setEmail(e.target.value)} className={AUTH_INPUT} placeholder="email@example.com" required />
+                <input type="email" id="email" value={email} onChange={(e) => setEmail(e.target.value)} className={AUTH_INPUT} placeholder="email@example.com" required aria-describedby={error ? 'signup-error' : undefined} />
               </div>
               <div>
                 <label htmlFor="name" className={AUTH_LABEL}>닉네임 *</label>
-                <input type="text" id="name" value={name} onChange={(e) => setName(e.target.value)} className={AUTH_INPUT} placeholder="랭킹에 표시될 닉네임을 입력하세요" required />
+                <input type="text" id="name" value={name} onChange={(e) => setName(e.target.value)} className={AUTH_INPUT} placeholder="랭킹에 표시될 닉네임을 입력하세요" required aria-describedby={error ? 'signup-error' : undefined} />
               </div>
               <div>
                 <label htmlFor="password" className={AUTH_LABEL}>비밀번호 *</label>
-                <input type="password" id="password" value={password} onChange={(e) => setPassword(e.target.value)} className={AUTH_INPUT} placeholder="비밀번호를 입력하세요 (6자 이상)" required />
+                <input type="password" id="password" value={password} onChange={(e) => setPassword(e.target.value)} className={AUTH_INPUT} placeholder="비밀번호를 입력하세요 (6자 이상)" required aria-describedby={error ? 'signup-error' : undefined} />
               </div>
               <div>
                 <label htmlFor="confirmPassword" className={AUTH_LABEL}>비밀번호 확인 *</label>

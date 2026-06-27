@@ -21,6 +21,8 @@ export function useNotifications(enabled = true) {
   );
   const prevUnreadRef = useRef(0);
   const initialLoadRef = useRef(true);
+  // 이미 토스트/표시한 알림 id 집합 — 개수 차분 대신 id diff로 신규를 가려내, 정렬·외부 읽음 변동에도 정확하게.
+  const seenIdsRef = useRef<Set<string>>(new Set());
 
   // 브라우저 알림 권한 요청
   const requestNotificationPermission = useCallback(async (): Promise<string> => {
@@ -29,22 +31,8 @@ export function useNotifications(enabled = true) {
       const permission = await window.Notification.requestPermission();
       setNotificationPermission(permission as NotificationPermissionState);
 
-      // 권한 승인 시 서비스워커에 push 구독 등록 시도
-      if (permission === 'granted' && 'serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.ready;
-        const existing = await registration.pushManager.getSubscription();
-        if (!existing) {
-          // VAPID 서버가 없으므로 구독은 시도만 하고 실패해도 무시
-          try {
-            await registration.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: undefined,
-            });
-          } catch {
-            // VAPID 키 없이는 구독 불가 — 로컬 알림으로 폴백
-          }
-        }
-      }
+      // VAPID 서버 키가 아직 없어 Web Push 구독은 항상 거부되므로 시도하지 않는다.
+      // VAPID 공개키가 준비되면 그때 pushManager.subscribe로 등록하고, 그 전까지는 로컬 알림으로 폴백한다.
       return permission;
     } catch {
       return 'denied';
@@ -81,37 +69,44 @@ export function useNotifications(enabled = true) {
       const count = await notificationService.getUnreadCount();
       setUnreadCount(count);
 
-      // 새 알림이 생겼으면 전체 목록 조회 후 토스트 표시
-      if (!initialLoadRef.current && count > prevUnreadRef.current) {
+      // 미읽음 수가 늘었거나 최초 로드면 전체 목록을 조회한다.
+      if (count > prevUnreadRef.current || initialLoadRef.current) {
         const all = await notificationService.getNotifications();
         setNotifications(all);
 
-        // 새로 추가된 알림만 토스트로 표시
-        const newCount = count - prevUnreadRef.current;
-        const newNotifs = all.filter(n => !n.read).slice(0, newCount);
-        const toastType = (type: string): ToastItem['type'] => {
-          switch (type) {
-            case 'LIMIT_ORDER_FILLED':
-            case 'MARKET_ORDER_FILLED':
-            case 'AUTO_TRADE_EXECUTED': return 'success';
-            case 'TURTLE_TRADE': return 'info';
-            case 'STRATEGY_EXECUTED': return 'info';
-            case 'PRICE_ALERT': return 'info';
-            default: return 'info';
-          }
-        };
-        const newToasts: ToastItem[] = newNotifs.map(n => ({
-          id: n.id,
-          type: toastType(n.type),
-          title: n.title,
-          message: n.message,
-          duration: 7000,
-        }));
-        setToasts(prev => [...prev, ...newToasts]);
+        const unread = all.filter(n => !n.read);
+        if (initialLoadRef.current) {
+          // 최초 로드: 기존 미읽음은 토스트하지 않고 seen에 시드(앱 진입 때 과거 알림이 쏟아지지 않게).
+          unread.forEach(n => seenIdsRef.current.add(n.id));
+        } else {
+          // 개수 차분이 아니라 id diff — 정렬 변동/다른 기기 읽음에도 정확히 '새로 본 적 없는' 것만 토스트.
+          const newNotifs = unread.filter(n => !seenIdsRef.current.has(n.id));
+          const toastType = (type: string): ToastItem['type'] => {
+            switch (type) {
+              case 'LIMIT_ORDER_FILLED':
+              case 'MARKET_ORDER_FILLED':
+              case 'AUTO_TRADE_EXECUTED': return 'success';
+              case 'TURTLE_TRADE': return 'info';
+              case 'STRATEGY_EXECUTED': return 'info';
+              case 'PRICE_ALERT': return 'info';
+              default: return 'info';
+            }
+          };
+          const newToasts: ToastItem[] = newNotifs.map(n => ({
+            id: n.id,
+            type: toastType(n.type),
+            title: n.title,
+            message: n.message,
+            duration: 7000,
+          }));
+          // 알림 폭주 시 화면을 가리지 않도록 동시 표시 토스트를 최신 3개로 제한.
+          if (newToasts.length) setToasts(prev => [...prev, ...newToasts].slice(-3));
 
-        // 브라우저 알림도 표시
-        for (const n of newNotifs) {
-          showBrowserNotification(n.title, n.message);
+          // 브라우저 알림도 표시하고, 처리한 id를 seen에 적립
+          for (const n of newNotifs) {
+            showBrowserNotification(n.title, n.message);
+            seenIdsRef.current.add(n.id);
+          }
         }
       }
 

@@ -10,6 +10,21 @@ export default {
         // 시세·금액 등 숫자에 JetBrains Mono 적용 (index.html에서 로드)
         mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
+      // 가시성 개선: 명명 텍스트 클래스를 기본 대비 +1px 상향(줄간격은 기본 유지).
+      // 임의값 text-[Npx] 토큰은 별도로 비례(~+8%) 상향됨.
+      fontSize: {
+        'xs':   ['0.8125rem', { lineHeight: '1rem' }],     // 12 → 13
+        'sm':   ['0.9375rem', { lineHeight: '1.25rem' }],  // 14 → 15
+        'base': ['1.0625rem', { lineHeight: '1.5rem' }],   // 16 → 17
+        'lg':   ['1.1875rem', { lineHeight: '1.75rem' }],  // 18 → 19
+        'xl':   ['1.3125rem', { lineHeight: '1.75rem' }],  // 20 → 21
+        '2xl':  ['1.5625rem', { lineHeight: '2rem' }],     // 24 → 25
+        '3xl':  ['1.9375rem', { lineHeight: '2.25rem' }],  // 30 → 31
+        '4xl':  ['2.3125rem', { lineHeight: '2.5rem' }],   // 36 → 37
+        '5xl':  ['3.0625rem', { lineHeight: '1' }],        // 48 → 49
+        '6xl':  ['3.8125rem', { lineHeight: '1' }],        // 60 → 61
+        '7xl':  ['4.5625rem', { lineHeight: '1' }],        // 72 → 73
+      },
       colors: {
         // ── 기존 브랜드 블루 (개편본 팔레트로 리튠) ──
         'whale-dark': '#1a2b4d',   // 다크 네이비 (텍스트/딥 배경) — 유지

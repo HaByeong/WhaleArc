@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
 
 import jakarta.annotation.PreDestroy;
@@ -46,6 +47,9 @@ public class CandlestickService {
     private static final long STOCK_CACHE_TTL = 10 * 60 * 1000L;  // 10분
     private static final long CRYPTO_CACHE_TTL = 60 * 1000L;       // 1분
     private static final int MAX_CACHE_SIZE = 100;
+    // 빗썸 캔들 API가 지원하는 interval(toBithumbInterval 변환 후 기준). 미지원 값은 재시도 없이 빈 결과 처리.
+    private static final Set<String> BITHUMB_SUPPORTED_INTERVALS = Set.of(
+            "1m", "3m", "5m", "10m", "30m", "1h", "6h", "12h", "24h");
     private final ConcurrentHashMap<String, CandleCache> candleCache = new ConcurrentHashMap<>();
 
     private ExecutorService chunkExecutor;
@@ -269,6 +273,11 @@ public class CandlestickService {
     @SuppressWarnings("unchecked")
     private List<CandlestickResponse> getCryptoCandlesticks(String symbol, String interval) {
         String bithumbInterval = toBithumbInterval(interval);
+        // 빗썸 미지원 interval(예: 1w 주봉)은 항상 실패하므로 재시도/지연 없이 즉시 빈 결과로 단락 처리한다.
+        if (!BITHUMB_SUPPORTED_INTERVALS.contains(bithumbInterval)) {
+            log.debug("빗썸 미지원 캔들 interval — 즉시 빈 결과 반환: {}", interval);
+            return List.of();
+        }
         String url = baseUrl + "/public/candlestick/" + symbol + "_KRW/" + bithumbInterval;
 
         for (int attempt = 1; attempt <= 3; attempt++) {
@@ -303,8 +312,19 @@ public class CandlestickService {
                     result.add(new CandlestickResponse(time, open, high, low, close, volume));
                 }
 
-                log.debug("캔들스틱 {}개 조회: {} / {}", result.size(), symbol, interval);
-                return result;
+                // 시간순 정렬 + 중복 제거 (주식 경로와 동일하게 lightweight-charts 요구사항 보장)
+                result.sort(Comparator.comparingLong(CandlestickResponse::getTime));
+                List<CandlestickResponse> deduped = new ArrayList<>();
+                long prevTime = -1;
+                for (CandlestickResponse cr : result) {
+                    if (cr.getTime() != prevTime) {
+                        deduped.add(cr);
+                        prevTime = cr.getTime();
+                    }
+                }
+
+                log.debug("캔들스틱 {}개 조회: {} / {}", deduped.size(), symbol, interval);
+                return deduped;
             } catch (Exception e) {
                 log.warn("캔들스틱 조회 오류 [{}/{}] (시도 {}/3): {}", symbol, interval, attempt, e.getMessage());
                 if (attempt < 3) {
@@ -315,14 +335,6 @@ public class CandlestickService {
 
         log.error("캔들스틱 조회 최종 실패 [{}/{}]: 3회 재시도 후 실패", symbol, interval);
         return List.of();
-    }
-
-    private long parseLong(Object value) {
-        try {
-            return Long.parseLong(String.valueOf(value).replace("\"", ""));
-        } catch (Exception e) {
-            return 0L;
-        }
     }
 
     private double parseDouble(Object value) {

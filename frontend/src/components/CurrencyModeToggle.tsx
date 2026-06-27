@@ -11,7 +11,7 @@ interface Props {
  * 원화 환산(convert) ↔ 통화 분리(separate)
  */
 export default function CurrencyModeToggle({ mode, onChange, isDark = false }: Props) {
-  const btn = 'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors whitespace-nowrap';
+  const btn = 'px-2.5 py-1 text-[12px] font-semibold rounded-md transition-colors whitespace-nowrap';
   const active = isDark ? 'bg-cyan-500/20 text-cyan-300' : 'bg-white text-whale-dark shadow-sm';
   const inactive = isDark ? 'text-slate-400 hover:text-slate-200' : 'text-gray-500 hover:text-gray-700';
 

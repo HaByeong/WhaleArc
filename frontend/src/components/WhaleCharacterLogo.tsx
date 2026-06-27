@@ -199,7 +199,7 @@ const WhaleCharacterLogo = ({ size = 120, showText = false, animate = true, clas
       {showText && (
         <div className="text-center">
           <div className="text-lg font-bold tracking-wider" style={{ color: '#1a2b4d' }}>WHALEARC</div>
-          <div className="text-[10px] text-gray-400 tracking-wide">고래처럼, 시장을 유영하듯</div>
+          <div className="text-[11px] text-gray-400 tracking-wide">고래처럼, 시장을 유영하듯</div>
         </div>
       )}
 

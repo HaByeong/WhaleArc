@@ -1,9 +1,11 @@
 package com.project.whalearc.exchange.controller;
 
 import com.project.whalearc.exchange.domain.ExchangeAccount;
+import com.project.whalearc.exchange.domain.ExchangePortfolioSnapshot;
 import com.project.whalearc.exchange.dto.ExchangeAccountRequestDto;
 import com.project.whalearc.exchange.dto.ExchangePortfolioDto;
 import com.project.whalearc.exchange.dto.ExchangeTransactionDto;
+import com.project.whalearc.exchange.repository.ExchangePortfolioSnapshotRepository;
 import com.project.whalearc.exchange.service.ExchangeAccountService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +13,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +25,7 @@ import java.util.Map;
 public class ExchangeAccountController {
 
     private final ExchangeAccountService exchangeAccountService;
+    private final ExchangePortfolioSnapshotRepository snapshotRepository;
 
     /**
      * API 키 등록/수정
@@ -118,6 +123,28 @@ public class ExchangeAccountController {
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("data", transactions);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 실계좌 자산 추이 — 일별 스냅샷 이력 (기본 30일).
+     * ExchangeSnapshotScheduler 가 매일 저장한 KRW 합계 스냅샷을 반환.
+     */
+    @GetMapping("/history")
+    public ResponseEntity<Map<String, Object>> getHistory(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = "30") int days) {
+
+        String userId = jwt.getSubject();
+        int safeDays = Math.min(Math.max(days, 1), 2000);   // 음수(역범위)·과다 입력 방어
+        LocalDate to = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        LocalDate from = to.minusDays(safeDays);
+        List<ExchangePortfolioSnapshot> snapshots =
+                snapshotRepository.findByUserIdAndDateBetweenOrderByDateAsc(userId, from, to);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("data", snapshots);
         return ResponseEntity.ok(response);
     }
 }

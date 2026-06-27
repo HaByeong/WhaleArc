@@ -8,9 +8,12 @@ import com.project.whalearc.trade.domain.PortfolioSnapshot;
 import com.project.whalearc.trade.repository.PortfolioSnapshotRepository;
 import com.project.whalearc.trade.service.PortfolioService;
 import com.project.whalearc.market.service.ExchangeRateService;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -21,6 +24,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/portfolio")
 @RequiredArgsConstructor
+@Validated
 public class PortfolioController {
 
     private final PortfolioService portfolioService;
@@ -69,7 +73,7 @@ public class PortfolioController {
     @GetMapping("/history")
     public ApiResponse<List<PortfolioSnapshot>> getHistory(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestParam(defaultValue = "30") int days) {
+            @RequestParam(defaultValue = "30") @Min(1) @Max(365) int days) {
         String userId = jwt.getSubject();
         LocalDate from = LocalDate.now(ZoneId.of("Asia/Seoul")).minusDays(days);
         LocalDate to = LocalDate.now(ZoneId.of("Asia/Seoul"));

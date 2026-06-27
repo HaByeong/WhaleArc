@@ -220,7 +220,7 @@ body.whalearc-dark:not(.whalearc-virt):not(.whalearc-novirt) {
   --wa-select-bg: #0c1a2e;
 }
 body.whalearc-dark {
-  background-color: var(--wa-page-bg, #060d18);
+  background-color: var(--wa-page-bg, #060b1f);
   color: var(--wa-text-primary, #e2e8f0);
 }
 
@@ -813,6 +813,20 @@ body.whalearc-dark .wa-force-dark .text-slate-600 {
 @keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-in { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes message-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+/* 유리병 도착 — 파도에 실려 잔잔히 떠오르듯 */
+@keyframes bottle-arrive { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes float-y { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-6px); } }
+@keyframes bottle-dot { 0%,100%{ opacity: 1; } 50%{ opacity: .5; } }
+/* 유리/물에 빛이 반짝 — 유리병 편지 타이틀 글린트 */
+@keyframes glint-twinkle { 0%,100%{ opacity: .35; transform: scale(.82) rotate(0deg); } 50%{ opacity: 1; transform: scale(1) rotate(8deg); } }
+/* 유리병 편지 — 축하 반짝임 · 공유 모달 등장 · 방어 금액 카운트업 */
+@keyframes twinkle { 0%,100%{ opacity: .25; transform: scale(.7); } 50%{ opacity: 1; transform: scale(1); } }
+@keyframes modal-pop { from { opacity: 0; transform: scale(.94) translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes count-pop { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: none; } }
+/* 규율 점수 패널 — 좁은 화면에선 게이지+스탯을 세로로 */
+@media (max-width: 560px) { .disc-top { grid-template-columns: 1fr !important; justify-items: center; } }
 
 @keyframes whale-swim {
   0%, 100% {
@@ -1083,6 +1097,31 @@ body.whalearc-dark .wa-force-dark .text-slate-600 {
 @keyframes whalearc-shine {
   0%   { background-position: 100% 50%; }
   100% { background-position: -100% 50%; }
+}
+
+/* 히어로 "유영하듯" — 물결처럼 흐르는 소나블루 그라데이션 (워드마크보다 느린 ease 왕복) */
+.hero-swim {
+  background: linear-gradient(100deg, #5b9dff 0%, #a8d4ff 30%, #e8f2ff 50%, #a8d4ff 70%, #5b9dff 100%);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: hero-swim 9s ease-in-out infinite;
+  filter: drop-shadow(0 0 14px rgba(91, 157, 255, 0.25));
+}
+@keyframes hero-swim {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-swim { animation: none; }
+  /* 멀미 민감 사용자 보호: 전역 애니메이션/트랜지션 최소화 (티커·셔머·부유·펄스 등) */
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* 사이드바 활성 nav 항목: 대각선 빛이 흐르는 sheen 효과 (목업 nav-active) */

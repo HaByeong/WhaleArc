@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { AuthShell, AuthBrand, AuthPanel, PrimaryButton, AuthAlert, AUTH_INPUT, AUTH_LABEL } from '../components/auth/AuthShell';
+import { getErrorMessage } from '../utils/api';
 
 /* 비밀번호 찾기 — 로그인/회원가입과 동일한 콘솔 디자인. 로직 보존. */
 
@@ -13,14 +14,23 @@ const ForgotPasswordPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError(null);
 
+    // 이메일 형식 검증(로그인/회원가입과 동일한 trim + 정규식)
+    const trimmedEmail = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      setError('올바른 이메일 형식을 입력해주세요.');
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      await authService.resetPassword(email);
+      await authService.resetPassword(trimmedEmail);
+      setEmail(trimmedEmail);
       setSent(true);
-    } catch (err: any) {
-      setError(err.message || '비밀번호 재설정 이메일 전송에 실패했습니다.');
+    } catch (err) {
+      setError(getErrorMessage(err, '비밀번호 재설정 이메일 전송에 실패했습니다.'));
     } finally {
       setIsLoading(false);
     }

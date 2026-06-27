@@ -370,6 +370,12 @@ public class QuantStoreService {
     private ProductPurchase purchaseProductLocked(String userId, String productId, BigDecimal investmentAmount) {
         QuantProduct product = getProduct(productId);
 
+        // 투트랙 정책: 관리형(TURTLE)만 구매 가능. SIMPLE 신호전략은 백테스트→자동매매 경로(구매 없음).
+        // UI는 이미 SIMPLE 구매 버튼을 노출하지 않지만, 서버단에서도 즉시-시장가-매수 경로를 차단한다(방어).
+        if (product.getStrategyType() != QuantProduct.StrategyType.TURTLE) {
+            throw new IllegalArgumentException("이 전략은 구매 상품이 아닙니다. 백테스트로 검증한 뒤 자동매매로 운용하세요.");
+        }
+
         if (purchaseRepository.existsByUserIdAndProductIdAndStatus(
                 userId, productId, ProductPurchase.Status.ACTIVE)) {
             throw new IllegalArgumentException("이미 구매한 상품입니다.");
@@ -412,6 +418,7 @@ public class QuantStoreService {
             turtleStrategyService.initializePositions(userId, purchase.getId(), targetAssets, investBd);
             log.info("터틀 항로 구매: userId={}, investment={}, assets={}", userId, investmentAmount, targetAssets);
         } else {
+            // ── 도달 불가(375행 가드에서 TURTLE 외 전략은 이미 예외) — 레거시 참고용 ──
             // ── 일반 전략: 균등 분배 즉시 매수 (가상화폐 or 주식) ──
             boolean isStockProduct = product.isStock();
             String assetType = isStockProduct ? "STOCK" : "CRYPTO";
@@ -553,11 +560,8 @@ public class QuantStoreService {
         purchase.setStatus(ProductPurchase.Status.REFUNDED);
         purchase = purchaseRepository.save(purchase);
 
-        // 구독자 수 감소
-        productRepository.findById(purchase.getProductId()).ifPresent(p -> {
-            p.setSubscribers(Math.max(0, p.getSubscribers() - 1));
-            productRepository.save(p);
-        });
+        // 구독자 수 원자적 감소($inc:-1) — 증가 경로와 동일하게 동시 취소/구매 경합 시 lost-update 방지
+        productRepository.decrementSubscribers(purchase.getProductId());
 
         log.info("항로 구매 취소 완료: userId={}, product={}", userId, purchase.getProductName());
         return purchase;

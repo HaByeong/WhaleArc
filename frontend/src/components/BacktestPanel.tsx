@@ -3,9 +3,12 @@ import {
   strategyService,
   type Strategy,
   type BacktestResult,
+  type BacktestRequest,
 } from '../services/strategyService';
 import { tradeService, type StockPrice } from '../services/tradeService';
 import { marketService } from '../services/marketService';
+import { getErrorMessage } from '../utils/api';
+import { formatAmountInput, parseAmountInput } from '../utils/currency';
 
 /* 숫자 포맷 */
 const _fmtPct  = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
@@ -16,9 +19,9 @@ void _fmtPct; void _fmtCur;
 function _KpiCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div className="bg-gray-50 rounded-lg p-2.5 text-center">
-      <div className="text-[10px] text-gray-400 mb-0.5">{label}</div>
+      <div className="text-[11px] text-gray-400 mb-0.5">{label}</div>
       <div className={`text-xs font-bold ${color ?? 'text-gray-800'}`}>{value}</div>
-      {sub && <div className="text-[10px] text-gray-400 mt-0.5 truncate">{sub}</div>}
+      {sub && <div className="text-[11px] text-gray-400 mt-0.5 truncate">{sub}</div>}
     </div>
   );
 }
@@ -40,6 +43,7 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
   const [assetType, setAssetType] = useState('CRYPTO');
   const [cryptoList, setCryptoList] = useState<StockPrice[]>([]);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchSeqRef = useRef(0); // 비동기 검색 순서 가드: 오래된 결과가 최신을 덮어쓰지 않도록
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   /* 기간 & 자본 */
@@ -89,6 +93,11 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  /* 언마운트 시 검색 디바운스 타이머 정리 (잔여 setState 경고 방지) */
+  useEffect(() => () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+  }, []);
+
   /* 종목 검색 */
   const handleSearch = (q: string) => {
     setSearchQuery(q);
@@ -96,6 +105,7 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     if (!q.trim()) { setSearchResults([]); setShowDropdown(false); return; }
     setIsSearching(true);
+    const seq = ++searchSeqRef.current;
     searchTimerRef.current = setTimeout(async () => {
       try {
         const crypto = cryptoList
@@ -103,15 +113,16 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
           .slice(0, 8)
           .map(s => ({ code: s.stockCode, name: s.stockName, market: 'CRYPTO' }));
         const krx = await tradeService.searchKrxStocks(q).catch(() => []);
-        const mapped = krx.slice(0, 8).map((s: any) => ({ code: s.code || s.stockCode, name: s.name || s.stockName, market: 'STOCK' }));
+        const mapped = krx.slice(0, 8).map((s) => ({ code: s.code, name: s.name, market: 'STOCK' }));
         const us = await marketService.searchUsStocks(q).catch(() => []);
-        const usMapped = us.slice(0, 8).map((s: any) => ({ code: s.code, name: s.name, market: 'US_STOCK' }));
+        const usMapped = us.slice(0, 8).map((s) => ({ code: s.code, name: s.name, market: 'US_STOCK' }));
         const etfs = await marketService.searchEtfs(q).catch(() => []);
-        const etfMapped = etfs.slice(0, 8).map((s: any) => ({ code: s.code, name: s.name, market: 'ETF' }));
+        const etfMapped = etfs.slice(0, 8).map((s) => ({ code: s.code, name: s.name, market: 'ETF' }));
+        if (seq !== searchSeqRef.current) return; // 더 최신 검색이 시작됐으면 오래된 결과는 버림
         setSearchResults([...crypto, ...mapped, ...usMapped, ...etfMapped]);
         setShowDropdown(true);
       } finally {
-        setIsSearching(false);
+        if (seq === searchSeqRef.current) setIsSearching(false);
       }
     }, 300);
   };
@@ -125,12 +136,16 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
   const handleRun = async () => {
     if (!stockCode) { setErrorMsg('종목을 선택해주세요.'); return; }
     if (!selectedStrategyId) { setErrorMsg('항로를 선택해주세요.'); return; }
+    const initialCapital = parseInt(capital);
+    if (!Number.isFinite(initialCapital) || initialCapital <= 0) {
+      setErrorMsg('초기 투자금을 올바르게 입력해주세요.'); return;
+    }
     setErrorMsg(''); setRunning(true); setResult(null);
     try {
-      const req: any = {
+      const req: BacktestRequest = {
         stockCode, stockName: stockName || stockCode,
         startDate, endDate,
-        initialCapital: parseInt(capital),
+        initialCapital,
         assetType,
         strategyId: selectedStrategyId,
       };
@@ -156,8 +171,8 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
       const res = await strategyService.runBacktest(req);
       setResult(res);
       onResult?.(res);
-    } catch (e: any) {
-      setErrorMsg(e.response?.data?.error || e.response?.data?.message || '백테스트 실행에 실패했습니다.');
+    } catch (e) {
+      setErrorMsg(getErrorMessage(e, '백테스트 실행에 실패했습니다.'));
     } finally {
       setRunning(false);
     }
@@ -180,14 +195,14 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
       <div className="space-y-3">
         {/* 항로 선택 */}
         <div>
-          <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">항로 선택</label>
+          <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">항로 선택</label>
           <select value={selectedStrategyId} onChange={e => setSelectedStrategyId(e.target.value)}
             className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-400 focus:border-blue-400 outline-none appearance-none">
             <option value="">항로를 선택하세요</option>
             {strategies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           {selectedStrategy && (
-            <div className="mt-1 text-[10px] text-gray-400">
+            <div className="mt-1 text-[11px] text-gray-400">
               진입 {selectedStrategy.entryConditions?.length ?? 0}개 · 청산 {selectedStrategy.exitConditions?.length ?? 0}개 조건
             </div>
           )}
@@ -195,7 +210,7 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
 
         {/* 종목 검색 */}
         <div ref={dropdownRef} className="relative">
-          <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">종목 검색</label>
+          <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">종목 검색</label>
           <div className="relative">
             <input
               type="text" value={searchQuery} onChange={e => handleSearch(e.target.value)}
@@ -220,7 +235,7 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
                 <button key={`${r.market}-${r.code}`} type="button" onClick={() => selectStock(r.code, r.name, r.market)}
                   className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs flex items-center justify-between transition-colors first:rounded-t-xl last:rounded-b-xl">
                   <span className="font-medium text-gray-800 truncate">{r.name} <span className="text-gray-400">({r.code})</span></span>
-                  <span className={`ml-2 flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-50 text-indigo-600' : r.market === 'US_STOCK' ? 'bg-blue-50 text-blue-600' : r.market === 'ETF' ? 'bg-teal-50 text-teal-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                  <span className={`ml-2 flex-shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded-full ${r.market === 'STOCK' ? 'bg-indigo-50 text-indigo-600' : r.market === 'US_STOCK' ? 'bg-blue-50 text-blue-600' : r.market === 'ETF' ? 'bg-teal-50 text-teal-600' : 'bg-emerald-50 text-emerald-600'}`}>
                     {r.market === 'STOCK' ? '주식' : r.market === 'US_STOCK' ? '미국주식' : r.market === 'ETF' ? 'ETF' : '코인'}
                   </span>
                 </button>
@@ -232,12 +247,12 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
         {/* 날짜 */}
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">시작일</label>
+            <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">시작일</label>
             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} max={endDate}
               className="w-full px-2 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-400 outline-none" />
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">종료일</label>
+            <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">종료일</label>
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} min={startDate} max={new Date().toISOString().slice(0,10)}
               className="w-full px-2 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-400 outline-none" />
           </div>
@@ -245,8 +260,9 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
 
         {/* 초기 자본 */}
         <div>
-          <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">초기 투자금 (원)</label>
-          <input type="number" value={capital} onChange={e => setCapital(e.target.value)} placeholder="10000000"
+          <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">초기 투자금 (원)</label>
+          <input type="text" inputMode="numeric" value={formatAmountInput(capital)}
+            onChange={e => setCapital(parseAmountInput(e.target.value))} placeholder="10,000,000"
             className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-400 outline-none" />
         </div>
 
@@ -260,10 +276,10 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
           </label>
           {useMonthlyContribution && (
             <div className="flex items-center gap-2">
-              <input type="number" value={monthlyContribution} onChange={e => setMonthlyContribution(e.target.value)}
-                min="0" placeholder="1000000"
+              <input type="text" inputMode="numeric" value={formatAmountInput(monthlyContribution)} onChange={e => setMonthlyContribution(parseAmountInput(e.target.value))}
+                placeholder="1,000,000"
                 className="flex-1 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs focus:ring-1 focus:ring-blue-400 outline-none" />
-              <span className="text-[10px] text-gray-500">원 / 월</span>
+              <span className="text-[11px] text-gray-500">원 / 월</span>
             </div>
           )}
         </div>
@@ -271,7 +287,7 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
         {/* 리스크 관리 & 고급 설정 토글 */}
         <div>
           <button onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 hover:text-gray-600 transition-colors">
+            className="flex items-center gap-1.5 text-[12px] font-semibold text-gray-400 hover:text-gray-600 transition-colors">
             <svg className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
@@ -282,12 +298,12 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
               {/* 손절 / 익절 */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">손절 (%)</label>
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">손절 (%)</label>
                   <input type="number" value={stopLossPercent} onChange={e => setStopLossPercent(e.target.value)}
                     className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" placeholder="5" step="0.5" min="0" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">익절 (%)</label>
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">익절 (%)</label>
                   <input type="number" value={takeProfitPercent} onChange={e => setTakeProfitPercent(e.target.value)}
                     className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" placeholder="10" step="0.5" min="0" />
                 </div>
@@ -295,12 +311,12 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
               {/* 트레일링 / 슬리피지 */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">트레일링 스탑 (%)</label>
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">트레일링 스탑 (%)</label>
                   <input type="number" value={trailingStopPercent} onChange={e => setTrailingStopPercent(e.target.value)}
                     className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" placeholder="5" step="0.5" min="0" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">슬리피지 (%)</label>
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">슬리피지 (%)</label>
                   <input type="number" value={slippagePercent} onChange={e => setSlippagePercent(e.target.value)}
                     className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" placeholder="0.1" step="0.05" min="0" />
                 </div>
@@ -308,8 +324,8 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
               {/* 매매 방향 / 최대 포지션 */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">매매 방향</label>
-                  <select value={tradeDirection} onChange={e => setTradeDirection(e.target.value as any)}
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">매매 방향</label>
+                  <select value={tradeDirection} onChange={e => setTradeDirection(e.target.value as 'LONG_ONLY' | 'SHORT_ONLY' | 'LONG_SHORT')}
                     className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs appearance-none">
                     <option value="LONG_ONLY">롱 (매수만)</option>
                     <option value="SHORT_ONLY">숏 (공매도)</option>
@@ -317,7 +333,7 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">최대 포지션</label>
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">최대 포지션</label>
                   <select value={maxPositions} onChange={e => setMaxPositions(e.target.value)}
                     className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs appearance-none">
                     <option value="1">1 (단일)</option>
@@ -330,12 +346,12 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
               {/* 수수료 / 포지션 사이징 */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">수수료율 (%)</label>
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">수수료율 (%)</label>
                   <input type="number" value={commissionRate} onChange={e => setCommissionRate(e.target.value)}
                     className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" placeholder="0.1" step="0.01" min="0" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">포지션 사이징</label>
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">포지션 사이징</label>
                   <select value={positionSizing} onChange={e => setPositionSizing(e.target.value)}
                     className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs appearance-none">
                     <option value="ALL_IN">전액 투자</option>
@@ -347,7 +363,7 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
               {/* 포지션 값 (ALL_IN이 아닐 때) */}
               {positionSizing !== 'ALL_IN' && (
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">
+                  <label className="block text-[11px] font-semibold text-gray-400 uppercase mb-1">
                     {positionSizing === 'PERCENT' ? '투자 비율 (%)' : '투자 금액 (원)'}
                   </label>
                   <input type="number" value={positionValue} onChange={e => setPositionValue(e.target.value)}
@@ -362,10 +378,10 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
                     <input type="checkbox" checked={dividendReinvest}
                       onChange={e => setDividendReinvest(e.target.checked)}
                       className="w-3.5 h-3.5 rounded accent-blue-500" />
-                    <span className="text-[11px] font-semibold text-gray-700">배당 자동 재투자 (DRIP)</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-600">미국주식·ETF</span>
+                    <span className="text-[12px] font-semibold text-gray-700">배당 자동 재투자 (DRIP)</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-600">미국주식·ETF</span>
                   </label>
-                  <p className="text-[10px] mt-1 text-gray-400 leading-relaxed">
+                  <p className="text-[11px] mt-1 text-gray-400 leading-relaxed">
                     {dividendReinvest
                       ? 'ON: 수정 종가(adjclose) 기반 — 배당이 자동으로 가격에 반영됩니다 (Total Return).'
                       : 'OFF: 일반 종가 + 배당 지급일에 cash 누적. 결과에 누적 배당 합계 표기.'}
@@ -378,7 +394,7 @@ export default function BacktestPanel({ onResult }: { onResult?: (result: Backte
 
         {/* 에러 */}
         {errorMsg && (
-          <div className="text-[11px] text-red-500 bg-red-50 rounded-lg px-3 py-2">{errorMsg}</div>
+          <div className="text-[12px] text-red-500 bg-red-50 rounded-lg px-3 py-2">{errorMsg}</div>
         )}
 
         {/* 실행 버튼 */}

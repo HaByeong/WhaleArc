@@ -38,21 +38,43 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
   const updatePosition = useCallback(() => {
     if (!step) return;
     const el = document.querySelector(`[data-tour="${step.target}"]`);
-    if (!el) return;
+    // 대상이 없으면 직전 스텝의 스포트라이트가 잘못된 위치에 남지 않도록 비운다
+    if (!el) { setSpotlight(null); return; }
 
     const rect = el.getBoundingClientRect();
+    // 콘솔 본문(.wa-console-dense)의 zoom 보정 — 타깃은 zoom 안, 스포트라이트는 body 포털(시각 뷰포트)이라
+    // 좌표계를 맞춰야 정렬된다. Chrome 버전마다 getBoundingClientRect가 zoom을 반영(시각좌표)하거나 안 함(CSS좌표)이라,
+    // 프로브로 판별 → CSS좌표면 zoom 원점(zoomEl 좌상단) 기준으로 시각좌표로 변환한다.
+    let sp = { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
+    const zoomEl = (el as HTMLElement).closest('.wa-console-dense') as HTMLElement | null;
+    if (zoomEl) {
+      const zoom = parseFloat(getComputedStyle(zoomEl).zoom) || 1;
+      if (zoom && zoom !== 1) {
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;left:0;top:0;width:1000px;height:0;visibility:hidden;pointer-events:none;';
+        zoomEl.appendChild(probe);
+        const grcFactor = (probe.getBoundingClientRect().width || 1000) / 1000; // ≈zoom이면 grc=시각좌표, ≈1이면 grc=CSS좌표
+        zoomEl.removeChild(probe);
+        if (Math.abs(grcFactor - 1) < 0.02) {
+          const base = zoomEl.getBoundingClientRect(); // 같은 CSS좌표계의 zoom 원점
+          sp = {
+            left: base.left + (rect.left - base.left) * zoom,
+            top: base.top + (rect.top - base.top) * zoom,
+            width: rect.width * zoom,
+            height: rect.height * zoom,
+          };
+        }
+        // grcFactor≈zoom이면 grc가 이미 시각좌표 → 변환 불필요
+      }
+    }
+
     const pad = 8;
-    setSpotlight({
-      top: rect.top - pad,
-      left: rect.left - pad,
-      width: rect.width + pad * 2,
-      height: rect.height + pad * 2,
-    });
+    setSpotlight({ top: sp.top - pad, left: sp.left - pad, width: sp.width + pad * 2, height: sp.height + pad * 2 });
 
     // 툴팁은 강조 영역을 가리지 않게 화면 상/하단 중앙에 크게 고정 (항상 잘 보이게)
-    const spotCenterY = rect.top + rect.height / 2;
+    const spotCenterY = sp.top + sp.height / 2;
     setPlacement(spotCenterY < window.innerHeight * 0.52 ? 'bottom' : 'top');
-  }, [step, currentStep]);
+  }, [step]);
 
   useEffect(() => {
     if (!isActive) { setCurrentStep(0); return; }
@@ -142,18 +164,18 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
               background: i === currentStep ? '#4a90e2' : i < currentStep ? t.dotDone : t.dotIdle,
             }} />
           ))}
-          <span className="ml-auto rounded-full px-2.5 py-1 text-[12.5px] font-bold" style={{ background: t.chip, color: t.chipText }}>{currentStep + 1} / {steps.length}</span>
+          <span className="ml-auto rounded-full px-2.5 py-1 text-[13.5px] font-bold" style={{ background: t.chip, color: t.chipText }}>{currentStep + 1} / {steps.length}</span>
         </div>
 
         {/* 내용 */}
-        <h4 className="mb-2.5 text-[23px] font-extrabold leading-tight" style={{ color: t.title }}>{step.title}</h4>
-        <div className="mb-6 whitespace-pre-line text-[16px] font-medium leading-relaxed" style={{ color: t.desc }}>{step.description}</div>
+        <h4 className="mb-2.5 text-[25px] font-extrabold leading-tight" style={{ color: t.title }}>{step.title}</h4>
+        <div className="mb-6 whitespace-pre-line text-[17.5px] font-medium leading-relaxed" style={{ color: t.desc }}>{step.description}</div>
 
         {/* 버튼 */}
         <div className="flex items-center justify-between">
           <button
             onClick={(e) => { e.stopPropagation(); onFinish(); }}
-            className="text-[14px] font-semibold transition-colors hover:opacity-80"
+            className="text-[15px] font-semibold transition-colors hover:opacity-80"
             style={{ color: t.skip }}
           >
             건너뛰기
@@ -162,7 +184,7 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
             {currentStep > 0 && (
               <button
                 onClick={(e) => { e.stopPropagation(); handlePrev(); }}
-                className="rounded-xl px-5 py-2.5 text-[15px] font-bold transition-colors hover:opacity-85"
+                className="rounded-xl px-5 py-2.5 text-[16px] font-bold transition-colors hover:opacity-85"
                 style={{ background: t.prevBg, color: t.prevText }}
               >
                 이전
@@ -170,7 +192,7 @@ const GuideTour = ({ steps, isActive, onFinish }: GuideTourProps) => {
             )}
             <button
               onClick={(e) => { e.stopPropagation(); handleNext(); }}
-              className="rounded-xl px-6 py-2.5 text-[15px] font-bold text-white bg-whale-light hover:bg-whale-dark transition-colors shadow-md"
+              className="rounded-xl px-6 py-2.5 text-[16px] font-bold text-white bg-whale-light hover:bg-whale-dark transition-colors shadow-md"
             >
               {isLast ? '시작하기 →' : '다음 →'}
             </button>

@@ -5,6 +5,8 @@ import type { Strategy, Condition } from '../services/strategyService';
 export type PresetCategory = 'basic' | 'trend' | 'reversal' | 'volatility';
 export interface PresetStrategy extends Strategy {
   category: PresetCategory;
+  /** 사용 가능 최소 등급(미지정=FREE). 난이도와 1:1 정렬 — 초급 5종=FREE, 중급 5종=BASIC, 고급 5종=PRO. */
+  minTier?: 'FREE' | 'BASIC' | 'PRO';
   maxPositions?: number;
   /** 프리셋 권장 트레일링 스탑(%) — 사용자가 고급설정에서 직접 입력하지 않으면 이 값이 적용된다. */
   trailingStopPercent?: number;
@@ -17,6 +19,74 @@ export interface PresetStrategy extends Strategy {
   /** 독립 양방향 전용 숏 진입/청산 조건. */
   shortEntryConditions?: Condition[];
   shortExitConditions?: Condition[];
+  /** 특수 엔진 타입. "MOMENTUM_ROTATION"이면 지표-조건이 아닌 유니버스 랭킹 로테이션. */
+  strategyType?: 'MOMENTUM_ROTATION';
+}
+
+// ── 미국주식 상대모멘텀 로테이션 ──
+export const MOMENTUM_PRESET_ID = 'preset-momentum-top5';
+export type MomentumAssetType = 'US_STOCK' | 'ETF' | 'STOCK' | 'CRYPTO';
+export interface MomentumParams {
+  assetType: MomentumAssetType; // 자산군: 미국주식·미국ETF·한국주식·가상자산
+  topN: number;          // 상위 N종목 (기본 5)
+  lookbackDays: number;  // 모멘텀 거래일 (기본 252)
+  regimeFilter: boolean; // 레짐 필터(벤치마크 200SMA)
+  regimeFloor: number;   // 약세장 노출 비율 (기본 0.5)
+  rebalanceBandPct: number; // 잔존 비중 유지 밴드(±%p)
+  fullInvest?: boolean;  // 자본 최대 활용(bin-packing). true면 균등비중 풀고 예산 최대 소진(소액 적합)
+}
+export const MOMENTUM_DEFAULTS: MomentumParams = { assetType: 'US_STOCK', topN: 5, lookbackDays: 252, regimeFilter: true, regimeFloor: 0.5, rebalanceBandPct: 3, fullInvest: false };
+
+// 자산군별 레짐 벤치마크·종목수·기본 룩백(거래일) — UI 라벨/안내용. 백엔드 MomentumUniverses와 정렬.
+export const MOMENTUM_ASSET_META: Record<MomentumAssetType, { label: string; benchmark: string; poolSize: number; defaultLookback: number }> = {
+  US_STOCK: { label: '미국주식', benchmark: 'SPY 200일선', poolSize: 132, defaultLookback: 252 },
+  ETF:      { label: '미국 ETF', benchmark: 'SPY 200일선', poolSize: 40, defaultLookback: 252 },
+  STOCK:    { label: '한국주식', benchmark: 'KODEX200 200일선', poolSize: 40, defaultLookback: 252 },
+  CRYPTO:   { label: '가상자산', benchmark: 'BTC 200일선', poolSize: 30, defaultLookback: 120 },
+};
+
+// ── 터틀 트레이딩 파라미터화 ──
+// 백엔드는 임의 기간 DONCHIAN_HIGH_<n>/DONCHIAN_LOW_<n> 와 ADX 임계값을 그대로 지원하므로,
+// 사용자가 설정한 파라미터로 지표·조건을 즉석 생성한다(종목별로 다른 채널/필터를 쓸 수 있게).
+export const TURTLE_PRESET_ID = 'preset-turtle';
+export interface TurtleParams {
+  entryPeriod: number;   // 진입 채널(돈치안) 기간 — 신고가/신저가 돌파 기준
+  exitPeriod: number;    // 청산 채널 기간 — 반대 채널 닿으면 flat
+  adxThreshold: number;  // 추세 강도 필터 (ADX > 이 값일 때만 진입)
+  maxUnits: number;      // 피라미딩 최대 유닛
+  leverage: number;      // 선물 레버리지 배수
+  trailingStopPercent: number; // 트레일링 스탑 %
+}
+export const TURTLE_DEFAULTS: TurtleParams = { entryPeriod: 100, exitPeriod: 30, adxThreshold: 15, maxUnits: 4, leverage: 2, trailingStopPercent: 4 };
+
+/** 터틀 파라미터 → 지표 + 롱/숏 진입·청산 조건. */
+export function buildTurtleConditions(p: TurtleParams): Pick<PresetStrategy,
+  'indicators' | 'entryConditions' | 'exitConditions' | 'shortEntryConditions' | 'shortExitConditions'> {
+  const e = Math.max(2, Math.round(p.entryPeriod));
+  const x = Math.max(2, Math.round(p.exitPeriod));
+  const adx = p.adxThreshold;
+  return {
+    indicators: [
+      { type: 'DONCHIAN', parameters: { period: e } },
+      { type: 'DONCHIAN', parameters: { period: x } },
+      { type: 'ADX', parameters: { period: 14 } },
+      { type: 'ATR', parameters: { period: 14 } },
+    ],
+    entryConditions: [
+      { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: `DONCHIAN_HIGH_${e}` },
+      { indicator: 'ADX', operator: 'GT', value: adx, logic: 'AND' },
+    ],
+    exitConditions: [
+      { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: `DONCHIAN_LOW_${x}` },
+    ],
+    shortEntryConditions: [
+      { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: `DONCHIAN_LOW_${e}` },
+      { indicator: 'ADX', operator: 'GT', value: adx, logic: 'AND' },
+    ],
+    shortExitConditions: [
+      { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: `DONCHIAN_HIGH_${x}` },
+    ],
+  };
 }
 
 export const PRESET_STRATEGIES: PresetStrategy[] = [
@@ -57,7 +127,7 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-bollinger-squeeze', category: 'volatility', name: '볼린저 밴드 수축 돌파', description: '볼린저 밴드 수축 구간에서 상단 돌파 시 매수, 중심선 하락 시 손절. 변동성 확대 구간을 노리는 전략입니다.',
+      id: 'preset-bollinger-squeeze', minTier: 'BASIC', category: 'volatility', name: '볼린저 밴드 수축 돌파', description: '볼린저 밴드 수축 구간에서 상단 돌파 시 매수, 중심선 하락 시 손절. 변동성 확대 구간을 노리는 전략입니다.',
       beginnerTip: '쉽게 말하면: 가격이 한동안 조용하다가 갑자기 위로 터지면 "폭발적 상승 시작"이라 보고 올라타는 전략이에요.',
       whyUse: '횡보장에서 기다리다가 큰 움직임이 시작될 때만 거래해서, 불필요한 매매를 줄여줘요.',
       difficulty: '중급',
@@ -69,7 +139,7 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-macd-divergence', category: 'trend', name: 'MACD 크로스오버', description: 'MACD 시그널 크로스와 히스토그램 전환을 활용한 추세 전환 포착 전략입니다.',
+      id: 'preset-macd-divergence', minTier: 'BASIC', category: 'trend', name: 'MACD 크로스오버', description: 'MACD 시그널 크로스와 히스토그램 전환을 활용한 추세 전환 포착 전략입니다.',
       beginnerTip: '쉽게 말하면: 두 개의 추세선이 교차하는 순간을 포착해서 "추세가 바뀌고 있다"는 신호를 잡아내는 전략이에요.',
       whyUse: '상승↔하락 전환 시점을 미리 감지할 수 있어서, 큰 흐름의 시작에 올라탈 수 있어요.',
       difficulty: '중급',
@@ -81,7 +151,7 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-stochastic', category: 'reversal', name: '스토캐스틱 크로스', description: '스토캐스틱 %K가 %D를 상향 돌파할 때 매수, 하향 돌파할 때 매도하는 모멘텀 전략입니다.',
+      id: 'preset-stochastic', minTier: 'BASIC', category: 'reversal', name: '스토캐스틱 크로스', description: '스토캐스틱 %K가 %D를 상향 돌파할 때 매수, 하향 돌파할 때 매도하는 모멘텀 전략입니다.',
       beginnerTip: '쉽게 말하면: "지금 가격이 최근 범위에서 어디쯤인지" 보고, 바닥 근처에서 사고 천장 근처에서 파는 전략이에요.',
       whyUse: '단기 매매에 적합하고, 매수/매도 타이밍을 비교적 명확하게 잡아줘요.',
       difficulty: '중급',
@@ -93,10 +163,10 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-connors-rsi2', category: 'reversal', name: '래리 코너스 RSI(2)', description: '초단기 RSI(2일)를 사용하여 급락 후 반등을 포착하는 단기 매매 전략입니다. 래리 코너스가 개발한 전략으로, 상승 추세 종목에서 일시적 과매도 구간을 노립니다.',
+      id: 'preset-connors-rsi2', minTier: 'BASIC', category: 'reversal', name: '래리 코너스 RSI(2)', description: '초단기 RSI(2일)를 사용하여 급락 후 반등을 포착하는 단기 매매 전략입니다. 래리 코너스가 개발한 전략으로, 상승 추세 종목에서 일시적 과매도 구간을 노립니다.',
       beginnerTip: '쉽게 말하면: 평소 잘 오르던 종목이 갑자기 2~3일 급락했을 때 "일시적 할인"이라 보고 사는 전략이에요.',
       whyUse: '실제 월가에서 검증된 전략으로, 높은 승률이 특징이에요. 단, 단기 매매라 잦은 거래가 발생해요.',
-      difficulty: '고급',
+      difficulty: '중급',
       strategyLogic: 'RSI(2) < 5 → 매수 (초단기 과매도) / RSI(2) > 60 → 매도 (반등 확인)',
       assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
       indicators: [{ type: 'RSI', parameters: { period: 2 } }],
@@ -108,7 +178,7 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       id: 'preset-volatility-breakout', category: 'volatility', name: '변동성 돌파 전략', description: '래리 윌리엄스의 변동성 돌파 전략입니다. 전일 변동폭(고가-저가)의 일정 비율만큼 당일 시가에서 상승하면 매수하고, 다음 날 청산합니다.',
       beginnerTip: '쉽게 말하면: 어제 가격이 많이 흔들렸는데, 오늘 그 흔들림의 절반만큼 올라가면 "오늘은 오르는 날"이라 보고 사는 전략이에요.',
       whyUse: '하루 단위로 매매해서 리스크가 제한적이고, 코인처럼 변동성 큰 자산에 잘 맞아요.',
-      difficulty: '고급',
+      difficulty: '초급',
       strategyLogic: 'CLOSE > OPEN + (전일고가 - 전일저가) × 0.5 → 매수 / 다음날 시가 매도',
       assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
       indicators: [{ type: 'ATR', parameters: { period: 1 } }],
@@ -120,7 +190,7 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       id: 'preset-triple-ema', category: 'trend', name: '트리플 EMA 추세 정렬', description: '단기·중기·장기 EMA(20·50·200)가 완전히 정렬된 상태에서만 골든크로스로 진입하는 다중 시간프레임 추세 정렬 전략입니다. 단일 골든크로스의 잦은 속임수 신호를 구조적으로 걸러냅니다.',
       beginnerTip: '쉽게 말하면: 짧은 흐름·중간 흐름·긴 흐름이 "모두 같은 방향(위)"일 때만 올라타는 전략이에요. 셋이 줄을 맞춰야 출발합니다.',
       whyUse: '단일 이동평균 교차는 횡보장에서 사고팔기를 반복하며 손실이 쌓여요. 세 EMA가 정렬(20>50>200)된 상태에서만 진입하면 거래 수가 절반 이하로 줄고 진짜 추세에만 올라타 거래당 기대값이 크게 올라갑니다. EMA200은 강세장/약세장을 가르는 업계 표준선이에요.',
-      difficulty: '고급',
+      difficulty: '초급',
       strategyLogic: 'EMA50 > EMA200(상승 체제) + EMA20 ↑ EMA50 골든크로스 → 매수 / EMA20 ↓ EMA50 또는 종가 < EMA200 → 매도',
       assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
       indicators: [{ type: 'EMA', parameters: { period: 20 } }, { type: 'EMA', parameters: { period: 50 } }, { type: 'EMA', parameters: { period: 200 } }],
@@ -135,10 +205,10 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-keltner-breakout', category: 'volatility', name: '켈트너 채널 변동성 돌파', description: 'EMA20 중심선에 ATR(실제 변동폭) 밴드를 두른 켈트너 채널의 상단을 종가가 돌파할 때 진입하고, 중심선으로 회귀하면 청산하는 변동성 정규화 추세 돌파 전략입니다.',
+      id: 'preset-keltner-breakout', minTier: 'BASIC', category: 'volatility', name: '켈트너 채널 변동성 돌파', description: 'EMA20 중심선에 ATR(실제 변동폭) 밴드를 두른 켈트너 채널의 상단을 종가가 돌파할 때 진입하고, 중심선으로 회귀하면 청산하는 변동성 정규화 추세 돌파 전략입니다.',
       beginnerTip: '쉽게 말하면: 평소 출렁임(ATR)보다 두 배 이상 세게 위로 치고 나가면 "진짜 강한 상승"이라 보고 올라타는 전략이에요.',
       whyUse: '볼린저 밴드는 표준편차를 쓰지만 켈트너는 ATR(실제 거래폭)을 써서 갑작스러운 갭이나 긴 꼬리에 덜 흔들려요. 변동성으로 정규화된 돌파라 비트코인이든 주식이든 같은 설정을 그대로 적용할 수 있는 게 강점입니다.',
-      difficulty: '고급',
+      difficulty: '중급',
       strategyLogic: '종가 > EMA20 + 2×ATR(상단 돌파) + 종가 > EMA200 → 매수 / 종가 < EMA20(중심선 회귀) → 매도',
       assetType: 'MIXED', targetAssets: ['BTC', '005930', 'NVDA'], targetAssetNames: { BTC: '비트코인', '005930': '삼성전자', NVDA: '엔비디아' },
       indicators: [{ type: 'EMA', parameters: { period: 20 } }, { type: 'EMA', parameters: { period: 200 } }, { type: 'ATR', parameters: { period: 10 } }],
@@ -152,7 +222,7 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-bollinger-reversion', category: 'reversal', name: '볼린저 %b 레짐 평균회귀', description: '200일선 위(상승 체제)에서만 볼린저 밴드 하단 이탈(%b < 0.05)을 과매도로 보고 매수, 중심선 회귀(%b ≥ 0.5) 시 청산하는 추세 필터형 평균회귀 전략입니다.',
+      id: 'preset-bollinger-reversion', minTier: 'PRO', category: 'reversal', name: '볼린저 %b 레짐 평균회귀', description: '200일선 위(상승 체제)에서만 볼린저 밴드 하단 이탈(%b < 0.05)을 과매도로 보고 매수, 중심선 회귀(%b ≥ 0.5) 시 청산하는 추세 필터형 평균회귀 전략입니다.',
       beginnerTip: '쉽게 말하면: 장기적으로 잘 오르는 종목이 잠깐 확 빠졌을 때만 "할인 구간"이라 보고 사서, 제자리로 돌아오면 파는 전략이에요.',
       whyUse: '단순 과매도 매수의 최대 약점은 하락장에서 "떨어지는 칼날"을 잡는 거예요. 200일선 위에서만 매수하도록 거르면 손실 거래의 꼬리가 잘려 승률과 손익비가 크게 개선됩니다. 월가에서 검증된 정통 평균회귀 조합이에요.',
       difficulty: '고급',
@@ -170,7 +240,7 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-oscillator-confluence', category: 'reversal', name: '멀티 오실레이터 컨플루언스 반전', description: 'RSI·스토캐스틱·윌리엄스%R·CCI 네 개의 오실레이터가 모두 과매도이고 200일선 위일 때만 매수하는 고확신 평균회귀 전략입니다. 단일 지표의 거짓 신호를 만장일치로 걸러냅니다.',
+      id: 'preset-oscillator-confluence', minTier: 'PRO', category: 'reversal', name: '멀티 오실레이터 컨플루언스 반전', description: 'RSI·스토캐스틱·윌리엄스%R·CCI 네 개의 오실레이터가 모두 과매도이고 200일선 위일 때만 매수하는 고확신 평균회귀 전략입니다. 단일 지표의 거짓 신호를 만장일치로 걸러냅니다.',
       beginnerTip: '쉽게 말하면: 네 명의 심판(지표)이 "지금 너무 많이 빠졌다"고 모두 동의할 때만 사는, 신중함을 극대화한 전략이에요.',
       whyUse: '지표 하나는 자주 속이지만 네 개가 동시에 과매도를 가리키는 일은 드물고, 그만큼 진짜 바닥일 확률이 높아요. 거래 빈도는 낮지만 진입 한 번의 신뢰도가 높아 승률 중심으로 운용하기 좋습니다.',
       difficulty: '고급',
@@ -192,7 +262,7 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-macd-rsi-gate', category: 'trend', name: 'MACD·RSI·EMA200 삼중 추세 게이트', description: '200일선 위(상승 체제)이고 RSI가 50을 넘은(모멘텀 확인) 상태에서 MACD 골든크로스가 나올 때만 진입하는 다중 지표 컨플루언스 추세 전략입니다. 세 신호가 동시에 같은 방향일 때만 매수합니다.',
+      id: 'preset-macd-rsi-gate', minTier: 'PRO', category: 'trend', name: 'MACD·RSI·EMA200 삼중 추세 게이트', description: '200일선 위(상승 체제)이고 RSI가 50을 넘은(모멘텀 확인) 상태에서 MACD 골든크로스가 나올 때만 진입하는 다중 지표 컨플루언스 추세 전략입니다. 세 신호가 동시에 같은 방향일 때만 매수합니다.',
       beginnerTip: '쉽게 말하면: "추세도 위, 힘도 위, 교차도 위" 세 조건이 한꺼번에 맞을 때만 들어가서 가짜 신호를 거르는 전략이에요.',
       whyUse: 'MACD 단독 교차는 횡보장에서 자주 속아요. 장기 추세(EMA200)와 모멘텀(RSI)을 함께 확인하면 거짓 전환 신호를 크게 줄이고 진짜 추세 초입에만 진입할 수 있습니다.',
       difficulty: '고급',
@@ -211,34 +281,26 @@ export const PRESET_STRATEGIES: PresetStrategy[] = [
       applied: false, createdAt: '', updatedAt: '',
     },
     {
-      id: 'preset-turtle', category: 'trend', name: '터틀 트레이딩 (돈치안 돌파)',
+      id: 'preset-turtle', minTier: 'PRO', category: 'trend', name: '터틀 트레이딩 (돈치안 돌파)',
       tradeDirection: 'LONG_SHORT_FLAT', leverage: 2, maxPositions: 4, pyramidMode: 'ATR', trailingStopPercent: 4,
       description: '전설적인 터틀 트레이더들의 추세추종 시스템입니다. 직전 100봉 신고가(돈치안 채널 상단)를 돌파하면 롱, 직전 100봉 신저가를 하향 돌파하면 숏으로 진입하고, ADX(추세 강도) 필터를 통과한 추세에만 올라탑니다. 청산 채널(30봉)에 닿으면 현금으로 빠져 다음 돌파를 기다립니다. 추세가 이어지면 ATR 간격마다 유닛을 더하는 피라미딩으로 수익을 키웁니다.',
       beginnerTip: '쉽게 말하면: "한동안의 최고가를 뚫으면 사고(롱), 최저가를 뚫으면 팔아서(숏) 큰 추세를 양방향으로 올라타는" 전략이에요. 추세가 이어지면 조금씩 더 보태고, 꺾이면 현금으로 쉽니다.',
       whyUse: '추세추종의 교과서로 불리는 검증된 시스템입니다. 롱·숏 양방향이라 상승장과 하락장 모두에서 수익 기회를 노립니다. ADX 필터로 횡보장의 거짓 돌파를 걸러내고, 피라미딩으로 "이익은 길게" 키우며, 청산 채널로 "손실은 짧게" 끊습니다. 변동성이 큰 비트코인·이더리움 선물에서 특히 강점이 있습니다. (레버리지·숏은 라이브 Bitget 선물에서, 백테스트는 일봉 근사입니다.)',
       difficulty: '고급',
-      strategyLogic: '롱: 종가 > 100봉 신고가 + ADX>15 / 숏: 종가 < 100봉 신저가 + ADX>15 / 청산: 30봉 반대 채널 또는 트레일링 4% / 피라미딩: +ATR마다 최대 4유닛 / 레버리지 2배',
+      strategyLogic: '롱: 종가 > 진입채널 신고가 + ADX>임계 / 숏: 종가 < 진입채널 신저가 + ADX>임계 / 청산: 청산채널 반대 또는 트레일링 / 피라미딩: +ATR마다 유닛 추가 (전략 선택 시 채널 기간·ADX·유닛·레버리지를 직접 설정)',
       assetType: 'CRYPTO', targetAssets: ['BTC', 'ETH'], targetAssetNames: { BTC: '비트코인', ETH: '이더리움' },
-      indicators: [
-        { type: 'DONCHIAN', parameters: { period: 100 } },
-        { type: 'DONCHIAN', parameters: { period: 30 } },
-        { type: 'ADX', parameters: { period: 14 } },
-        { type: 'ATR', parameters: { period: 14 } },
-      ],
-      entryConditions: [
-        { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_HIGH_100' },
-        { indicator: 'ADX', operator: 'GT', value: 15, logic: 'AND' },
-      ],
-      exitConditions: [
-        { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_LOW_30' },
-      ],
-      shortEntryConditions: [
-        { indicator: 'CLOSE', operator: 'LT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_LOW_100' },
-        { indicator: 'ADX', operator: 'GT', value: 15, logic: 'AND' },
-      ],
-      shortExitConditions: [
-        { indicator: 'CLOSE', operator: 'GT', value: 0, logic: 'AND', valueExpression: 'DONCHIAN_HIGH_30' },
-      ],
+      ...buildTurtleConditions(TURTLE_DEFAULTS),   // 기본값(100/30/ADX15) — UI에서 종목별로 변경 가능
+      applied: false, createdAt: '', updatedAt: '',
+    },
+    {
+      id: MOMENTUM_PRESET_ID, minTier: 'PRO', category: 'trend', strategyType: 'MOMENTUM_ROTATION', name: '모멘텀 TopN 로테이션',
+      description: '자산군(미국주식·미국ETF·한국주식·가상자산)을 골라, 그 유니버스를 매월 모멘텀(기본 12개월 수익률)으로 줄 세워 상위 N종목에 균등 분산하고 매달 다시 줄 세워 교체하는 추세추종 로테이션입니다. 양수 모멘텀만 담고(없으면 현금), 대표지수가 200일선 아래(약세장)면 노출을 줄입니다.',
+      beginnerTip: '쉽게 말하면: "고른 시장에서 최근 가장 잘 오른 N개만 담고, 매달 새로 줄 세워 갈아타는" 전략이에요. 시장 전체가 약세면 노출을 줄여 위험을 낮춥니다.',
+      whyUse: '같은 종목 풀의 단순 보유보다 꾸준히 초과수익(상대 모멘텀 알파)을 내는 게 검증된 방식입니다. 자산군별로 돌릴 수 있어, 예컨대 코인 모멘텀과 미국주식 모멘텀처럼 상관이 낮은 둘을 섞으면 변동성이 낮아집니다(샤프↑). 월 1회 교체라 손이 적게 갑니다. (생존편향·세금 감안해 기대치는 보수적으로.)',
+      difficulty: '고급',
+      strategyLogic: '매월 첫 거래일: 선택 자산군 유니버스의 모멘텀 랭킹 → 양수 상위 N(균등) → 대표지수<200일선이면 ×레짐floor → 월간 리밸런싱 (자산군·top-N·lookback·레짐을 직접 설정)',
+      assetType: 'US_STOCK', targetAssets: [], targetAssetNames: {},
+      indicators: [], entryConditions: [], exitConditions: [],
       applied: false, createdAt: '', updatedAt: '',
     },
   ];

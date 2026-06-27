@@ -18,6 +18,7 @@ public class BacktestHistoryItemDto {
     private double sharpeRatio;
     private double maxDrawdown;
     private int totalTrades;
+    private Double winRate;  // 승률(%) — 구 레코드는 null
     private long createdAt; // epoch millis
 
     public static BacktestHistoryItemDto from(SavedBacktest s) {
@@ -32,6 +33,7 @@ public class BacktestHistoryItemDto {
                 .sharpeRatio(s.getSharpeRatio())
                 .maxDrawdown(s.getMaxDrawdown())
                 .totalTrades(s.getTotalTrades())
+                .winRate(s.getWinRate())
                 .createdAt(s.getCreatedAt() != null ? s.getCreatedAt().toEpochMilli() : 0L)
                 .build();
     }

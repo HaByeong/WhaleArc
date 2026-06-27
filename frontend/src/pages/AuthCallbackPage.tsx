@@ -12,11 +12,16 @@ const AuthCallbackPage = () => {
     const savedRedirect = localStorage.getItem('whalearc_redirect') || '/dashboard';
     localStorage.removeItem('whalearc_redirect');
     try {
-      const profile = await userService.getProfile();
+      // 온보딩 체크는 비핵심 — 백엔드가 느려도 로그인 진입을 막지 않도록 4초 레이스.
+      // (타임아웃 시 null → 그냥 목적지로 진입, "바다로 입수 중..." 장시간 멈춤 방지)
+      const profile = await Promise.race([
+        userService.getProfile(),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 4000)),
+      ]);
       if (profile && !profile.investmentStyle) {
-        const onboardingUrl = savedRedirect.startsWith('/virt')
-          ? `/user?onboarding=true&from=${encodeURIComponent(savedRedirect)}`
-          : '/user?onboarding=true';
+        // 온보딩 완료 후 원래 목적지로 돌아가도록 from을 항상 보존(virt 외 딥링크도 유실 안 되게).
+        // UserPage가 from을 읽어 이동하며, 기본 '/dashboard'여도 무해.
+        const onboardingUrl = `/user?onboarding=true&from=${encodeURIComponent(savedRedirect)}`;
         window.location.replace(onboardingUrl);
         return;
       }
@@ -102,6 +107,7 @@ const AuthCallbackPage = () => {
           // 세션이 아직 없으면 onAuthStateChange로 대기
           const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'SIGNED_IN' && session) {
+              clearTimeout(timeoutId); // 정상 진입 시 지연 타임아웃 해제(동의 게이트/리다이렉트가 30초 뒤 튕기는 것 방지)
               subscription.unsubscribe();
               try {
                 await gateThenRedirect();
@@ -113,7 +119,7 @@ const AuthCallbackPage = () => {
           });
 
           // 30초 타임아웃 (모바일 네트워크 고려)
-          setTimeout(() => {
+          const timeoutId = setTimeout(() => {
             subscription.unsubscribe();
             setError('로그인 응답이 지연되고 있습니다. 다시 시도해주세요.');
             setTimeout(() => window.location.replace('/login'), 2000);
@@ -126,6 +132,7 @@ const AuthCallbackPage = () => {
     };
 
     handleCallback();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 콜백은 마운트 시 1회만 실행; gateThenRedirect를 deps에 넣으면 매 렌더 재실행됨
   }, []);
 
   return (
@@ -135,17 +142,17 @@ const AuthCallbackPage = () => {
         {needsConsent ? (
           <div className="w-[min(420px,90vw)] rounded-2xl border border-white/10 bg-white/[0.03] p-7 text-left">
             <h2 className="text-lg font-bold text-white">약관 동의가 필요해요</h2>
-            <p className="mt-2 text-[13px] leading-relaxed text-slate-400">WhaleArc를 이용하려면 이용약관과 개인정보 처리방침에 동의해야 합니다.</p>
+            <p className="mt-2 text-[14px] leading-relaxed text-slate-400">WhaleArc를 이용하려면 이용약관과 개인정보 처리방침에 동의해야 합니다.</p>
             <label className="mt-5 flex cursor-pointer items-start gap-2.5">
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/[0.04] text-[#2c6fe6] focus:ring-[#5b9dff]/40" />
-              <span className="text-[13px] text-slate-300">
+              <span className="text-[14px] text-slate-300">
                 <a href="/terms" target="_blank" rel="noreferrer" className="text-cyan-400 underline">이용약관</a> 및 <a href="/privacy" target="_blank" rel="noreferrer" className="text-cyan-400 underline">개인정보 처리방침</a>에 동의합니다.
               </span>
             </label>
             <button onClick={agreeAndContinue} disabled={!agreed || saving} className="mt-5 w-full rounded-xl py-2.5 text-sm font-bold text-white transition-opacity disabled:opacity-50" style={{ background: 'linear-gradient(180deg,#4d8aff,#2c6fe6)' }}>
               {saving ? '처리 중...' : '동의하고 시작'}
             </button>
-            <button onClick={declineAndLogout} className="mt-2 w-full text-[12px] text-slate-500 transition-colors hover:text-slate-300">동의하지 않고 나가기</button>
+            <button onClick={declineAndLogout} className="mt-2 w-full text-[13px] text-slate-500 transition-colors hover:text-slate-300">동의하지 않고 나가기</button>
           </div>
         ) : error ? (
           <>

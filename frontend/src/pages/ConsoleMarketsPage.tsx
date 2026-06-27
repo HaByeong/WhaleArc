@@ -111,34 +111,34 @@ type StockListProps = {
 const StockList = ({ assets, activeSym, onPick, isFav, onToggleFav, filter, setFilter, query, setQuery, searchResults, onSearchPick, loading, canSearch, usdKrw }: StockListProps) => (
   <aside style={{ ...mkCard, padding: 0, display: 'flex', flexDirection: 'column', minHeight: 760 }}>
     <div style={{ padding: '20px 22px 16px', borderBottom: `1px solid ${LINE}` }}>
-      <div className="mb-3.5 flex items-center justify-between"><h3 className="text-[16px] font-bold">종목 목록</h3><span className="font-mono text-[11px]" style={{ color: INK3 }}>{assets.length}개</span></div>
+      <div className="mb-3.5 flex items-center justify-between"><h3 className="text-[17.5px] font-bold">종목 목록</h3><span className="font-mono text-[12px]" style={{ color: INK3 }}>{assets.length}개</span></div>
       <div className="relative">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: INK3 }}><circle cx="6" cy="6" r="4" stroke="currentColor" strokeWidth="1.4" /><path d="M9 9l3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
-        <input value={query} onChange={e => setQuery(e.target.value)} aria-label="종목 검색" placeholder={canSearch ? '종목명 · 코드 검색 (2자 이상)' : '종목 필터'} className="w-full rounded-lg py-2.5 pl-[34px] pr-3 text-[13px] outline-none" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: 'var(--ci-ink0)' }} />
+        <input value={query} onChange={e => setQuery(e.target.value)} aria-label="종목 검색" placeholder={canSearch ? '종목명 · 코드 검색 (2자 이상)' : '종목 필터'} className="w-full rounded-lg py-2.5 pl-[34px] pr-3 text-[14px] outline-none" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: 'var(--ci-ink0)' }} />
         {canSearch && searchResults.length > 0 && (
           <div className="absolute left-0 right-0 top-[44px] z-20 max-h-[280px] overflow-y-auto rounded-lg" style={{ background: 'var(--ci-raised)', border: `1px solid ${LINE_STRONG}`, boxShadow: '0 12px 28px -12px rgba(0,0,0,.5)' }}>
             {searchResults.map(r => (
               <button key={r.code} onClick={() => onSearchPick(r)} className="flex w-full items-center justify-between px-3.5 py-2.5 text-left" style={{ borderBottom: `1px solid ${LINE}` }}>
-                <span className="text-[13px] font-semibold">{r.name}</span><span className="font-mono text-[11px]" style={{ color: INK3 }}>{r.code} · {r.market}</span>
+                <span className="text-[14px] font-semibold">{r.name}</span><span className="font-mono text-[12px]" style={{ color: INK3 }}>{r.code} · {r.market}</span>
               </button>
             ))}
           </div>
         )}
         {canSearch && query.trim().length >= 2 && searchResults.length === 0 && (
-          <div className="absolute left-0 right-0 top-[44px] z-20 rounded-lg px-3.5 py-3 text-[12.5px]" style={{ background: 'var(--ci-raised)', border: `1px solid ${LINE_STRONG}`, color: INK3, boxShadow: '0 12px 28px -12px rgba(0,0,0,.5)' }}>'{query.trim()}' 검색 결과가 없습니다.</div>
+          <div className="absolute left-0 right-0 top-[44px] z-20 rounded-lg px-3.5 py-3 text-[13.5px]" style={{ background: 'var(--ci-raised)', border: `1px solid ${LINE_STRONG}`, color: INK3, boxShadow: '0 12px 28px -12px rgba(0,0,0,.5)' }}>'{query.trim()}' 검색 결과가 없습니다.</div>
         )}
       </div>
       <div className="mt-3.5 flex w-fit gap-1.5 rounded-lg p-[3px]" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}` }}>
         {[['all', '전체'], ['fav', '★ 관심'], ['gain', '급등'], ['loss', '급락']].map(([k, l]) => (
-          <button key={k} onClick={() => setFilter(k)} className="rounded-md px-3 py-1.5 text-[12.5px] font-semibold" style={{ background: filter === k ? 'rgba(91,157,255,.18)' : 'transparent', color: filter === k ? 'var(--ci-ink0)' : INK1 }}>{l}</button>
+          <button key={k} onClick={() => setFilter(k)} className="rounded-md px-3 py-1.5 text-[13.5px] font-semibold" style={{ background: filter === k ? 'rgba(91,157,255,.18)' : 'transparent', color: filter === k ? 'var(--ci-ink0)' : INK1 }}>{l}</button>
         ))}
       </div>
     </div>
     <ul className="no-scrollbar m-0 flex-1 list-none overflow-y-auto p-0" style={{ maxHeight: 640 }}>
       {loading && assets.length === 0 ? (
-        <li className="flex h-40 items-center justify-center text-[13px]" style={{ color: INK3 }}><span className="mr-2 h-4 w-4 animate-spin rounded-full" style={{ border: '2px solid rgba(91,157,255,.3)', borderTopColor: GLOW }} />불러오는 중…</li>
+        <li className="flex h-40 items-center justify-center text-[14px]" style={{ color: INK3 }}><span className="mr-2 h-4 w-4 animate-spin rounded-full" style={{ border: '2px solid rgba(91,157,255,.3)', borderTopColor: GLOW }} />불러오는 중…</li>
       ) : assets.length === 0 ? (
-        <li className="flex h-40 items-center justify-center text-[13px]" style={{ color: INK3 }}>{filter === 'fav' ? '관심 종목이 없습니다' : '종목이 없습니다'}</li>
+        <li className="flex h-40 items-center justify-center text-[14px]" style={{ color: INK3 }}>{filter === 'fav' ? '관심 종목이 없습니다' : '종목이 없습니다'}</li>
       ) : assets.map((s, i) => {
         const isActive = s.symbol === activeSym, up = s.changeRate >= 0;
         return (
@@ -146,19 +146,19 @@ const StockList = ({ assets, activeSym, onPick, isFav, onToggleFav, filter, setF
             <button onClick={() => onPick(s.symbol)} className="grid w-full items-center gap-2.5 px-[18px] py-3.5 text-left" style={{ gridTemplateColumns: 'auto 1fr auto', background: isActive ? 'rgba(91,157,255,.10)' : 'transparent', borderLeft: isActive ? `2px solid ${GLOW}` : '2px solid transparent', borderBottom: i === assets.length - 1 ? 'none' : `1px solid ${LINE}` }}>
               <FavStar on={isFav(s)} onClick={e => { e.stopPropagation(); onToggleFav(s); }} />
               <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-[13.5px]" style={{ fontWeight: isActive ? 700 : 600 }}>{s.name}</span>
-                <span className="font-mono text-[11px]" style={{ color: INK3 }}>{s.symbol} · Vol {fmtVol(s.volume)}</span>
+                <span className="truncate text-[14.5px]" style={{ fontWeight: isActive ? 700 : 600 }}>{s.name}</span>
+                <span className="font-mono text-[12px]" style={{ color: INK3 }}>{s.symbol} · Vol {fmtVol(s.volume)}</span>
               </div>
               <div className="flex flex-col gap-0.5 text-right">
-                <span className="font-mono text-[13px] font-semibold">{fmtPrice(s, usdKrw)}</span>
-                <span className="font-mono text-[11.5px] font-semibold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{s.changeRate.toFixed(2)}%</span>
+                <span className="font-mono text-[14px] font-semibold">{fmtPrice(s, usdKrw)}</span>
+                <span className="font-mono text-[12.5px] font-semibold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{s.changeRate.toFixed(2)}%</span>
               </div>
             </button>
           </li>
         );
       })}
     </ul>
-    <div className="px-[18px] py-3" style={{ borderTop: `1px solid ${LINE}`, background: 'var(--ci-card)' }}><span className="text-[11px]" style={{ color: INK3 }}>* 주식 시세는 KIS 모의투자 API 기준 약 15~20초 시차</span></div>
+    <div className="px-[18px] py-3" style={{ borderTop: `1px solid ${LINE}`, background: 'var(--ci-card)' }}><span className="text-[12px]" style={{ color: INK3 }}>* 주식 시세는 KIS 모의투자 API 기준 약 15~20초 시차</span></div>
   </aside>
 );
 
@@ -188,23 +188,23 @@ const StockDetail = ({ stock, isFav, onToggleFav, usdKrw, isCrypto, live }: Deta
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div>
             <div className="mb-2 flex items-center gap-2.5">
-              <span className="rounded-[5px] px-2 py-[3px] text-[10.5px] font-bold tracking-[.08em]" style={{ background: 'rgba(91,157,255,.14)', color: '#cfe1ff', border: '1px solid rgba(91,157,255,.24)' }}>{stock.market}</span>
-              <span className="font-mono text-[12px]" style={{ color: INK3 }}>{stock.symbol}</span>
+              <span className="rounded-[5px] px-2 py-[3px] text-[11.5px] font-bold tracking-[.08em]" style={{ background: 'rgba(91,157,255,.14)', color: '#cfe1ff', border: '1px solid rgba(91,157,255,.24)' }}>{stock.market}</span>
+              <span className="font-mono text-[13px]" style={{ color: INK3 }}>{stock.symbol}</span>
               <button onClick={onToggleFav} aria-label="관심 종목" className="flex h-6 w-6 items-center justify-center" style={{ color: isFav ? '#f5d061' : INK3 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill={isFav ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.8 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z" strokeLinejoin="round" /></svg>
               </button>
             </div>
-            <h2 className="text-[30px] font-bold tracking-tight">{stock.name}</h2>
+            <h2 className="text-[32.5px] font-bold tracking-tight">{stock.name}</h2>
             <div className="mt-3.5 flex flex-wrap items-baseline gap-3.5">
-              <span className="font-mono text-[38px] font-semibold tracking-tight">{fmtPrice(stock, usdKrw)}</span>
-              {krw && <span className="font-mono text-[13px]" style={{ color: INK3 }}>(${stock.price.toLocaleString('ko-KR', { maximumFractionDigits: 2 })})</span>}
-              <span className="font-mono text-[16px] font-semibold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{nfmt(stock.change)} ({up ? '+' : ''}{stock.changeRate.toFixed(2)}%)</span>
+              <span className="font-mono text-[41px] font-semibold tracking-tight">{fmtPrice(stock, usdKrw)}</span>
+              {krw && <span className="font-mono text-[14px]" style={{ color: INK3 }}>(${stock.price.toLocaleString('ko-KR', { maximumFractionDigits: 2 })})</span>}
+              <span className="font-mono text-[17.5px] font-semibold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{nfmt(stock.change)} ({up ? '+' : ''}{stock.changeRate.toFixed(2)}%)</span>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => navigate(`${prefix}/trade?code=${stock.symbol}&type=${stock.assetType}`)} style={pill('primary')}>매수</button>
             <button onClick={() => navigate(`${prefix}/trade?code=${stock.symbol}&type=${stock.assetType}`)} style={pill('danger')}>매도</button>
-            <button onClick={() => navigate(`/virt/trade?code=${stock.symbol}&type=${stock.assetType}`)} style={pill('ghost')}><span className="mr-1.5 rounded px-1.5 py-0.5 text-[10px] font-bold tracking-[.06em]" style={{ background: 'rgba(180,210,255,.18)', color: '#cfe1ff' }}>VIRT</span>모의 거래</button>
+            <button onClick={() => navigate(`/virt/trade?code=${stock.symbol}&type=${stock.assetType}`)} style={pill('ghost')}><span className="mr-1.5 rounded px-1.5 py-0.5 text-[11px] font-bold tracking-[.06em]" style={{ background: 'rgba(180,210,255,.18)', color: '#cfe1ff' }}>VIRT</span>모의 거래</button>
             <button onClick={() => navigate(`${prefix}/strategy`)} style={pill('ghost')}>전략 백테스트 →</button>
           </div>
         </div>
@@ -213,25 +213,25 @@ const StockDetail = ({ stock, isFav, onToggleFav, usdKrw, isCrypto, live }: Deta
       <div style={{ ...mkCard, padding: '20px 24px' }}>
         <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[12.5px] font-semibold" style={{ color: INK2 }}>차트</span>
-            {isCrypto && live && <span className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-semibold" style={{ background: 'rgba(239,77,77,.12)', color: UP, border: '1px solid rgba(239,77,77,.25)' }}><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: UP }} />실시간</span>}
+            <span className="text-[13.5px] font-semibold" style={{ color: INK2 }}>차트</span>
+            {isCrypto && live && <span className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-semibold" style={{ background: 'rgba(239,77,77,.12)', color: UP, border: '1px solid rgba(239,77,77,.25)' }}><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: UP }} />실시간</span>}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             {IND_LABELS.map(({ k, label }) => { const on = ind[k]; return (
-              <button key={k} onClick={() => toggleInd(k)} title={INDICATOR_HELP[k]} className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px]" style={{ border: on ? '1px solid rgba(91,157,255,.32)' : `1px solid ${LINE}`, background: on ? 'rgba(91,157,255,.10)' : 'transparent', color: on ? 'var(--ci-ink0)' : INK2 }}>
+              <button key={k} onClick={() => toggleInd(k)} title={INDICATOR_HELP[k]} className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px]" style={{ border: on ? '1px solid rgba(91,157,255,.32)' : `1px solid ${LINE}`, background: on ? 'rgba(91,157,255,.10)' : 'transparent', color: on ? 'var(--ci-ink0)' : INK2 }}>
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: on ? GLOW : INK3 }} />{label}
               </button>); })}
-            <button onClick={() => setHelpOpen(o => !o)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[12px] font-semibold" style={{ color: 'var(--ci-sonar)' }} title="각 지표가 뭔지 설명 보기">{helpOpen ? '설명 닫기 ▴' : '지표가 뭔가요? ▾'}</button>
+            <button onClick={() => setHelpOpen(o => !o)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[13px] font-semibold" style={{ color: 'var(--ci-sonar)' }} title="각 지표가 뭔지 설명 보기">{helpOpen ? '설명 닫기 ▴' : '지표가 뭔가요? ▾'}</button>
           </div>
         </div>
         {helpOpen && (
           <div className="mb-2 grid gap-1.5 rounded-lg p-3" style={{ background: 'var(--ci-card)', border: `1px solid ${LINE}`, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
             {IND_LABELS.map(({ k, label }) => (
-              <div key={k} className="text-[11.5px] leading-relaxed"><span className="font-bold" style={{ color: ind[k] ? GLOW : 'var(--ci-ink0)' }}>{label}</span> <span style={{ color: INK2 }}>— {INDICATOR_HELP[k].split('—')[1]?.trim() || INDICATOR_HELP[k]}</span></div>
+              <div key={k} className="text-[12.5px] leading-relaxed"><span className="font-bold" style={{ color: ind[k] ? GLOW : 'var(--ci-ink0)' }}>{label}</span> <span style={{ color: INK2 }}>— {INDICATOR_HELP[k].split('—')[1]?.trim() || INDICATOR_HELP[k]}</span></div>
             ))}
           </div>
         )}
-        {(ind.ma || ind.ema || ind.vwap) && <div className="mb-2 flex flex-wrap gap-3 text-[10.5px]" style={{ color: INK2 }}>{ind.ma && MA_DEFS.map(([p, c]) => <span key={p} className="inline-flex items-center gap-1.5"><span style={{ width: 12, height: 2, background: c, display: 'inline-block' }} />MA{p}</span>)}{ind.ema && <span className="inline-flex items-center gap-1.5"><span style={{ width: 12, height: 2, background: EMA_COLOR, display: 'inline-block' }} />EMA20</span>}{ind.vwap && <span className="inline-flex items-center gap-1.5"><span style={{ width: 12, height: 2, background: VWAP_COLOR, display: 'inline-block' }} />VWAP</span>}</div>}
+        {(ind.ma || ind.ema || ind.vwap) && <div className="mb-2 flex flex-wrap gap-3 text-[11.5px]" style={{ color: INK2 }}>{ind.ma && MA_DEFS.map(([p, c]) => <span key={p} className="inline-flex items-center gap-1.5"><span style={{ width: 12, height: 2, background: c, display: 'inline-block' }} />MA{p}</span>)}{ind.ema && <span className="inline-flex items-center gap-1.5"><span style={{ width: 12, height: 2, background: EMA_COLOR, display: 'inline-block' }} />EMA20</span>}{ind.vwap && <span className="inline-flex items-center gap-1.5"><span style={{ width: 12, height: 2, background: VWAP_COLOR, display: 'inline-block' }} />VWAP</span>}</div>}
         <div>
           <TradingChart symbol={stock.symbol} price={stock.price} changeRate={stock.changeRate}
             assetType={stock.assetType} activeIndicators={indToKeys(ind)} isDark />
@@ -246,8 +246,8 @@ const StockDetail = ({ stock, isFav, onToggleFav, usdKrw, isCrypto, live }: Deta
       </div>
       {/* 기본 정보 */}
       <div style={{ ...mkCard, padding: '22px 24px' }}>
-        <h3 className="mb-3.5 text-[14px] font-bold tracking-[.02em]">기본 정보</h3>
-        <dl className="m-0 grid text-[13px]" style={{ gridTemplateColumns: 'auto 1fr auto 1fr', rowGap: 10, columnGap: 14 }}>
+        <h3 className="mb-3.5 text-[15px] font-bold tracking-[.02em]">기본 정보</h3>
+        <dl className="m-0 grid text-[14px]" style={{ gridTemplateColumns: 'auto 1fr auto 1fr', rowGap: 10, columnGap: 14 }}>
           <dt style={{ color: INK2 }}>시장</dt><dd className="m-0 truncate text-right">{stock.market}</dd>
           <dt style={{ color: INK2 }}>통화</dt><dd className="m-0 truncate text-right font-mono">{stock.currency || 'KRW'}</dd>
           <dt style={{ color: INK2 }}>현재가</dt><dd className="m-0 truncate text-right font-mono">{fmtPrice(stock, usdKrw)}</dd>
@@ -332,7 +332,7 @@ const ConsoleMarketsPage = () => {
     let timer: ReturnType<typeof setInterval> | undefined;
     if (assetType !== 'CRYPTO') timer = setInterval(() => fetchPrices(true), 10_000);
     return () => { alive = false; if (timer) clearInterval(timer); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [assetType]);
 
   // 탭별 선택 기억
@@ -402,12 +402,14 @@ const ConsoleMarketsPage = () => {
     else if (listFilter === 'loss') list = list.filter(a => a.changeRate < 0);
     if (!canSearch && query.trim()) { const q = query.trim().toLowerCase(); list = list.filter(a => a.name.toLowerCase().includes(q) || a.symbol.toLowerCase().includes(q)); }
     const arr = [...list];
+    // USD 종목(미국주식/ETF)은 원화 환산가로 비교해 통화가 섞여도 가격순 정렬이 일관되게
+    const krwPrice = (a: MarketPrice) => (a.currency === 'USD' ? a.price * (usdKrw || 1) : a.price);
     if (sortBy === 'volume') arr.sort((a, b) => b.volume - a.volume);
-    else if (sortBy === 'mcap') arr.sort((a, b) => b.price - a.price);
+    else if (sortBy === 'mcap') arr.sort((a, b) => krwPrice(b) - krwPrice(a));
     else if (sortBy === 'gain') arr.sort((a, b) => b.changeRate - a.changeRate);
     else if (sortBy === 'loss') arr.sort((a, b) => a.changeRate - b.changeRate);
     return arr;
-  }, [mergedList, listFilter, sortBy, query, canSearch, isFav]);
+  }, [mergedList, listFilter, sortBy, query, canSearch, isFav, usdKrw]);
 
   const selected = useMemo(() => mergedList.find(a => a.symbol === activeSym) || mergedList[0], [mergedList, activeSym]);
 
@@ -431,9 +433,9 @@ const ConsoleMarketsPage = () => {
       <div className="flex flex-col gap-6">
         {/* 헤더 */}
         <div>
-          <div className="mb-3 flex items-center gap-2.5">{(() => { const live = assetType === 'CRYPTO'; const dot = !live ? 'var(--ci-sonar)' : wsConnected ? UP : '#f5d061'; const label = !live ? '자동 갱신 · 10초' : wsConnected ? 'LIVE · 실시간 연결됨' : '실시간 연결 중…'; return <><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: dot, boxShadow: `0 0 8px ${dot}` }} /><span className="text-[11.5px] font-semibold tracking-[.18em]" style={{ color: live && !wsConnected ? '#f5d061' : 'var(--ci-sonar)' }}>{label}</span></>; })()}</div>
-          <h1 className="text-[36px] font-bold tracking-tight">시장 현황</h1>
-          <p className="mt-2 text-[14.5px]" style={{ color: INK1 }}>주식 · 미국주식 · ETF · 가상화폐 시세를 한 곳에서 살펴보세요.</p>
+          <div className="mb-3 flex items-center gap-2.5">{(() => { const live = assetType === 'CRYPTO'; const dot = !live ? 'var(--ci-sonar)' : wsConnected ? UP : '#f5d061'; const label = !live ? '자동 갱신 · 10초' : wsConnected ? 'LIVE · 실시간 연결됨' : '실시간 연결 중…'; return <><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: dot, boxShadow: `0 0 8px ${dot}` }} /><span className="text-[12.5px] font-semibold tracking-[.18em]" style={{ color: live && !wsConnected ? '#f5d061' : 'var(--ci-sonar)' }}>{label}</span></>; })()}</div>
+          <h1 className="text-[39px] font-bold tracking-tight">시장 현황</h1>
+          <p className="mt-2 text-[15.5px]" style={{ color: INK1 }}>주식 · 미국주식 · ETF · 가상화폐 시세를 한 곳에서 살펴보세요.</p>
         </div>
         {/* 인덱스 스트립 */}
         <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
@@ -441,10 +443,10 @@ const ConsoleMarketsPage = () => {
             const u = ix.changeRate >= 0; const hasData = ix.price > 0;
             return (
               <div key={ix.code} className="rounded-[14px] p-5" style={{ ...mkCard }}>
-                <div className="text-[11px] font-semibold tracking-[.14em]" style={{ color: INK2 }}>{ix.name}</div>
+                <div className="text-[12px] font-semibold tracking-[.14em]" style={{ color: INK2 }}>{ix.name}</div>
                 <div className="mt-2 flex items-baseline justify-between">
-                  <span className="font-mono text-[22px] font-semibold">{hasData ? ix.price.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) : '—'}</span>
-                  {hasData && <span className="font-mono text-[13px] font-semibold" style={{ color: u ? UP : DOWN }}>{u ? '+' : ''}{ix.changeRate.toFixed(2)}%</span>}
+                  <span className="font-mono text-[24px] font-semibold">{hasData ? ix.price.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) : '—'}</span>
+                  {hasData && <span className="font-mono text-[14px] font-semibold" style={{ color: u ? UP : DOWN }}>{u ? '+' : ''}{ix.changeRate.toFixed(2)}%</span>}
                 </div>
               </div>
             );
@@ -454,28 +456,28 @@ const ConsoleMarketsPage = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             {ASSET_CLASSES.map(c => { const on = c.key === klass; return (
-              <button key={c.key} onClick={() => { setKlass(c.key); setListFilter('all'); setQuery(''); }} className="inline-flex items-center gap-2 rounded-[10px] px-[18px] py-2.5 text-[14px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : `1px solid ${LINE}`, background: on ? 'rgba(91,157,255,.12)' : 'var(--ci-card)', color: 'var(--ci-ink0)' }}>
-                {c.label}<span className="text-[11px] font-medium tracking-[.04em]" style={{ color: on ? '#cfe1ff' : INK2 }}>{c.meta}</span>
+              <button key={c.key} onClick={() => { setKlass(c.key); setListFilter('all'); setQuery(''); }} className="inline-flex items-center gap-2 rounded-[10px] px-[18px] py-2.5 text-[15px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : `1px solid ${LINE}`, background: on ? 'rgba(91,157,255,.12)' : 'var(--ci-card)', color: 'var(--ci-ink0)' }}>
+                {c.label}<span className="text-[12px] font-medium tracking-[.04em]" style={{ color: on ? '#cfe1ff' : INK2 }}>{c.meta}</span>
               </button>); })}
           </div>
-          <div className="flex items-center gap-2"><span className="text-[12px]" style={{ color: INK2 }}>정렬</span>
-            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="rounded-lg py-2 pl-3 pr-7 text-[13px] font-medium" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: 'var(--ci-ink0)', appearance: 'none' }}>
+          <div className="flex items-center gap-2"><span className="text-[13px]" style={{ color: INK2 }}>정렬</span>
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="rounded-lg py-2 pl-3 pr-7 text-[14px] font-medium" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: 'var(--ci-ink0)', appearance: 'none' }}>
               <option value="volume">거래량순</option><option value="mcap">가격순</option><option value="gain">등락률순 (상승)</option><option value="loss">등락률순 (하락)</option>
             </select>
           </div>
         </div>
-        {error && <div className="rounded-xl px-4 py-3 text-[13px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{error}</div>}
+        {error && <div className="rounded-xl px-4 py-3 text-[14px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{error}</div>}
         {/* 본문 */}
         <div className="grid items-start gap-6 grid-cols-1 lg:grid-cols-[minmax(320px,380px)_1fr]">
           <StockList assets={displayList} activeSym={activeSym} onPick={sym => { setActiveSym(sym); const a = displayList.find(x => x.symbol === sym); if (a) recordRecent(a); }} isFav={isFav} onToggleFav={toggleFav}
             filter={listFilter} setFilter={setListFilter} query={query} setQuery={setQuery} searchResults={searchResults} onSearchPick={onSearchPick} loading={loading} canSearch={canSearch} usdKrw={usdKrw} />
           {selected ? <StockDetail stock={selected} isFav={isFav(selected)} onToggleFav={() => toggleFav(selected)} usdKrw={usdKrw} isCrypto={assetType === 'CRYPTO'} live={rtPrice != null && wsConnected} />
-            : <div style={{ ...mkCard, padding: '60px', textAlign: 'center', color: INK3 }} className="text-[14px]">{loading ? '불러오는 중…' : '종목을 선택하세요'}</div>}
+            : <div style={{ ...mkCard, padding: '60px', textAlign: 'center', color: INK3 }} className="text-[15px]">{loading ? '불러오는 중…' : '종목을 선택하세요'}</div>}
         </div>
         {/* 푸터 */}
         <footer className="flex flex-wrap items-center justify-between gap-3.5 pt-6" style={{ borderTop: `1px solid ${LINE}` }}>
-          <span className="font-mono text-[12px]" style={{ color: INK3 }}>© 2026 WhaleArc · 모든 항해는 사용자의 책임 아래 진행됩니다.</span>
-          <div className="flex gap-[18px] text-[12.5px]" style={{ color: INK2 }}><a>도움말</a><a>상태</a><a>API</a><a>의견 보내기</a></div>
+          <span className="font-mono text-[13px]" style={{ color: INK3 }}>© 2026 WhaleArc · 모든 항해는 사용자의 책임 아래 진행됩니다.</span>
+          <div className="flex gap-[18px] text-[13.5px]" style={{ color: INK2 }}><a>도움말</a><a>상태</a><a>API</a><a>의견 보내기</a></div>
         </footer>
       </div>
     </HelmShell>

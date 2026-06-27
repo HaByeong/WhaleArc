@@ -41,6 +41,7 @@ public class UpbitApiClient {
             double totalValue = 0;
             double totalProfitLoss = 0;
             double cashBalance = 0;
+            boolean priceFetchFailed = false;   // 보유종목 존재 + 시세 일괄조회 전면 실패 시 true
 
             if (response.getBody() != null) {
                 List<Map<String, Object>> accounts = response.getBody();
@@ -63,6 +64,10 @@ public class UpbitApiClient {
                 // 3. 현재가 조회
                 if (!markets.isEmpty()) {
                     Map<String, Double> prices = getCurrentPrices(markets);
+                    // 보유 종목이 있는데 시세 일괄조회가 전면 실패(빈 맵)하면, 아래에서 현재가가 매입가로 폴백돼
+                    // 손익이 전부 0인 잘못된 스냅샷이 만들어진다. 이 부분 실패를 fetchOk=false로 표시해
+                    // ExchangeAccountService의 lastGood 유지 보호가 작동하게 한다.
+                    priceFetchFailed = prices.isEmpty();
 
                     for (Map.Entry<String, Map<String, Object>> entry : accountMap.entrySet()) {
                         String currency = entry.getKey();
@@ -96,12 +101,19 @@ public class UpbitApiClient {
             double invested = totalValue - cashBalance - totalProfitLoss;
             double totalReturnRate = invested > 0 ? (totalProfitLoss / invested) * 100 : 0;
 
-            return new ExchangePortfolioDto("UPBIT", true, totalValue, totalProfitLoss,
+            ExchangePortfolioDto dto = new ExchangePortfolioDto("UPBIT", true, totalValue, totalProfitLoss,
                     totalReturnRate, cashBalance, holdings);
+            if (priceFetchFailed) {
+                // 시세 일괄조회 전면 실패 → 손익이 매입가 기준(0)으로 묻힌 잘못된 스냅샷이므로 정상 응답과 구분
+                dto.setFetchOk(false);
+            }
+            return dto;
 
         } catch (Exception e) {
             System.err.println("업비트 API 호출 실패: " + e.getMessage());
-            return new ExchangePortfolioDto("UPBIT", true, 0, 0, 0, 0, new ArrayList<>());
+            ExchangePortfolioDto failed = new ExchangePortfolioDto("UPBIT", true, 0, 0, 0, 0, new ArrayList<>());
+            failed.setFetchOk(false);   // 조회 실패 → 빈 계좌와 구분(에러 UI·자산추이 스냅샷 스킵)
+            return failed;
         }
     }
 

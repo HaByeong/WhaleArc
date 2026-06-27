@@ -17,4 +17,9 @@ public interface QuantProductRepository extends MongoRepository<QuantProduct, St
     @Query("{ '_id': ?0 }")
     @Update("{ '$inc': { 'subscribers': 1 } }")
     void incrementSubscribers(String id);
+
+    // 원자적 $inc(-1) — subscribers>0 일 때만 감소해 음수 방지. 취소 경합 시 lost-update 방지(증가와 동일 규약).
+    @Query("{ '_id': ?0, 'subscribers': { $gt: 0 } }")
+    @Update("{ '$inc': { 'subscribers': -1 } }")
+    void decrementSubscribers(String id);
 }

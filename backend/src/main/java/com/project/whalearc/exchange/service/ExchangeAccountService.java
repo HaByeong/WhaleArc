@@ -34,6 +34,8 @@ public class ExchangeAccountService {
     private static final long PORTFOLIO_CACHE_TTL_MS = 8000;
     private final Map<String, CachedPortfolio> portfolioCache = new ConcurrentHashMap<>();
     private record CachedPortfolio(ExchangePortfolioDto dto, long expiresAt) {}
+    // 마지막 "정상 조회" 스냅샷 — 거래소 일시 오류(레이트리밋 등)로 fetchOk=false가 오면 0원 대신 이 값을 유지해 깜빡임을 막는다.
+    private final Map<String, ExchangePortfolioDto> lastGoodPortfolio = new ConcurrentHashMap<>();
 
     /**
      * 거래소 API 키 등록/수정 (암호화 저장)
@@ -75,6 +77,7 @@ public class ExchangeAccountService {
 
         ExchangeAccount saved = exchangeAccountRepository.save(account);
         portfolioCache.remove(userId + "|" + request.getExchangeType()); // 키 변경 후 stale 잔고 방지
+        lastGoodPortfolio.remove(userId + "|" + request.getExchangeType());
         maskSensitiveFields(saved); // 응답에 암호문 노출 방지 (저장 후 메모리 객체만 마스킹)
         return saved;
     }
@@ -104,6 +107,7 @@ public class ExchangeAccountService {
     public void deleteAccount(String userId, String exchangeType) {
         exchangeAccountRepository.deleteByUserIdAndExchangeType(userId, exchangeType);
         portfolioCache.remove(userId + "|" + exchangeType); // 연결 해제 후 stale 잔고 즉시 제거
+        lastGoodPortfolio.remove(userId + "|" + exchangeType);
     }
 
     /**
@@ -151,10 +155,19 @@ public class ExchangeAccountService {
                 default:
                     dto = new ExchangePortfolioDto(exchangeType, true, 0, 0, 0, 0, new ArrayList<>());
             }
-            portfolioCache.put(cacheKey, new CachedPortfolio(dto, System.currentTimeMillis() + PORTFOLIO_CACHE_TTL_MS));
-            return dto;
+            // 조회 성공(fetchOk)일 때만 캐시·마지막정상 스냅샷 갱신. 실패(fetchOk=false)면 0원 대신 직전 정상 스냅샷 유지.
+            if (dto.isFetchOk()) {
+                portfolioCache.put(cacheKey, new CachedPortfolio(dto, System.currentTimeMillis() + PORTFOLIO_CACHE_TTL_MS));
+                lastGoodPortfolio.put(cacheKey, dto);
+                return dto;
+            }
+            ExchangePortfolioDto lastGood = lastGoodPortfolio.get(cacheKey);
+            return lastGood != null ? lastGood : dto;   // 첫 조회부터 실패면 폴백 없음 → 실패 dto 그대로
         } catch (Exception e) {
             System.err.println("거래소 API 호출 실패 (" + exchangeType + "): " + e.getMessage());
+            // 일시 오류 시 마지막 정상 스냅샷을 유지(없으면 fetchOk=false 빈 계좌로 구분)
+            ExchangePortfolioDto lastGood = lastGoodPortfolio.get(cacheKey);
+            if (lastGood != null) return lastGood;
             ExchangePortfolioDto failed = new ExchangePortfolioDto(exchangeType, true, 0, 0, 0, 0, new ArrayList<>());
             failed.setFetchOk(false); // 실제 API 실패 → 빈 계좌(연결됨+0)와 구분 가능하도록 표시
             return failed;

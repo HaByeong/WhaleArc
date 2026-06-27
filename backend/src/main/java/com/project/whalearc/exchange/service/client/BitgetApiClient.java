@@ -5,6 +5,7 @@ import com.project.whalearc.exchange.dto.ExchangeHoldingDto;
 import com.project.whalearc.exchange.dto.ExchangePortfolioDto;
 import com.project.whalearc.market.dto.CandlestickResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -21,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 비트겟(Bitget) Open API 클라이언트
  * API 문서: https://www.bitget.com/api-doc
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class BitgetApiClient {
@@ -100,6 +102,51 @@ public class BitgetApiClient {
                 }
             }
 
+            // ── 선물(USDT-M) 계좌 자산 합산 (best-effort: 선물 조회 실패해도 현물 표시는 유지) ──
+            //   선물 지갑 equity(=가용+증거금+미실현손익)를 총자산에, 가용 USDT를 현금에, 보유 포지션을 종목으로 추가한다.
+            try {
+                Map<String, Object> facct = signedRequest(apiKey, secretKey, passphrase, HttpMethod.GET,
+                        "/api/v2/mix/account/accounts", futuresQuery(false), null);
+                if (facct.get("data") instanceof List<?> accts) {
+                    for (Object a : accts) {
+                        if (!(a instanceof Map<?, ?> m)) continue;
+                        if (!"USDT".equalsIgnoreCase(String.valueOf(m.get("marginCoin")))) continue;
+                        double equity = parseDouble(m.get("accountEquity") != null ? m.get("accountEquity") : m.get("usdtEquity"));
+                        double available = parseDouble(m.get("available"));
+                        double uPnl = parseDouble(m.get("unrealizedPL"));
+                        cashBalance += available * usdtToKrw;                  // 선물 가용 USDT → 현금
+                        totalValue += (equity - available) * usdtToKrw;        // 포지션에 묶인 증거금+미실현손익
+                        totalProfitLoss += uPnl * usdtToKrw;
+                    }
+                }
+                // 보유 선물 포지션을 종목 행으로 추가(표시용; 총자산은 위 equity로 이미 반영됨)
+                Map<String, Object> fpos = signedRequest(apiKey, secretKey, passphrase, HttpMethod.GET,
+                        "/api/v2/mix/position/all-position", futuresQuery(true), null);
+                if (fpos.get("data") instanceof List<?> poss) {
+                    for (Object p : poss) {
+                        if (!(p instanceof Map<?, ?> m)) continue;
+                        double size = parseDouble(m.get("total"));
+                        if (size <= 0) continue;
+                        String sym = String.valueOf(m.get("symbol"));
+                        String coin = sym.replace("USDT", "");
+                        boolean isLong = "long".equalsIgnoreCase(String.valueOf(m.get("holdSide")));
+                        double openAvg = parseDouble(m.get("openPriceAvg"));
+                        double mark = parseDouble(m.get("markPrice"));
+                        double uPnl = parseDouble(m.get("unrealizedPL"));
+                        double levNum = parseDouble(m.get("leverage"));
+                        String levStr = (levNum > 0) ? " ×" + (long) levNum : "";
+                        double priceMovePct = openAvg > 0 ? (isLong ? (mark - openAvg) : (openAvg - mark)) / openAvg * 100 : 0;
+                        double returnRate = priceMovePct * (levNum > 0 ? levNum : 1);   // 레버리지 반영 증거금 수익률
+                        holdings.add(new ExchangeHoldingDto(sym,
+                                getCoinName(coin) + " 무기한(" + (isLong ? "롱" : "숏") + levStr + ")",
+                                size, openAvg * usdtToKrw, mark * usdtToKrw,
+                                size * mark * usdtToKrw, uPnl * usdtToKrw, returnRate));
+                    }
+                }
+            } catch (Exception fe) {
+                log.warn("비트겟 선물 자산 조회 실패(현물만 표시): " + fe.getMessage());
+            }
+
             totalValue += cashBalance;
             ExchangePortfolioDto dto = new ExchangePortfolioDto("BITGET", true, totalValue, totalProfitLoss,
                     0, cashBalance, holdings);
@@ -107,8 +154,10 @@ public class BitgetApiClient {
             return dto;
 
         } catch (Exception e) {
-            System.err.println("비트겟 API 호출 실패: " + e.getMessage());
-            return new ExchangePortfolioDto("BITGET", true, 0, 0, 0, 0, new ArrayList<>());
+            log.warn("비트겟 API 호출 실패: " + e.getMessage());
+            ExchangePortfolioDto failed = new ExchangePortfolioDto("BITGET", true, 0, 0, 0, 0, new ArrayList<>());
+            failed.setFetchOk(false);   // 조회 실패 → 빈 계좌와 구분(에러 UI·자산추이 스냅샷 스킵)
+            return failed;
         }
     }
 
@@ -124,7 +173,7 @@ public class BitgetApiClient {
                 }
             }
         } catch (Exception e) {
-            System.err.println("비트겟 시세 조회 실패 (" + coin + "): " + e.getMessage());
+            log.warn("비트겟 시세 조회 실패 (" + coin + "): " + e.getMessage());
         }
         return 0;
     }
@@ -140,7 +189,7 @@ public class BitgetApiClient {
                 return parseDouble(ticker.get("trade_price"));
             }
         } catch (Exception e) {
-            System.err.println("USDT/KRW 환율 조회 실패: " + e.getMessage());
+            log.warn("USDT/KRW 환율 조회 실패: " + e.getMessage());
         }
         return 1350; // 기본 환율
     }
@@ -174,6 +223,14 @@ public class BitgetApiClient {
         } catch (NumberFormatException e) {
             return 0;
         }
+    }
+
+    /** 선물 조회용 쿼리(productType=USDT-FUTURES, 필요 시 marginCoin=USDT). */
+    private Map<String, Object> futuresQuery(boolean withMarginCoin) {
+        Map<String, Object> q = new LinkedHashMap<>();
+        q.put("productType", FUTURES_PRODUCT_TYPE);
+        if (withMarginCoin) q.put("marginCoin", FUTURES_MARGIN_COIN);
+        return q;
     }
 
     // ── 라이브 자동매매: 인증 요청 + 현물 주문/체결/캔들/규격 ──────────────
@@ -244,7 +301,7 @@ public class BitgetApiClient {
                     return new BitgetSymbolInfo(qp, pp, minUsdt.signum() > 0 ? minUsdt : BigDecimal.valueOf(5));
                 }
             } catch (Exception e) {
-                System.err.println("비트겟 심볼규격 조회 실패 (" + sym + "): " + e.getMessage());
+                log.warn("비트겟 심볼규격 조회 실패 (" + sym + "): " + e.getMessage());
             }
             // 조회 실패 시 보수적 기본값(수량 6자리, 최소 5 USDT)
             return new BitgetSymbolInfo(6, 4, BigDecimal.valueOf(5));
@@ -269,7 +326,7 @@ public class BitgetApiClient {
                     return new BitgetSymbolInfo(vp, pp, minNum);
                 }
             } catch (Exception e) {
-                System.err.println("비트겟 선물규격 조회 실패 (" + symbol + "): " + e.getMessage());
+                log.warn("비트겟 선물규격 조회 실패 (" + symbol + "): " + e.getMessage());
             }
             return new BitgetSymbolInfo(4, 2, BigDecimal.ZERO);
         });
@@ -307,7 +364,7 @@ public class BitgetApiClient {
             }
             out.sort(Comparator.comparingLong(CandlestickResponse::getTime));
         } catch (Exception e) {
-            System.err.println("비트겟 캔들 조회 실패: " + url + " - " + e.getMessage());
+            log.warn("비트겟 캔들 조회 실패: " + url + " - " + e.getMessage());
         }
         return out;
     }
@@ -318,14 +375,37 @@ public class BitgetApiClient {
     private static final String FUTURES_MARGIN_COIN = "USDT";
     private static final String FUTURES_MARGIN_MODE = "isolated";
 
-    /** 선물 레버리지 설정(개시 전 호출). 롱 기본. */
-    public void setFuturesLeverage(String apiKey, String secretKey, String passphrase,
-                                   String symbol, int leverage) {
-        setFuturesLeverage(apiKey, secretKey, passphrase, symbol, leverage, "long");
+    /**
+     * 선물 마진모드를 주문과 동일하게(isolated) 맞춘다(개시 전 호출).
+     * 레버리지는 (심볼, 마진모드)별로 따로 보관되므로, 심볼이 crossed인데 주문이 isolated면
+     * set-leverage가 crossed에 적용되고 주문은 isolated의 기존 레버리지로 체결돼 설정이 무시된다.
+     * @return 성공 여부(code=00000). 포지션 보유 중이면 변경 불가하여 false.
+     */
+    public boolean setFuturesIsolatedMode(String apiKey, String secretKey, String passphrase, String symbol) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("symbol", symbol);
+        body.put("productType", FUTURES_PRODUCT_TYPE);
+        body.put("marginCoin", FUTURES_MARGIN_COIN);
+        body.put("marginMode", FUTURES_MARGIN_MODE);   // 주문(placeFuturesOpen)과 동일한 isolated
+        Map<String, Object> resp = signedRequest(apiKey, secretKey, passphrase, HttpMethod.POST,
+                "/api/v2/mix/account/set-margin-mode", null, body);
+        String code = String.valueOf(resp.get("code"));
+        if (!"00000".equals(code)) {
+            log.warn("비트겟 마진모드 설정 경고: symbol=" + symbol + ", mode=" + FUTURES_MARGIN_MODE
+                    + ", code=" + code + ", msg=" + resp.get("msg"));
+            return false;
+        }
+        return true;
     }
 
-    /** 선물 레버리지 설정(holdSide 지정: long/short). */
-    public void setFuturesLeverage(String apiKey, String secretKey, String passphrase,
+    /** 선물 레버리지 설정(개시 전 호출). 롱 기본. @return 설정 성공 여부(code=00000). */
+    public boolean setFuturesLeverage(String apiKey, String secretKey, String passphrase,
+                                   String symbol, int leverage) {
+        return setFuturesLeverage(apiKey, secretKey, passphrase, symbol, leverage, "long");
+    }
+
+    /** 선물 레버리지 설정(holdSide 지정: long/short). @return 설정 성공 여부(code=00000). */
+    public boolean setFuturesLeverage(String apiKey, String secretKey, String passphrase,
                                    String symbol, int leverage, String holdSide) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("symbol", symbol);
@@ -338,8 +418,35 @@ public class BitgetApiClient {
         String code = String.valueOf(resp.get("code"));
         if (!"00000".equals(code)) {
             // 레버리지 변경 실패는 기존 설정으로 진행 가능하므로 예외 대신 경고만(포지션 보유 중엔 변경 불가 등)
-            System.err.println("비트겟 레버리지 설정 경고: symbol=" + symbol + ", code=" + code + ", msg=" + resp.get("msg"));
+            log.warn("비트겟 레버리지 설정 경고: symbol=" + symbol + ", holdSide=" + holdSide
+                    + ", leverage=" + leverage + ", code=" + code + ", msg=" + resp.get("msg"));
+            return false;
         }
+        return true;
+    }
+
+    /**
+     * 현재 '설정된'(포지션 아님) 선물 레버리지 조회 — isolated holdSide별. 미확인 시 0.
+     * set-leverage 직후 개시 주문이 옛 레버리지로 체결되는 전파 지연을 막기 위해, 반영 확인용으로 폴링한다.
+     */
+    @SuppressWarnings("unchecked")
+    public int getConfiguredFuturesLeverage(String apiKey, String secretKey, String passphrase,
+                                            String symbol, boolean isLong) {
+        try {
+            Map<String, Object> q = new LinkedHashMap<>();
+            q.put("symbol", symbol);
+            q.put("productType", FUTURES_PRODUCT_TYPE);
+            q.put("marginCoin", FUTURES_MARGIN_COIN);
+            Map<String, Object> resp = signedRequest(apiKey, secretKey, passphrase, HttpMethod.GET,
+                    "/api/v2/mix/account/account", q, null);
+            if (resp.get("data") instanceof Map<?, ?> d) {
+                Object lev = isLong ? d.get("isolatedLongLever") : d.get("isolatedShortLever");
+                return (int) parseDouble(lev);
+            }
+        } catch (Exception e) {
+            log.warn("비트겟 설정 레버리지 조회 실패: symbol=" + symbol + ", " + e.getMessage());
+        }
+        return 0;
     }
 
     /**
@@ -555,7 +662,12 @@ public class BitgetApiClient {
         return resp.getBody() != null ? resp.getBody() : Map.of();
     }
 
-    /** 쿼리 파라미터를 키 사전순으로 직렬화(서명 규칙과 일치해야 함). 비어있으면 "". */
+    /**
+     * 쿼리 파라미터를 키 사전순으로 직렬화(서명 규칙과 일치해야 함). 비어있으면 "".
+     * ⚠ 값을 URL 인코딩하지 않고 그대로 이어붙인다. 서명 문자열(preSign)과 실제 요청 URL을 같은 fullPath로
+     * 만들기 때문에, 현재처럼 값이 영숫자(symbol/productType/marginCoin/orderId 등)뿐일 때만 안전하다.
+     * 공백·&·= 등 인코딩이 필요한 값을 넘기면 서명과 요청이 어긋나 ACCESS-SIGN 불일치가 발생하므로 금지.
+     */
     private static String toSortedQuery(Map<String, Object> query) {
         if (query == null || query.isEmpty()) return "";
         StringBuilder sb = new StringBuilder("?");

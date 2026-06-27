@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.WeakKeyException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -102,11 +103,17 @@ public class VirtUpbitClient {
 
     /** 업비트 JWT 토큰 생성 */
     private String generateToken(String accessKey, String secretKey) {
-        return Jwts.builder()
-                .claim("access_key", accessKey)
-                .claim("nonce", UUID.randomUUID().toString())
-                .signWith(Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8)))
-                .compact();
+        try {
+            return Jwts.builder()
+                    .claim("access_key", accessKey)
+                    .claim("nonce", UUID.randomUUID().toString())
+                    .signWith(Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8)))
+                    .compact();
+        } catch (WeakKeyException e) {
+            // jjwt는 256bit(32바이트) 미만 HMAC 키를 거부한다 — 잘못된/짧은 Secret Key 입력을
+            // 정체불명의 500/연결 실패 대신 명확한 메시지로 알린다.
+            throw new IllegalArgumentException("업비트 Secret Key 형식이 올바르지 않습니다. 발급받은 키를 다시 확인해주세요.");
+        }
     }
 
     private void sleep(long ms) {

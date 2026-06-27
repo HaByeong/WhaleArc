@@ -52,10 +52,17 @@ public class KisApiClient {
     }
 
     // KIS 접근토큰은 발급이 1분당 1회로 제한(초과 시 EGW00133)되고 유효기간이 24h다.
-    // appkey별로 캐싱해 재사용한다(매 조회마다 새로 발급하던 EGW00133 버그 수정).
+    // (appKey,appSecret) 조합별로 캐싱해 재사용한다(매 조회마다 새로 발급하던 EGW00133 버그 수정).
+    // appKey만 키로 쓰면 같은 appKey에 appSecret만 바꿔 저장한 경우 옛 토큰이 재사용돼 혼란을 주므로
+    // appSecret 까지 포함해 구분한다.
     private final Map<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
 
     private record CachedToken(String token, long expiresAtMillis) {}
+
+    /** 토큰 캐시 키 — appKey 와 appSecret 을 함께 묶어 appSecret 변경 시 옛 토큰 재사용을 막는다. */
+    private static String tokenCacheKey(String appKey, String appSecret) {
+        return appKey + "|" + (appSecret == null ? "" : appSecret);
+    }
 
     // 잔고 짧은 캐시(폴링/동시요청 디듀프)는 ExchangeAccountService 계층에서 (userId,exchangeType)로
     // 일원화(KIS/Upbit/Bitget 공통). 여기서는 토큰만 캐시한다.
@@ -64,17 +71,22 @@ public class KisApiClient {
         try {
             String accessToken = getAccessToken(appKey, appSecret);
             if (accessToken == null) {
-                return new ExchangePortfolioDto("KIS", true, 0, 0, 0, 0, new ArrayList<>());
+                ExchangePortfolioDto failed = new ExchangePortfolioDto("KIS", true, 0, 0, 0, 0, new ArrayList<>());
+                failed.setFetchOk(false);   // 토큰 발급 실패 → 빈 계좌와 구분(에러 UI·자산추이 스냅샷 스킵)
+                return failed;
             }
             return fetchBalance(accessToken, appKey, appSecret, accountNumber);
         } catch (Exception e) {
             log.warn("KIS API 호출 실패: {}", e.getMessage());
-            return new ExchangePortfolioDto("KIS", true, 0, 0, 0, 0, new ArrayList<>());
+            ExchangePortfolioDto failed = new ExchangePortfolioDto("KIS", true, 0, 0, 0, 0, new ArrayList<>());
+            failed.setFetchOk(false);
+            return failed;
         }
     }
 
     private String getAccessToken(String appKey, String appSecret) {
-        CachedToken cached = tokenCache.get(appKey);
+        String cacheKey = tokenCacheKey(appKey, appSecret);
+        CachedToken cached = tokenCache.get(cacheKey);
         if (cached != null && System.currentTimeMillis() < cached.expiresAtMillis()) {
             return cached.token();
         }
@@ -104,7 +116,7 @@ public class KisApiClient {
                     try { ttl = (long) (Double.parseDouble(String.valueOf(exp)) * 1000) - 60_000; }
                     catch (NumberFormatException ignore) { /* 기본 사용 */ }
                 }
-                tokenCache.put(appKey, new CachedToken(token, System.currentTimeMillis() + ttl));
+                tokenCache.put(cacheKey, new CachedToken(token, System.currentTimeMillis() + ttl));
                 return token;
             }
         } catch (Exception e) {
@@ -160,6 +172,7 @@ public class KisApiClient {
                                  String cano, String acntPrdtCd, List<ExchangeHoldingDto> holdings) {
         double cash = 0;
         String fk = "", nk = "", trCont = "";
+        Set<String> seen = new HashSet<>();   // 연속조회(페이지) 간 같은 종목 중복 적재 방지 → 개수·평가합 부풀림 차단
         for (int page = 0; page < MAX_PAGES; page++) {
             HttpHeaders headers = baseHeaders(accessToken, appKey, appSecret, "TTTC8434R");
             if (!trCont.isEmpty()) headers.set("tr_cont", trCont);
@@ -172,9 +185,17 @@ public class KisApiClient {
 
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
             Map<String, Object> b = response.getBody();
-            if (b == null) break;
+            if (b == null) {
+                if (page == 0) throw new IllegalStateException("KIS 국내잔고 응답 없음");
+                break;
+            }
             if (!"0".equals(String.valueOf(b.get("rt_cd")))) {
                 log.warn("[KIS 국내잔고] 비정상 rt_cd={} msg={} (CANO={}-{})", b.get("rt_cd"), b.get("msg1"), cano, acntPrdtCd);
+                // 첫 페이지부터 에러(레이트리밋 EGW00201 등)면 빈 잔고(0원)를 진짜 잔고로 오인하지 않도록 예외로 전파한다.
+                // → getPortfolio가 fetchOk=false로 표시 → ExchangeAccountService가 마지막 정상 스냅샷 유지(0원 깜빡임 방지).
+                if (page == 0) {
+                    throw new IllegalStateException("KIS 국내잔고 조회 실패: rt_cd=" + b.get("rt_cd") + " msg=" + b.get("msg1"));
+                }
                 break;
             }
 
@@ -183,8 +204,10 @@ public class KisApiClient {
                 for (Map<String, Object> item : output1) {
                     double qty = parseDouble(item.get("hldg_qty"));
                     if (qty <= 0) continue;
+                    String pdno = (String) item.get("pdno");
+                    if (pdno != null && !seen.add(pdno)) continue;   // 이미 담은 종목(페이지 중복) 스킵
                     holdings.add(new ExchangeHoldingDto(
-                            (String) item.get("pdno"), (String) item.get("prdt_name"), qty,
+                            pdno, (String) item.get("prdt_name"), qty,
                             parseDouble(item.get("pchs_avg_pric")), parseDouble(item.get("prpr")),
                             parseDouble(item.get("evlu_amt")), parseDouble(item.get("evlu_pfls_amt")),
                             parseDouble(item.get("evlu_pfls_rt")), "KRW"));
@@ -210,6 +233,7 @@ public class KisApiClient {
     @SuppressWarnings("unchecked")
     private void fetchOverseas(String accessToken, String appKey, String appSecret,
                                String cano, String acntPrdtCd, List<ExchangeHoldingDto> holdings) {
+        Set<String> seen = new HashSet<>();   // 거래소(NASD/NYSE/AMEX) 간 같은 종목 중복 적재 방지
         for (String excg : US_EXCHANGES) {
             try {
                 HttpHeaders headers = baseHeaders(accessToken, appKey, appSecret, "TTTS3012R");
@@ -229,8 +253,10 @@ public class KisApiClient {
                 for (Map<String, Object> item : output1) {
                     double qty = parseDouble(item.get("ovrs_cblc_qty"));
                     if (qty <= 0) continue;
+                    String pdno = str(item.get("ovrs_pdno"));
+                    if (!pdno.isEmpty() && !seen.add(pdno)) continue;   // 다른 거래소 응답에 중복된 종목 스킵
                     holdings.add(new ExchangeHoldingDto(
-                            str(item.get("ovrs_pdno")), str(item.get("ovrs_item_name")), qty,
+                            pdno, str(item.get("ovrs_item_name")), qty,
                             parseDouble(item.get("pchs_avg_pric")), parseDouble(item.get("now_pric2")),
                             parseDouble(item.get("ovrs_stck_evlu_amt")), parseDouble(item.get("frcr_evlu_pfls_amt")),
                             parseDouble(item.get("evlu_pfls_rt")), "USD"));
@@ -267,11 +293,14 @@ public class KisApiClient {
             for (Map<String, Object> item : output2) {
                 double frcrCash = parseDouble(item.get("frcr_dncl_amt_2"));   // 외화예수금
                 if (frcrCash == 0) continue;
+                // 통화코드 미제공 시 해외 주력 통화 USD로 간주
+                String ccy = str(item.get("crcy_cd"));
+                // 원화(KRW) 예수금 행은 건너뛴다. 통합증거금 계좌는 output2에 KRW 예수금까지 내려주는데,
+                // 이는 이미 fetchDomestic의 dnca_tot_amt(cashKrw)에 집계돼 있어, 더하면 예수금이 중복돼 총자산이 부풀려진다.
+                if (ccy != null && "KRW".equalsIgnoreCase(ccy.trim())) continue;
                 double rate = parseDouble(item.get("frst_bltn_exrt"));        // 최초고시환율
                 if (rate <= 0) rate = 1.0;
                 krw += frcrCash * rate;
-                // 통화코드 미제공 시 해외 주력 통화 USD로 간주
-                String ccy = str(item.get("crcy_cd"));
                 if (ccy == null || ccy.isBlank() || "USD".equalsIgnoreCase(ccy)) usd += frcrCash;
             }
             return new double[]{krw, usd};

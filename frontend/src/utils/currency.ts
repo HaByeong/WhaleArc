@@ -38,6 +38,43 @@ export const fmtKRW = (v: number): string =>
 export const fmtUSD = (v: number): string =>
   `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+/**
+ * 정수 금액 입력용 표시 포맷 — 자릿수만 남기고 천 단위 콤마를 넣는다(빈 값은 빈 문자열).
+ * 예: '10000000' 또는 10000000 → '10,000,000'. type="text" inputMode="numeric" 입력과 함께 사용.
+ */
+export const formatAmountInput = (v: string | number): string => {
+  const digits = String(v).replace(/[^\d]/g, '');
+  return digits === '' ? '' : Number(digits).toLocaleString('en-US');
+};
+
+/** 금액 입력 onChange용 — 콤마·공백 등 비숫자를 제거해 순수 자릿수 문자열을 돌려준다. */
+export const parseAmountInput = (s: string): string => s.replace(/[^\d]/g, '');
+
+/**
+ * 숫자를 천 단위 콤마로 표시하되 소수부는 보존한다(수량·USD 가격 등 소수 허용 필드용).
+ * 예: 145000000 → '145,000,000', 1234.56 → '1,234.56', 0.0012 → '0.0012'.
+ */
+export const commaNumber = (n: number): string => {
+  if (!Number.isFinite(n)) return '';
+  const [intp, frac] = String(n).split('.');
+  const ci = Number(intp).toLocaleString('en-US');
+  return frac !== undefined ? `${ci}.${frac}` : ci;
+};
+
+/**
+ * 편집 중 입력 텍스트를 라이브로 콤마 포맷 — 소수점/입력 중인 소수부('150.', '0.0012')를 보존한다.
+ * 정수부에만 콤마를 넣고 소수점 이하는 그대로 둔다(천 단위 콤마 입력 필드의 onChange 표시용).
+ */
+export const formatAmountLive = (raw: string): string => {
+  const cleaned = raw.replace(/[^\d.]/g, '');
+  const dot = cleaned.indexOf('.');
+  if (dot === -1) return cleaned === '' ? '' : Number(cleaned).toLocaleString('en-US');
+  const intp = cleaned.slice(0, dot).replace(/\./g, '');
+  const frac = cleaned.slice(dot + 1).replace(/\./g, '');   // 두 번째 이후 소수점은 제거
+  const ci = intp === '' ? '0' : Number(intp).toLocaleString('en-US');
+  return `${ci}.${frac}`;
+};
+
 /** 통화 정규화 결과: 모든 화면이 동일하게 합산/표시할 수 있는 공통 형태 */
 export interface NormalizedHolding {
   isUsd: boolean;
@@ -73,7 +110,9 @@ export const normalizeVirtHolding = (h: {
   currency?: string;
   originalMarketValue?: number;
 }): NormalizedHolding => {
-  const isUsd = !!h.originalMarketValue && !!h.currency && h.currency !== 'KRW';
+  // 통화 판정은 currency 만으로 한다(표시값 originalMarketValue 유무에 묶지 않는다).
+  // 달러 원금이 0/누락이어도 USD 자산이면 통화 분리 합계에서 USD로 잡혀야 한다.
+  const isUsd = !!h.currency && h.currency !== 'KRW';
   return {
     isUsd,
     krwValue: h.marketValue,

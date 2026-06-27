@@ -63,6 +63,21 @@ public class CommunityImageService {
         return path;
     }
 
+    /** 게시글 삭제 시 업로드 이미지 고아 방지 — imageUrl(/api/community/images/{filename})의 파일을 best-effort 삭제. */
+    public void deleteImageByUrl(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) return;
+        try {
+            String filename = imageUrl.substring(imageUrl.lastIndexOf('/') + 1);
+            if (filename.isBlank()) return;
+            Path path = UPLOAD_DIR.resolve(filename).normalize();
+            if (!path.startsWith(UPLOAD_DIR.normalize())) return; // 경로 이탈 방어
+            Files.deleteIfExists(path);
+        } catch (Exception e) {
+            // 삭제 실패는 로그만 — 게시글 삭제는 계속 진행
+            log.warn("커뮤니티 이미지 삭제 실패 [{}]: {}", imageUrl, e.getMessage());
+        }
+    }
+
     /** 매직바이트로 실제 이미지인지 검증 (MIME/확장자는 위조 가능) */
     static boolean isAllowedImage(byte[] b) {
         if (b == null || b.length < 12) return false;

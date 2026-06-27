@@ -63,6 +63,15 @@ export interface BacktestRequest {
   // 독립 양방향(LONG_SHORT_FLAT) 전용 숏 조건
   shortEntryConditions?: Condition[];
   shortExitConditions?: Condition[];
+  // 모멘텀 TopN 로테이션 (strategyType=MOMENTUM_ROTATION)
+  strategyType?: string;
+  momentumAssetType?: string;   // US_STOCK·ETF·STOCK(한국)·CRYPTO
+  topN?: number;
+  lookbackDays?: number;
+  regimeFilter?: boolean;
+  regimeFloor?: number;
+  universe?: string[];
+  rebalanceBandPct?: number;
   // 적립식 투자: 매월 첫 거래일에 추가 납입할 금액 (KRW). 0/undefined 면 off
   monthlyContribution?: number;
   // 2자산 리밸런싱 (둘 다 채워졌을 때만 활성)
@@ -143,6 +152,8 @@ export interface BacktestResult {
   totalDividendsReceived?: number;  // OFF 모드일 때 누적 배당 cash 입금액 (native 단위)
   // 지표 요약 (0-trade 디버깅용)
   indicatorSummary?: Record<string, { min: number; max: number; avg: number; last: number }>;
+  // 모멘텀 로테이션: 월별 보유 top-N 변천 이력
+  rotationHistory?: { date: string; regimeBear: boolean; holdings: { symbol: string; momentum: number; weight: number }[] }[];
 }
 
 export interface BacktestTrade {
@@ -241,7 +252,10 @@ export const strategyService = {
 
   // 백테스팅 실행 (서버가 결과를 자동 보관)
   runBacktest: async (request: BacktestRequest): Promise<BacktestResult> => {
-    const response = await apiClient.post('/api/strategies/backtest', request);
+    // 모멘텀 로테이션은 132종목 일봉을 모아 계산하므로 콜드 캐시 첫 실행이 수십 초 걸린다.
+    // 전역 15초 타임아웃을 넘기므로 백테스트 요청은 넉넉히(모멘텀 120초, 그 외 60초) 오버라이드.
+    const timeout = request.strategyType === 'MOMENTUM_ROTATION' ? 120000 : 60000;
+    const response = await apiClient.post('/api/strategies/backtest', request, { timeout });
     return response.data.data;
   },
 
@@ -322,17 +336,21 @@ export function exportBacktestCsv(result: BacktestResult): void {
 
   // 요약 헤더
   lines.push('전략명,종목,기간,초기자본,최종가치,수익률,최대낙폭,샤프비율,승률');
-  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  // CSV 수식 인젝션 방어: =,+,-,@ 로 시작하는 값은 앞에 작은따옴표를 붙여 수식 해석을 막는다
+  const esc = (v: string) => {
+    const safe = /^[=+\-@]/.test(v) ? `'${v}` : v;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
   lines.push([
     esc(result.strategyName || '-'),
     esc(`${result.stockName || ''}(${result.stockCode || ''})`),
     esc(`${result.startDate} ~ ${result.endDate}`),
     result.initialCapital,
     Math.round(result.finalValue),
-    `${result.totalReturnRate.toFixed(2)}%`,
-    `${result.maxDrawdown.toFixed(2)}%`,
-    result.sharpeRatio.toFixed(2),
-    `${result.winRate.toFixed(1)}%`,
+    `${(result.totalReturnRate ?? 0).toFixed(2)}%`,
+    `${(result.maxDrawdown ?? 0).toFixed(2)}%`,
+    (result.sharpeRatio ?? 0).toFixed(2),
+    `${(result.winRate ?? 0).toFixed(1)}%`,
   ].join(','));
 
   // 빈 줄 구분
@@ -387,6 +405,7 @@ export interface BacktestHistoryItem {
   sharpeRatio: number;
   maxDrawdown: number;
   totalTrades: number;
+  winRate?: number;   // 구 레코드는 미보관(undefined)
   createdAt: number;
 }
 

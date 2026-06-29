@@ -626,6 +626,29 @@ public class VirtService {
                     .build());
         }
 
+        // 3) 선물(USDT-M 무기한) 계좌 자산 — 있으면 합산(없으면 빈 목록이라 현물만).
+        //    선물 지갑 전체 평가액(usdtEquity = 증거금 + 미실현손익)을 한 줄로 표시.
+        double futuresUsdt = 0;
+        double futuresUpl = 0;
+        for (Map<String, Object> fa : bitgetClient.getFuturesAssets(apiKey, secretKey, passphrase)) {
+            futuresUsdt += safeDouble(String.valueOf(fa.get("usdtEquity")));
+            futuresUpl += safeDouble(String.valueOf(fa.get("unrealizedPL")));
+        }
+        if (futuresUsdt > 0.00000001) {
+            long futuresKrw = (long) (futuresUsdt * usdtKrw);
+            holdings.add(VirtPortfolioResponse.VirtHolding.builder()
+                    .stockCode("USDT-FUTURES")
+                    .stockName("선물 (USDT-M)")
+                    .quantity(futuresUsdt)
+                    .averagePrice((long) usdtKrw)
+                    .currentPrice((long) usdtKrw)
+                    .marketValue(futuresKrw)
+                    .profitLoss((long) (futuresUpl * usdtKrw))
+                    .returnRate(0)
+                    .build());
+            bitgetUsdt += futuresUsdt; // foreignCashUsd 합계에 선물 평가액 포함
+        }
+
         long holdingsValue = holdings.stream().mapToLong(VirtPortfolioResponse.VirtHolding::getMarketValue).sum();
         long totalValue = cashBalance + holdingsValue;
 

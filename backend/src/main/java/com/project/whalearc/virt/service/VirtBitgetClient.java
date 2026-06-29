@@ -126,6 +126,47 @@ public class VirtBitgetClient {
         return List.of();
     }
 
+    /**
+     * 선물(USDT-M 무기한) 계좌 자산 조회. productType=USDT-FUTURES.
+     * marginCoin별 계좌 목록 반환(보통 USDT 1개, 각 항목에 usdtEquity/unrealizedPL 등).
+     * 선물 미사용·권한없음·오류 시 빈 목록을 반환해 현물 조회를 깨지 않는다(현물만 진행).
+     */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> getFuturesAssets(String apiKey, String secretKey, String passphrase) {
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                String path = "/api/v2/mix/account/accounts?productType=USDT-FUTURES";
+                String timestamp = String.valueOf(Instant.now().toEpochMilli());
+
+                HttpHeaders headers = buildHeaders(apiKey, secretKey, passphrase, timestamp, "GET", path, "");
+                HttpEntity<Void> request = new HttpEntity<>(headers);
+
+                ResponseEntity<String> response = restTemplate.exchange(
+                        BASE_URL + path, HttpMethod.GET, request, String.class);
+
+                Map<String, Object> result = objectMapper.readValue(response.getBody(),
+                        new TypeReference<>() {});
+
+                if (!"00000".equals(String.valueOf(result.get("code")))) {
+                    // 선물 권한 없음/미사용 등 — 현물만으로 진행 (예외로 올리지 않음)
+                    log.info("[Virt/Bitget] 선물 자산 조회 코드 {} ({}) — 현물만 진행",
+                            result.get("code"), result.get("msg"));
+                    return List.of();
+                }
+
+                Object data = result.get("data");
+                return data instanceof List ? (List<Map<String, Object>>) data : List.of();
+            } catch (Exception e) {
+                log.warn("[Virt/Bitget] 선물 자산 조회 오류 (시도 {}/{}): {}", attempt, MAX_RETRIES, e.getMessage());
+                if (attempt < MAX_RETRIES) {
+                    sleep(RETRY_DELAY_MS * attempt);
+                }
+            }
+        }
+        log.warn("[Virt/Bitget] 선물 자산 조회 최종 실패 — 현물만 진행");
+        return List.of();
+    }
+
     /* ───── HMAC-SHA256 서명 ───── */
 
     private HttpHeaders buildHeaders(String apiKey, String secretKey, String passphrase,

@@ -68,6 +68,7 @@ public class BitgetApiClient {
             double totalValue = 0;
             double totalProfitLoss = 0;
             double cashBalance = 0;
+            double foreignCashUsd = 0; // USDT 원금 합계(현물+선물 가용) — 통화 분리 표시용
             // USDT 기준 코인 시세를 KRW 환산하는 데 쓰는 환율 (응답에 무관하게 한 번 조회)
             double usdtToKrw = getUsdtToKrw();
 
@@ -84,6 +85,7 @@ public class BitgetApiClient {
 
                     if ("USDT".equals(coin) || "USDC".equals(coin)) {
                         cashBalance += qty * usdtToKrw;
+                        foreignCashUsd += qty;
                         continue;
                     }
 
@@ -115,6 +117,7 @@ public class BitgetApiClient {
                         double available = parseDouble(m.get("available"));
                         double uPnl = parseDouble(m.get("unrealizedPL"));
                         cashBalance += available * usdtToKrw;                  // 선물 가용 USDT → 현금
+                        foreignCashUsd += available;
                         totalValue += (equity - available) * usdtToKrw;        // 포지션에 묶인 증거금+미실현손익
                         totalProfitLoss += uPnl * usdtToKrw;
                     }
@@ -150,6 +153,8 @@ public class BitgetApiClient {
             totalValue += cashBalance;
             ExchangePortfolioDto dto = new ExchangePortfolioDto("BITGET", true, totalValue, totalProfitLoss,
                     0, cashBalance, holdings);
+            dto.setForeignCashKrw(cashBalance);    // Bitget은 전액 외화(USDT) — 외화예수금 KRW환산 = cashBalance
+            dto.setForeignCashUsd(foreignCashUsd); // USDT 원금 (통화 분리 표시용)
             dto.setUsdtKrwRate(usdtToKrw);
             return dto;
 

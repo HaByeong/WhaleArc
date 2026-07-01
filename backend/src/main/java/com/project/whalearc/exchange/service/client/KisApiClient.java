@@ -291,7 +291,9 @@ public class KisApiClient {
             if (output2 == null) return new double[]{0, 0};
             double krw = 0, usd = 0;
             for (Map<String, Object> item : output2) {
-                double frcrCash = parseDouble(item.get("frcr_dncl_amt_2"));   // 외화예수금
+                // 외화예수금 + 미결제 매도대금(D+2). 미국주식은 미결제 매도대금으로 즉시 매수 가능(가정산)하므로
+                // 실질 주문가능 근사 = 예수금 + 매도대금 합계.
+                double frcrCash = parseDouble(item.get("frcr_dncl_amt_2")) + parseDouble(item.get("frcr_sll_amt_smtl"));
                 if (frcrCash == 0) continue;
                 // 통화코드 미제공 시 해외 주력 통화 USD로 간주
                 String ccy = str(item.get("crcy_cd"));

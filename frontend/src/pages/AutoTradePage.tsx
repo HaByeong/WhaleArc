@@ -16,6 +16,7 @@ import {
   type DeploymentStatus,
   type LiveOrderLog,
 } from '../services/liveTradeService';
+import { exchangeService, type ExchangeType } from '../services/exchangeService';
 
 // ── 헬퍼 ──
 const formatKRW = (n?: number) =>
@@ -226,6 +227,8 @@ const AutoTradePage = () => {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [creating, setCreating] = useState(false);
   const [usdKrw, setUsdKrw] = useState(1380);   // 예상 KRW 표시·환산용 환율(USDT/KRW는 USD/KRW로 근사)
+  const [availCash, setAvailCash] = useState<{ amount: number; ccy: string } | null>(null); // 연동 계좌 사용가능 현금
+  const [cashLoading, setCashLoading] = useState(false);
   // 배포 할당금액을 KRW로 환산(카드 수익률·합계용). 네이티브(USD/USDT)는 환율 적용.
   const allocKrw = (d: Deployment) => (d.baseCurrency && d.baseCurrency !== 'KRW')
     ? (d.allocatedCash || 0) * usdKrw : (d.allocatedCash || 0);
@@ -295,6 +298,30 @@ const AutoTradePage = () => {
   useEffect(() => {
     marketService.getExchangeRate().then(r => { if (r?.usdKrw > 0) setUsdKrw(r.usdKrw); }).catch(() => {});
   }, []);
+
+  // 실거래 연동 계좌 사용가능 현금 조회 — 생성 모달 열림·브로커·전략(통화) 변경 시. 모의(MOCK)는 조회 안 함.
+  useEffect(() => {
+    const isMom = form.strategyId === MOMENTUM_PRESET_ID;
+    const broker = isMom ? (momentum.assetType === 'CRYPTO' ? 'BITGET' : 'KIS') : form.brokerType;
+    if (!showCreate || !isLive || (broker !== 'KIS' && broker !== 'UPBIT' && broker !== 'BITGET')) {
+      setAvailCash(null);
+      return;
+    }
+    const strat = [...PRESET_STRATEGIES, ...strategies].find(s => s.id === form.strategyId);
+    const assetType = isMom ? momentum.assetType : (form.assetType || strat?.assetType);
+    const ccy = resolveBaseCcy(isLive, broker, assetType);
+    let cancelled = false;
+    setCashLoading(true);
+    exchangeService.getPortfolio(broker as ExchangeType)
+      .then(p => {
+        if (cancelled) return;
+        const amount = (ccy === 'USD' || ccy === 'USDT') ? (p.foreignCashUsd ?? 0) : (p.cashBalance ?? 0);
+        setAvailCash({ amount, ccy });
+      })
+      .catch(() => { if (!cancelled) setAvailCash(null); })
+      .finally(() => { if (!cancelled) setCashLoading(false); });
+    return () => { cancelled = true; };
+  }, [showCreate, isLive, form.strategyId, form.brokerType, form.assetType, momentum.assetType, strategies]);
 
   // 백테스트 → "자동매매 시작" 딥링크(?deploy=<전략id>): 그 전략이 선택된 채로 생성 모달 자동 오픈.
   // 등급 게이트(canAutoTrade)가 해결된 뒤에만 처리해, 잠긴 실거래에서 전략 fetch/토스트/모달이 새지 않게 한다.
@@ -1410,6 +1437,12 @@ const AutoTradePage = () => {
                   {modalCcy !== 'KRW' && (
                     <p className={`text-[12px] mt-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                       {modalCcy} 기준 · 예상 ≈ {formatKRW(Math.round(modalAllocNum * usdKrw))} <span className="opacity-60">(환율 {Math.round(usdKrw).toLocaleString('ko-KR')}원 적용, 체결 시점 환율로 달라질 수 있어요)</span>
+                    </p>
+                  )}
+                  {isLive && (cashLoading || availCash) && (
+                    <p className={`text-[12px] mt-1 font-medium ${availCash && modalAllocNum > availCash.amount ? 'text-red-400' : (isDark ? 'text-emerald-400' : 'text-emerald-600')}`}>
+                      사용 가능: {cashLoading ? '조회 중…' : fmtNative(availCash!.amount, availCash!.ccy)}
+                      {availCash && modalAllocNum > availCash.amount && <span> · 잔고 초과</span>}
                     </p>
                   )}
                 </div>

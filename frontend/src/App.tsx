@@ -28,6 +28,8 @@ const ConsoleMirrorPage = lazy(() => import('./pages/ConsoleMirrorPage'));
 const ConsoleCommunityPage = lazy(() => import('./pages/ConsoleCommunityPage'));
 const ConsoleStatusPage = lazy(() => import('./pages/ConsoleStatusPage'));
 const ConsoleBillingPage = lazy(() => import('./pages/ConsoleBillingPage'));
+const BillingSuccessPage = lazy(() => import('./pages/BillingSuccessPage'));
+const BillingFailPage = lazy(() => import('./pages/BillingFailPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
@@ -182,6 +184,8 @@ function App() {
             }
           />
           <Route path="/billing" element={<ProtectedRoute><ConsoleBillingPage /></ProtectedRoute>} />
+          <Route path="/billing/success" element={<ProtectedRoute><BillingSuccessPage /></ProtectedRoute>} />
+          <Route path="/billing/fail" element={<ProtectedRoute><BillingFailPage /></ProtectedRoute>} />
           {/* Virt 모드 라우트 — 개편 콘솔 페이지를 virt 모드(고래꼬리 로고)로 재사용 */}
           <Route path="/virt/dashboard" element={<ProtectedRoute><ConsoleDashboardPage /></ProtectedRoute>} />
           <Route path="/virt/my-portfolio" element={<ProtectedRoute><ConsolePortfolioPage /></ProtectedRoute>} />

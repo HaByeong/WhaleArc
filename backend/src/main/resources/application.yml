@@ -58,6 +58,15 @@ exchange:
 virt:
   encryption-key: ${VIRT_ENCRYPTION_KEY:dev-local-encryption-key-do-not-use-in-prod}
 
+# 토스페이먼츠 자동결제(빌링) 시크릿 키. 개발 단계는 토스 개발자센터에서 발급받는 테스트 키(test_sk_...)를 사용.
+toss:
+  payments:
+    secret-key: ${TOSS_SECRET_KEY:}
+
+# 빌링키 AES 암호화 키 (로컬 개발용 기본값; 프로덕션은 PAYMENT_ENCRYPTION_KEY 환경변수 사용)
+payment:
+  encryption-key: ${PAYMENT_ENCRYPTION_KEY:dev-local-payment-encryption-key-32}
+
 logging:
   level:
     org.springframework: INFO

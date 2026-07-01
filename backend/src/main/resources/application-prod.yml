@@ -40,6 +40,15 @@ virt:
 exchange:
   encryption-key: ${EXCHANGE_ENCRYPTION_KEY}
 
+# 토스페이먼츠 자동결제(빌링) 시크릿 키 (필수 — 라이브 전환 시 test_sk_... 대신 live_sk_... 사용)
+toss:
+  payments:
+    secret-key: ${TOSS_SECRET_KEY}
+
+# 빌링키 암호화 키 (필수)
+payment:
+  encryption-key: ${PAYMENT_ENCRYPTION_KEY}
+
 # 감정 거울 — 운영은 7일(10080분) 타임캡슐
 mirror:
   reveal-minutes: ${MIRROR_REVEAL_MINUTES:10080}

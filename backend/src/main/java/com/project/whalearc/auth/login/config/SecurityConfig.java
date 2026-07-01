@@ -71,6 +71,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/store/products").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/feedback/images/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/community/images/**").permitAll()
+                        // 토스페이먼츠 서버가 직접 호출(무인증) — 본문은 신뢰하지 않고 서버 재조회로 검증(BillingController 참고)
+                        .requestMatchers(HttpMethod.POST, "/api/billing/webhook").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

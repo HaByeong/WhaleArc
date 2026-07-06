@@ -693,7 +693,7 @@ const AutoTradePage = () => {
           <PrimaryBtn onClick={openCreate}>새 자동매매 시작</PrimaryBtn>
         </div>
 
-        {isVirt && <div className="mb-5"><FunnelSteps current={3} /></div>}
+        {isVirt && <div className="mb-5"><FunnelSteps current={2} /></div>}
 
         {/* AUTOPILOT 관제 덱 (좌: 상태·요약 / 우: 전역 킬스위치) */}
         <section style={{ position: 'relative', overflow: 'hidden', background: 'var(--ci-panel)', border: '1px solid var(--ci-line)', borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)', marginBottom: 20 }}>

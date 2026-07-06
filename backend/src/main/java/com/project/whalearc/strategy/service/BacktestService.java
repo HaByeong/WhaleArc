@@ -272,8 +272,13 @@ public class BacktestService {
     }
 
     private void validateRequest(BacktestRequest request) {
-        if (request.getInitialCapital() <= 0) {
-            throw new IllegalArgumentException("초기 자본금은 0보다 커야 합니다.");
+        // 초기 자본금 0원은 '적립식(매월 납입)'과 함께면 허용한다(0원 시작 → 매월 DCA 매수).
+        double monthlyForCheck = request.getMonthlyContribution() != null ? request.getMonthlyContribution() : 0.0;
+        if (request.getInitialCapital() < 0) {
+            throw new IllegalArgumentException("초기 자본금은 0 이상이어야 합니다.");
+        }
+        if (request.getInitialCapital() == 0 && monthlyForCheck <= 0) {
+            throw new IllegalArgumentException("초기 자본금이 0이면 월 적립금을 설정해주세요. (0원 시작 + 적립식 투자)");
         }
         if (request.getInitialCapital() > 100_000_000_000L) {
             throw new IllegalArgumentException("초기 자본금은 1,000억원 이하로 설정해주세요.");

@@ -372,7 +372,8 @@ const PaperPortfolio = () => {
   }, [portfolio, load]);
 
   const goTrade = useCallback((code: string, at?: string) => {
-    navigate(`${isVirt ? '/virt' : ''}/trade?code=${code}&type=${at || 'CRYPTO'}`);
+    // 보유 종목 클릭 = 포지션 관리 의지 → 시세·거래 통합 페이지에서 주문 패널을 바로 연다
+    navigate(`${isVirt ? '/virt' : ''}/market?code=${code}&type=${at || 'CRYPTO'}&panel=order`);
   }, [navigate, isVirt]);
 
   const handleExport = useCallback(async (kind: 'trades' | 'portfolio') => {
@@ -531,7 +532,7 @@ const PaperPortfolio = () => {
             kicker="FIRST VOYAGE"
             title="아직 항해를 시작하지 않았어요"
             desc="첫 거래를 하면 보유 종목·자산 추이·항해 중인 항로가 이곳에 채워져요. VIRT 가상 자금 1,000만 원으로 위험 없이 시작할 수 있어요."
-            ctaLabel="첫 거래 시작하기" onCta={() => navTo('/trade')}
+            ctaLabel="첫 거래 시작하기" onCta={() => navTo('/market')}
             secondaryLabel="시세 둘러보기" onSecondary={() => navTo('/market')}
             preview={[
               { icon: 'pie', label: '자산 배분', sub: '현금·종목 비중이 도넛으로 표시돼요' },
@@ -676,16 +677,16 @@ const PaperPortfolio = () => {
 
         {/* 보유종목 + 항로 */}
         <div className="grid grid-cols-1 items-start gap-[18px] lg:grid-cols-[1.5fr_1fr]">
-          <HoldingsTrades holdings={holdings} trades={trades} holdingsValue={holdingsValue} holdingsPnl={holdingsPnl} routeMap={assetRouteMap} onPick={goTrade} navTrade={() => navigate(`${isVirt ? '/virt' : ''}/trade`)} navStore={() => navigate(`${isVirt ? '/virt' : ''}/store`)} />
+          <HoldingsTrades holdings={holdings} trades={trades} holdingsValue={holdingsValue} holdingsPnl={holdingsPnl} routeMap={assetRouteMap} onPick={goTrade} navTrade={() => navigate(`${isVirt ? '/virt' : ''}/market`)} navStore={() => navigate(`${isVirt ? '/virt' : ''}/strategy`)} />
           <Panel style={{ overflow: 'hidden' }}>
-            <PanelHead kicker="ACTIVE ROUTE" title="항해 중인 항로" right={<button onClick={() => navigate(`${isVirt ? '/virt' : ''}/store`)} className="text-[13px] text-white/80 hover:text-white">전략 학습 →</button>} />
+            <PanelHead kicker="ACTIVE ROUTE" title="항해 중인 항로" right={<button onClick={() => navigate(`${isVirt ? '/virt' : ''}/strategy`)} className="text-[13px] text-white/80 hover:text-white">전략 학습 →</button>} />
             {routes.length === 0 ? (
               <div className="px-[22px] py-12 text-center">
                 <div className="text-[14px]" style={{ color: 'var(--ci-ink3)' }}>적용 중인 항로가 없습니다.</div>
-                <button onClick={() => navigate(`${isVirt ? '/virt' : ''}/store`)} className="mt-3 rounded-lg px-4 py-2 text-[13.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>항로 둘러보기 →</button>
+                <button onClick={() => navigate(`${isVirt ? '/virt' : ''}/strategy`)} className="mt-3 rounded-lg px-4 py-2 text-[13.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>항로 둘러보기 →</button>
               </div>
             ) : routes.map(perf => (
-              <RouteCard key={perf.purchaseId} perf={perf} isRep={portfolio?.representativePurchaseId === perf.purchaseId} onStar={() => handleStar(perf.purchaseId)} busy={settingRoute === perf.purchaseId} navTo={() => navigate(`${isVirt ? '/virt' : ''}/store`)} />
+              <RouteCard key={perf.purchaseId} perf={perf} isRep={portfolio?.representativePurchaseId === perf.purchaseId} onStar={() => handleStar(perf.purchaseId)} busy={settingRoute === perf.purchaseId} navTo={() => navigate(`${isVirt ? '/virt' : ''}/strategy`)} />
             ))}
           </Panel>
         </div>
@@ -951,7 +952,7 @@ const RealAccountPortfolio = () => {
                   <button onClick={() => openSetup(activeTab)} className="flex-1 rounded-lg py-2 text-[13.5px] font-semibold" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink1)' }}>키 수정</button>
                   <button onClick={() => handleDisconnect(activeTab)} className="flex-1 rounded-lg py-2 text-[13.5px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.3)', color: UP }}>연결 해제</button>
                 </div>
-                <p className="mt-3 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>* 체결 내역은 거래 페이지에서 확인하세요. 키는 읽기 전용 권한만 사용합니다.</p>
+                <p className="mt-3 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>* 체결 내역은 거래 내역 탭에서 확인하세요. 키는 읽기 전용 권한만 사용합니다.</p>
               </Panel>
             </div>
           </div>

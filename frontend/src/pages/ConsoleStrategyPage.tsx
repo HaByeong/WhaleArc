@@ -17,6 +17,7 @@ import { tradeService } from '../services/tradeService';
 import { Term } from '../components/GlossaryTerm';
 import GuideTour, { type TourStep } from '../components/GuideTour';
 import FunnelSteps from '../components/FunnelSteps';
+import StrategyLearnDrawer from '../components/strategy/StrategyLearnDrawer';
 import { getErrorMessage } from '../utils/api';
 
 const STRAT_TOUR: TourStep[] = [
@@ -306,7 +307,7 @@ const EmptyHero = ({ onGuide, running, total = PRESET_STRATEGIES.length, userCou
 );
 
 /* 전략 선택 시 — 이 전략 이해하기(초보 교육 + 시각화 차트) */
-const StrategyGuidePanel = ({ strat, userStrat, onApply, onCreate }: { strat: Strat; userStrat?: Strategy; onApply?: () => void; onCreate?: () => void }) => {
+const StrategyGuidePanel = ({ strat, userStrat, onApply, onCreate, onLearn }: { strat: Strat; userStrat?: Strategy; onApply?: () => void; onCreate?: () => void; onLearn?: () => void }) => {
   const navigate = useNavigate();
   const edu = PRESET_EDU[strat.id];
   const tip = edu?.tip || userStrat?.beginnerTip;
@@ -332,6 +333,11 @@ const StrategyGuidePanel = ({ strat, userStrat, onApply, onCreate }: { strat: St
             <div className="mb-1 text-[13px] font-bold" style={{ color: GLOW }}>⚓ 왜 쓰나요?</div>
             <p className="m-0 text-[14px] leading-relaxed" style={{ color: INK1 }}>{why}</p>
           </div>
+        )}
+        {onLearn && (
+          <button onClick={onLearn} className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-[14px] font-bold" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.10)', color: GLOW }}>
+            <span className="text-[16px]">🐋</span>고래 튜터에게 이 전략 자세히 배우기
+          </button>
         )}
       </div>
       {Chart ? (
@@ -1211,6 +1217,7 @@ const ConsoleStrategyPage = () => {
   const [builder, setBuilder] = useState<{ mode: 'create' | 'edit'; strategy?: Strategy } | null>(null);
   const [applyFor, setApplyFor] = useState<Strategy | null>(null);
   const [cash, setCash] = useState<number | null>(null);
+  const [learnOpen, setLearnOpen] = useState(false); // 고래 튜터 교육 드로어(구 /store 흡수)
   const [tour, setTour] = useState(false);
   useEffect(() => {
     if (import.meta.env.DEV && window.location.pathname.startsWith('/preview')) return;
@@ -1341,7 +1348,8 @@ const ConsoleStrategyPage = () => {
       : PRESET_DEFS[s.id];
     const us = userStrats.find(x => x.id === s.id);
     const useEdit = !isTurtle && s.id === editForId; // 터틀은 동적 생성 조건을 쓰므로 수동 편집값 무시
-    if (!(capital > 0)) { setError('초기 투자금은 0보다 커야 합니다.'); return; }
+    // 초기 투자금 0원은 적립식(매월 납입)과 함께면 허용 — 0원 시작 + DCA
+    if (capital < 0 || (capital === 0 && monthly <= 0)) { setError('초기 투자금이 0이면 적립식 투자를 켜고 월 납입금을 설정해주세요.'); return; }
     if (adv.dateMode === 'custom') {
       if (!adv.customStart || !adv.customEnd) { setError('직접지정 기간의 시작일과 종료일을 모두 선택해주세요.'); return; }
       if (adv.customStart >= adv.customEnd) { setError('시작일은 종료일보다 앞서야 합니다.'); return; }
@@ -1438,7 +1446,7 @@ const ConsoleStrategyPage = () => {
     <HelmShell active="strategy" virt={isVirt} userName={userName} session="전략 백테스트">
       <div className="flex flex-col gap-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          {isVirt ? <FunnelSteps current={2} /> : <span />}
+          {isVirt ? <FunnelSteps current={1} /> : <span />}
           <button onClick={() => setTour(true)} className="inline-flex items-center gap-1.5 rounded-[10px] px-3.5 py-2 text-[14px] font-bold" style={{ border: '1px solid rgba(91,157,255,.4)', background: 'rgba(91,157,255,.14)', color: GLOW }} title="사용법 가이드 투어 다시 보기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="10" /><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .8-1 1.7" strokeLinecap="round" /><circle cx="12" cy="17" r=".6" fill="currentColor" /></svg>가이드 투어 다시 보기</button>
         </div>
         {error && <div className="rounded-xl px-4 py-3 text-[14px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{error}</div>}
@@ -1455,7 +1463,7 @@ const ConsoleStrategyPage = () => {
           <div className="min-w-0" data-tour="result">
             {running ? <RunningView onCancel={() => { runIdRef.current++; setRunning(false); }} />
               : result ? <ResultView result={result} strat={strat} onExport={onExport} />
-                : strat ? <StrategyGuidePanel strat={strat} userStrat={userStrats.find(s => s.id === strat.id)} onApply={() => { const st = userStrats.find(s => s.id === strat.id); if (st) setApplyFor(st); }} onCreate={() => setBuilder({ mode: 'create' })} />
+                : strat ? <StrategyGuidePanel strat={strat} userStrat={userStrats.find(s => s.id === strat.id)} onApply={() => { const st = userStrats.find(s => s.id === strat.id); if (st) setApplyFor(st); }} onCreate={() => setBuilder({ mode: 'create' })} onLearn={() => setLearnOpen(true)} />
                   : <EmptyHero running={running} total={allStrats.length} userCount={userStrats.length} onGuide={() => { setActiveId('preset-golden-cross'); setTarget({ symbol: 'BTC', name: '비트코인', assetType: 'CRYPTO' }); run('preset-golden-cross', { symbol: 'BTC', name: '비트코인', assetType: 'CRYPTO' }); }} />}
           </div>
           <div data-tour="runner" className="min-w-0">
@@ -1469,6 +1477,7 @@ const ConsoleStrategyPage = () => {
       </div>
       {builder && <BuilderModal key={`${builder.mode}:${builder.strategy?.id ?? 'new'}`} mode={builder.mode} initial={builder.strategy} onClose={() => setBuilder(null)} onSaved={(msg) => { setBuilder(null); refreshUserStrats(); showToast(msg); }} />}
       {applyFor && <ApplyModal strategy={applyFor} cash={cash} onClose={() => setApplyFor(null)} onDone={(msg, type) => { showToast(msg, type); if (type === 'success') { setApplyFor(null); refreshUserStrats(); refreshCash(); } }} />}
+      <StrategyLearnDrawer strat={learnOpen && strat ? { id: strat.id, name: strat.name, cat: strat.cat } : null} logic={strat ? (PRESET_EDU[strat.id]?.logic || userStrats.find(s => s.id === strat.id)?.strategyLogic) : undefined} onClose={() => setLearnOpen(false)} />
       <GuideTour steps={STRAT_TOUR} isActive={tour} onFinish={() => { setTour(false); try { localStorage.setItem('whalearc_strategy_tour', 'done'); } catch { /* ignore */ } }} />
       {histOpen && <HistoryModal history={history} onPick={pickHistory} onDelete={deleteHistory} onClose={() => setHistOpen(false)} />}
       {toast && <Toast msg={toast.msg} type={toast.type} />}

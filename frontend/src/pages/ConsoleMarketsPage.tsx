@@ -1,43 +1,26 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
 import HelmShell from '../components/HelmShell';
 import TradingChart from '../components/TradingChart';
-import { marketService, type MarketPrice, type AssetType } from '../services/marketService';
-import { useRealtimePrice } from '../hooks/useRealtimePrice';
+import OrderPanel from '../components/trade/OrderPanel';
+import type { MarketPrice } from '../services/marketService';
+import { useMarketFeed } from '../hooks/useMarketFeed';
+import { useExchangeRate } from '../hooks/useExchangeRate';
 import { userService } from '../services/userService';
 import apiClient from '../utils/api';
+import {
+  UP, DOWN, GLOW, INK1, INK2, INK3, LINE, LINE_STRONG, mkCard,
+  ASSET_CLASSES, POPULAR_COINS, curOf, fmtPrice, fmtVol,
+} from '../lib/marketUi';
 
 /* ────────────────────────────────────────────────────────────
-   ConsoleMarketsPage — 시세 (실데이터 배선)
-   marketService.getPrices(자산클래스) + getCandlesticks(캔들) + searchStocks(검색)
-   + useRealtimePrice(크립토 실시간) + 관심종목 watchlist(userService).
+   ConsoleMarketsPage — 시세·거래 통합 페이지.
+   왼쪽 네비의 '시세'와 '거래'를 하나로 합치고, 거래(주문)는 시세 상세의
+   매수/매도 버튼(또는 우측 '거래' 손잡이)으로 여는 슬라이드오버 OrderPanel로 처리.
+   시세 상태 머신은 useMarketFeed 훅으로 단일 소스화(폴링/캐시/검색/실시간/딥링크).
    ──────────────────────────────────────────────────────────── */
-
-const UP = '#ef4d4d';   // 상승 = 빨강 (양쪽 테마 공통)
-const DOWN = '#4d8aff'; // 하락 = 파랑 (양쪽 테마 공통)
-const GLOW = 'var(--ci-sonar)';
-const INK1 = 'var(--ci-ink1)', INK2 = 'var(--ci-ink2)', INK3 = 'var(--ci-ink3)';
-const LINE = 'var(--ci-line)', LINE_STRONG = 'var(--ci-line-strong)';
-
-const mkCard: React.CSSProperties = { borderRadius: 16, background: 'var(--ci-panel)', border: `1px solid ${LINE}`, boxShadow: 'var(--ci-panel-shadow)', position: 'relative', overflow: 'hidden' };
-
-// klass(탭) → AssetType + 검색함수 + 메타
-const ASSET_CLASSES: { key: string; type: AssetType; label: string; meta: string }[] = [
-  { key: 'stock', type: 'STOCK', label: '주식', meta: 'KOSPI · KOSDAQ' },
-  { key: 'us', type: 'US_STOCK', label: '미국주식', meta: 'NYSE · NASDAQ' },
-  { key: 'etf', type: 'ETF', label: 'ETF', meta: '국내 · 해외' },
-  { key: 'crypto', type: 'CRYPTO', label: '가상화폐', meta: '빗썸' },
-];
-
-const curOf = (a?: MarketPrice | null) => (a?.currency === 'USD' ? '$' : '₩');
-// 미국주식/ETF(USD)는 환율로 원화 환산해서 표시 (옛 MarketPage 동작)
-const fmtPrice = (a: MarketPrice, usdKrw = 0) => {
-  if (a.currency === 'USD' && usdKrw > 0) return '₩' + Math.round(a.price * usdKrw).toLocaleString('ko-KR');
-  return curOf(a) + a.price.toLocaleString('ko-KR', { maximumFractionDigits: a.currency === 'USD' ? 2 : 0 });
-};
-const fmtVol = (n: number) => (n >= 1e8 ? (n / 1e8).toFixed(1) + '억' : n >= 1e4 ? (n / 1e4).toFixed(1) + '만' : n.toLocaleString('ko-KR'));
 
 const Stat = ({ label, value, color }: { label: string; value: string; color?: string }) => (
   <div style={{ ...mkCard, padding: '18px 20px', minWidth: 0 }}>
@@ -45,7 +28,6 @@ const Stat = ({ label, value, color }: { label: string; value: string; color?: s
     <div className="font-mono" style={{ marginTop: 10, fontSize: 'clamp(16px,2.1vw,22px)', fontWeight: 600, color: color || 'var(--ci-ink0)', whiteSpace: 'nowrap' }}>{value}</div>
   </div>
 );
-
 
 // 범례 색 = TradingChart(utils/indicators INDICATOR_COLORS)와 동일하게 맞춤 — 차트선과 범례 색 불일치 방지
 const MA_DEFS: [number, string][] = [[5, '#f59e0b'], [20, '#3b82f6'], [60, '#a855f7']];
@@ -73,7 +55,6 @@ const INDICATOR_HELP: Record<keyof Inds, string> = {
   atr: 'ATR — 평균 변동폭. 클수록 변동성이 큽니다. 손절 폭·포지션 크기 정할 때 참고.',
   obv: 'OBV — 거래량 누적선. 가격보다 OBV가 먼저 움직이면 추세 전환 신호일 수 있어요.',
 };
-
 // 지표 토글(Inds) → TradingChart 의 activeIndicators(키 배열) 매핑. (거래량은 TradingChart에 항상 표시)
 const indToKeys = (ind: Inds): string[] => {
   const out: string[] = [];
@@ -92,7 +73,6 @@ const indToKeys = (ind: Inds): string[] => {
   if (ind.obv) out.push('OBV');
   return out;
 };
-
 
 const FavStar = ({ on, onClick }: { on: boolean; onClick: (e: React.MouseEvent) => void }) => (
   <button onClick={onClick} aria-label={on ? '관심 해제' : '관심 추가'} className="flex h-6 w-6 shrink-0 items-center justify-center" style={{ color: on ? '#f5d061' : INK3 }}>
@@ -169,10 +149,8 @@ const pill = (kind: 'primary' | 'danger' | 'ghost'): React.CSSProperties => ({
       : { border: `1px solid ${LINE_STRONG}`, background: 'transparent', color: 'var(--ci-ink0)' }),
 });
 
-type DetailProps = { stock: MarketPrice; isFav: boolean; onToggleFav: () => void; usdKrw: number; isCrypto: boolean; live: boolean };
-const StockDetail = ({ stock, isFav, onToggleFav, usdKrw, isCrypto, live }: DetailProps) => {
-  const navigate = useNavigate();
-  const { prefix } = useRoutePrefix();
+type DetailProps = { stock: MarketPrice; isFav: boolean; onToggleFav: () => void; usdKrw: number; isCrypto: boolean; live: boolean; onBuy: () => void; onSell: () => void; onBacktest: () => void };
+const StockDetail = ({ stock, isFav, onToggleFav, usdKrw, isCrypto, live, onBuy, onSell, onBacktest }: DetailProps) => {
   const [ind, setInd] = useState<Inds>({ ma: true, ema: false, vwap: false, bb: false, sar: false, ichimoku: false, vol: true, rsi: false, macd: false, stoch: false, cci: false, wr: false, atr: false, obv: false });
   const [helpOpen, setHelpOpen] = useState(false);
   const toggleInd = (k: keyof Inds) => setInd(s => ({ ...s, [k]: !s[k] }));
@@ -202,10 +180,9 @@ const StockDetail = ({ stock, isFav, onToggleFav, usdKrw, isCrypto, live }: Deta
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => navigate(`${prefix}/trade?code=${stock.symbol}&type=${stock.assetType}`)} style={pill('primary')}>매수</button>
-            <button onClick={() => navigate(`${prefix}/trade?code=${stock.symbol}&type=${stock.assetType}`)} style={pill('danger')}>매도</button>
-            <button onClick={() => navigate(`/virt/trade?code=${stock.symbol}&type=${stock.assetType}`)} style={pill('ghost')}><span className="mr-1.5 rounded px-1.5 py-0.5 text-[11px] font-bold tracking-[.06em]" style={{ background: 'rgba(180,210,255,.18)', color: '#cfe1ff' }}>VIRT</span>모의 거래</button>
-            <button onClick={() => navigate(`${prefix}/strategy`)} style={pill('ghost')}>전략 백테스트 →</button>
+            <button onClick={onBuy} style={pill('primary')}>매수</button>
+            <button onClick={onSell} style={pill('danger')}>매도</button>
+            <button onClick={onBacktest} style={pill('ghost')}>전략 백테스트 →</button>
           </div>
         </div>
       </div>
@@ -254,9 +231,42 @@ const StockDetail = ({ stock, isFav, onToggleFav, usdKrw, isCrypto, live }: Deta
           <dt style={{ color: INK2 }}>거래량</dt><dd className="m-0 truncate text-right font-mono">{stock.volume.toLocaleString('ko-KR')}</dd>
         </dl>
       </div>
+      {/* 종목 메모 */}
+      <NoteCard sym={stock.symbol} name={stock.name} />
     </section>
   );
 };
+
+const NoteCard = ({ sym, name }: { sym: string; name: string }) => {
+  const [note, setNote] = useState('');
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    try { const all = JSON.parse(localStorage.getItem('whalearc_stock_memos') || '{}'); setNote(all[sym] || ''); } catch { setNote(''); }
+  }, [sym]);
+  // 언마운트 시 대기 중인 저장 타이머 정리
+  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
+  const onChange = (v: string) => {
+    const t = v.slice(0, 200); setNote(t);
+    // 매 키 입력마다 동기 직렬화하지 않도록 400ms 디바운스 후 한 번만 저장
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      try { const all = JSON.parse(localStorage.getItem('whalearc_stock_memos') || '{}'); all[sym] = t; localStorage.setItem('whalearc_stock_memos', JSON.stringify(all)); } catch { /* ignore */ }
+    }, 400);
+  };
+  return (
+    <div style={{ ...mkCard, padding: '18px 22px' }}>
+      <div className="mb-2.5 flex items-center justify-between">
+        <h3 className="flex items-center gap-2 text-[15px] font-bold"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" style={{ color: INK2 }}><path d="M9 2L12 5L5 12L1.5 12.5L2 9L9 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>종목 메모</h3>
+        <span className="font-mono text-[12px]" style={{ color: INK3 }}>{note.length}/200</span>
+      </div>
+      <textarea value={note} onChange={e => onChange(e.target.value)} placeholder={`${name}에 대한 메모를 남겨보세요 (자동 저장)`} className="w-full resize-y rounded-lg px-3.5 py-3 text-[14.5px] leading-normal outline-none" style={{ minHeight: 80, border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: 'var(--ci-ink0)' }} />
+    </div>
+  );
+};
+
+const Toast = ({ msg, type }: { msg: string; type: 'success' | 'error' }) => (
+  <div className="fixed bottom-6 left-1/2 z-[120] -translate-x-1/2 rounded-xl px-5 py-3 text-[14px] font-semibold text-white" style={{ background: type === 'error' ? 'linear-gradient(180deg,#e0524f,#c23b38)' : 'linear-gradient(180deg,#2f9e6e,#1f7d57)', boxShadow: '0 14px 32px -10px rgba(0,0,0,.55)', animation: 'message-in .25s ease' }}>{msg}</div>
+);
 
 type IndexData = { code: string; name: string; price: number; change: number; changeRate: number };
 // 실데이터 로드 전/실패 시 표시할 빈 슬롯 (가짜 숫자 대신 '—')
@@ -267,84 +277,46 @@ const FALLBACK_INDICES: IndexData[] = [
 
 const ConsoleMarketsPage = () => {
   const { session } = useAuth();
-  const { isVirt } = useRoutePrefix();
+  const { isVirt, prefix } = useRoutePrefix();
+  const navigate = useNavigate();
   const userName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
 
-  const [klass, setKlass] = useState('stock');
-  const assetType = (ASSET_CLASSES.find(c => c.key === klass) || ASSET_CLASSES[0]).type;
-  const canSearch = assetType !== 'CRYPTO';
+  // 시세 상태 머신(단일 소스) + 환율
+  const {
+    klass, setKlass, assetType, canSearch,
+    mergedList, sel, activeSym, setActiveSym,
+    loading, error, wsConnected, rtPrice,
+    query, setQuery, searchResults, onSearchPick, requestSymbol, recent,
+  } = useMarketFeed();
+  const usdKrw = useExchangeRate();
 
-  const [assetList, setAssetList] = useState<MarketPrice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeSym, setActiveSym] = useState<string>('');
-  const [query, setQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<{ code: string; name: string; market: string }[]>([]);
+  // 화면-로컬 탐색 상태
   const [favoriteAssets, setFavoriteAssets] = useState<string[]>([]);
   const [listFilter, setListFilter] = useState('all');
   const [sortBy, setSortBy] = useState('volume');
   const [indices, setIndices] = useState<IndexData[]>(FALLBACK_INDICES);
-  const [usdKrw, setUsdKrw] = useState(0);
-  const extraRef = useRef<MarketPrice[]>([]);
-  const assetCacheRef = useRef<Record<AssetType, MarketPrice[]>>({ STOCK: [], CRYPTO: [], US_STOCK: [], ETF: [] });
-  const selectionCacheRef = useRef<Record<AssetType, string>>({ STOCK: '', CRYPTO: '', US_STOCK: '', ETF: '' });
-  const failRef = useRef(0);
 
-  const recordRecent = useCallback((a: MarketPrice) => {
-    try {
-      const saved = localStorage.getItem('whalearc_recent_stocks');
-      const prev: { stockCode: string; stockName: string; assetType: string }[] = saved ? JSON.parse(saved) : [];
-      const next = [{ stockCode: a.symbol, stockName: a.name, assetType: a.assetType }, ...prev.filter(r => r.stockCode !== a.symbol)].slice(0, 8);
-      localStorage.setItem('whalearc_recent_stocks', JSON.stringify(next));
-    } catch { /* ignore */ }
+  // 주문 패널
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [orderSide, setOrderSide] = useState('buy');
+  const openPanel = useCallback((side: string) => { setOrderSide(side); setPanelOpen(true); }, []);
+
+  // 딥링크 ?panel=order(&side=buy|sell) — 거래 의지가 있는 진입(포트폴리오·알림 등)은 주문 패널을 바로 연다
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('panel') === 'order') openPanel(searchParams.get('side') === 'sell' ? 'sell' : 'buy');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 실시간(크립토)
-  const { prices: realtimePrices, connected: wsConnected } = useRealtimePrice({ enabled: assetType === 'CRYPTO' });
-
-  // 자산클래스 시세 로드 + 폴링. 캐시 즉시표시(stale-while-revalidate) + 탭별 선택 복원 + 3회연속 실패 누적
-  useEffect(() => {
-    let alive = true;
-    extraRef.current = [];
-    failRef.current = 0;
-    const cached = assetCacheRef.current[assetType];
-    if (cached.length > 0) { setAssetList(cached); setActiveSym(selectionCacheRef.current[assetType] || cached[0].symbol); }
-    else { setAssetList([]); setActiveSym(''); setLoading(true); }
-    const fetchPrices = async (isPoll: boolean) => {
-      try {
-        const prices = await marketService.getPrices(assetType);
-        if (!alive) return;
-        assetCacheRef.current[assetType] = prices;
-        const server = new Set(prices.map(p => p.symbol));
-        setAssetList([...extraRef.current.filter(a => !server.has(a.symbol)), ...prices]);
-        setActiveSym(prev => prev || selectionCacheRef.current[assetType] || prices[0]?.symbol || '');
-        failRef.current = 0; setError(null);
-      } catch {
-        if (!alive) return;
-        failRef.current += 1;
-        if (assetCacheRef.current[assetType].length === 0) setError('시세 데이터를 불러오지 못했습니다.');
-        else if (failRef.current >= 3) setError('시세 갱신에 실패하고 있습니다. 네트워크 상태를 확인해주세요.');
-      } finally {
-        if (alive && !isPoll) setLoading(false);
-      }
-    };
-    fetchPrices(false);
-    let timer: ReturnType<typeof setInterval> | undefined;
-    if (assetType !== 'CRYPTO') timer = setInterval(() => fetchPrices(true), 10_000);
-    return () => { alive = false; if (timer) clearInterval(timer); };
-     
-  }, [assetType]);
-
-  // 탭별 선택 기억
-  useEffect(() => { if (activeSym) selectionCacheRef.current[assetType] = activeSym; }, [activeSym, assetType]);
-
-  // 환율(미국주식 원화 환산용) 주기 갱신
-  useEffect(() => {
-    const fetchRate = async () => { try { const { usdKrw } = await marketService.getExchangeRate(); setUsdKrw(usdKrw); } catch { /* fallback */ } };
-    fetchRate();
-    const t = setInterval(fetchRate, 30_000);
-    return () => clearInterval(t);
+  // 토스트
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const toastTimer = useRef<number | null>(null);
+  const notify = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 3000);
   }, []);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
   // 관심종목 로드
   useEffect(() => {
@@ -357,24 +329,18 @@ const ConsoleMarketsPage = () => {
     apiClient.get<IndexData[]>('/api/market/indices').then(r => { if (r.data?.length) setIndices(r.data); }).catch(() => {});
   }, []);
 
-  // 검색 (디바운스, 주식/미국/ETF)
+  // 단축키 (B 매수 패널 / S 매도 패널) — 입력 중에는 무시, Esc는 검색 초기화
   useEffect(() => {
-    if (!canSearch || query.trim().length < 2) { setSearchResults([]); return; }
-    const t = setTimeout(async () => {
-      try {
-        const fn = assetType === 'US_STOCK' ? marketService.searchUsStocks : assetType === 'ETF' ? marketService.searchEtfs : marketService.searchStocks;
-        const r = await fn(query.trim());
-        setSearchResults(r.slice(0, 12));
-      } catch { setSearchResults([]); }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [query, assetType, canSearch]);
-
-  // 실시간 병합(크립토)
-  const mergedList = useMemo(() => {
-    if (assetType !== 'CRYPTO' || realtimePrices.size === 0) return assetList;
-    return assetList.map(a => realtimePrices.get(a.symbol) ?? a);
-  }, [assetList, realtimePrices, assetType]);
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (e.key === 'b' || e.key === 'B') { if (sel) openPanel('buy'); }
+      else if (e.key === 's' || e.key === 'S') { if (sel) openPanel('sell'); }
+      else if (e.key === 'Escape') { if (!panelOpen) { setQuery(''); } }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sel, panelOpen, openPanel, setQuery]);
 
   // 관심 판별
   const favoriteSet = useMemo(() => {
@@ -394,7 +360,7 @@ const ConsoleMarketsPage = () => {
     });
   }, []);
 
-  // 표시 목록: 필터 + 정렬 + 로컬 검색(크립토)
+  // 표시 목록: 필터 + 정렬 + 로컬 검색(크립토) + 크립토 인기코인 상단 고정
   const displayList = useMemo(() => {
     let list = mergedList;
     if (listFilter === 'fav') list = list.filter(isFav);
@@ -404,38 +370,26 @@ const ConsoleMarketsPage = () => {
     const arr = [...list];
     // USD 종목(미국주식/ETF)은 원화 환산가로 비교해 통화가 섞여도 가격순 정렬이 일관되게
     const krwPrice = (a: MarketPrice) => (a.currency === 'USD' ? a.price * (usdKrw || 1) : a.price);
-    if (sortBy === 'volume') arr.sort((a, b) => b.volume - a.volume);
+    if (sortBy === 'volume') arr.sort((a, b) => {
+      if (assetType === 'CRYPTO') { const pa = POPULAR_COINS.has(a.symbol), pb = POPULAR_COINS.has(b.symbol); if (pa !== pb) return pa ? -1 : 1; }
+      return b.volume - a.volume;
+    });
     else if (sortBy === 'mcap') arr.sort((a, b) => krwPrice(b) - krwPrice(a));
     else if (sortBy === 'gain') arr.sort((a, b) => b.changeRate - a.changeRate);
     else if (sortBy === 'loss') arr.sort((a, b) => a.changeRate - b.changeRate);
     return arr;
-  }, [mergedList, listFilter, sortBy, query, canSearch, isFav, usdKrw]);
+  }, [mergedList, listFilter, sortBy, query, canSearch, isFav, usdKrw, assetType]);
 
-  const selected = useMemo(() => mergedList.find(a => a.symbol === activeSym) || mergedList[0], [mergedList, activeSym]);
-
-  // 선택 크립토 종목의 실시간 현재가 (차트 실시간 배지용). 캔들 로딩·표시는 TradingChart가 자체 처리.
-  const rtPrice = useMemo(() => (assetType === 'CRYPTO' && selected ? realtimePrices.get(selected.symbol)?.price ?? null : null), [assetType, selected, realtimePrices]);
-
-  const onSearchPick = useCallback(async (r: { code: string; name: string; market: string }) => {
-    try {
-      const fn = assetType === 'US_STOCK' ? marketService.getUsStockPrice : assetType === 'ETF' ? marketService.getEtfPrice : marketService.getStockPrice;
-      const price = await fn(r.code);
-      extraRef.current = [price, ...extraRef.current.filter(a => a.symbol !== price.symbol)];
-      setAssetList(prev => [price, ...prev.filter(a => a.symbol !== price.symbol)]);
-      setActiveSym(price.symbol);
-      recordRecent(price);
-      setQuery(''); setSearchResults([]);
-    } catch { setError('종목 시세 조회에 실패했습니다.'); }
-  }, [assetType, recordRecent]);
+  const selectedIsCrypto = assetType === 'CRYPTO';
 
   return (
-    <HelmShell active="markets" virt={isVirt} userName={userName} session={assetType === 'CRYPTO' ? '실시간 시세 · WebSocket' : '시세 10초 갱신'}>
+    <HelmShell active="markets" virt={isVirt} userName={userName} session={selectedIsCrypto ? '실시간 시세 · WebSocket' : '시세 10초 갱신'}>
       <div className="flex flex-col gap-6">
         {/* 헤더 */}
         <div>
-          <div className="mb-3 flex items-center gap-2.5">{(() => { const live = assetType === 'CRYPTO'; const dot = !live ? 'var(--ci-sonar)' : wsConnected ? UP : '#f5d061'; const label = !live ? '자동 갱신 · 10초' : wsConnected ? 'LIVE · 실시간 연결됨' : '실시간 연결 중…'; return <><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: dot, boxShadow: `0 0 8px ${dot}` }} /><span className="text-[12.5px] font-semibold tracking-[.18em]" style={{ color: live && !wsConnected ? '#f5d061' : 'var(--ci-sonar)' }}>{label}</span></>; })()}</div>
+          <div className="mb-3 flex items-center gap-2.5">{(() => { const live = selectedIsCrypto; const dot = !live ? 'var(--ci-sonar)' : wsConnected ? UP : '#f5d061'; const label = !live ? '자동 갱신 · 10초' : wsConnected ? 'LIVE · 실시간 연결됨' : '실시간 연결 중…'; return <><span className="h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: dot, boxShadow: `0 0 8px ${dot}` }} /><span className="text-[12.5px] font-semibold tracking-[.18em]" style={{ color: live && !wsConnected ? '#f5d061' : 'var(--ci-sonar)' }}>{label}</span></>; })()}</div>
           <h1 className="text-[39px] font-bold tracking-tight">시장 현황</h1>
-          <p className="mt-2 text-[15.5px]" style={{ color: INK1 }}>주식 · 미국주식 · ETF · 가상화폐 시세를 한 곳에서 살펴보세요.</p>
+          <p className="mt-2 text-[15.5px]" style={{ color: INK1 }}>종목을 살펴보고, 바로 매수·매도까지 한 곳에서. 관심 종목의 <b style={{ color: 'var(--ci-ink0)' }}>매수/매도</b> 버튼을 누르면 주문 패널이 열립니다.</p>
         </div>
         {/* 인덱스 스트립 */}
         <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
@@ -456,7 +410,7 @@ const ConsoleMarketsPage = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             {ASSET_CLASSES.map(c => { const on = c.key === klass; return (
-              <button key={c.key} onClick={() => { setKlass(c.key); setListFilter('all'); setQuery(''); }} className="inline-flex items-center gap-2 rounded-[10px] px-[18px] py-2.5 text-[15px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : `1px solid ${LINE}`, background: on ? 'rgba(91,157,255,.12)' : 'var(--ci-card)', color: 'var(--ci-ink0)' }}>
+              <button key={c.key} onClick={() => { setKlass(c.key); setListFilter('all'); }} className="inline-flex items-center gap-2 rounded-[10px] px-[18px] py-2.5 text-[15px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : `1px solid ${LINE}`, background: on ? 'rgba(91,157,255,.12)' : 'var(--ci-card)', color: 'var(--ci-ink0)' }}>
                 {c.label}<span className="text-[12px] font-medium tracking-[.04em]" style={{ color: on ? '#cfe1ff' : INK2 }}>{c.meta}</span>
               </button>); })}
           </div>
@@ -469,10 +423,22 @@ const ConsoleMarketsPage = () => {
         {error && <div className="rounded-xl px-4 py-3 text-[14px]" style={{ background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{error}</div>}
         {/* 본문 */}
         <div className="grid items-start gap-6 grid-cols-1 lg:grid-cols-[minmax(320px,380px)_1fr]">
-          <StockList assets={displayList} activeSym={activeSym} onPick={sym => { setActiveSym(sym); const a = displayList.find(x => x.symbol === sym); if (a) recordRecent(a); }} isFav={isFav} onToggleFav={toggleFav}
+          <StockList assets={displayList} activeSym={activeSym} onPick={setActiveSym} isFav={isFav} onToggleFav={toggleFav}
             filter={listFilter} setFilter={setListFilter} query={query} setQuery={setQuery} searchResults={searchResults} onSearchPick={onSearchPick} loading={loading} canSearch={canSearch} usdKrw={usdKrw} />
-          {selected ? <StockDetail stock={selected} isFav={isFav(selected)} onToggleFav={() => toggleFav(selected)} usdKrw={usdKrw} isCrypto={assetType === 'CRYPTO'} live={rtPrice != null && wsConnected} />
-            : <div style={{ ...mkCard, padding: '60px', textAlign: 'center', color: INK3 }} className="text-[15px]">{loading ? '불러오는 중…' : '종목을 선택하세요'}</div>}
+          <div className="flex flex-col gap-3">
+            {/* 최근 본 종목 */}
+            {recent.filter(r => !sel || r.stockCode !== sel.symbol).length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[12px] font-semibold" style={{ color: INK3 }}>최근 본</span>
+                {recent.filter(r => !sel || r.stockCode !== sel.symbol).slice(0, 6).map(r => (
+                  <button key={r.stockCode} onClick={() => requestSymbol(r.stockCode, r.assetType)} className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold" style={{ border: `1px solid ${LINE}`, background: 'var(--ci-card)', color: INK1 }}>{r.stockName}</button>
+                ))}
+              </div>
+            )}
+            {sel ? <StockDetail stock={sel} isFav={isFav(sel)} onToggleFav={() => toggleFav(sel)} usdKrw={usdKrw} isCrypto={selectedIsCrypto} live={rtPrice != null && wsConnected}
+              onBuy={() => openPanel('buy')} onSell={() => openPanel('sell')} onBacktest={() => navigate(`${prefix}/strategy`)} />
+              : <div style={{ ...mkCard, padding: '60px', textAlign: 'center', color: INK3 }} className="text-[15px]">{loading ? '불러오는 중…' : '종목을 선택하세요'}</div>}
+          </div>
         </div>
         {/* 푸터 */}
         <footer className="flex flex-wrap items-center justify-between gap-3.5 pt-6" style={{ borderTop: `1px solid ${LINE}` }}>
@@ -480,6 +446,17 @@ const ConsoleMarketsPage = () => {
           <div className="flex gap-[18px] text-[13.5px]" style={{ color: INK2 }}><a>도움말</a><a>상태</a><a>API</a><a>의견 보내기</a></div>
         </footer>
       </div>
+
+      {/* 우측 '거래' 손잡이 — 종목 선택 상태에서 패널이 닫혀 있을 때 노출 */}
+      {sel && !panelOpen && (
+        <button onClick={() => openPanel('buy')} aria-label="거래 패널 열기" className="fixed right-0 top-1/2 z-[90] flex -translate-y-1/2 flex-col items-center gap-1 rounded-l-xl px-2 py-4 text-[13px] font-bold text-white" style={{ background: `linear-gradient(180deg, ${GLOW}, #2f6fe0)`, boxShadow: '-8px 0 24px -10px rgba(60,120,255,.6)', writingMode: 'vertical-rl' }}>
+          <span style={{ letterSpacing: '.12em' }}>거래</span>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ transform: 'rotate(90deg)' }}><path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+      )}
+
+      <OrderPanel open={panelOpen} onClose={() => setPanelOpen(false)} sel={sel} usdKrw={usdKrw} rtPrice={rtPrice} isVirt={isVirt} side={orderSide} setSide={setOrderSide} notify={notify} />
+      {toast && <Toast msg={toast.msg} type={toast.type} />}
     </HelmShell>
   );
 };

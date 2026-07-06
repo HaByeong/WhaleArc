@@ -6,6 +6,7 @@ import com.project.whalearc.live.domain.LiveOrderLog;
 import com.project.whalearc.live.domain.LiveDeploymentEquitySnapshot;
 import com.project.whalearc.live.dto.CreateDeploymentRequest;
 import com.project.whalearc.live.dto.DeploymentResponse;
+import com.project.whalearc.live.dto.DeviceReportRequest;
 import com.project.whalearc.live.repository.LiveOrderLogRepository;
 import com.project.whalearc.live.repository.LiveDeploymentEquitySnapshotRepository;
 import com.project.whalearc.live.repository.LiveStrategyDeploymentRepository;
@@ -180,8 +181,12 @@ public class LiveStrategyService {
                 && brokerType == LiveStrategyDeployment.BrokerType.MOCK) {
             throw new IllegalArgumentException("실계좌(LIVE) 모드는 실거래 브로커가 필요합니다.");
         }
-        // 처리 가능한 게이트웨이가 없으면 거부 (MOCK 외 미지원이면 실계좌 자동 차단)
-        resolveGateway(brokerType);
+        // Model A(기기 실행형): PAPER는 서버가 실행하므로 게이트웨이(MOCK)가 반드시 있어야 한다.
+        // LIVE는 사용자 기기가 로컬 키로 실행하므로 서버 게이트웨이가 없어도 배포를 생성·보유·동기화한다
+        // (서버는 실행하지 않음 — investSelf 불변식). 브로커 타입 정합성은 위 검증(174-182)에서 이미 확인.
+        if (accountMode == LiveStrategyDeployment.AccountMode.PAPER) {
+            resolveGateway(brokerType);
+        }
 
         // 기초통화 결정(모의=KRW, 실거래는 자산군별 USDT/USD/KRW). 상한은 KRW 기준이라 KRW로 환산해 검사한다.
         String baseCurrency = resolveBaseCurrency(accountMode, brokerType, assetType);
@@ -307,18 +312,24 @@ public class LiveStrategyService {
             if (d.getAccountMode() == LiveStrategyDeployment.AccountMode.LIVE) {
                 enforceLiveTierLimitsLocked(userId, tierResolver.effectiveTier(userId), d);
             }
-            Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
-            BigDecimal cash = portfolio.getCashBalance() != null ? portfolio.getCashBalance() : BigDecimal.ZERO;
-            BigDecimal reserved = deploymentRepository
-                    .findByUserIdAndStatusIn(userId, List.of(
-                            LiveStrategyDeployment.Status.RUNNING, LiveStrategyDeployment.Status.PAUSED))
-                    .stream()
-                    .map(this::allocatedKrwOf)   // 배포마다 기초통화가 달라도 KRW로 환산해 합산
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal allocKrw = allocatedKrwOf(d);   // 신규 배포 할당금액의 KRW 환산
-            if (reserved.add(allocKrw).compareTo(cash) > 0) {
-                throw new IllegalArgumentException(
-                        "할당 금액이 가용 현금을 초과합니다(이미 자동매매에 예약된 금액 포함). 가용=" + cash + ", 기예약=" + reserved);
+            // 자금 예약 검사는 모의(PAPER)만 — 페이퍼 포트폴리오 현금 대비 합산.
+            // Model A: LIVE(실계좌)는 실제 자금이 기기 브로커 계좌에 있고 서버는 잔고를 알 수 없으므로(INV-1: 키 없음)
+            // 서버가 예약 검사를 하지 않는다. 실잔고 한도는 기기가 주문 집행 시 강제한다.
+            if (d.getAccountMode() == LiveStrategyDeployment.AccountMode.PAPER) {
+                Portfolio portfolio = portfolioService.getOrCreatePortfolio(userId);
+                BigDecimal cash = portfolio.getCashBalance() != null ? portfolio.getCashBalance() : BigDecimal.ZERO;
+                BigDecimal reserved = deploymentRepository
+                        .findByUserIdAndStatusIn(userId, List.of(
+                                LiveStrategyDeployment.Status.RUNNING, LiveStrategyDeployment.Status.PAUSED))
+                        .stream()
+                        .filter(x -> x.getAccountMode() == LiveStrategyDeployment.AccountMode.PAPER)   // 페이퍼끼리만 합산
+                        .map(this::allocatedKrwOf)   // 배포마다 기초통화가 달라도 KRW로 환산해 합산
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                BigDecimal allocKrw = allocatedKrwOf(d);   // 신규 배포 할당금액의 KRW 환산
+                if (reserved.add(allocKrw).compareTo(cash) > 0) {
+                    throw new IllegalArgumentException(
+                            "할당 금액이 가용 현금을 초과합니다(이미 자동매매에 예약된 금액 포함). 가용=" + cash + ", 기예약=" + reserved);
+                }
             }
             LiveStrategyDeployment saved = deploymentRepository.save(d);
             log.info("라이브 배포 생성: userId={}, deploymentId={}, strategy={}, assets={}, mode={}",
@@ -389,7 +400,10 @@ public class LiveStrategyService {
                         : ("CRYPTO".equals(assetType)
                                 ? LiveStrategyDeployment.BrokerType.BITGET
                                 : LiveStrategyDeployment.BrokerType.KIS);
-        resolveGateway(brokerType);   // 게이트웨이 없으면(예: KIS/Bitget 비활성) 거부
+        // Model A: PAPER만 서버가 실행(게이트웨이 필요). LIVE는 기기가 로컬 키로 실행하므로 서버 게이트웨이 불요(설정만 보유).
+        if (accountMode == LiveStrategyDeployment.AccountMode.PAPER) {
+            resolveGateway(brokerType);
+        }
 
         // 기초통화: 모의=KRW, 실거래는 자산군별(미국·ETF=USD, 한국=KRW, 코인=USDT). 상한은 KRW 기준이라 KRW로 환산해 검사.
         String baseCurrency = resolveBaseCurrency(accountMode, brokerType, assetType);
@@ -469,6 +483,7 @@ public class LiveStrategyService {
     private void doRebalanceMomentumLocked(String deploymentId, boolean force) {
         LiveStrategyDeployment d = deploymentRepository.findById(deploymentId).orElse(null);
         if (d == null || d.getStatus() != LiveStrategyDeployment.Status.RUNNING || !d.isMomentumRotation()) return;
+        if (serverMustNotExecute(d)) return;   // Model A: 서버는 LIVE 실행 안 함
         resetDailyPnlIfNewDay(d);   // 일별 손익 리셋(KST 자정 경계) — 모멘텀은 doEvaluateLocked를 안 타므로 여기서
         String month = YearMonth.now(KST).toString();   // yyyy-MM
         if (!force && month.equals(d.getLastRotationMonth())) return;   // 이번 달 이미 처리(멱등)
@@ -587,6 +602,7 @@ public class LiveStrategyService {
     private void doApplyRegimeLocked(String deploymentId) {
         LiveStrategyDeployment d = deploymentRepository.findById(deploymentId).orElse(null);
         if (d == null || d.getStatus() != LiveStrategyDeployment.Status.RUNNING || !d.isMomentumRotation()) return;
+        if (serverMustNotExecute(d)) return;   // Model A: 서버는 LIVE 실행 안 함
         boolean dayReset = resetDailyPnlIfNewDay(d);   // 일별 손익 리셋(KST 자정 경계) — lastRegimeDay 멱등 스킵 전에 수행
         String today = LocalDate.now(KST).toString();
         if (today.equals(d.getLastRegimeDay())) {
@@ -876,6 +892,27 @@ public class LiveStrategyService {
     }
 
     /**
+     * Model A(기기 실행형): 사용자 기기가 로컬 키로 실행한 LIVE 배포의 상태(포지션·손익·체결수·마지막평가시각)를
+     * 사후 보고받아 <b>표시용으로만</b> 저장한다. 서버는 이 값으로 어떤 주문·실행도 하지 않는다(read-only).
+     * PAPER 배포는 서버가 직접 갱신하므로 이 경로 대상이 아니다.
+     * ⚠️ 방향은 반드시 기기→서버 사후 보고. 서버가 기기에 주문을 지시하는 역방향은 만들지 않는다(일임 회피).
+     */
+    public LiveStrategyDeployment applyDeviceReport(String userId, String deploymentId, DeviceReportRequest report) {
+        LiveStrategyDeployment d = deploymentRepository.findByIdAndUserId(deploymentId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+        if (d.getAccountMode() != LiveStrategyDeployment.AccountMode.LIVE) {
+            throw new IllegalArgumentException("기기 상태 보고는 실계좌(LIVE) 배포만 대상입니다. 모의(PAPER)는 서버가 직접 갱신합니다.");
+        }
+        if (report.getPositions() != null) d.setPositions(report.getPositions());
+        if (report.getRealizedPnl() != null) d.setRealizedPnl(report.getRealizedPnl());
+        if (report.getTodayRealizedPnl() != null) d.setTodayRealizedPnl(report.getTodayRealizedPnl());
+        if (report.getTradeCount() != null) d.setTradeCount(report.getTradeCount());
+        if (report.getWinCount() != null) d.setWinCount(report.getWinCount());
+        if (report.getLastEvaluatedAt() != null) d.setLastEvaluatedAt(report.getLastEvaluatedAt());
+        return deploymentRepository.save(d);
+    }
+
+    /**
      * 배포 1건을 카드 표시용 확장 DTO로 변환.
      * 오늘 체결 수 + 최근 주문 + 일별 손익 스파크라인을 함께 채운다(모두 가벼운 DB 조회).
      */
@@ -924,7 +961,12 @@ public class LiveStrategyService {
     }
 
     public List<LiveStrategyDeployment> getRunningDeployments() {
-        return deploymentRepository.findByStatus(LiveStrategyDeployment.Status.RUNNING);
+        // Model A(기기 실행형): 서버는 LIVE(실계좌)를 절대 실행하지 않는다 — 투자일임업 회피 핵심 불변식.
+        // 이 메서드는 실행 스케줄러(GenericStrategyScheduler + 모멘텀 getRunningMomentumDeployments)의 소스이므로
+        // PAPER만 반환한다. LIVE는 사용자 기기가 로컬 키로 실행한다.
+        // (표시용 손익 스냅샷은 findByStatusIn을 따로 써서 LIVE도 포함하므로 대시보드 표시엔 영향 없다.)
+        return deploymentRepository.findByStatusAndAccountMode(
+                LiveStrategyDeployment.Status.RUNNING, LiveStrategyDeployment.AccountMode.PAPER);
     }
 
     /** 배포의 체결 주문 원장(최신순). 본인 소유 검증. */
@@ -1004,6 +1046,10 @@ public class LiveStrategyService {
     public LiveStrategyDeployment evaluateNow(String userId, String deploymentId) {
         LiveStrategyDeployment d = deploymentRepository.findByIdAndUserId(deploymentId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+        // Model A: 실계좌(LIVE)는 기기가 실행 — 서버는 신호 평가·주문을 하지 않는다(일임 회피).
+        if (d.getAccountMode() == LiveStrategyDeployment.AccountMode.LIVE) {
+            throw new IllegalArgumentException("실계좌(LIVE) 자동매매는 사용자 기기에서 실행됩니다. 서버는 신호 평가·주문을 하지 않습니다.");
+        }
         if (killSwitch.get()) {
             throw new IllegalArgumentException("전역 킬스위치가 켜져 있어 평가할 수 없습니다.");
         }
@@ -1024,8 +1070,12 @@ public class LiveStrategyService {
      * @return 청산 후 최신 배포. 보유 포지션이 없으면 예외.
      */
     public LiveStrategyDeployment closeNow(String userId, String deploymentId) {
-        deploymentRepository.findByIdAndUserId(deploymentId, userId)
+        LiveStrategyDeployment found = deploymentRepository.findByIdAndUserId(deploymentId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
+        // Model A: 실계좌(LIVE)는 기기가 청산 실행 — 서버는 주문을 내지 않는다.
+        if (found.getAccountMode() == LiveStrategyDeployment.AccountMode.LIVE) {
+            throw new IllegalArgumentException("실계좌(LIVE) 포지션 청산은 사용자 기기에서 실행됩니다. 서버는 주문을 하지 않습니다.");
+        }
         userLockRegistry.withLock(userId, () -> doCloseNowLocked(deploymentId));
         return deploymentRepository.findById(deploymentId)
                 .orElseThrow(() -> new IllegalArgumentException("배포를 찾을 수 없습니다."));
@@ -1034,6 +1084,7 @@ public class LiveStrategyService {
     private void doCloseNowLocked(String deploymentId) {
         LiveStrategyDeployment d = deploymentRepository.findById(deploymentId).orElse(null);
         if (d == null) return;
+        if (serverMustNotExecute(d)) return;   // Model A: 서버는 LIVE 청산 주문도 내지 않음 (실계좌는 기기가 실행)
         OrderGateway gateway = resolveGateway(d.getBrokerType());
         boolean closedAny = false;
         List<String> failedSymbols = new ArrayList<>();   // 시세 미수신/예외로 청산 못 한 심볼 — 부분 청산 통지용
@@ -1130,6 +1181,7 @@ public class LiveStrategyService {
     private void doEvaluateLocked(String deploymentId) {
         LiveStrategyDeployment d = deploymentRepository.findById(deploymentId).orElse(null);
         if (d == null || d.getStatus() != LiveStrategyDeployment.Status.RUNNING) return;
+        if (serverMustNotExecute(d)) return;   // Model A: 서버는 LIVE 실행 안 함
         OrderGateway gateway = resolveGateway(d.getBrokerType());
 
         resetDailyPnlIfNewDay(d);   // 일별 손익 리셋(KST 자정 경계)
@@ -1599,6 +1651,22 @@ public class LiveStrategyService {
             log.error("주문 원장 기록 실패 — 멱등키 미영속으로 다음 주기 중복 발주 위험! deploymentId={}, symbol={}, side={}, clientOrderId={}, error={}",
                     d.getId(), pos.getSymbol(), side, clientOrderId, e.getMessage(), e);
         }
+    }
+
+    /**
+     * Model A(기기 실행형) 불변식: 서버는 LIVE(실계좌)를 절대 실행하지 않는다.
+     * 실행(주문) 진입점마다 재확인하는 이중 차단 — getRunningDeployments의 PAPER 필터에 더해,
+     * 수동 트리거(controller evaluate/rebalance)나 잔여 경로로 LIVE가 흘러들어도 주문을 내지 않는다.
+     * 실계좌 자동매매는 사용자 기기가 로컬 키로 실행한다(투자일임업 회피).
+     * @return LIVE라 서버 실행을 막아야 하면 true(호출부는 즉시 return).
+     */
+    private boolean serverMustNotExecute(LiveStrategyDeployment d) {
+        if (d.getAccountMode() != LiveStrategyDeployment.AccountMode.PAPER) {
+            log.warn("서버 LIVE 실행 차단(Model A 기기 실행형) — deploymentId={}, mode={}, broker={}. 실계좌 자동매매는 기기가 실행합니다.",
+                    d.getId(), d.getAccountMode(), d.getBrokerType());
+            return true;
+        }
+        return false;
     }
 
     private OrderGateway resolveGateway(LiveStrategyDeployment.BrokerType brokerType) {

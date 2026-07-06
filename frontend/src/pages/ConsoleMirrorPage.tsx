@@ -886,7 +886,7 @@ const ConsoleMirrorPage = () => {
 
             <section>
               <SectionHead icon="shield" title="규율 점수 · 당신이 참아낸 기록" desc="칭찬하는 건 수익이 아니라 인내예요 — 참은 비율·연속 기록·지켜낸 가치." />
-              {empty ? <EmptyDiscipline badges={badges} onStart={() => go('/trade')} /> : <DisciplinePanel d={disc} badges={badges} resil={resil} showRank={SHOW_RANK} pending={drifting.length > 0} />}
+              {empty ? <EmptyDiscipline badges={badges} onStart={() => go('/market')} /> : <DisciplinePanel d={disc} badges={badges} resil={resil} showRank={SHOW_RANK} pending={drifting.length > 0} />}
             </section>
 
             <div style={{ display: 'flex', gap: 11, padding: '16px 18px', borderRadius: 14, background: CARD, border: `1px solid ${HAIR}` }}>
@@ -912,7 +912,7 @@ const ConsoleMirrorPage = () => {
         )}
       </div>
       <ShareModal open={share} onClose={() => setShare(false)} d={disc} />
-      <AboutBottleModal open={about} onClose={() => setAbout(false)} onStart={() => { setAbout(false); go('/trade'); }} />
+      <AboutBottleModal open={about} onClose={() => setAbout(false)} onStart={() => { setAbout(false); go('/market'); }} />
     </HelmShell>
   );
 };

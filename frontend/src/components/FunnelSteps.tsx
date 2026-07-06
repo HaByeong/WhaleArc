@@ -1,15 +1,15 @@
 import { Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-/* 학습 → 백테스트 → 자동매매 퍼널의 현재 단계를 표시(여정감). 클릭 시 해당 단계로 이동.
-   모의(VIRT) 흐름 기준 — 세 페이지(전략학습/백테스트/자동매매)가 한 여정으로 읽히게 한다. */
+/* 전략·백테스트 → 자동매매 퍼널의 현재 단계를 표시(여정감). 클릭 시 해당 단계로 이동.
+   모의(VIRT) 흐름 기준 — 두 페이지(전략·백테스트/자동매매)가 한 여정으로 읽히게 한다.
+   (구 '전략 학습'(/store)은 '전략·백테스트'(/strategy)로 통합돼 1단계에 흡수됨) */
 const FUNNEL = [
-  { n: 1, label: '전략 학습', path: '/virt/store' },
-  { n: 2, label: '백테스트', path: '/virt/strategy' },
-  { n: 3, label: '자동매매', path: '/virt/auto-trade' },
+  { n: 1, label: '전략·백테스트', path: '/virt/strategy' },
+  { n: 2, label: '자동매매', path: '/virt/auto-trade' },
 ] as const;
 
-const FunnelSteps = ({ current }: { current: 1 | 2 | 3 }) => {
+const FunnelSteps = ({ current }: { current: 1 | 2 }) => {
   const navigate = useNavigate();
   return (
     <div className="flex items-center gap-1.5 overflow-x-auto" style={{ fontSize: 12.5 }}>

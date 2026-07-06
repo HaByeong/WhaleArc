@@ -3,17 +3,24 @@ package com.project.whalearc.market.service;
 import com.project.whalearc.market.dto.CandlestickResponse;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 /**
  * 백테스트 전용 데이터 제공자
@@ -57,6 +64,17 @@ public class BacktestDataProvider {
     private static final long CACHE_TTL_MS = 30 * 60 * 1000; // 30분
     private static final int MAX_CACHE_SIZE = 400;   // 모멘텀 유니버스(132+) 한 번에 캐시 유지 → 재실행 즉시(첫 실행만 콜드)
     private final ConcurrentHashMap<String, CacheEntry> candleCache = new ConcurrentHashMap<>();
+
+    // ── 디스크 영구 캐시 (종목별 OHLCV+수정주가+배당을 파일로 영속, 외부 호출은 최초 적재·일 1회 갱신만) ──
+    // 모멘텀 MomentumDataCache 와 같은 철학을 일반 백테스트(임의 종목)로 확장. Yahoo 등 외부 rate-limit 을 구조적으로 제거.
+    @Value("${backtest.cache-dir:${user.home}/.whalearc/dailycandles}")
+    private String diskCacheDir;
+    // 로컬 사전수집 데이터셋(파이썬 봇이 받아둔 {TICKER}_1d.csv, 도메스틱은 {CODE}.KS_1d.csv). 있으면 외부 fetch 없이 즉시 부트스트랩.
+    @Value("${backtest.seed-dir:${user.home}/crypto/dataset}")
+    private String seedDir;
+    private static final String PERSIST_START = "2000-01-01"; // 디스크 적재 시작일 — 1회 최대 범위 수집 후 재사용
+    private static final long DISK_FRESH_MS = 20L * 3600 * 1000; // 20시간 — 매일 1회 갱신과 정합
+    private static final long DISK_PACE_MS = 2500;  // 일일 갱신 시 종목 간 간격(rate-limit 회피)
 
     private record CacheEntry(FetchResult data, long expiry) {
         boolean isExpired() { return System.currentTimeMillis() > expiry; }
@@ -209,31 +227,268 @@ public class BacktestDataProvider {
             return cached.data();
         }
 
-        try {
-            FetchResult result;
-            if ("STOCK".equalsIgnoreCase(assetType)) {
-                result = FetchResult.ofCandlesOnly(getStockCandles(symbol, warmupStart.toString(), endDate));
-            } else if ("US_STOCK".equalsIgnoreCase(assetType) || "ETF".equalsIgnoreCase(assetType)) {
-                result = getUsStockData(symbol, warmupStart.toString(), endDate, assetType);
-            } else {
-                result = FetchResult.ofCandlesOnly(getCryptoCandles(symbol, warmupStart.toString(), endDate));
+        // 1) 디스크 영구 캐시가 신선하면 외부 호출 없이 사용(요청 범위로 슬라이스). rate-limit 구조적 회피의 핵심.
+        if (diskFresh(symbol, assetType)) {
+            FetchResult sliced = sliceRange(loadDisk(symbol, assetType), warmupStart.toString(), endDate);
+            if (!sliced.isEmpty()) {
+                putMemCache(cacheKey, sliced);
+                log.debug("디스크 캐시 히트: {} ({}) {}건", symbol, assetType, sliced.candles().size());
+                return sliced;
             }
+        }
 
-            if (!result.isEmpty()) {
-                if (candleCache.size() >= MAX_CACHE_SIZE) {
-                    candleCache.entrySet().removeIf(e -> e.getValue().isExpired());
-                    if (candleCache.size() >= MAX_CACHE_SIZE) {
-                        candleCache.clear();
-                    }
-                }
-                candleCache.put(cacheKey, new CacheEntry(result,
-                        System.currentTimeMillis() + CACHE_TTL_MS));
+        // 2) 디스크 파일이 아예 없으면 로컬 시드 데이터셋에서 부트스트랩(외부 rate-limit 무관 즉시 적재)
+        if (!Files.exists(mainFile(symbol, assetType))) {
+            FetchResult seed = loadSeed(symbol, assetType);
+            if (!seed.isEmpty()) {
+                saveDisk(symbol, assetType, seed);
+                log.info("백테스트 캐시 시드 부트스트랩: {} ({}) {}건", symbol, assetType, seed.candles().size());
             }
-            return result;
+        }
+
+        // 3) 외부 fetch로 최신화(성공 시 디스크 덮어씀). 최대 범위(PERSIST_START~오늘) 1회 수집.
+        FetchResult full = FetchResult.empty();
+        try {
+            String today = LocalDate.now(KST).toString();
+            String fetchStart = warmupStart.isBefore(LocalDate.parse(PERSIST_START)) ? warmupStart.toString() : PERSIST_START;
+            full = fetchRange(symbol, assetType, fetchStart, today);
         } catch (Exception e) {
-            log.error("백테스트 데이터 조회 실패: symbol={}, error={}", symbol, e.getMessage());
+            log.warn("백테스트 외부 fetch 실패(디스크/시드 폴백 시도): symbol={}, error={}", symbol, e.getMessage());
+        }
+        if (!full.isEmpty()) {
+            saveDisk(symbol, assetType, full);
+            FetchResult sliced = sliceRange(full, warmupStart.toString(), endDate);
+            FetchResult ret = sliced.isEmpty() ? full : sliced;
+            putMemCache(cacheKey, ret);
+            return ret;
+        }
+
+        // 4) 외부 실패 → 디스크(시드 부트스트랩분 포함, 만료 허용)로 폴백 — 데이터 0건보다 stale 이라도 낫다.
+        FetchResult disk = loadDisk(symbol, assetType);
+        if (!disk.isEmpty()) {
+            FetchResult sliced = sliceRange(disk, warmupStart.toString(), endDate);
+            if (!sliced.isEmpty()) {
+                putMemCache(cacheKey, sliced);
+                log.info("외부 fetch 실패 → 디스크/시드 폴백: {} ({}) {}건", symbol, assetType, sliced.candles().size());
+                return sliced;
+            }
+        }
+        return FetchResult.empty();
+    }
+
+    /**
+     * 로컬 시드 데이터셋에서 OHLCV 적재 — {SYMBOL}_1d.csv (도메스틱 STOCK 은 {CODE}.KS_1d.csv).
+     * 헤더 time,open,high,low,close,volume. 거래일 epoch 는 UTC 자정(MomentumDataCache 와 동일 규약).
+     * close<=0(과거 수정주가 역산 손상분) 라인은 건너뛴다.
+     */
+    private FetchResult loadSeed(String symbol, String assetType) {
+        if (seedDir == null || seedDir.isBlank()) return FetchResult.empty();
+        String fname = "STOCK".equalsIgnoreCase(assetType)
+                ? symbol.toUpperCase() + ".KS_1d.csv"
+                : symbol.toUpperCase() + "_1d.csv";
+        Path src = Path.of(seedDir, fname);
+        if (!Files.exists(src)) return FetchResult.empty();
+        try {
+            List<CandlestickResponse> candles = new ArrayList<>();
+            for (String line : Files.readAllLines(src)) {
+                String[] p = line.split(",");
+                if (p.length < 5 || p[0].equalsIgnoreCase("time")) continue;
+                try {
+                    long t = LocalDate.parse(p[0].trim()).atStartOfDay(ZoneOffset.UTC).toEpochSecond();
+                    double o = Double.parseDouble(p[1].trim()), h = Double.parseDouble(p[2].trim()),
+                           l = Double.parseDouble(p[3].trim()), c = Double.parseDouble(p[4].trim());
+                    double v = p.length >= 6 && !p[5].trim().isEmpty() ? Double.parseDouble(p[5].trim()) : 0;
+                    if (c > 0) candles.add(new CandlestickResponse(t, o, h, l, c, v));   // 음수/0 손상 필터
+                } catch (NumberFormatException ignore) { /* 손상 라인 스킵 */ }
+            }
+            return candles.isEmpty() ? FetchResult.empty() : FetchResult.ofCandlesOnly(candles);
+        } catch (IOException e) {
+            log.warn("시드 적재 실패: {} ({}) — {}", symbol, assetType, e.getMessage());
             return FetchResult.empty();
         }
+    }
+
+    /** 자산군별 외부 fetch (디스크 캐시 미스/갱신 시에만 호출). */
+    private FetchResult fetchRange(String symbol, String assetType, String start, String end) {
+        if ("STOCK".equalsIgnoreCase(assetType)) {
+            return FetchResult.ofCandlesOnly(getStockCandles(symbol, start, end));
+        } else if ("US_STOCK".equalsIgnoreCase(assetType) || "ETF".equalsIgnoreCase(assetType)) {
+            return getUsStockData(symbol, start, end, assetType);
+        } else {
+            return FetchResult.ofCandlesOnly(getCryptoCandles(symbol, start, end));
+        }
+    }
+
+    private void putMemCache(String cacheKey, FetchResult result) {
+        if (result.isEmpty()) return;
+        if (candleCache.size() >= MAX_CACHE_SIZE) {
+            candleCache.entrySet().removeIf(e -> e.getValue().isExpired());
+            if (candleCache.size() >= MAX_CACHE_SIZE) candleCache.clear();
+        }
+        candleCache.put(cacheKey, new CacheEntry(result, System.currentTimeMillis() + CACHE_TTL_MS));
+    }
+
+    // ── 디스크 영구 캐시 입출력 ─────────────────────────────────────────────
+
+    private static String safeName(String s) { return s.toUpperCase().replaceAll("[^A-Z0-9._-]", "_"); }
+    private Path mainFile(String symbol, String assetType) {
+        return Path.of(diskCacheDir, safeName(symbol) + "__" + assetType.toUpperCase() + ".csv");
+    }
+    private Path divFile(String symbol, String assetType) {
+        return Path.of(diskCacheDir, safeName(symbol) + "__" + assetType.toUpperCase() + ".div.csv");
+    }
+
+    /** 디스크 캐시가 존재하고 20시간 이내 갱신됐는지. */
+    private boolean diskFresh(String symbol, String assetType) {
+        if (diskCacheDir == null || diskCacheDir.isBlank()) return false;
+        Path mf = mainFile(symbol, assetType);
+        try {
+            return Files.exists(mf) && (System.currentTimeMillis() - Files.getLastModifiedTime(mf).toMillis()) < DISK_FRESH_MS;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** 디스크에서 종목 전체 일봉(OHLCV+수정주가+배당)을 FetchResult 로 복원. */
+    private FetchResult loadDisk(String symbol, String assetType) {
+        Path mf = mainFile(symbol, assetType);
+        if (!Files.exists(mf)) return FetchResult.empty();
+        try {
+            List<CandlestickResponse> candles = new ArrayList<>();
+            List<Double> adjcloses = new ArrayList<>();
+            boolean anyAdj = false;
+            for (String line : Files.readAllLines(mf)) {
+                String[] p = line.split(",", -1);
+                if (p.length < 6) continue;
+                try {
+                    long t = Long.parseLong(p[0].trim());
+                    double o = Double.parseDouble(p[1].trim()), h = Double.parseDouble(p[2].trim()),
+                           l = Double.parseDouble(p[3].trim()), c = Double.parseDouble(p[4].trim());
+                    double v = p[5].trim().isEmpty() ? 0 : Double.parseDouble(p[5].trim());
+                    if (c <= 0) continue;
+                    candles.add(new CandlestickResponse(t, o, h, l, c, v));
+                    Double adj = (p.length >= 7 && !p[6].trim().isEmpty()) ? Double.parseDouble(p[6].trim()) : null;
+                    adjcloses.add(adj);
+                    if (adj != null && adj > 0) anyAdj = true;
+                } catch (NumberFormatException ignore) { /* 헤더/손상 라인 스킵 */ }
+            }
+            if (candles.isEmpty()) return FetchResult.empty();
+            java.util.SortedMap<Long, Double> dividends = new java.util.TreeMap<>();
+            Path df = divFile(symbol, assetType);
+            if (Files.exists(df)) {
+                for (String line : Files.readAllLines(df)) {
+                    int comma = line.indexOf(',');
+                    if (comma <= 0) continue;
+                    try {
+                        dividends.put(Long.parseLong(line.substring(0, comma).trim()),
+                                Double.parseDouble(line.substring(comma + 1).trim()));
+                    } catch (NumberFormatException ignore) { /* 손상 라인 스킵 */ }
+                }
+            }
+            return new FetchResult(candles, anyAdj ? adjcloses : List.of(), dividends);
+        } catch (IOException e) {
+            log.warn("디스크 캐시 읽기 실패: {} ({}) — {}", symbol, assetType, e.getMessage());
+            return FetchResult.empty();
+        }
+    }
+
+    /** FetchResult 를 디스크에 영속(메인 OHLCV+수정주가 + 배당 별도 파일, atomic). */
+    private void saveDisk(String symbol, String assetType, FetchResult fr) {
+        if (diskCacheDir == null || diskCacheDir.isBlank() || fr.isEmpty()) return;
+        try {
+            Files.createDirectories(Path.of(diskCacheDir));
+            List<CandlestickResponse> cs = fr.candles();
+            List<Double> adj = fr.adjcloses();
+            boolean hasAdj = !adj.isEmpty() && adj.size() == cs.size();
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < cs.size(); i++) {
+                CandlestickResponse c = cs.get(i);
+                sb.append(c.getTime()).append(',').append(c.getOpen()).append(',').append(c.getHigh())
+                        .append(',').append(c.getLow()).append(',').append(c.getClose()).append(',').append(c.getVolume())
+                        .append(',').append(hasAdj && adj.get(i) != null ? adj.get(i).toString() : "").append('\n');
+            }
+            writeAtomic(mainFile(symbol, assetType), sb.toString());
+            if (!fr.dividends().isEmpty()) {
+                StringBuilder db = new StringBuilder();
+                for (Map.Entry<Long, Double> e : fr.dividends().entrySet()) db.append(e.getKey()).append(',').append(e.getValue()).append('\n');
+                writeAtomic(divFile(symbol, assetType), db.toString());
+            }
+        } catch (IOException e) {
+            log.warn("디스크 캐시 저장 실패: {} ({}) — {}", symbol, assetType, e.getMessage());
+        }
+    }
+
+    private void writeAtomic(Path target, String content) throws IOException {
+        Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+        Files.writeString(tmp, content);
+        Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /** 디스크 전체본을 요청 범위[warmupStart, endDate]로 슬라이스 — 기존 fetch 반환과 동일한 범위를 유지. */
+    private FetchResult sliceRange(FetchResult fr, String warmupStart, String endDate) {
+        if (fr.isEmpty()) return fr;
+        long from = LocalDate.parse(warmupStart).atStartOfDay().toEpochSecond(KST);
+        long to = LocalDate.parse(endDate).plusDays(1).atStartOfDay().toEpochSecond(KST);
+        List<CandlestickResponse> cs = new ArrayList<>();
+        List<Double> adj = new ArrayList<>();
+        boolean hasAdj = !fr.adjcloses().isEmpty() && fr.adjcloses().size() == fr.candles().size();
+        boolean anyAdj = false;
+        for (int i = 0; i < fr.candles().size(); i++) {
+            long t = fr.candles().get(i).getTime();
+            if (t < from || t >= to) continue;
+            cs.add(fr.candles().get(i));
+            if (hasAdj) { Double a = fr.adjcloses().get(i); adj.add(a); if (a != null && a > 0) anyAdj = true; }
+        }
+        java.util.SortedMap<Long, Double> divs = fr.dividends().isEmpty()
+                ? new java.util.TreeMap<>() : new java.util.TreeMap<>(fr.dividends().subMap(from, to));
+        return new FetchResult(cs, anyAdj ? adj : List.of(), divs);
+    }
+
+    /** 매일 07:00(KST) — 디스크에 쌓인 종목만 증분 갱신(만료분 재수집). 모멘텀 워밍(06:30) 이후. */
+    @Scheduled(cron = "0 0 7 * * *", zone = "Asia/Seoul")
+    public void refreshDiskCacheDaily() {
+        if (diskCacheDir == null || diskCacheDir.isBlank()) return;
+        Path dir = Path.of(diskCacheDir);
+        if (!Files.isDirectory(dir)) return;
+        Thread t = new Thread(() -> {
+            String today = LocalDate.now(KST).toString();
+            int updated = 0, failed = 0;
+            List<Path> mains;
+            try (Stream<Path> files = Files.list(dir)) {
+                mains = files.filter(p -> {
+                    String n = p.getFileName().toString();
+                    return n.endsWith(".csv") && !n.endsWith(".div.csv") && !n.endsWith(".tmp");
+                }).toList();
+            } catch (IOException e) {
+                log.warn("디스크 캐시 갱신 디렉토리 스캔 실패: {}", e.getMessage());
+                return;
+            }
+            for (Path mf : mains) {
+                String base = mf.getFileName().toString();
+                base = base.substring(0, base.length() - 4); // ".csv" 제거
+                int sep = base.lastIndexOf("__");
+                if (sep <= 0) continue;
+                String symbol = base.substring(0, sep);
+                String assetType = base.substring(sep + 2);
+                if (diskFresh(symbol, assetType)) continue;
+                try {
+                    FetchResult fr = fetchRange(symbol, assetType, PERSIST_START, today);
+                    if (!fr.isEmpty()) { saveDisk(symbol, assetType, fr); updated++; }
+                    else failed++;
+                } catch (Exception e) {
+                    failed++;
+                    log.debug("디스크 캐시 갱신 실패: {} ({}) — {}", symbol, assetType, e.getMessage());
+                }
+                paceSleep(DISK_PACE_MS);
+            }
+            log.info("백테스트 디스크 캐시 갱신 완료: {}종목 갱신, {}실패 (총 {}개 파일)", updated, failed, mains.size());
+        }, "backtest-cache-refresh");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private static void paceSleep(long ms) {
+        try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
 
     // ── 주식: Yahoo Finance ──────────────────────────────────────────────
@@ -337,8 +592,18 @@ public class BacktestDataProvider {
 
     @SuppressWarnings("unchecked")
     private FetchResult fetchYahoo(String symbol, String start, String end) {
+        // Yahoo chart API 는 크럼 없이도 동작한다(실측). 오히려 getcrumb 호출이 429(rate-limit)를 유발해
+        // chart 요청까지 실패시키므로, 먼저 크럼/쿠키 없이 시도하고 비었을 때만 크럼을 획득해 한 번 재시도한다.
+        FetchResult r = fetchYahooChart(symbol, start, end);
+        if (!r.isEmpty()) return r;
         ensureYahooCrumb();
+        if (yahooCrumb != null || yahooCookie != null) {
+            r = fetchYahooChart(symbol, start, end);
+        }
+        return r;
+    }
 
+    private FetchResult fetchYahooChart(String symbol, String start, String end) {
         long p1 = LocalDate.parse(start).atStartOfDay().toEpochSecond(KST);
         long p2 = LocalDate.parse(end).plusDays(1).atStartOfDay().toEpochSecond(KST);
 

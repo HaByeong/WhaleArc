@@ -109,6 +109,22 @@ public class ExchangeAccountController {
     }
 
     /**
+     * Model A/INV-1(β): 기기가 로컬 키로 조회한 거래소 잔고를 사후 보고 → 서버는 표시용으로만 저장.
+     * 서버는 이 호출로 어떤 거래소 조회·주문도 하지 않는다(키 불요, read-only 표시).
+     */
+    @PostMapping("/accounts/{exchangeType}/balance")
+    public ResponseEntity<Map<String, Object>> reportBalance(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String exchangeType,
+            @RequestBody ExchangePortfolioDto portfolio) {
+
+        exchangeAccountService.reportBalance(jwt.getSubject(), exchangeType, portfolio);
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * 특정 거래소 체결 내역 조회 (KIS 주식, 기본 30일)
      */
     @GetMapping("/transactions/{exchangeType}")

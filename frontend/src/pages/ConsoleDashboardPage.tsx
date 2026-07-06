@@ -8,7 +8,7 @@ import { userService } from '../services/userService';
 import { exchangeService, type ExchangeType, type ExchangeAccount, type ExchangePortfolio } from '../services/exchangeService';
 import { tradeService, type Portfolio } from '../services/tradeService';
 import { strategyService } from '../services/strategyService';
-import { liveTradeService } from '../services/liveTradeService';
+import { liveTradeService, type Deployment } from '../services/liveTradeService';
 import { marketService, type MarketPrice } from '../services/marketService';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
 import ExchangeConnectModal from '../components/ExchangeConnectModal';
@@ -209,8 +209,8 @@ const SummaryCard = ({ kicker, title, total, pnl, returnRate, cash, equity, hold
   );
 };
 
-const QUICK: [string, string, string][] = [['시세 확인하기', '실시간 시세 조회', 'sonar'], ['내 포트폴리오', '잔고·수익률 한눈에', 'pie'], ['전략 백테스트', '과거 데이터로 시뮬레이션', 'route'], ['전략 학습', '검증된 전략을 단계별로', 'book']];
-const QUICK_PATH = ['/market', '/my-portfolio', '/strategy', '/store'];
+const QUICK: [string, string, string][] = [['시세 확인하기', '실시간 시세 조회', 'sonar'], ['내 포트폴리오', '잔고·수익률 한눈에', 'pie'], ['전략·백테스트', '배우고 과거 데이터로 검증', 'route'], ['자동매매', '검증한 전략을 자동으로', 'book']];
+const QUICK_PATH = ['/market', '/my-portfolio', '/strategy', '/auto-trade'];
 // 정적 투자 원칙(교육용) — 가짜 시세 시그널 대신 정직한 가이드
 const SIGNALS: [string, string, string, string][] = [['원칙', '분산 투자', '한 자산에 몰빵하지 않으면 변동성이 줄어듭니다', SONAR], ['원칙', '손절 규칙', '미리 정한 손실 한계를 지키면 큰 손실을 막아요', COMPASS], ['원칙', '장기 관점', '잦은 매매보다 검증된 전략을 꾸준히', UP]];
 
@@ -278,7 +278,7 @@ const WatchlistPanel = ({ go }: { go: (path: string) => void }) => {
           {!loaded ? <div className="px-3 py-6 text-center text-[13px] text-white/40">불러오는 중…</div>
             : merged.length === 0 ? <div className="px-3 py-6 text-center text-[13px] leading-relaxed text-white/40">시세 페이지에서 ★를 눌러<br />관심 종목을 등록해보세요.</div>
               : merged.map(s => { const up = s.changeRate >= 0; return (
-                <button key={s.symbol} onClick={() => go(`/trade?code=${s.symbol}&type=${s.assetType}`)} className="grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.03]">
+                <button key={s.symbol} onClick={() => go(`/market?code=${s.symbol}&type=${s.assetType}`)} className="grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.03]">
                   <div className="min-w-0"><div className="truncate text-[14px] font-semibold">{s.name}</div><div className="font-mono text-[12px] text-white/40">{s.symbol}</div></div>
                   <div className="text-right"><div className="font-mono text-[13.5px] font-semibold">{wlPrice(s)}</div><div className="font-mono text-[12px] font-semibold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{s.changeRate.toFixed(2)}%</div></div>
                 </button>
@@ -331,6 +331,62 @@ const GoalPanel = ({ returnRate }: { returnRate: number | null }) => {
   );
 };
 
+/* 자동매매 현황 — 운용 중인 배포가 있을 때만 노출 (liveTradeService.getDeployments) */
+const DEPLOY_STATUS: Record<string, { label: string; color: string; bg: string }> = {
+  RUNNING: { label: '운용 중', color: '#3fd6a0', bg: 'rgba(63,214,160,.14)' },
+  PAUSED: { label: '일시정지', color: '#f5d061', bg: 'rgba(245,208,97,.14)' },
+  ERROR: { label: '오류', color: '#ef4d4d', bg: 'rgba(239,77,77,.14)' },
+  STOPPED: { label: '중지', color: 'var(--ci-ink3)', bg: 'var(--ci-chip)' },
+};
+const AutoTradePanel = ({ go }: { go: (path: string) => void }) => {
+  const [deps, setDeps] = useState<Deployment[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const isPreview = import.meta.env.DEV && window.location.pathname.startsWith('/preview');
+  useEffect(() => {
+    if (isPreview) { setLoaded(true); return; } // 프리뷰(비로그인) 401 방지
+    let alive = true;
+    liveTradeService.getDeployments()
+      .then(list => { if (alive) setDeps(list || []); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, [isPreview]);
+  // '자동매매를 돌리고 있다면'만 노출 — 중지/미사용이면 렌더하지 않아 대시보드를 간결하게 유지
+  const active = deps.filter(d => d.status !== 'STOPPED');
+  if (!loaded || active.length === 0) return null;
+  return (
+    <Panel style={{ padding: 0 }}>
+      <PanelHead kicker="AUTO TRADING" title="자동매매 현황" right={<button onClick={() => go('/auto-trade')} className="text-[12px] font-semibold" style={{ color: SONAR }}>관리 →</button>} />
+      <div className="px-2.5 pb-3 pt-1">
+        {active.slice(0, 4).map(d => {
+          const st = DEPLOY_STATUS[d.status] || DEPLOY_STATUS.STOPPED;
+          const pnl = d.realizedPnl ?? 0;
+          const rate = d.allocatedCash > 0 ? (pnl / d.allocatedCash) * 100 : 0;
+          const up = pnl >= 0;
+          return (
+            <button key={d.id} onClick={() => go('/auto-trade')} className="grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.03]">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-[14px] font-semibold">{d.strategyName}</span>
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10.5px] font-bold" style={{ color: st.color, background: st.bg }}>
+                    {d.status === 'RUNNING' && <span className="inline-block h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: st.color }} />}{st.label}
+                  </span>
+                </div>
+                <div className="font-mono text-[12px] text-white/40">{won(d.allocatedCash)} 운용 · {d.tradeCount ?? 0}회 체결</div>
+              </div>
+              <div className="text-right">
+                <div className="font-mono text-[13.5px] font-semibold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{rate.toFixed(2)}%</div>
+                <div className="font-mono text-[12px]" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{won(pnl)}</div>
+              </div>
+            </button>
+          );
+        })}
+        {active.length > 4 && <div className="px-3 pt-1.5 text-[12px] text-white/40">외 {active.length - 4}개 · 자동매매에서 전체 보기 →</div>}
+      </div>
+    </Panel>
+  );
+};
+
 const RightRail = ({ go, returnRate = null }: { go: (path: string) => void; returnRate?: number | null }) => (
   <div className="flex flex-col gap-5 lg:sticky lg:top-[88px]">
     <GoalPanel returnRate={returnRate} />
@@ -347,6 +403,7 @@ const RightRail = ({ go, returnRate = null }: { go: (path: string) => void; retu
       </ul>
       </div>
     </Panel>
+    <AutoTradePanel go={go} />
     <WatchlistPanel go={go} />
     <Panel style={{ padding: 0 }}>
       <PanelHead title="투자 원칙" right={<span className="text-[12px] text-white/30">항해 수칙</span>} />
@@ -467,7 +524,7 @@ const FIRST_BUYS: { stockCode: string; stockName: string; quantity: number; asse
 ];
 
 const ONBOARD_STEPS = [
-  { key: 'trade', icon: '🛒', title: '첫 종목 매수해보기', desc: '시장가로 한 종목만 사봐도 거래의 흐름을 느낄 수 있어요.', action: '/virt/trade', label: '거래 화면으로 →', doneLabel: '첫 거래 완료' },
+  { key: 'trade', icon: '🛒', title: '첫 종목 매수해보기', desc: '시장가로 한 종목만 사봐도 거래의 흐름을 느낄 수 있어요.', action: '/virt/market', label: '시세·거래 화면으로 →', doneLabel: '첫 거래 완료' },
   { key: 'backtest', icon: '📊', title: '전략 백테스트 실행', desc: '내가 만든 조건이 과거에 돈을 벌었는지 한 번 눌러 확인해보세요.', action: '/virt/strategy', label: '백테스트 해보기 →', doneLabel: '백테스트 경험함' },
   { key: 'auto', icon: '🤖', title: '자동매매 설정하기', desc: '전략을 골라 자동으로 사고 팔도록 맡기면 24시간 운영됩니다.', action: '/virt/auto-trade', label: '자동매매 시작 →', doneLabel: '자동매매 가동함' },
 ] as const;
@@ -604,7 +661,7 @@ const VirtDashboard = () => {
                   {FIRST_BUYS.map(o => (
                     <button key={o.stockCode} onClick={() => quickBuy(o)} disabled={qbBusy != null} className="rounded-[10px] px-4 py-2.5 text-[14px] font-semibold disabled:opacity-50" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.1)', color: SONAR }}>{qbBusy === o.stockCode ? '매수 중…' : `⚡ ${o.label} 사보기`}</button>
                   ))}
-                  <button onClick={() => navigate('/virt/trade')} className="rounded-[10px] px-4 py-2.5 text-[14px] font-semibold text-white/70" style={{ border: '1px solid var(--ci-line-strong)' }}>직접 골라 매수 →</button>
+                  <button onClick={() => navigate('/virt/market')} className="rounded-[10px] px-4 py-2.5 text-[14px] font-semibold text-white/70" style={{ border: '1px solid var(--ci-line-strong)' }}>직접 골라 매수 →</button>
                 </div>
                 {qbMsg && <div className="mt-3 rounded-lg px-3.5 py-2.5 text-[13.5px] font-semibold" style={qbMsg.ok ? { background: 'rgba(63,214,160,.1)', border: '1px solid rgba(63,214,160,.28)', color: '#3fd6a0' } : { background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{qbMsg.msg}</div>}
               </Panel>

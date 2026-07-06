@@ -61,11 +61,9 @@ type NavItem = { label: string; icon: IconKind; path: string; key: string };
 const NAV: NavItem[] = [
   { label: '내 투자', icon: 'helm', path: '/dashboard', key: 'home' },
   { label: '포트폴리오', icon: 'pie', path: '/my-portfolio', key: 'portfolio' },
-  { label: '시세', icon: 'sonar', path: '/market', key: 'markets' },
-  { label: '거래', icon: 'swap', path: '/trade', key: 'trade' },
-  { label: '전략', icon: 'route', path: '/strategy', key: 'strategy' },
+  { label: '시세·거래', icon: 'sonar', path: '/market', key: 'markets' },
+  { label: '전략·백테스트', icon: 'route', path: '/strategy', key: 'strategy' },
   { label: '자동매매', icon: 'bolt', path: '/auto-trade', key: 'autotrade' },
-  { label: '전략 학습', icon: 'book', path: '/store', key: 'learn' },
   { label: '커뮤니티', icon: 'chat', path: '/feedback', key: 'community' },
   { label: '투자 현황', icon: 'gauge', path: '/ranking', key: 'status' },
   { label: '결제', icon: 'card', path: '/billing', key: 'billing' },
@@ -92,7 +90,8 @@ const HelmShell = ({ children, active, virt = false, session = '정규장 마감
   const navItems: NavItem[] = virt
     ? (() => {
         const c = [...NAV];
-        const i = c.findIndex((n) => n.key === 'learn');
+        // '전략 학습'(learn) 통합 후 앵커를 '자동매매' 뒤로 이동 — 학습 노트·유리병 위치 보존
+        const i = c.findIndex((n) => n.key === 'autotrade');
         // VIRT 전용 회고 도구: 학습 노트(거래 복기) + 감정 거울(충동 복기)
         c.splice(i + 1, 0,
           { label: '학습 노트', icon: 'note', path: '/learn', key: 'edu' },

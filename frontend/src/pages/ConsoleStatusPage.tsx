@@ -174,7 +174,7 @@ const ConsoleStatusPage = () => {
               ? <button onClick={load} className="mt-4 rounded-[10px] px-5 py-2.5 text-[14.5px] font-semibold" style={{ border: '1px solid rgba(91,157,255,.32)', background: SONAR_DIM, color: SONAR }}>다시 시도 ↻</button>
               : <div className="mt-5 flex flex-col items-center gap-2.5 sm:flex-row sm:justify-center">
                   <button onClick={() => navigate('/virt/dashboard')} className="w-full rounded-[10px] px-5 py-2.5 text-[14.5px] font-bold text-white sm:w-auto" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff 0%,#2c6fe6 62%,#2257c8 100%)' }}>모의투자 시작하기 →</button>
-                  <button onClick={() => navigate(`${prefix}/store`)} className="w-full rounded-[10px] px-5 py-2.5 text-[14.5px] font-semibold sm:w-auto" style={{ border: '1px solid rgba(91,157,255,.32)', background: SONAR_DIM, color: SONAR }}>전략 학습 둘러보기</button>
+                  <button onClick={() => navigate(`${prefix}/strategy`)} className="w-full rounded-[10px] px-5 py-2.5 text-[14.5px] font-semibold sm:w-auto" style={{ border: '1px solid rgba(91,157,255,.32)', background: SONAR_DIM, color: SONAR }}>전략·백테스트 둘러보기</button>
                 </div>}
           </div>
         ) : (

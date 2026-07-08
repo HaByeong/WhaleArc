@@ -16,6 +16,18 @@ const INK1 = 'var(--ci-ink1)', INK2 = 'var(--ci-ink2)', INK3 = 'var(--ci-ink3)';
 const LINE = 'var(--ci-line)';
 const panel: React.CSSProperties = { background: 'var(--ci-panel)', border: `1px solid ${LINE}`, borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)' };
 const fmtKRW = (n: number) => '₩' + Math.round(n || 0).toLocaleString('ko-KR');
+// device-report 기준시각을 상대시간으로 ("방금"/"N분 전"/"N시간 전"). 파싱 실패 시 null.
+const fmtAgo = (iso?: string): string | null => {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  const min = Math.max(0, Math.floor((Date.now() - t) / 60000));
+  if (min < 1) return '방금 전';
+  if (min < 60) return `${min}분 전`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}시간 전`;
+  return `${Math.floor(h / 24)}일 전`;
+};
 // 보유종목 단가/평가는 표시 통화로(해외주식=USD는 $, 그 외 ₩). 합계는 항상 ₩(서버가 KRW 환산).
 const fmtMoney = (n: number, cur?: string) => cur === 'USD'
   ? '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -136,6 +148,7 @@ const ConsoleExchangePage = () => {
                     <div><div className="text-[11.5px] tracking-[.06em]" style={{ color: INK2 }}>총 평가금액</div><div className="mt-0.5 font-mono text-[17.5px] font-bold">{fmtKRW(port.totalValue)}</div></div>
                     <div><div className="text-[11.5px] tracking-[.06em]" style={{ color: INK2 }}>평가 손익</div><div className="mt-0.5 font-mono text-[17.5px] font-bold" style={{ color: port.totalProfitLoss >= 0 ? UP : DOWN }}>{port.totalProfitLoss >= 0 ? '+' : ''}{port.totalReturnRate.toFixed(2)}%</div></div>
                     <div className="col-span-2"><div className="text-[11.5px] tracking-[.06em]" style={{ color: INK2 }}>보유 종목</div><div className="mt-0.5 text-[14px]" style={{ color: INK1 }}>{port.holdings.length}개 · 현금 <span className="font-mono">{fmtKRW(port.cashBalance)}</span></div></div>
+                    {fmtAgo(port.balanceReportedAt) && <div className="col-span-2 text-[11.5px]" style={{ color: INK3 }}>📱 기기 보고 기준 · {fmtAgo(port.balanceReportedAt)}</div>}
                   </div>
                 ) : (
                   <p className="mt-3 text-[13.5px] leading-relaxed" style={{ color: INK2 }}>{e.guide}</p>

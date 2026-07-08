@@ -163,6 +163,7 @@ public class ExchangeAccountService {
             try {
                 ExchangePortfolioDto reported = objectMapper.readValue(
                         account.getReportedPortfolioJson(), ExchangePortfolioDto.class);
+                reported.setBalanceReportedAt(account.getBalanceReportedAt()); // 웹에 '기준 시각' 표시용
                 portfolioCache.put(cacheKey, new CachedPortfolio(reported, System.currentTimeMillis() + PORTFOLIO_CACHE_TTL_MS));
                 return reported;
             } catch (Exception e) {

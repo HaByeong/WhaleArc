@@ -59,6 +59,7 @@ public class DeploymentResponse {
     private final Integer rotationTopN;
     private final Integer rotationLookbackDays;
     private final Boolean rotationRegimeFilter;
+    private final Double rotationRegimeFloor;     // 약세장 노출 배수(기본 0.5) — 기기 모멘텀 배분에 사용
     private final Boolean rotationFullInvest;     // 자본 최대 활용 모드
     private final Boolean regimeBear;             // 현재 레짐 약세 여부
     private final List<String> currentTopHoldings;// 현 보유 top-N 심볼
@@ -106,6 +107,7 @@ public class DeploymentResponse {
         this.rotationTopN = d.getRotationTopN();
         this.rotationLookbackDays = d.getRotationLookbackDays();
         this.rotationRegimeFilter = d.getRotationRegimeFilter();
+        this.rotationRegimeFloor = d.isMomentumRotation() ? d.effectiveRegimeFloor() : null;
         this.rotationFullInvest = d.isMomentumRotation() ? d.isRotationFullInvest() : null;
         this.regimeBear = d.isMomentumRotation() ? d.isRegimeBear() : null;
         this.currentTopHoldings = d.getCurrentTopHoldings() != null ? d.getCurrentTopHoldings() : List.of();

@@ -21,6 +21,7 @@ public class ExchangePortfolioDto {
     private List<ExchangeHoldingDto> holdings;
     private double usdtKrwRate;       // BITGET: USDT→KRW 환산 환율 / KIS: USD→KRW 환율 (0이면 미적용)
     private boolean fetchOk = true;   // 실제 거래소 API 조회 성공 여부 (false면 실패/staleness → 빈 계좌와 구분)
+    private String balanceReportedAt; // 기기 보고(device-report) 기준시각(ISO). null이면 서버 실시간 조회값
 
     // 기존 7-arg 생성자 유지 (KIS/UPBIT/BITGET 호출부 호환) — usdtKrwRate 는 setter 로 주입
     public ExchangePortfolioDto(String exchangeType, boolean connected, double totalValue,

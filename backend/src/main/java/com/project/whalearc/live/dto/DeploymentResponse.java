@@ -2,6 +2,8 @@ package com.project.whalearc.live.dto;
 
 import com.project.whalearc.live.domain.LiveOrderLog;
 import com.project.whalearc.live.domain.LiveStrategyDeployment;
+import com.project.whalearc.strategy.domain.Condition;
+import com.project.whalearc.strategy.domain.Indicator;
 import lombok.Getter;
 
 import java.math.BigDecimal;
@@ -9,8 +11,8 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * 배포 조회 응답. 전략 스냅샷(indicators/conditions) 같은 내부 디테일은 제외하고
- * 화면에 필요한 요약 + 심볼별 포지션 현황만 노출한다.
+ * 배포 조회 응답. 화면 표시용 요약 + 심볼별 포지션에 더해, Model A(기기 실행형)에서 사용자 기기가
+ * LIVE 배포를 로컬 실행할 수 있도록 <b>전략 스냅샷</b>(indicators/conditions/방향/피라미딩)도 포함한다.
  */
 @Getter
 public class DeploymentResponse {
@@ -39,6 +41,15 @@ public class DeploymentResponse {
     private final List<PositionDto> positions;
     private final Instant lastEvaluatedAt;
     private final Instant createdAt;
+    // ── Model A: 기기 실행용 전략 스냅샷 (기기가 이 정의로 로컬 신호 평가·실행) ──
+    private final List<Indicator> indicators;
+    private final List<Condition> entryConditions;
+    private final List<Condition> exitConditions;
+    private final List<Condition> shortEntryConditions;
+    private final List<Condition> shortExitConditions;
+    private final String tradeDirection;
+    private final Integer maxUnits;
+    private final String pyramidMode;
     // ── 카드 표시용 확장 필드 ──
     private final int todayFilledCount;       // 오늘(KST) 체결 수
     private final LastOrderDto lastOrder;     // 가장 최근 주문(최근 신호), 없으면 null
@@ -48,6 +59,7 @@ public class DeploymentResponse {
     private final Integer rotationTopN;
     private final Integer rotationLookbackDays;
     private final Boolean rotationRegimeFilter;
+    private final Double rotationRegimeFloor;     // 약세장 노출 배수(기본 0.5) — 기기 모멘텀 배분에 사용
     private final Boolean rotationFullInvest;     // 자본 최대 활용 모드
     private final Boolean regimeBear;             // 현재 레짐 약세 여부
     private final List<String> currentTopHoldings;// 현 보유 top-N 심볼
@@ -80,6 +92,14 @@ public class DeploymentResponse {
                 : d.getPositions().stream().map(PositionDto::new).toList();
         this.lastEvaluatedAt = d.getLastEvaluatedAt();
         this.createdAt = d.getCreatedAt();
+        this.indicators = d.getIndicators();
+        this.entryConditions = d.getEntryConditions();
+        this.exitConditions = d.getExitConditions();
+        this.shortEntryConditions = d.getShortEntryConditions();
+        this.shortExitConditions = d.getShortExitConditions();
+        this.tradeDirection = d.getTradeDirection();
+        this.maxUnits = d.getMaxUnits();
+        this.pyramidMode = d.getPyramidMode();
         this.todayFilledCount = todayFilledCount;
         this.lastOrder = lastOrder != null ? new LastOrderDto(lastOrder) : null;
         this.equitySpark = equitySpark != null ? equitySpark : List.of();
@@ -87,6 +107,7 @@ public class DeploymentResponse {
         this.rotationTopN = d.getRotationTopN();
         this.rotationLookbackDays = d.getRotationLookbackDays();
         this.rotationRegimeFilter = d.getRotationRegimeFilter();
+        this.rotationRegimeFloor = d.isMomentumRotation() ? d.effectiveRegimeFloor() : null;
         this.rotationFullInvest = d.isMomentumRotation() ? d.isRotationFullInvest() : null;
         this.regimeBear = d.isMomentumRotation() ? d.isRegimeBear() : null;
         this.currentTopHoldings = d.getCurrentTopHoldings() != null ? d.getCurrentTopHoldings() : List.of();

@@ -4,6 +4,7 @@ import com.project.whalearc.exchange.service.client.BitgetApiClient;
 import com.project.whalearc.live.domain.LiveStrategyDeployment;
 import com.project.whalearc.live.domain.LiveStrategyDeployment.LivePosition;
 import com.project.whalearc.live.dto.CreateDeploymentRequest;
+import com.project.whalearc.live.dto.DeviceReportRequest;
 import com.project.whalearc.live.repository.LiveDeploymentEquitySnapshotRepository;
 import com.project.whalearc.live.repository.LiveOrderLogRepository;
 import com.project.whalearc.live.repository.LiveStrategyDeploymentRepository;
@@ -191,6 +192,21 @@ class LiveStrategyServiceTest {
     }
 
     @Test
+    void serverDoesNotExecuteLiveDeployment() {
+        // Model A(기기 실행형): 서버는 LIVE(실계좌)를 절대 실행하지 않는다 — 진입 신호가 충족돼도 주문 0건.
+        // (실계좌 자동매매는 사용자 기기가 로컬 키로 실행한다 — 투자일임업 회피 불변식)
+        when(candlestickService.getCandlesticks(anyString(), anyString(), anyString()))
+                .thenReturn(flatCandles(130, 100));
+
+        LiveStrategyDeployment d = baseDeployment();
+        d.setAccountMode(LiveStrategyDeployment.AccountMode.LIVE);   // 실계좌로 전환 — PAPER였다면 매수 1건이 나갈 신호
+        svc.evaluateDeployment(d);
+
+        assertTrue(gateway.placed.isEmpty(), "서버는 LIVE를 실행하지 않으므로 주문이 발주되지 않아야 한다");
+        assertEquals(LivePosition.Direction.NONE, d.getPositions().get(0).getDirection(), "포지션 변화 없음(서버 미실행)");
+    }
+
+    @Test
     void duplicateBarDoesNotPlaceDuplicateOrder() {
         when(candlestickService.getCandlesticks(anyString(), anyString(), anyString()))
                 .thenReturn(flatCandles(130, 100));   // 동일 캔들 → 동일 봉 타임스탬프
@@ -268,16 +284,52 @@ class LiveStrategyServiceTest {
     }
 
     @Test
-    void liveModeWithUnsupportedBrokerIsRejected() {
+    void liveDeploymentIsCreatedForDeviceExecution() {
+        // Model A: 서버 게이트웨이가 없어도 LIVE 배포를 생성·보유한다(실행은 기기). 페이퍼 현금 예약 검사도 LIVE엔 미적용.
+        when(tierResolver.effectiveTier(anyString()))
+                .thenReturn(com.project.whalearc.user.domain.User.Tier.PRO);   // 종목 수 무제한
         CreateDeploymentRequest req = new CreateDeploymentRequest();
         req.setEntryConditions(List.of(cond("PRICE", Condition.Operator.GT, 0)));
         req.setTargetAssets(List.of("BTC"));
+        req.setAssetType("CRYPTO");
         req.setAllocatedCash(BigDecimal.valueOf(1_000_000));
         req.setAccountMode(LiveStrategyDeployment.AccountMode.LIVE);
-        req.setBrokerType(LiveStrategyDeployment.BrokerType.KIS);   // 1단계에 게이트웨이 없음
+        req.setBrokerType(LiveStrategyDeployment.BrokerType.BITGET);   // 코인 실거래 — 서버 게이트웨이 없어도 생성 성공
 
-        // 실계좌(LIVE) + 미지원 브로커 → 배포 생성 거부
-        assertThrows(IllegalArgumentException.class, () -> svc.createDeployment("u1", req));
+        LiveStrategyDeployment d = svc.createDeployment("u1", req);
+        assertEquals(LiveStrategyDeployment.AccountMode.LIVE, d.getAccountMode(), "LIVE로 생성");
+        assertEquals(LiveStrategyDeployment.Status.RUNNING, d.getStatus(), "RUNNING 상태로 생성");
+        assertTrue(gateway.placed.isEmpty(), "생성만으로는 서버가 어떤 주문도 내지 않는다");
+    }
+
+    @Test
+    void serverRejectsEvaluateForLiveDeployment() {
+        // Model A: 실계좌(LIVE) 즉시 평가는 서버가 하지 않는다(기기 실행) → 명시적 거부.
+        LiveStrategyDeployment d = baseDeployment();
+        d.setAccountMode(LiveStrategyDeployment.AccountMode.LIVE);
+        when(deploymentRepo.findByIdAndUserId("dep1", "u1")).thenReturn(java.util.Optional.of(d));
+        assertThrows(IllegalArgumentException.class, () -> svc.evaluateNow("u1", "dep1"));
+        assertTrue(gateway.placed.isEmpty(), "LIVE 평가 요청에도 서버는 주문을 내지 않는다");
+    }
+
+    @Test
+    void deviceReportUpdatesLiveDeploymentForDisplayOnly() {
+        // Model A: 기기가 보고한 상태를 서버가 표시용으로만 저장한다(주문 유발 없음). PAPER는 대상 아님.
+        LiveStrategyDeployment d = baseDeployment();
+        d.setAccountMode(LiveStrategyDeployment.AccountMode.LIVE);
+        when(deploymentRepo.findByIdAndUserId("dep1", "u1")).thenReturn(java.util.Optional.of(d));
+        DeviceReportRequest report = new DeviceReportRequest();
+        report.setRealizedPnl(BigDecimal.valueOf(12345));
+        report.setTradeCount(3);
+
+        LiveStrategyDeployment updated = svc.applyDeviceReport("u1", "dep1", report);
+        assertEquals(0, updated.getRealizedPnl().compareTo(BigDecimal.valueOf(12345)), "손익 표시값 저장");
+        assertEquals(3, updated.getTradeCount(), "체결수 표시값 저장");
+        assertTrue(gateway.placed.isEmpty(), "상태 보고 저장은 어떤 주문도 유발하지 않는다");
+
+        // PAPER 배포는 기기 보고 대상이 아님 → 거부
+        d.setAccountMode(LiveStrategyDeployment.AccountMode.PAPER);
+        assertThrows(IllegalArgumentException.class, () -> svc.applyDeviceReport("u1", "dep1", report));
     }
 
     @Test

@@ -6,6 +6,7 @@ import com.project.whalearc.live.domain.LiveOrderLog;
 import com.project.whalearc.live.domain.LiveStrategyDeployment;
 import com.project.whalearc.live.dto.CreateDeploymentRequest;
 import com.project.whalearc.live.dto.DeploymentResponse;
+import com.project.whalearc.live.dto.DeviceReportRequest;
 import com.project.whalearc.live.service.LiveStrategyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,10 +62,37 @@ public class LiveStrategyController {
     }
 
     @GetMapping("/deployments")
-    public ResponseEntity<ApiResponse<List<DeploymentResponse>>> getDeployments(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<ApiResponse<List<DeploymentResponse>>> getDeployments(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String accountMode) {
         String userId = jwt.getSubject();
         List<DeploymentResponse> deployments = liveStrategyService.getUserDeploymentResponses(userId);
+        // Model A: 기기(App)가 자기 실계좌(LIVE) 배포만 내려받을 때 ?accountMode=LIVE 로 필터한다.
+        if (accountMode != null && !accountMode.isBlank()) {
+            String want = accountMode.trim().toUpperCase();
+            deployments = deployments.stream().filter(d -> want.equals(d.getAccountMode())).toList();
+        }
         return ResponseEntity.ok(ApiResponse.ok(deployments));
+    }
+
+    /**
+     * Model A(기기 실행형): 사용자 기기가 로컬 실행한 LIVE 배포 상태를 사후 보고 → 서버는 표시용으로만 저장.
+     * 서버는 이 호출로 어떤 주문·실행도 하지 않는다(read-only). 방향은 기기→서버 사후 보고만 허용.
+     */
+    @PostMapping("/deployments/{deploymentId}/device-report")
+    public ResponseEntity<ApiResponse<DeploymentResponse>> deviceReport(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable String deploymentId,
+            @RequestBody DeviceReportRequest report) {
+        String userId = jwt.getSubject();
+        try {
+            LiveStrategyDeployment d = liveStrategyService.applyDeviceReport(userId, deploymentId, report);
+            return ResponseEntity.ok(ApiResponse.ok(liveStrategyService.toResponse(d)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("기기 상태 보고 처리 실패: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body(ApiResponse.error("상태 보고 처리 중 오류가 발생했습니다."));
+        }
     }
 
     @GetMapping("/deployments/{deploymentId}/orders")

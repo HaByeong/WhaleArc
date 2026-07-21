@@ -28,6 +28,9 @@ public class ExchangeAccountService {
     private final KisApiClient kisApiClient;
     private final UpbitApiClient upbitApiClient;
     private final BitgetApiClient bitgetApiClient;
+    // 기기 보고 잔고 스냅샷 직렬화용 (초기화된 final이라 @RequiredArgsConstructor 대상 아님)
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
+            new com.fasterxml.jackson.databind.ObjectMapper();
 
     // 거래소 잔고 짧은 캐시(8초) — 대시보드/포트폴리오 10초 폴링 + 동시 사용자가 외부 거래소 API를
     // 반복 호출(특히 Bitget 코인당 N+1)하지 않도록 (userId,exchangeType)별 디듀프. KIS/Upbit/Bitget 공통.
@@ -83,6 +86,32 @@ public class ExchangeAccountService {
     }
 
     /**
+     * Model A/INV-1(β): 사용자 기기가 로컬 키로 조회한 거래소 잔고를 사후 보고 → 서버는 표시용으로만 저장.
+     * 서버는 이 값으로 어떤 주문·조회도 하지 않는다(키 불요). 계정이 없으면 키 없이 생성(기기 실행형 연결).
+     */
+    public void reportBalance(String userId, String exchangeType, ExchangePortfolioDto portfolio) {
+        ExchangeAccount account = exchangeAccountRepository
+                .findByUserIdAndExchangeType(userId, exchangeType)
+                .orElseGet(() -> {
+                    ExchangeAccount a = new ExchangeAccount();
+                    a.setUserId(userId);
+                    a.setExchangeType(exchangeType);
+                    a.setCreatedAt(LocalDateTime.now().toString());
+                    return a;
+                });
+        try {
+            account.setReportedPortfolioJson(objectMapper.writeValueAsString(portfolio));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("잔고 보고 직렬화에 실패했습니다.");
+        }
+        account.setBalanceReportedAt(LocalDateTime.now().toString());
+        account.setConnected(true);   // 기기가 연결된 계좌를 보고 = 연결됨
+        account.setUpdatedAt(LocalDateTime.now().toString());
+        exchangeAccountRepository.save(account);
+        portfolioCache.remove(userId + "|" + exchangeType);   // 최신 보고 즉시 반영
+    }
+
+    /**
      * 사용자의 모든 거래소 계정 조회 (API 키는 마스킹)
      */
     public List<ExchangeAccount> getAccounts(String userId) {
@@ -129,8 +158,21 @@ public class ExchangeAccountService {
 
         ExchangeAccount account = accountOpt.get();
 
+        // Model A/INV-1(β): 기기가 보고한 잔고가 있으면 그것을 표시한다 — 서버는 키로 거래소를 조회하지 않는다.
+        if (account.getReportedPortfolioJson() != null && !account.getReportedPortfolioJson().isBlank()) {
+            try {
+                ExchangePortfolioDto reported = objectMapper.readValue(
+                        account.getReportedPortfolioJson(), ExchangePortfolioDto.class);
+                reported.setBalanceReportedAt(account.getBalanceReportedAt()); // 웹에 '기준 시각' 표시용
+                portfolioCache.put(cacheKey, new CachedPortfolio(reported, System.currentTimeMillis() + PORTFOLIO_CACHE_TTL_MS));
+                return reported;
+            } catch (Exception e) {
+                // 역직렬화 실패 시 아래 전환기 폴백(키 조회)으로 진행
+            }
+        }
+
         try {
-            // 복호화된 키로 실제 거래소 API 호출
+            // 복호화된 키로 실제 거래소 API 호출 (전환기 폴백 — 기기 보고 정착 후 이 경로와 키 저장을 제거)
             String apiKey = aesCryptoUtil.decrypt(account.getApiKey());
             String secretKey = aesCryptoUtil.decrypt(account.getSecretKey());
 

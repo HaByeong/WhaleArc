@@ -67,6 +67,8 @@ public class SecurityConfig {
                         // 익명에는 status(UP/DOWN)만 노출되고 상세는 가려진다. /actuator/metrics 등은 인증 필요.
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/market/**").permitAll()
+                        // 프리셋 전략 카탈로그 = 사용자 무관 범용 템플릿(INV-4 도구 중립) → 무인증 공개
+                        .requestMatchers(HttpMethod.GET, "/api/strategies/catalog").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/store/products/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/store/products").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/feedback/images/**").permitAll()

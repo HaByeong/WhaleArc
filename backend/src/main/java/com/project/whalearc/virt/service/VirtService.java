@@ -264,7 +264,8 @@ public class VirtService {
             List<Map<String, String>> osOutput2 = (List<Map<String, String>>) os.get("output2");
             if (osOutput2 != null) {
                 for (Map<String, String> item : osOutput2) {
-                    double frcrCash = safeDouble(item.get("frcr_dncl_amt_2"));
+                    // 외화예수금 + 미결제 매도대금(D+2, 매수 가능분 — 가정산).
+                    double frcrCash = safeDouble(item.get("frcr_dncl_amt_2")) + safeDouble(item.get("frcr_sll_amt_smtl"));
                     if (frcrCash == 0) continue;
                     // 통화코드 미제공 시 해외계좌 주력 통화인 USD 로 간주
                     String ccy = item.getOrDefault("crcy_cd", "USD");

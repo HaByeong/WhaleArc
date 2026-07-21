@@ -2,6 +2,7 @@ package com.project.whalearc.strategy.dto;
 
 import com.project.whalearc.strategy.domain.Condition;
 import com.project.whalearc.strategy.domain.Indicator;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -81,8 +82,23 @@ public class BacktestRequest {
     private String secondStockCode;
     private String secondStockName;
     private String secondAssetType;     // STOCK / CRYPTO / US_STOCK / ETF
-    private Double firstAssetWeight;    // 0~100. 자산1 비중 (%). 자산2 비중 = 100 - 이 값. 기본 50.
+    private Double firstAssetWeight;    // 0~100. 자산1(기본) 비중 (%). 레거시 2자산: 자산2 비중 = 100 - 이 값. 기본 50.
     private String rebalanceFrequency;  // MONTHLY (기본) / QUARTERLY / YEARLY
+
+    // ─── N자산 리밸런싱 (기본 자산 + 추가 1~4개, 총 최대 5자산) ───
+    // 채워져 있으면 second* 레거시 필드 대신 이 목록 사용. 비중 합(firstAssetWeight + Σweight)=100 필수.
+    private List<RebalanceAsset> additionalAssets;
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RebalanceAsset {
+        private String stockCode;
+        private String stockName;
+        private String assetType;   // STOCK / CRYPTO / US_STOCK / ETF
+        private Double weight;      // 0~100 (%)
+    }
 
     // 배당 처리 (미국주식·ETF 한정. 국내주식은 KIS 수정주가, 가상화폐는 무관)
     // null/true (기본): adjclose 사용 → 배당 자동 재투자 (Total Return)

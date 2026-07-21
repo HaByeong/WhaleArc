@@ -115,18 +115,13 @@ public class BacktestDcaDailyReturnTest {
 
         BacktestService svc = new BacktestService(null, null, null, null, null, null, null, null, null);
 
-        Method m = BacktestService.class.getDeclaredMethod(
-                "simulateRebalance", String.class, String.class, List.class, List.class,
-                List.class, Map.class, int.class, String.class, Map.class,
-                List.class, Map.class, int.class, String.class, Map.class,
-                BacktestRequest.class, boolean.class);
-        m.setAccessible(true);
-
-        BacktestResponse res = (BacktestResponse) m.invoke(svc,
+        // N자산 일반화(2026-07-13) 후 leg 리스트 시그니처 — 테스트 접근용 package-private 직접 호출
+        List<BacktestService.RebalanceLeg> legs = List.of(
+                new BacktestService.RebalanceLeg("TESTA", "TESTA", "CRYPTO", candlesA, Map.of(), 0, Map.of(), 0.6),
+                new BacktestService.RebalanceLeg("TESTB", "TESTB", "CRYPTO", candlesB, Map.of(), 0, Map.of(), 0.4));
+        BacktestResponse res = svc.simulateRebalance(
                 "direct", "테스트", Collections.emptyList(), Collections.emptyList(),
-                candlesA, Map.of(), 0, "CRYPTO", Map.of(),
-                candlesB, Map.of(), 0, "CRYPTO", Map.of(),
-                req, false);
+                legs, req, false);
 
         List<BacktestResponse.DailyReturnDto> spikes = new ArrayList<>();
         for (BacktestResponse.DailyReturnDto dr : res.getDailyReturns()) {

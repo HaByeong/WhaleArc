@@ -11,8 +11,13 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -252,10 +257,58 @@ public class KisApiClient {
 
     /* ───── 업종(지수) 일봉 조회 ───── */
 
-    @SuppressWarnings("unchecked")
+    /** 지수 일봉 페이지네이션 안전 상한 — 실측상 페이지당 ~750 거래일(약 3년)이라 5년은 2페이지면 충분. 여유 상한. */
+    private static final int MAX_INDEX_CANDLE_PAGES = 15;
+    private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+    /**
+     * 업종(지수) 일봉 조회 — 기간 전체를 페이지네이션으로 수집.
+     * KIS FHKUP03500100은 시작일을 존중하지만 호출당 반환 행수가 잘린다(실측 ~750건 ≈ 3년).
+     * 그래서 조회 끝 날짜를 페이지의 가장 오래된 거래일 하루 전으로 옮겨가며 startDate까지 반복 수집한다.
+     * (이전엔 1회 호출이라 3년 이전 구간이 잘려, 오래 기록된 계정의 KOSPI 벤치마크 시작점이
+     * 최근 값으로 클램프되고 알파가 왜곡됐다.)
+     */
     public List<Map<String, String>> getIndexDailyCandles(String indexCode, String startDate, String endDate) {
         String cacheKey = "indexCandle:" + indexCode + ":" + startDate + ":" + endDate;
 
+        // read-through: 일봉은 하루 1건 늘어나는 데이터라 캐시 폴백 창(≤15분) 재사용이 안전하고,
+        // 페이지네이션(최대 15회 KIS 호출) 부담을 페이지 로드마다 반복하지 않게 해준다.
+        List<Map<String, String>> cachedFresh = getCachedOrNull(cacheKey);
+        if (cachedFresh != null) {
+            return cachedFresh;
+        }
+
+        List<Map<String, String>> merged = new ArrayList<>();
+        Set<String> seenDates = new HashSet<>();
+        String windowEnd = endDate;
+
+        for (int page = 0; page < MAX_INDEX_CANDLE_PAGES; page++) {
+            List<Map<String, String>> rows = fetchIndexCandlePage(indexCode, startDate, windowEnd);
+            if (rows == null) {                       // 페이지 조회 실패(리트라이 소진)
+                if (!merged.isEmpty()) break;         // 이미 모은 최근 구간이라도 반환
+                List<Map<String, String>> cached = getCachedOrNull(cacheKey);
+                if (cached != null) {
+                    log.warn("KIS 지수 일봉 [{}]: API 실패, 캐시 폴백 사용", indexCode);
+                    return cached;
+                }
+                return List.of();
+            }
+            for (Map<String, String> row : rows) {
+                String d = row.get("stck_bsop_date");
+                if (d == null || d.isBlank() || !seenDates.add(d)) continue;  // 페이지 경계 중복 방어
+                merged.add(row);
+            }
+            String oldest = oldestDateOf(rows);
+            if (oldest == null || oldest.compareTo(startDate) <= 0) break;    // 목표 범위 도달(또는 빈 페이지)
+            windowEnd = prevDay(oldest);
+        }
+
+        putCache(cacheKey, merged);
+        return merged;
+    }
+
+    /** 지수 일봉 1페이지 조회(리트라이 포함). 실패 시 null — 호출부에서 부분 결과/캐시 폴백을 결정한다. */
+    private List<Map<String, String>> fetchIndexCandlePage(String indexCode, String startDate, String endDate) {
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 String url = baseUrl + "/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice"
@@ -275,14 +328,12 @@ public class KisApiClient {
 
                 if (!"0".equals(String.valueOf(result.get("rt_cd")))) {
                     log.warn("KIS 지수 일봉 조회 실패 [{}]: {}", indexCode, result.get("msg1"));
-                    List<Map<String, String>> cached = getCachedOrNull(cacheKey);
-                    return cached != null ? cached : List.of();
+                    return null;
                 }
 
                 List<Map<String, String>> output = objectMapper.convertValue(result.get("output2"),
                         new TypeReference<List<Map<String, String>>>() {});
-                putCache(cacheKey, output);
-                return output;
+                return output != null ? output : List.of();
             } catch (Exception e) {
                 log.warn("KIS 지수 일봉 조회 오류 [{}] (시도 {}/{}): {}", indexCode, attempt, maxRetries, e.getMessage());
                 if (attempt < maxRetries) {
@@ -290,13 +341,23 @@ public class KisApiClient {
                 }
             }
         }
+        return null;
+    }
 
-        List<Map<String, String>> cached = getCachedOrNull(cacheKey);
-        if (cached != null) {
-            log.warn("KIS 지수 일봉 [{}]: API 실패, 캐시 폴백 사용", indexCode);
-            return cached;
+    /** 페이지에서 가장 오래된 거래일(yyyyMMdd). KIS는 보통 최신→과거 순이지만 순서에 의존하지 않는다. */
+    static String oldestDateOf(List<Map<String, String>> rows) {
+        String oldest = null;
+        for (Map<String, String> row : rows) {
+            String d = row.get("stck_bsop_date");
+            if (d == null || d.isBlank()) continue;
+            if (oldest == null || d.compareTo(oldest) < 0) oldest = d;
         }
-        return List.of();
+        return oldest;
+    }
+
+    /** yyyyMMdd 하루 전 날짜 — 페이지네이션 다음 윈도우의 끝. */
+    static String prevDay(String yyyymmdd) {
+        return LocalDate.parse(yyyymmdd, YYYYMMDD).minusDays(1).format(YYYYMMDD);
     }
 
     /* ───── 업종(지수) 현재가 조회 ───── */

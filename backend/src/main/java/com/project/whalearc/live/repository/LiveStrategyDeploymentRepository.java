@@ -14,6 +14,13 @@ public interface LiveStrategyDeploymentRepository extends MongoRepository<LiveSt
     /** 스케줄러 진입점: RUNNING 배포만 인덱스 쿼리로 조회 (터틀 findAll 풀스캔 회피). */
     List<LiveStrategyDeployment> findByStatus(LiveStrategyDeployment.Status status);
 
+    /**
+     * Model A(기기 실행형) 실행 스케줄러 진입점 — 서버는 모의(PAPER)만 실행한다.
+     * 실계좌(LIVE) 자동매매는 사용자 기기가 로컬 키로 실행하므로 서버는 절대 주문을 내지 않는다(투자일임업 회피 불변식).
+     */
+    List<LiveStrategyDeployment> findByStatusAndAccountMode(LiveStrategyDeployment.Status status,
+                                                            LiveStrategyDeployment.AccountMode accountMode);
+
     /** 손익 스냅샷 스케줄러: 활성(RUNNING/PAUSED) 배포만 조회 — 정지 배포의 불필요한 외부 시세 호출 회피. */
     List<LiveStrategyDeployment> findByStatusIn(Collection<LiveStrategyDeployment.Status> statuses);
 

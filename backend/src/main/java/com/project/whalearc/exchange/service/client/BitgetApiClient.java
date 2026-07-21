@@ -68,6 +68,7 @@ public class BitgetApiClient {
             double totalValue = 0;
             double totalProfitLoss = 0;
             double cashBalance = 0;
+            double foreignCashUsd = 0; // USDT 원금 합계(현물+선물 가용) — 통화 분리 표시용
             // USDT 기준 코인 시세를 KRW 환산하는 데 쓰는 환율 (응답에 무관하게 한 번 조회)
             double usdtToKrw = getUsdtToKrw();
 
@@ -84,6 +85,7 @@ public class BitgetApiClient {
 
                     if ("USDT".equals(coin) || "USDC".equals(coin)) {
                         cashBalance += qty * usdtToKrw;
+                        foreignCashUsd += qty;
                         continue;
                     }
 
@@ -115,6 +117,7 @@ public class BitgetApiClient {
                         double available = parseDouble(m.get("available"));
                         double uPnl = parseDouble(m.get("unrealizedPL"));
                         cashBalance += available * usdtToKrw;                  // 선물 가용 USDT → 현금
+                        foreignCashUsd += available;
                         totalValue += (equity - available) * usdtToKrw;        // 포지션에 묶인 증거금+미실현손익
                         totalProfitLoss += uPnl * usdtToKrw;
                     }
@@ -148,8 +151,14 @@ public class BitgetApiClient {
             }
 
             totalValue += cashBalance;
+            // 수익률 = 손익 / 보유원금(현금 제외) — KIS·업비트와 동일 기준. (이전 0 하드코딩 → 항상 +0.00% 표시)
+            // 현물은 평단 미제공으로 손익 미산출(위 주석)이라 평가액이 원금 취급되고, 선물 미실현손익만 반영되는 부분 지표.
+            double invested = totalValue - cashBalance - totalProfitLoss;
+            double totalReturnRate = invested > 0 ? (totalProfitLoss / invested) * 100 : 0;
             ExchangePortfolioDto dto = new ExchangePortfolioDto("BITGET", true, totalValue, totalProfitLoss,
-                    0, cashBalance, holdings);
+                    totalReturnRate, cashBalance, holdings);
+            dto.setForeignCashKrw(cashBalance);    // Bitget은 전액 외화(USDT) — 외화예수금 KRW환산 = cashBalance
+            dto.setForeignCashUsd(foreignCashUsd); // USDT 원금 (통화 분리 표시용)
             dto.setUsdtKrwRate(usdtToKrw);
             return dto;
 

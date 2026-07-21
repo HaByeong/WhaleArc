@@ -79,6 +79,9 @@ public class BacktestResponse {
     private int rebalanceCount;             // 리밸런싱 발생 횟수
     private String rebalanceFrequency;      // MONTHLY / QUARTERLY / YEARLY
 
+    // N자산 리밸런싱 자산별 분해 (전체 leg — 위 first/second 필드는 앞 2개 leg 하위호환용)
+    private List<AssetBreakdownDto> assetBreakdown;
+
     // 배당 처리
     private boolean dividendReinvest;       // true = adjclose 사용 (자동 재투자)
     private double totalDividendsReceived;  // OFF 모드일 때 누적 배당 cash 입금액 (native 단위)
@@ -154,5 +157,15 @@ public class BacktestResponse {
         private double max;
         private double avg;
         private double last;
+    }
+
+    @Getter
+    @Builder
+    public static class AssetBreakdownDto {
+        private String stockCode;
+        private String stockName;
+        private double weight;      // 0~100 (%)
+        private double finalValue;  // 종료 시점 평가가치 (native 단위)
+        private int tradeCount;
     }
 }

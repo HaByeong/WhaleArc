@@ -6,7 +6,7 @@ import com.project.whalearc.market.dto.IndicatorResponse;
 import com.project.whalearc.market.dto.IndexPriceResponse;
 import com.project.whalearc.market.dto.MarketPriceResponse;
 import com.project.whalearc.market.service.*;
-import com.project.whalearc.market.websocket.RealtimePriceHolder;
+import com.project.whalearc.market.spi.MarketDataService;
 import com.project.whalearc.virt.service.VirtUpbitClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,11 +25,10 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class MarketController {
 
-    private final StockPriceProvider stockPriceProvider;
+    private final MarketDataService marketDataService;
     private final UsStockPriceProvider usStockPriceProvider;
     private final UsEtfPriceProvider usEtfPriceProvider;
     private final CryptoPriceProvider cryptoPriceProvider;
-    private final RealtimePriceHolder realtimePriceHolder;
     private final CandlestickService candlestickService;
     private final StockMasterService stockMasterService;
     private final KisApiClient kisApiClient;
@@ -44,27 +43,9 @@ public class MarketController {
     @GetMapping("/prices")
     public ResponseEntity<List<MarketPriceResponse>> getPrices(@RequestParam AssetType type) {
         try {
-            List<MarketPriceResponse> prices = switch (type) {
-                case STOCK -> stockPriceProvider.getAllStockPrices();
-                case US_STOCK -> usStockPriceProvider.getAllUsStockPrices();
-                case ETF -> usEtfPriceProvider.getAllEtfPrices();
-                case CRYPTO -> {
-                    // REST 데이터를 기본으로, 실시간 WebSocket 데이터로 덮어쓰기
-                    List<MarketPriceResponse> restData = cryptoPriceProvider.getAllKrwTickers();
-                    if (realtimePriceHolder.hasData()) {
-                        Map<String, MarketPriceResponse> merged = new LinkedHashMap<>();
-                        for (MarketPriceResponse r : restData) {
-                            merged.put(r.getSymbol(), r);
-                        }
-                        for (MarketPriceResponse rt : realtimePriceHolder.getAllLatestPrices()) {
-                            merged.put(rt.getSymbol(), rt); // 실시간 데이터로 덮어쓰기
-                        }
-                        yield new ArrayList<>(merged.values());
-                    }
-                    yield restData;
-                }
-            };
-            return ResponseEntity.ok(prices);
+            // 자산군→소스 라우팅은 MarketDataService(SPI)가 담당. CRYPTO의 REST+WS 병합은
+            // CryptoMarketDataProvider로 이동(동작 동일).
+            return ResponseEntity.ok(marketDataService.getAllPrices(type));
         } catch (Exception e) {
             log.error("시세 조회 실패 [{}]: {}", type, e.getMessage());
             return ResponseEntity.internalServerError().body(List.of());
@@ -255,8 +236,9 @@ public class MarketController {
         if (!kisApiClient.isConfigured()) {
             return ResponseEntity.ok(List.of());
         }
-        // 음수/과대 입력 방어: 벤치마크 용도상 2년이면 충분하므로 1~730일로 클램프
-        days = Math.max(1, Math.min(days, 730));
+        // 음수/과대 입력 방어: 포트폴리오 성과 지표가 최대 5년(RANGE_DAYS.Y=1825일) 스냅샷과
+        // 비교하므로 벤치마크도 같은 상한으로 클램프 (KIS 조회는 페이지네이션으로 전 구간 수집)
+        days = Math.max(1, Math.min(days, 1825));
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
         String endDate = LocalDate.now().format(fmt);
         String startDate = LocalDate.now().minusDays(days).format(fmt);

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
@@ -19,10 +19,8 @@ const ConsoleExchangePage = lazy(() => import('./pages/ConsoleExchangePage'));
 const ConsoleDashboardPage = lazy(() => import('./pages/ConsoleDashboardPage'));
 const ConsolePortfolioPage = lazy(() => import('./pages/ConsolePortfolioPage'));
 const ConsoleMarketsPage = lazy(() => import('./pages/ConsoleMarketsPage'));
-const ConsoleTradePage = lazy(() => import('./pages/ConsoleTradePage'));
 const ConsoleStrategyPage = lazy(() => import('./pages/ConsoleStrategyPage'));
 const AutoTradePage = lazy(() => import('./pages/AutoTradePage'));
-const ConsoleLearnPage = lazy(() => import('./pages/ConsoleLearnPage'));
 const ConsoleEducationPage = lazy(() => import('./pages/ConsoleEducationPage'));
 const ConsoleMirrorPage = lazy(() => import('./pages/ConsoleMirrorPage'));
 const ConsoleCommunityPage = lazy(() => import('./pages/ConsoleCommunityPage'));
@@ -59,6 +57,13 @@ const RouteSplashLoading = () => {
   const { section } = useTheme();
   return section === 'virt' ? <VirtSplashLoading /> : <SplashLoading />;
 };
+
+// 시세·거래 통합에 따른 하위호환 리다이렉트 — 옛 /trade 딥링크(?code=&type=…)를
+// 쿼리 그대로 보존해 /market 으로 넘긴다. 외부 알림·북마크 URL도 계속 동작.
+function QueryRedirect({ to }: { to: string }) {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
+}
 
 // 라우트별 에러 바운더리 — 경로가 바뀌면 에러 상태를 리셋해 한 페이지 장애가
 // 셸·다른 메뉴까지 마비시키지 않도록 한다(다른 메뉴로 이동하면 자동 복구).
@@ -103,14 +108,8 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/trade"
-            element={
-              <ProtectedRoute>
-                <ConsoleTradePage />
-              </ProtectedRoute>
-            }
-          />
+          {/* /trade → /market 통합 리다이렉트 (쿼리 보존) */}
+          <Route path="/trade" element={<QueryRedirect to="/market" />} />
           <Route
             path="/strategy"
             element={
@@ -127,14 +126,8 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/store"
-            element={
-              <ProtectedRoute>
-                <ConsoleLearnPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* /store(전략 학습) → /strategy(전략·백테스트) 통합 리다이렉트 (쿼리 보존) */}
+          <Route path="/store" element={<QueryRedirect to="/strategy" />} />
           <Route
             path="/ranking"
             element={
@@ -190,10 +183,10 @@ function App() {
           <Route path="/virt/dashboard" element={<ProtectedRoute><ConsoleDashboardPage /></ProtectedRoute>} />
           <Route path="/virt/my-portfolio" element={<ProtectedRoute><ConsolePortfolioPage /></ProtectedRoute>} />
           <Route path="/virt/market" element={<ProtectedRoute><ConsoleMarketsPage /></ProtectedRoute>} />
-          <Route path="/virt/trade" element={<ProtectedRoute><ConsoleTradePage /></ProtectedRoute>} />
+          <Route path="/virt/trade" element={<QueryRedirect to="/virt/market" />} />
           <Route path="/virt/strategy" element={<ProtectedRoute><ConsoleStrategyPage /></ProtectedRoute>} />
           <Route path="/virt/auto-trade" element={<ProtectedRoute><AutoTradePage /></ProtectedRoute>} />
-          <Route path="/virt/store" element={<ProtectedRoute><ConsoleLearnPage /></ProtectedRoute>} />
+          <Route path="/virt/store" element={<QueryRedirect to="/virt/strategy" />} />
           <Route path="/virt/learn" element={<ProtectedRoute><ConsoleEducationPage /></ProtectedRoute>} />
           <Route path="/virt/mirror" element={<ProtectedRoute><ConsoleMirrorPage /></ProtectedRoute>} />
           <Route path="/virt/ranking" element={<ProtectedRoute><ConsoleStatusPage /></ProtectedRoute>} />
@@ -206,10 +199,10 @@ function App() {
           {import.meta.env.DEV && <Route path="/preview/console" element={<ConsoleDashboardPage />} />}
           {import.meta.env.DEV && <Route path="/preview/portfolio" element={<ConsolePortfolioPage />} />}
           {import.meta.env.DEV && <Route path="/preview/markets" element={<ConsoleMarketsPage />} />}
-          {import.meta.env.DEV && <Route path="/preview/trade" element={<ConsoleTradePage />} />}
+          {import.meta.env.DEV && <Route path="/preview/trade" element={<QueryRedirect to="/preview/markets" />} />}
           {import.meta.env.DEV && <Route path="/preview/strategy" element={<ConsoleStrategyPage />} />}
           {import.meta.env.DEV && <Route path="/preview/auto-trade" element={<AutoTradePage />} />}
-          {import.meta.env.DEV && <Route path="/preview/learn" element={<ConsoleLearnPage />} />}
+          {import.meta.env.DEV && <Route path="/preview/learn" element={<QueryRedirect to="/preview/strategy" />} />}
           {import.meta.env.DEV && <Route path="/preview/edu" element={<ConsoleEducationPage />} />}
           {import.meta.env.DEV && <Route path="/preview/community" element={<ConsoleCommunityPage />} />}
           {import.meta.env.DEV && <Route path="/preview/status" element={<ConsoleStatusPage />} />}

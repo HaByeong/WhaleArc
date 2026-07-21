@@ -77,7 +77,7 @@ const VirtBadge = () => (
 const FEATURES = [
   { n: '01', title: '실시간 시세 스트림', body: 'KIS 모의투자 API로 국내 주식·코인 시세를 추적합니다. 대시보드에서 보유 종목과 함께.', meta: 'KOSPI · KOSDAQ · 빗썸', route: '/market',
     icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l5-6 4 4 6-8" /> },
-  { n: '02', title: '고래 튜터와 전략 학습', body: '골든크로스·RSI·볼린저 등 8가지 검증된 전략을 챗으로 쉽게 알려드려요. 용어 설명과 예시까지.', meta: '8개 기본 전략 · 초급~고급', route: '/store',
+  { n: '02', title: '고래 튜터와 전략 학습', body: '골든크로스·RSI·볼린저 등 검증된 전략을 챗으로 쉽게 알려드려요. 전략을 고르면 바로 백테스트로 검증까지.', meta: '15개 프리셋 · 초급~고급', route: '/strategy',
     icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 12c3-4 6-4 9 0s6 4 9 0M3 17c3-4 6-4 9 0s6 4 9 0" /> },
   { n: '03', title: 'VIRT 가상 항해', body: '실제 시세로 움직이는 모의 계좌. 전략을 실험하고, 실수해도 자산은 안전하게 지킵니다.', meta: '가상돈 ₩1,000만 · 무제한 리셋', route: '/virt/dashboard',
     icon: <><rect x="3" y="4" width="18" height="16" rx="2" /><path strokeLinecap="round" d="M3 9h18M7 14l2 2 3-4" /></> },

@@ -348,7 +348,7 @@ const ReviewTab = () => {
       kicker="FIRST REVIEW"
       title="아직 복기할 거래가 없어요"
       desc="첫 모의 거래를 마치면 여기서 수익률·승률·평균 손익을 돌아볼 수 있어요. 결과보다 ‘규칙을 지켰는가’를 점검하는 게 복기예요."
-      ctaLabel="첫 모의 거래 하기" onCta={() => go('/trade')}
+      ctaLabel="첫 모의 거래 하기" onCta={() => go('/market')}
       secondaryLabel="전략 둘러보기" onSecondary={() => go('/strategy')}
       preview={[
         { icon: 'card', label: '청산 거래 KPI', sub: '승률·평균 수익률·실현 손익' },

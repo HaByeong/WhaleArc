@@ -74,12 +74,14 @@ export interface BacktestRequest {
   rebalanceBandPct?: number;
   // 적립식 투자: 매월 첫 거래일에 추가 납입할 금액 (KRW). 0/undefined 면 off
   monthlyContribution?: number;
-  // 2자산 리밸런싱 (둘 다 채워졌을 때만 활성)
+  // 2자산 리밸런싱 (레거시 — additionalAssets 없을 때만 사용)
   secondStockCode?: string;
   secondStockName?: string;
   secondAssetType?: string;
-  firstAssetWeight?: number;  // 0~100, 기본 50
+  firstAssetWeight?: number;  // 0~100. 기본 자산 비중, 기본 50
   rebalanceFrequency?: 'MONTHLY' | 'QUARTERLY' | 'YEARLY';  // 기본 MONTHLY
+  // N자산 리밸런싱 (기본 자산 + 추가 1~4개, 총 최대 5자산). 비중 합(firstAssetWeight + Σweight)=100
+  additionalAssets?: { stockCode: string; stockName?: string; assetType: string; weight: number }[];
   // 배당 처리 (미국주식·ETF 한정. null/true=재투자 ON → adjclose, false=OFF → 일반 close + 배당 cash 입금)
   dividendReinvest?: boolean;
   // 종목 분석 모드: 직접 조건 입력
@@ -147,6 +149,8 @@ export interface BacktestResult {
   secondAssetTradeCount?: number;
   rebalanceCount?: number;
   rebalanceFrequency?: 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+  // N자산 리밸런싱 자산별 분해 (전체 — first/second 필드는 앞 2개 하위호환)
+  assetBreakdown?: { stockCode: string; stockName: string; weight: number; finalValue: number; tradeCount: number }[];
   // 배당 처리
   dividendReinvest?: boolean;       // true = adjclose 사용 (자동 재투자)
   totalDividendsReceived?: number;  // OFF 모드일 때 누적 배당 cash 입금액 (native 단위)
@@ -158,7 +162,8 @@ export interface BacktestResult {
 
 export interface BacktestTrade {
   date: string;
-  type: 'BUY' | 'SELL' | 'SHORT' | 'COVER';
+  // BUY/SELL/SHORT/COVER + 리밸런싱 모드 접미사형(BUY_A, SELL_B, REBALANCE_SELL_A 등)
+  type: string;
   price: number;
   quantity: number;
   pnl: number;

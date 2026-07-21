@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,10 +6,12 @@ import HelmShell from '../components/HelmShell';
 import EmptyState from '../components/EmptyState';
 import { tradeService, portfolioService, type Portfolio, type Holding, type Trade, type PortfolioSnapshot } from '../services/tradeService';
 import { quantStoreService, type PurchasePerformance } from '../services/quantStoreService';
-import { exchangeService, type ExchangeType, type ExchangeAccount, type ExchangePortfolio, type ExchangeSnapshot } from '../services/exchangeService';
+import { exchangeService, type ExchangeType, type ExchangeAccount, type ExchangePortfolio, type ExchangeSnapshot, type ExchangeTransaction } from '../services/exchangeService';
 import ExchangeConnectModal from '../components/ExchangeConnectModal';
 import apiClient from '../utils/api';
 import { FALLBACK_USD_KRW } from '../utils/currency';
+import { SONAR, UP, DOWN, won, CHART_COLORS, ASSET_ICON, isUsd, stockLikeOf, fmtQty, holdingName, panel, EXCHANGES, REAL_SRC_KEY } from '../components/console/format';
+import { Panel, PanelHead, Tri, Toast, ConsoleFooter } from '../components/console/ui';
 
 /* ────────────────────────────────────────────────────────────
    ConsolePortfolioPage — 포트폴리오(페이퍼/모의투자) 실데이터 배선
@@ -19,35 +20,10 @@ import { FALLBACK_USD_KRW } from '../utils/currency';
    ※ 멀티거래소 실계좌는 대시보드(ConsoleDashboardPage) 책임 — 여기선 페이퍼만.
    ──────────────────────────────────────────────────────────── */
 
-const SONAR = 'var(--ci-sonar)';
-const UP = '#ef4d4d';     // 상승 = 빨강 (양쪽 테마 공통)
-const DOWN = '#4d8aff';   // 하락 = 파랑 (양쪽 테마 공통)
-const won = (n: number) => '₩' + Math.round(n).toLocaleString('ko-KR');
-const CHART_COLORS = ['#5b9dff', '#f7931a', '#627eea', '#9945ff', '#23c4a0', '#f5d061', '#ef6f6f', '#7c8cff'];
-const ASSET_ICON: Record<string, { c: string; t: string }> = {
-  BTC: { c: '#f7931a', t: '₿' }, ETH: { c: '#627eea', t: 'Ξ' }, SOL: { c: '#9945ff', t: '◎' },
-  XRP: { c: '#2f6fe6', t: '✕' }, USDT: { c: '#26a17b', t: '₮' }, DOGE: { c: '#c2a633', t: 'Ð' },
-};
-const isUsd = (at?: string) => at === 'US_STOCK' || at === 'ETF';
-const stockLikeOf = (at?: string) => at === 'STOCK' || isUsd(at);
-const stripZeros = (s: string) => s.replace(/\.?0+$/, '') || '0';
-const fmtQty = (n: number, stockLike: boolean) => (stockLike ? `${Math.floor(n).toLocaleString('ko-KR')}주` : `${stripZeros(n.toFixed(8))}개`);
-const holdingName = (h: { stockName?: string; stockCode: string }) => h.stockName || h.stockCode;
+/* 색·포맷터·CHART_COLORS·ASSET_ICON·Panel/PanelHead/Tri/Toast·EXCHANGES는 components/console/ui.tsx 공용 모듈 사용 */
 const fmtHoldingValue = (h: Holding) => (isUsd(h.assetType) ? '$' + h.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : won(h.marketValue));
 // 실계좌(ExchangeHolding) 단가/평가 표시: 해외주식 USD는 $, 그 외 ₩. (합계·도넛은 항상 KRW 환산)
 const exMoney = (n: number, cur?: string) => cur === 'USD' ? '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : won(n);
-
-const panel: React.CSSProperties = { background: 'var(--ci-panel)', border: '1px solid var(--ci-line)', borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)' };
-const Panel = ({ children, style }: { children: ReactNode; style?: React.CSSProperties }) => <div style={{ ...panel, ...style }}>{children}</div>;
-const PanelHead = ({ kicker, title, right }: { kicker?: string; title: string; right?: ReactNode }) => (
-  <div className="wa-force-dark flex items-center justify-between px-[22px] py-[15px] text-white" style={{ background: 'linear-gradient(105deg,#142647 0%,#1d3c7a 52%,#2c6fe6 100%)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
-    <div>{kicker && <div className="text-[11.5px] font-bold tracking-[.22em] text-white/70">{kicker}</div>}<div className="text-[17.5px] font-bold">{title}</div></div>
-    {right}
-  </div>
-);
-const Tri = ({ up }: { up: boolean }) => (
-  <svg width="9" height="9" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 2 }}><path d={up ? 'M5 1l4 7H1z' : 'M5 9L1 2h8z'} fill={up ? UP : DOWN} /></svg>
-);
 
 // 자산 추이 기간 선택 (일/월/년) — 일=일별, 월·년=월별 다운샘플(조회 범위만 다름)
 const RANGE_DAYS = { D: 30, M: 365, Y: 1825 } as const;
@@ -71,6 +47,106 @@ const trendSeries = <T extends { date: string }>(snaps: T[], range: TrendRange):
 // 캡션도 '일별(데이터 모으는 중)'로 바꿔 표기와 실제 그래프를 일치시킨다.
 const rangeCaption = <T extends { date: string }>(snaps: T[], range: TrendRange): string =>
   range !== 'D' && downsampleByMonth(snaps).length < 2 ? '일별 · 데이터 모으는 중' : RANGE_CAPTION[range];
+// 자산 추이 시계열 + KOSPI 리베이스(시작값 기준) — 페이퍼·실계좌 공용.
+// KOSPI는 포트폴리오 시작일 이전 마지막 종가를 기준점으로 잡고, 휴장일은 직전 종가로 채운다.
+const buildTrendData = (points: { date: string; value: number }[], kospiHistory: { date: string; close: number }[]) => {
+  if (points.length < 2) return null;
+  const startValue = points[0].value || 1;
+  const startDate = points[0].date;
+  const portValue = points.map(p => p.value);
+  const portPct = points.map(p => ((p.value - startValue) / startValue) * 100);
+  let kospiValue: number[] | null = null, kospiPct: number[] | null = null;
+  if (kospiHistory.length) {
+    const sorted = [...kospiHistory].sort((a, b) => a.date.localeCompare(b.date));
+    const kmap = new Map(sorted.map(k => [k.date, k.close]));
+    let startClose = 0;
+    for (const k of sorted) { if (k.date <= startDate) startClose = k.close; }
+    if (!startClose) startClose = sorted[0].close;
+    if (startClose) {
+      kospiPct = points.map(p => {
+        let c = kmap.get(p.date);
+        if (c == null) { for (const k of sorted) { if (k.date <= p.date) c = k.close; } }
+        if (c == null) c = startClose;
+        return ((c - startClose) / startClose) * 100;
+      });
+      kospiValue = kospiPct.map(pc => startValue * (1 + pc / 100));
+    }
+  }
+  return { dates: points.map(p => p.date), portValue, portPct, kospiValue, kospiPct };
+};
+
+// 스냅샷 시계열 기반 성과 지표(MDD·샤프·KOSPI 알파) — 페이퍼·실계좌 공용.
+// 승률·보유기간 등 거래 기반 지표는 전체 체결 이력이 있는 페이퍼에서만 별도 계산.
+const snapshotMetrics = (values: { date: string; value: number }[], kospiHistory: { date: string; close: number }[]) => {
+  if (values.length < 2) return null;
+  // MDD
+  let peak = values[0].value, mdd = 0;
+  for (const s of values) {
+    if (s.value > peak) peak = s.value;
+    const dd = peak > 0 ? (peak - s.value) / peak : 0;
+    if (dd > mdd) mdd = dd;
+  }
+  // 일간 수익률 & Sharpe (무위험 수익률 3.5%/년, 연환산)
+  const dailyRets: number[] = [];
+  for (let i = 1; i < values.length; i++) {
+    const prev = values[i - 1].value;
+    if (prev > 0) dailyRets.push((values[i].value - prev) / prev);
+  }
+  let sharpe: number | null = null;
+  if (dailyRets.length >= 5) {
+    const mean = dailyRets.reduce((a, b) => a + b, 0) / dailyRets.length;
+    const variance = dailyRets.reduce((a, b) => a + (b - mean) ** 2, 0) / dailyRets.length;
+    const stdev = Math.sqrt(variance);
+    const dailyRf = 0.035 / 252;
+    if (stdev > 0) sharpe = ((mean - dailyRf) / stdev) * Math.sqrt(252);
+  }
+  // Alpha vs KOSPI — 기간 수익률 차 (시작일 이전 마지막 종가 기준)
+  let alpha: number | null = null;
+  if (kospiHistory.length) {
+    const startVal = values[0].value, endVal = values[values.length - 1].value;
+    const portPct = startVal > 0 ? ((endVal - startVal) / startVal) * 100 : 0;
+    const sorted = [...kospiHistory].sort((a, b) => a.date.localeCompare(b.date));
+    let startClose = 0;
+    for (const k of sorted) { if (k.date <= values[0].date) startClose = k.close; }
+    if (!startClose) startClose = sorted[0].close;
+    let endClose = startClose;
+    for (const k of sorted) { if (k.date <= values[values.length - 1].date) endClose = k.close; }
+    const kospiPct = startClose > 0 ? ((endClose - startClose) / startClose) * 100 : 0;
+    alpha = portPct - kospiPct;
+  }
+  return { mdd: mdd * 100, sharpe, alpha };
+};
+
+// 지표 카드 설명문 — 페이퍼·실계좌 동일 기준으로 표기
+const sharpeExplain = (v: number | null) =>
+  v == null ? '데이터 5일 이상 필요' :
+  v >= 1.5 ? '위험 대비 수익이 매우 우수해요' :
+  v >= 1.0 ? '위험 대비 수익이 양호해요' :
+  v >= 0 ? '수익은 내고 있지만 변동이 큰 편' :
+  '수익보다 변동이 더 큰 상태예요';
+const mddExplain = (v: number) =>
+  v < 5 ? '낙폭이 매우 작아 안정적이에요' :
+  v < 10 ? '낙폭이 10% 미만 — 안정적인 편' :
+  v < 20 ? '한 번쯤 큰 하락이 있었어요. 분산을 고려하세요' :
+  '낙폭이 큰 편이에요. 손절 설정을 권장합니다';
+const alphaExplain = (v: number | null) =>
+  v == null ? 'KOSPI 비교 데이터 없음' :
+  v >= 5 ? `KOSPI보다 ${v.toFixed(1)}%p 더 벌었어요` :
+  v >= 0 ? `KOSPI와 비슷하거나 약간 앞서요` :
+  `KOSPI보다 ${Math.abs(v).toFixed(1)}%p 덜 벌었어요`;
+
+// 클라이언트 CSV 생성 — 실계좌는 백엔드 export 엔드포인트가 없어 화면 데이터로 직접 만든다(BOM: 엑셀 한글 호환)
+const csvEscape = (v: unknown) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+const downloadCsv = (rows: (string | number)[][], filename: string) => {
+  const csv = '\uFEFF' + rows.map(r => r.map(csvEscape).join(',')).join('\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+const todayStamp = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; };
+
 const RangeToggle = ({ range, onChange }: { range: TrendRange; onChange: (r: TrendRange) => void }) => (
   <div className="flex gap-[3px] rounded-lg p-[3px]" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
     {(Object.keys(RANGE_DAYS) as TrendRange[]).map(r => (
@@ -80,7 +156,8 @@ const RangeToggle = ({ range, onChange }: { range: TrendRange; onChange: (r: Tre
   </div>
 );
 
-const TrendChart = ({ port, kospi, mode, days = 0, real = false }: { port: number[]; kospi: number[] | null; mode: 'value' | 'pct'; days?: number; real?: boolean }) => {
+const TrendChart = ({ port, kospi, dates, mode, days = 0, real = false }: { port: number[]; kospi: number[] | null; dates?: string[]; mode: 'value' | 'pct'; days?: number; real?: boolean }) => {
+  const [hover, setHover] = useState<number | null>(null); // 호버 중인 데이터 인덱스 (조기 return 전에 선언 — 훅 규칙)
   if (port.length < 2) return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
       <svg width="34" height="34" viewBox="0 0 24 24" fill="none" style={{ color: 'var(--ci-ink3)', opacity: .65 }}><path d="M3 3v16a2 2 0 0 0 2 2h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><path d="M7 14l3.5-3.5 3 3L21 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2.5 2.5" /></svg>
@@ -104,14 +181,55 @@ const TrendChart = ({ port, kospi, mode, days = 0, real = false }: { port: numbe
   const bp = kospi ? 'M ' + kospi.map((p, i) => `${xP(i)} ${yP(p)}`).join(' L ') : '';
   const ticks = [0, .25, .5, .75, 1].map(t => min + (1 - t) * range);
   const fmtY = (v: number) => mode === 'pct' ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}%` : v >= 1e8 ? `${(v / 1e8).toFixed(1)}억` : `${Math.round(v / 10000)}만`;
+  // ── 호버 툴팁 + x축 날짜 라벨 ──
+  const hi = hover != null ? Math.min(hover, port.length - 1) : null; // 폴링으로 시리즈 길이가 줄어도 안전
+  const fmtV = (v: number) => (mode === 'pct' ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` : won(v));
+  const fmtD = (d?: string) => (d ? d.slice(2).replace(/-/g, '.') : '');
+  const xTicks = dates?.length ? [...new Set([0, Math.round((port.length - 1) / 3), Math.round(((port.length - 1) * 2) / 3), port.length - 1])] : [];
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    if (!r.width) return;
+    const x = ((e.clientX - r.left) / r.width) * W;
+    setHover(Math.max(0, Math.min(port.length - 1, Math.round(((x - padL) / innerW) * (port.length - 1)))));
+  };
+  // 툴팁 행: 날짜 / ●내 자산 / ●KOSPI — mono 값만 표기해 폭 예측 가능(한글 라벨 대신 컬러 불릿)
+  const tip = hi == null ? null : (() => {
+    const rows: { c?: string; t: string }[] = [];
+    if (dates?.[hi]) rows.push({ t: fmtD(dates[hi]) });
+    rows.push({ c: SONAR, t: fmtV(port[hi]) });
+    if (kospi) rows.push({ c: 'var(--ci-ink3)', t: fmtV(kospi[hi]) });
+    const w = Math.max(...rows.map(r => r.t.length)) * 6.6 + 30;
+    const h = rows.length * 15 + 11;
+    const hx = xP(hi);
+    const bx = hx + 12 + w > W - padR ? hx - 12 - w : hx + 12; // 오른쪽 공간 부족 시 왼쪽에 표시
+    const by = Math.max(padT, Math.min(yP(port[hi]) - h / 2, padT + innerH - h));
+    return { rows, w, h, hx, bx, by };
+  })();
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%" style={{ display: 'block' }}>
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%" style={{ display: 'block' }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
       <defs><linearGradient id="pf" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor={SONAR} stopOpacity=".2" /><stop offset="100%" stopColor={SONAR} stopOpacity="0" /></linearGradient></defs>
       {ticks.map((t, i) => (<g key={i}><line x1={padL} x2={W - padR} y1={yP(t)} y2={yP(t)} stroke="var(--ci-line)" /><text x={W - padR + 6} y={yP(t) + 4} fill="var(--ci-ink2)" fontSize="10" fontFamily="JetBrains Mono, monospace">{fmtY(t)}</text></g>))}
+      {xTicks.map(i => (
+        <text key={i} x={xP(i)} y={H - 9} textAnchor={i === 0 ? 'start' : i === port.length - 1 ? 'end' : 'middle'} fontSize="10" fill="var(--ci-ink3)" fontFamily="JetBrains Mono, monospace">{fmtD(dates?.[i])}</text>
+      ))}
       <path d={fp} fill="url(#pf)" />
       {kospi && <path d={bp} stroke="var(--ci-ink3)" strokeWidth="1.4" strokeDasharray="4 3" fill="none" vectorEffect="non-scaling-stroke" />}
       <path d={pp} stroke={SONAR} strokeWidth="1.8" fill="none" vectorEffect="non-scaling-stroke" />
       <circle cx={xP(port.length - 1)} cy={yP(port[port.length - 1])} r="3.5" fill={SONAR} stroke="var(--ci-card)" strokeWidth="1.5" />
+      {tip && hi != null && (
+        <g pointerEvents="none">
+          <line x1={tip.hx} x2={tip.hx} y1={padT} y2={padT + innerH} stroke="var(--ci-ink3)" strokeWidth="1" strokeDasharray="3 3" />
+          <circle cx={tip.hx} cy={yP(port[hi])} r="4" fill={SONAR} stroke="var(--ci-card)" strokeWidth="1.5" />
+          {kospi && <circle cx={tip.hx} cy={yP(kospi[hi])} r="3" fill="var(--ci-ink3)" stroke="var(--ci-card)" strokeWidth="1.5" />}
+          <rect x={tip.bx} y={tip.by} width={tip.w} height={tip.h} rx="7" fill="var(--ci-raised)" stroke="var(--ci-line-strong)" opacity="0.97" />
+          {tip.rows.map((r, i) => (
+            <g key={i}>
+              {r.c && <rect x={tip.bx + 9} y={tip.by + 9 + i * 15 - 5} width="7" height="7" rx="2" fill={r.c} />}
+              <text x={tip.bx + (r.c ? 21 : 9)} y={tip.by + 9 + i * 15 + 3} fontSize="10.5" fontWeight="600" fill="var(--ci-ink0)" fontFamily="JetBrains Mono, monospace">{r.t}</text>
+            </g>
+          ))}
+        </g>
+      )}
     </svg>
   );
 };
@@ -137,6 +255,27 @@ const mergeAllocByLabel = (items: { c: string; label: string; value: number }[])
     else m.set(it.label, { ...it });
   }
   return [...m.values()];
+};
+
+// 도넛 색 안정화 — 자산 코드(없으면 라벨) 해시로 결정: 보유 종목이 늘거나 순서가 바뀌어도
+// 같은 자산은 같은 색을 유지하고, 주요 코인은 ASSET_ICON 고유색(BTC 주황 등)과 일치시킨다.
+// (이전엔 배열 index 기반이라 종목 하나만 추가돼도 전체 색이 밀렸다)
+const stableColor = (code: string | undefined, label: string) => {
+  if (code && ASSET_ICON[code]) return ASSET_ICON[code].c;
+  const key = code || label;
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return CHART_COLORS[h % CHART_COLORS.length];
+};
+
+// 자산 배분 마무리 — 색 결정(현금·터틀 등 명시색 존중) → 라벨 병합 → 값 내림차순 → 상위 max개 + '기타' 묶음.
+// 도넛 조각과 범례가 항상 같은 목록을 쓰므로 어긋나지 않는다(이전 실계좌는 범례만 6개로 잘랐음).
+const finalizeAlloc = (items: { label: string; value: number; code?: string; c?: string }[], max = 7) => {
+  const colored = items.map(it => ({ c: it.c ?? stableColor(it.code, it.label), label: it.label, value: it.value }));
+  const merged = mergeAllocByLabel(colored).sort((a, b) => b.value - a.value);
+  if (merged.length <= max + 1) return merged; // '기타'가 1종뿐이면 묶는 의미가 없어 그대로
+  const rest = merged.slice(max);
+  return [...merged.slice(0, max), { c: '#5a6a88', label: `기타 ${rest.length}종`, value: rest.reduce((s, a) => s + a.value, 0) }];
 };
 
 // 실계좌 보유목록 정리 — 거래소가 같은 자산(assetCode)을 중복 entry로 주거나 수량 0 유령을
@@ -176,6 +315,7 @@ const HoldingsTrades = ({ holdings, trades, holdingsValue, holdingsPnl, routeMap
   onPick: (code: string, at?: string) => void; navTrade: () => void; navStore: () => void;
 }) => {
   const [tab, setTab] = useState<'holdings' | 'trades'>('holdings');
+  const [tradeLimit, setTradeLimit] = useState(20); // 처음 20건 + '더 보기'로 20건씩 (이전엔 20건 고정·CSV로만 전체 확인 가능)
   return (
     <Panel style={{ padding: 0, overflow: 'hidden' }}>
       <div className="grid grid-cols-2" style={{ borderBottom: '1px solid var(--ci-line)' }}>
@@ -227,7 +367,7 @@ const HoldingsTrades = ({ holdings, trades, holdingsValue, holdingsPnl, routeMap
           <div className="overflow-x-auto">
             <table className="w-full border-collapse" style={{ minWidth: 520 }}>
               <thead><tr>{['시간', '구분', '종목', '수량', '가격'].map(h => <th key={h} className="px-[18px] py-3 text-left text-[12px] font-semibold uppercase tracking-[.1em] text-white/48" style={{ borderBottom: '1px solid var(--ci-line)' }}>{h}</th>)}</tr></thead>
-              <tbody>{trades.slice(0, 20).map(t => { const buy = t.orderType === 'BUY', sl = stockLikeOf(t.assetType); return (
+              <tbody>{trades.slice(0, tradeLimit).map(t => { const buy = t.orderType === 'BUY', sl = stockLikeOf(t.assetType); return (
                 <tr key={t.id}>
                   <td className="font-mono text-[14px]" style={td}>{(() => { try { return new Date(t.executedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return t.executedAt; } })()}</td>
                   <td style={td}><span className="rounded px-2 py-0.5 text-[12px] font-bold" style={{ color: buy ? UP : DOWN, background: buy ? 'rgba(239,77,77,.12)' : 'rgba(77,138,255,.12)' }}>{buy ? '매수' : '매도'}</span></td>
@@ -236,6 +376,11 @@ const HoldingsTrades = ({ holdings, trades, holdingsValue, holdingsPnl, routeMap
                   <td className="font-mono text-[14px]" style={td}>{isUsd(t.assetType) ? '$' + t.price.toLocaleString('en-US', { maximumFractionDigits: 2 }) : won(t.price)}</td>
                 </tr>); })}</tbody>
             </table>
+            {trades.length > tradeLimit && (
+              <button onClick={() => setTradeLimit(l => l + 20)} className="w-full py-3 text-[13.5px] font-semibold transition-colors hover:bg-white/[0.03]" style={{ color: SONAR, borderTop: '1px solid var(--ci-line)' }}>
+                더 보기 ↓ ({trades.length - tradeLimit}건 남음)
+              </button>
+            )}
           </div>
         )
       )}
@@ -277,17 +422,13 @@ const RouteCard = ({ perf, isRep, onStar, busy, navTo }: { perf: PurchasePerform
   );
 };
 
-const Toast = ({ msg, type }: { msg: string; type: 'success' | 'error' }) => (
-  <div className="fixed bottom-6 left-1/2 z-[120] -translate-x-1/2 rounded-xl px-5 py-3 text-[14px] font-semibold text-white" style={{ background: type === 'error' ? 'linear-gradient(180deg,#e0524f,#c23b38)' : 'linear-gradient(180deg,#2f9e6e,#1f7d57)', boxShadow: '0 14px 32px -10px rgba(0,0,0,.55)', animation: 'message-in .25s ease' }}>{msg}</div>
-);
-
 /* ── 페이퍼(모의투자) 포트폴리오 — virt 라우트 ── */
 const PaperPortfolio = () => {
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { profileName } = useAuth();
   const { isVirt } = useRoutePrefix();
-  const email = session?.user?.email ?? '';
-  const userName = email ? email.split('@')[0] : '항해사';
+  // 표시명은 DB 닉네임(profileName) 단일 소스 — 대시보드와 동일(이메일 ID 노출·깜빡임 방지)
+  const userName = profileName || '항해사';
   const [mode, setMode] = useState<'value' | 'pct'>('value');
   const [range, setRange] = useState<TrendRange>('D');
 
@@ -329,7 +470,8 @@ const PaperPortfolio = () => {
   }, [isPreview]);
 
   // 자산 추이는 메인 로딩과 분리(무음) — 기간 토글 시 페이지 깜빡임 없이 차트만 갱신.
-  // 자체 10초 폴링으로 오늘 점은 라이브 유지, range 변경 시 즉시 재조회.
+  // 30초 폴링으로 오늘 점만 라이브 유지(총자산 숫자는 load()가 10초로 갱신; 이력 전체 재조회는
+  // 년 범위에서 5년치라 10초는 과했다), range 변경 시엔 즉시 재조회.
   const loadHistory = useCallback(() => {
     if (isPreview) return;
     portfolioService.getHistory(RANGE_DAYS[range]).then(setHistory).catch(() => {});
@@ -337,7 +479,7 @@ const PaperPortfolio = () => {
   useEffect(() => {
     loadHistory();
     if (isPreview) return;
-    const t = setInterval(loadHistory, 10_000);
+    const t = setInterval(loadHistory, 30_000);
     return () => clearInterval(t);
   }, [loadHistory, isPreview]);
 
@@ -356,11 +498,15 @@ const PaperPortfolio = () => {
     return () => clearInterval(t);
   }, [load, isPreview]);
 
-  // KOSPI 벤치마크 (공개 API, 인증 데이터와 분리 — 401에 묶이지 않게). 기간 선택에 맞춰 범위 조정.
+  // KOSPI 벤치마크 (공개 API, 인증 데이터와 분리 — 401에 묶이지 않게).
+  // 전체 기간(RANGE_DAYS.Y)을 1회 조회해 차트 리베이스와 성과 지표(알파)가 같은 데이터를 쓴다.
+  // 이전엔 차트 range에 맞춰 재조회(365/1825일)해서, 1년 넘게 기록된 계정에서 일/월 범위일 때
+  // 알파의 KOSPI 시작점이 잘리고 range 토글에 따라 알파 값이 바뀌는 불일치가 있었다.
+  // 고정 days = 전 유저 동일 요청 → 백엔드 지수 캐시도 공유된다.
   useEffect(() => {
-    apiClient.get('/api/market/indices/history', { params: { code: '0001', days: Math.max(365, RANGE_DAYS[range]) } })
+    apiClient.get('/api/market/indices/history', { params: { code: '0001', days: RANGE_DAYS.Y } })
       .then(res => { if (Array.isArray(res.data)) setKospiHistory(res.data); }).catch(() => {});
-  }, [range]);
+  }, []);
 
   const handleStar = useCallback(async (purchaseId: string) => {
     if (!portfolio) return;
@@ -372,7 +518,9 @@ const PaperPortfolio = () => {
   }, [portfolio, load]);
 
   const goTrade = useCallback((code: string, at?: string) => {
-    navigate(`${isVirt ? '/virt' : ''}/trade?code=${code}&type=${at || 'CRYPTO'}`);
+    // 보유 종목 클릭 = 포지션 관리 의지 → 시세·거래 통합 페이지에서 주문 패널을 바로 연다.
+    // 이미 보유 중이므로 매도 탭으로 여는 게 문맥에 맞다(매수 전환은 패널 안 탭 1클릭).
+    navigate(`${isVirt ? '/virt' : ''}/market?code=${code}&type=${at || 'CRYPTO'}&panel=order&side=sell`);
   }, [navigate, isVirt]);
 
   const handleExport = useCallback(async (kind: 'trades' | 'portfolio') => {
@@ -390,7 +538,12 @@ const PaperPortfolio = () => {
     catch { showToast('초기화에 실패했습니다.', 'error'); }
   }, [showToast, load, loadHistory, loadMetricsHistory]);
 
-  const holdings = portfolio?.holdings ?? [];
+  // 보유 종목은 평가액(KRW 환산) 내림차순 — API 응답 순서 그대로 두면 종목이 많을 때 훑기 어렵다
+  const holdings = useMemo(() => {
+    const fx = portfolio?.usdKrwRate || FALLBACK_USD_KRW;
+    const v = (h: Holding) => (isUsd(h.assetType) && fx > 0 ? h.marketValue * fx : h.marketValue);
+    return [...(portfolio?.holdings ?? [])].sort((a, b) => v(b) - v(a));
+  }, [portfolio]);
   const cash = portfolio?.cashBalance ?? 0;
   const initialCash = portfolio?.initialCash || 10_000_000;
   const totalValue = portfolio?.totalValue ?? 0;
@@ -412,71 +565,27 @@ const PaperPortfolio = () => {
   }, [routes]);
 
   const alloc = useMemo(() => {
-    const arr: { c: string; label: string; value: number }[] = [];
+    const arr: { label: string; value: number; code?: string; c?: string }[] = [];
     if (cash > 0) arr.push({ c: '#7a8aa8', label: '현금', value: cash });
-    holdings.forEach((h, i) => { const v = krwVal(h); if (v > 0) arr.push({ c: CHART_COLORS[i % CHART_COLORS.length], label: holdingName(h), value: v }); });
+    holdings.forEach(h => { const v = krwVal(h); if (v > 0) arr.push({ code: h.stockCode, label: holdingName(h), value: v }); });
     if (turtle > 0) arr.push({ c: '#f5d061', label: '터틀 전략', value: turtle });
-    return mergeAllocByLabel(arr);
+    return finalizeAlloc(arr);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- krwVal은 usdKrw만 읽는 렌더 로컬 헬퍼(usdKrw는 이미 dep); deps에 넣으면 memo가 매 렌더 무효화됨
   }, [holdings, cash, turtle, usdKrw]);
   const allocTotal = alloc.reduce((s, a) => s + a.value, 0);
 
   // 자산추이 시계열 + KOSPI 리베이스(포트폴리오 시작값 기준). 월·년은 월별 다운샘플.
-  const chart = useMemo(() => {
-    const hist = trendSeries(history, range);
-    if (hist.length < 2) return null;
-    const startValue = hist[0].totalValue || 1;
-    const startDate = hist[0].date;
-    const portValue = hist.map(s => s.totalValue);
-    const portPct = hist.map(s => ((s.totalValue - startValue) / startValue) * 100);
-    let kospiValue: number[] | null = null, kospiPct: number[] | null = null;
-    if (kospiHistory.length) {
-      const sorted = [...kospiHistory].sort((a, b) => a.date.localeCompare(b.date));
-      const kmap = new Map(sorted.map(k => [k.date, k.close]));
-      let startClose = 0;
-      for (const k of sorted) { if (k.date <= startDate) startClose = k.close; }
-      if (!startClose) startClose = sorted[0].close;
-      if (startClose) {
-        kospiPct = hist.map(s => {
-          let c = kmap.get(s.date);
-          if (c == null) { for (const k of sorted) { if (k.date <= s.date) c = k.close; } }
-          if (c == null) c = startClose;
-          return ((c - startClose) / startClose) * 100;
-        });
-        kospiValue = kospiPct.map(p => startValue * (1 + p / 100));
-      }
-    }
-    return { portValue, portPct, kospiValue, kospiPct };
-  }, [history, kospiHistory, range]);
+  const chart = useMemo(
+    () => buildTrendData(trendSeries(history, range).map(s => ({ date: s.date, value: s.totalValue })), kospiHistory),
+    [history, kospiHistory, range]);
   const port = chart ? (mode === 'pct' ? chart.portPct : chart.portValue) : [];
   const kospi = chart ? (mode === 'pct' ? chart.kospiPct : chart.kospiValue) : null;
 
   // ── 성과 지표 계산 (전체 기간 metricsHistory 기준 — 차트 일/월/년 토글과 무관하게 일정) ──
   const metrics = useMemo(() => {
-    if (metricsHistory.length < 2) return null;
-    // MDD
-    let peak = metricsHistory[0].totalValue;
-    let mdd = 0;
-    for (const s of metricsHistory) {
-      if (s.totalValue > peak) peak = s.totalValue;
-      const dd = peak > 0 ? (peak - s.totalValue) / peak : 0;
-      if (dd > mdd) mdd = dd;
-    }
-    // 일간 수익률 & Sharpe (무위험 수익률 3.5%/년)
-    const dailyRets: number[] = [];
-    for (let i = 1; i < metricsHistory.length; i++) {
-      const prev = metricsHistory[i - 1].totalValue;
-      const curr = metricsHistory[i].totalValue;
-      if (prev > 0) dailyRets.push((curr - prev) / prev);
-    }
-    let sharpe: number | null = null;
-    if (dailyRets.length >= 5) {
-      const mean = dailyRets.reduce((a, b) => a + b, 0) / dailyRets.length;
-      const variance = dailyRets.reduce((a, b) => a + (b - mean) ** 2, 0) / dailyRets.length;
-      const stdev = Math.sqrt(variance);
-      const dailyRf = 0.035 / 252;
-      if (stdev > 0) sharpe = ((mean - dailyRf) / stdev) * Math.sqrt(252);
-    }
+    // MDD·샤프·알파는 공용 헬퍼(snapshotMetrics), 승률·보유기간은 페이퍼 전용(전체 체결 이력 기반)
+    const base = snapshotMetrics(metricsHistory.map(s => ({ date: s.date, value: s.totalValue })), kospiHistory);
+    if (!base) return null;
     // 청산 거래 FIFO 매칭 → 승률 + 평균 보유기간
     const sortedT = [...trades].sort((a, b) => new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime());
     const buyQ: Record<string, Trade[]> = {};
@@ -497,28 +606,13 @@ const PaperPortfolio = () => {
     }
     const winRate = matched.length > 0 ? (matched.filter(m => m.win).length / matched.length) * 100 : null;
     const avgHoldDays = matched.length > 0 ? matched.reduce((a, m) => a + m.holdDays, 0) / matched.length : null;
-    // Alpha vs KOSPI — 전체 기간(metricsHistory) 기준이라 차트 일/월/년 토글과 무관하게 일정.
-    // 이전엔 range-scoped history를 써서 토글 시 알파(및 MDD·Sharpe)가 바뀌는 불일치가 있었음.
-    let alpha: number | null = null;
-    if (kospiHistory.length) {
-      const startVal = metricsHistory[0].totalValue, endVal = metricsHistory[metricsHistory.length - 1].totalValue;
-      const portPct = startVal > 0 ? ((endVal - startVal) / startVal) * 100 : 0;
-      const sorted = [...kospiHistory].sort((a, b) => a.date.localeCompare(b.date));
-      let startClose = 0;
-      for (const k of sorted) { if (k.date <= metricsHistory[0].date) startClose = k.close; }
-      if (!startClose) startClose = sorted[0].close;
-      let endClose = startClose;
-      for (const k of sorted) { if (k.date <= metricsHistory[metricsHistory.length - 1].date) endClose = k.close; }
-      const kospiPct = startClose > 0 ? ((endClose - startClose) / startClose) * 100 : 0;
-      alpha = portPct - kospiPct;
-    }
-    return { mdd: mdd * 100, sharpe, winRate, avgHoldDays, alpha, closedTrades: matched.length };
+    return { ...base, winRate, avgHoldDays, closedTrades: matched.length };
   }, [metricsHistory, trades, kospiHistory]);
 
   const navTo = (p: string) => navigate(`${isVirt ? '/virt' : ''}${p}`);
   const isEmpty = !loading && !error && holdings.length === 0 && trades.length === 0;
   return (
-    <HelmShell active="portfolio" virt={isVirt} userName={userName} session="모의투자 · 15초 갱신">
+    <HelmShell active="portfolio" virt={isVirt} userName={userName} session="모의투자 · 10초 갱신">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-[18px]">
         <div>
           <h1 className="text-[28px] font-bold tracking-tight">내 포트폴리오</h1>
@@ -531,7 +625,7 @@ const PaperPortfolio = () => {
             kicker="FIRST VOYAGE"
             title="아직 항해를 시작하지 않았어요"
             desc="첫 거래를 하면 보유 종목·자산 추이·항해 중인 항로가 이곳에 채워져요. VIRT 가상 자금 1,000만 원으로 위험 없이 시작할 수 있어요."
-            ctaLabel="첫 거래 시작하기" onCta={() => navTo('/trade')}
+            ctaLabel="첫 거래 시작하기" onCta={() => navTo('/market')}
             secondaryLabel="시세 둘러보기" onSecondary={() => navTo('/market')}
             preview={[
               { icon: 'pie', label: '자산 배분', sub: '현금·종목 비중이 도넛으로 표시돼요' },
@@ -592,7 +686,7 @@ const PaperPortfolio = () => {
             <span className="inline-flex items-center gap-1.5"><span style={{ width: 14, height: 2, background: SONAR }} />내 포트폴리오</span>
             {kospi && <span className="inline-flex items-center gap-1.5"><span style={{ width: 14, borderTop: '2px dashed var(--ci-ink3)' }} />KOSPI</span>}
           </div>
-          <div className="px-3 pb-[18px]" style={{ height: 250 }}><TrendChart port={port} kospi={kospi} mode={mode} days={history.length} /></div>
+          <div className="px-3 pb-[18px]" style={{ height: 250 }}><TrendChart port={port} kospi={kospi} dates={chart?.dates} mode={mode} days={history.length} /></div>
           {kospi && <div className="px-[22px] pb-3 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>* KOSPI 수익률은 실제 지수 일봉 데이터 기반입니다.</div>}
         </Panel>
 
@@ -610,25 +704,14 @@ const PaperPortfolio = () => {
                 value={metrics.sharpe != null ? metrics.sharpe.toFixed(2) : '—'}
                 sub="≥1.0이면 양호"
                 color={metrics.sharpe != null ? (metrics.sharpe >= 1 ? UP : metrics.sharpe >= 0 ? 'var(--ci-ink0)' : DOWN) : 'var(--ci-ink3)'}
-                explain={
-                  metrics.sharpe == null ? '데이터 5일 이상 필요' :
-                  metrics.sharpe >= 1.5 ? '위험 대비 수익이 매우 우수해요' :
-                  metrics.sharpe >= 1.0 ? '위험 대비 수익이 양호해요' :
-                  metrics.sharpe >= 0 ? '수익은 내고 있지만 변동이 큰 편' :
-                  '수익보다 변동이 더 큰 상태예요'
-                }
+                explain={sharpeExplain(metrics.sharpe)}
               />
               <MetricCard
                 label="최대낙폭 (MDD)"
                 value={`-${metrics.mdd.toFixed(1)}%`}
                 sub="낮을수록 안전"
                 color={metrics.mdd < 10 ? '#4ade80' : metrics.mdd < 20 ? 'var(--ci-ink0)' : DOWN}
-                explain={
-                  metrics.mdd < 5 ? '낙폭이 매우 작아 안정적이에요' :
-                  metrics.mdd < 10 ? '낙폭이 10% 미만 — 안정적인 편' :
-                  metrics.mdd < 20 ? '한 번쯤 큰 하락이 있었어요. 분산을 고려하세요' :
-                  '낙폭이 큰 편이에요. 손절 설정을 권장합니다'
-                }
+                explain={mddExplain(metrics.mdd)}
               />
               <MetricCard
                 label="청산 승률"
@@ -660,12 +743,7 @@ const PaperPortfolio = () => {
                 value={metrics.alpha != null ? `${metrics.alpha >= 0 ? '+' : ''}${metrics.alpha.toFixed(1)}%p` : '—'}
                 sub={metrics.alpha != null ? (metrics.alpha >= 0 ? 'KOSPI 초과' : 'KOSPI 하회') : 'KOSPI 데이터 없음'}
                 color={metrics.alpha != null ? (metrics.alpha >= 0 ? UP : DOWN) : 'var(--ci-ink3)'}
-                explain={
-                  metrics.alpha == null ? 'KOSPI 비교 데이터 없음' :
-                  metrics.alpha >= 5 ? `KOSPI보다 ${metrics.alpha.toFixed(1)}%p 더 벌었어요` :
-                  metrics.alpha >= 0 ? `KOSPI와 비슷하거나 약간 앞서요` :
-                  `KOSPI보다 ${Math.abs(metrics.alpha).toFixed(1)}%p 덜 벌었어요`
-                }
+                explain={alphaExplain(metrics.alpha)}
               />
             </div>
             <div className="px-5 pb-4 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>
@@ -676,16 +754,16 @@ const PaperPortfolio = () => {
 
         {/* 보유종목 + 항로 */}
         <div className="grid grid-cols-1 items-start gap-[18px] lg:grid-cols-[1.5fr_1fr]">
-          <HoldingsTrades holdings={holdings} trades={trades} holdingsValue={holdingsValue} holdingsPnl={holdingsPnl} routeMap={assetRouteMap} onPick={goTrade} navTrade={() => navigate(`${isVirt ? '/virt' : ''}/trade`)} navStore={() => navigate(`${isVirt ? '/virt' : ''}/store`)} />
+          <HoldingsTrades holdings={holdings} trades={trades} holdingsValue={holdingsValue} holdingsPnl={holdingsPnl} routeMap={assetRouteMap} onPick={goTrade} navTrade={() => navigate(`${isVirt ? '/virt' : ''}/market`)} navStore={() => navigate(`${isVirt ? '/virt' : ''}/strategy`)} />
           <Panel style={{ overflow: 'hidden' }}>
-            <PanelHead kicker="ACTIVE ROUTE" title="항해 중인 항로" right={<button onClick={() => navigate(`${isVirt ? '/virt' : ''}/store`)} className="text-[13px] text-white/80 hover:text-white">전략 학습 →</button>} />
+            <PanelHead kicker="ACTIVE ROUTE" title="항해 중인 항로" right={<button onClick={() => navigate(`${isVirt ? '/virt' : ''}/strategy`)} className="text-[13px] text-white/80 hover:text-white">전략 학습 →</button>} />
             {routes.length === 0 ? (
               <div className="px-[22px] py-12 text-center">
                 <div className="text-[14px]" style={{ color: 'var(--ci-ink3)' }}>적용 중인 항로가 없습니다.</div>
-                <button onClick={() => navigate(`${isVirt ? '/virt' : ''}/store`)} className="mt-3 rounded-lg px-4 py-2 text-[13.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>항로 둘러보기 →</button>
+                <button onClick={() => navigate(`${isVirt ? '/virt' : ''}/strategy`)} className="mt-3 rounded-lg px-4 py-2 text-[13.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)` }}>항로 둘러보기 →</button>
               </div>
             ) : routes.map(perf => (
-              <RouteCard key={perf.purchaseId} perf={perf} isRep={portfolio?.representativePurchaseId === perf.purchaseId} onStar={() => handleStar(perf.purchaseId)} busy={settingRoute === perf.purchaseId} navTo={() => navigate(`${isVirt ? '/virt' : ''}/store`)} />
+              <RouteCard key={perf.purchaseId} perf={perf} isRep={portfolio?.representativePurchaseId === perf.purchaseId} onStar={() => handleStar(perf.purchaseId)} busy={settingRoute === perf.purchaseId} navTo={() => navigate(`${isVirt ? '/virt' : ''}/strategy`)} />
             ))}
           </Panel>
         </div>
@@ -702,10 +780,7 @@ const PaperPortfolio = () => {
           </div>
         </Panel>
 
-        <footer className="mt-2 flex flex-wrap justify-between gap-3 border-t border-white/10 pt-5">
-          <span className="font-mono text-[12.5px] text-white/30">© 2026 WHALEARC · 모든 항해는 사용자의 책임 아래 진행됩니다.</span>
-          <span className="text-[12.5px] text-white/30">Built quietly, beneath the surface.</span>
-        </footer>
+        <ConsoleFooter />
         </>)}
       </div>
       {toast && <Toast msg={toast.msg} type={toast.type} />}
@@ -714,21 +789,31 @@ const PaperPortfolio = () => {
 };
 
 /* ── 실계좌(KIS/업비트/비트겟) 포트폴리오 — non-virt 라우트, exchangeService ── */
-const EXCHANGES: { key: ExchangeType; label: string; sub: string }[] = [
-  { key: 'KIS', label: 'KIS', sub: '주식' },
-  { key: 'UPBIT', label: '업비트', sub: '코인' },
-  { key: 'BITGET', label: '비트겟', sub: '코인' },
-];
+// 체결 내역 백엔드 지원 여부 — 현재 KIS(국내주식)만. 미지원 거래소는 호출 없이 '준비 중' 표기.
+const TXN_SUPPORTED: Partial<Record<ExchangeType, true>> = { KIS: true };
+// KIS 체결시각 "20260604 153012" → "06/04 15:30" (시간 누락 시 날짜만)
+const fmtTxnTime = (s: string) => {
+  const m = /^(\d{4})(\d{2})(\d{2})(?:\s+(\d{2})(\d{2})(\d{2})?)?/.exec((s || '').trim());
+  return m ? (m[4] ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : `${m[2]}/${m[3]}`) : (s || '—');
+};
 const RealAccountPortfolio = () => {
-  const { session } = useAuth();
+  const navigate = useNavigate();
+  const { profileName } = useAuth();
   const { isVirt } = useRoutePrefix();
-  const email = session?.user?.email ?? '';
-  const userName = email ? email.split('@')[0] : '항해사';
+  // 표시명은 DB 닉네임(profileName) 단일 소스 — 대시보드와 동일(이메일 ID 노출·깜빡임 방지)
+  const userName = profileName || '항해사';
   const [accounts, setAccounts] = useState<ExchangeAccount[]>([]);
   const [portfolios, setPortfolios] = useState<Partial<Record<ExchangeType, ExchangePortfolio | null>>>({});
   const [history, setHistory] = useState<ExchangeSnapshot[]>([]);  // 자산 추이(일별 스냅샷)
   const [range, setRange] = useState<TrendRange>('D');             // 일/월/년 기간 선택
   const [activeTab, setActiveTab] = useState<ExchangeType>('KIS');
+  const [holdTab, setHoldTab] = useState<'holdings' | 'txns'>('holdings');  // 보유 종목 / 체결 내역 탭
+  const [txns, setTxns] = useState<Partial<Record<ExchangeType, ExchangeTransaction[] | null>>>({});  // undefined=미조회, null=조회 실패
+  const [txnLoading, setTxnLoading] = useState(false);
+  const [txnExporting, setTxnExporting] = useState(false);
+  const [mode, setMode] = useState<'value' | 'pct'>('value');  // 자산 추이 총자산/수익률% 토글
+  const [metricsHistory, setMetricsHistory] = useState<ExchangeSnapshot[]>([]);  // 성과 지표용 전체 기간(차트 range와 무관)
+  const [kospiHistory, setKospiHistory] = useState<{ date: string; close: number }[]>([]);
   const [splitCcy, setSplitCcy] = useState(false);   // 원화/해외 통화 분리 표시 토글
   const autoPickRef = useRef(false); // 최초 로드 시 첫 연결 거래소 자동 선택(이후 사용자 선택 우선)
   const [loading, setLoading] = useState(true);
@@ -750,10 +835,13 @@ const RealAccountPortfolio = () => {
     if (!silent) setLoading(true);
     exchangeService.getAccounts().then(async accs => {
       setAccounts(accs);
-      // 최초 로드: 현재 탭이 미연결이면 첫 연결 거래소로 자동 전환 (사용자가 직접 고르기 전까지)
+      // 최초 로드: 대시보드와 공유하는 저장 선택(whalearc_real_src)이 연결돼 있으면 우선, 아니면 첫 연결 거래소.
+      // ('ALL'은 대시보드 전용 값 — 여기선 전체 합산 패널이 항상 위에 있으므로 무시하고 첫 연결로)
       if (!autoPickRef.current) {
-        const firstConn = accs.find(a => a.connected);
-        if (firstConn) { setActiveTab(firstConn.exchangeType); autoPickRef.current = true; }
+        let saved: string | null = null;
+        try { saved = localStorage.getItem(REAL_SRC_KEY); } catch { /* ignore */ }
+        const target = accs.find(a => a.exchangeType === saved && a.connected) ?? accs.find(a => a.connected);
+        if (target) { setActiveTab(target.exchangeType); autoPickRef.current = true; }
       }
       const ports: Partial<Record<ExchangeType, ExchangePortfolio | null>> = {};
       await Promise.all(accs.filter(a => a.connected).map(a =>
@@ -776,19 +864,53 @@ const RealAccountPortfolio = () => {
     exchangeService.getHistory(RANGE_DAYS[range]).then(setHistory).catch(() => {});
   }, [isPreview, range]);
 
+  // 성과 지표(MDD·샤프·알파)는 전체 기간 기준으로 일정해야 하므로 차트 range와 분리해 1회만 조회.
+  useEffect(() => {
+    if (isPreview) return;
+    exchangeService.getHistory(RANGE_DAYS.Y).then(setMetricsHistory).catch(() => {});
+  }, [isPreview]);
+
+  // KOSPI 벤치마크 (공개 API, 인증과 분리). 전체 기간을 1회 조회해 차트 리베이스·알파에 함께 사용 —
+  // 페이퍼처럼 range에 묶어 재조회하면 지표 시작점이 잘리는 불일치가 생기므로 처음부터 고정 범위.
+  useEffect(() => {
+    apiClient.get('/api/market/indices/history', { params: { code: '0001', days: RANGE_DAYS.Y } })
+      .then(res => { if (Array.isArray(res.data)) setKospiHistory(res.data); }).catch(() => {});
+  }, []);
+
   const isConn = (t: ExchangeType) => accounts.some(a => a.exchangeType === t && a.connected);
   const connectedList = EXCHANGES.filter(e => isConn(e.key));
   const totalAll = connectedList.reduce((s, e) => s + (portfolios[e.key]?.totalValue || 0), 0);
   const pnlAll = connectedList.reduce((s, e) => s + (portfolios[e.key]?.totalProfitLoss || 0), 0);
-  const investedAll = totalAll - pnlAll;
-  const returnAll = investedAll !== 0 ? (pnlAll / investedAll) * 100 : 0;
+  const cashAll = connectedList.reduce((s, e) => s + (portfolios[e.key]?.cashBalance || 0), 0);
+  // 합산 수익률 = 보유 자산 매입원금 대비(예수금 제외) — 거래소별 totalReturnRate(매입금 대비)와 같은 기준.
+  // 이전엔 분모에 현금이 포함돼(총자산-손익) 예수금이 많을수록 수익률이 희석돼 보였다.
+  const investedAll = totalAll - cashAll - pnlAll;
+  const returnAll = investedAll > 0 ? (pnlAll / investedAll) * 100 : 0;
   const hasAny = connectedList.length > 0;
   const port = portfolios[activeTab] || null;
   const connected = isConn(activeTab);
   const isStock = activeTab === 'KIS';
-  // 거래소 중복 entry/수량0 유령 제거 → 보유 개수·목록·도넛·통화분리 모두 정확
-  const holdings = useMemo(() => dedupeHoldings(port?.holdings ?? []), [port]);
+  // 거래소 중복 entry/수량0 유령 제거 → 보유 개수·목록·도넛·통화분리 모두 정확. 평가액(KRW 환산) 내림차순 정렬.
+  const holdings = useMemo(() => {
+    const fx = port?.usdtKrwRate || FALLBACK_USD_KRW;
+    const v = (h: { marketValue: number; currency?: string }) => (h.currency === 'USD' && fx > 0 ? h.marketValue * fx : h.marketValue);
+    return dedupeHoldings(port?.holdings ?? []).sort((a, b) => v(b) - v(a));
+  }, [port]);
   const cashLabel = isStock ? '예수금' : activeTab === 'UPBIT' ? 'KRW 잔고' : 'USDT';
+
+  // 체결 내역 — 지원 거래소(KIS) 선택 시 1회 조회 후 캐시. 10초 잔고 폴링과 분리해 KIS 호출을 아끼고,
+  // ↻ 새로고침 버튼이 캐시를 비워 재조회한다. txns[t]: undefined=미조회, null=실패, []=내역 없음.
+  useEffect(() => {
+    if (isPreview || !connected || !TXN_SUPPORTED[activeTab] || txns[activeTab] !== undefined) return;
+    let alive = true;
+    setTxnLoading(true);
+    exchangeService.getTransactions(activeTab)
+      .then(list => { if (alive) setTxns(prev => ({ ...prev, [activeTab]: list || [] })); })
+      .catch(() => { if (alive) setTxns(prev => ({ ...prev, [activeTab]: null })); })
+      .finally(() => { if (alive) setTxnLoading(false); });
+    return () => { alive = false; };
+  }, [isPreview, connected, activeTab, txns]);
+  const txnList = txns[activeTab];
 
   // 도넛/합계는 항상 KRW 기준 — KIS 해외주식(currency=USD)은 서버가 준 환율로 환산(통화 혼합 방지)
   const usdKrw = port?.usdtKrwRate || FALLBACK_USD_KRW;  // 환율 누락 시 폴백(원화 1:1 취급 방지)
@@ -803,17 +925,52 @@ const RealAccountPortfolio = () => {
   const krwVal = (h: { marketValue: number; currency?: string }) => (h.currency === 'USD' && usdKrw > 0 ? h.marketValue * usdKrw : h.marketValue);
   const alloc = useMemo(() => {
     if (!port) return [] as { c: string; label: string; value: number }[];
-    const arr: { c: string; label: string; value: number }[] = [];
+    const arr: { label: string; value: number; code?: string; c?: string }[] = [];
     if (port.cashBalance > 0) arr.push({ c: '#7a8aa8', label: isStock ? '예수금' : 'KRW', value: port.cashBalance });
-    holdings.forEach((h, i) => { const v = krwVal(h); if (v > 0) arr.push({ c: CHART_COLORS[i % CHART_COLORS.length], label: h.assetName, value: v }); });
-    return mergeAllocByLabel(arr);
+    holdings.forEach(h => { const v = krwVal(h); if (v > 0) arr.push({ code: h.assetCode, label: h.assetName, value: v }); });
+    return finalizeAlloc(arr);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- krwVal은 usdKrw만 읽는 렌더 로컬 헬퍼(usdKrw는 이미 dep); deps에 넣으면 memo가 매 렌더 무효화됨
   }, [port, holdings, isStock, usdKrw]);
   const allocTotal = alloc.reduce((s, a) => s + a.value, 0);
 
+  // 자산추이 시계열 + KOSPI 리베이스 / 성과 지표 — 페이퍼와 동일한 공용 헬퍼 사용
+  const chart = useMemo(
+    () => buildTrendData(trendSeries(history, range).map(s => ({ date: s.date, value: s.totalValueKrw })), kospiHistory),
+    [history, kospiHistory, range]);
+  const chartPort = chart ? (mode === 'pct' ? chart.portPct : chart.portValue) : [];
+  const chartKospi = chart ? (mode === 'pct' ? chart.kospiPct : chart.kospiValue) : null;
+  const metrics = useMemo(
+    () => snapshotMetrics(metricsHistory.map(s => ({ date: s.date, value: s.totalValueKrw })), kospiHistory),
+    [metricsHistory, kospiHistory]);
+
+  // CSV 내보내기 — 실계좌는 백엔드 export 엔드포인트가 없어 화면 데이터로 클라이언트 생성
+  const exportHoldingsCsv = () => {
+    const rows: (string | number)[][] = [['거래소', '자산코드', '자산명', '수량', '평균단가', '평가금액', '평가손익', '수익률(%)', '통화']];
+    connectedList.forEach(e => {
+      dedupeHoldings(portfolios[e.key]?.holdings ?? []).forEach(h =>
+        rows.push([e.shortName, h.assetCode, h.assetName, h.quantity, h.averagePrice, h.marketValue, h.profitLoss, h.returnRate, h.currency || 'KRW']));
+    });
+    if (rows.length === 1) { showToast('내보낼 보유 자산이 없습니다.', 'error'); return; }
+    downloadCsv(rows, `WhaleArc_real_holdings_${todayStamp()}.csv`);
+    showToast('보유 자산 CSV를 내려받았어요.');
+  };
+  const exportTxnsCsv = async () => {
+    if (txnExporting) return;
+    setTxnExporting(true);
+    try {
+      const list = Array.isArray(txns.KIS) ? txns.KIS : await exchangeService.getTransactions('KIS');
+      if (!list.length) { showToast('최근 30일 체결 내역이 없습니다.', 'error'); return; }
+      const rows: (string | number)[][] = [['시간', '구분', '종목코드', '종목명', '수량', '체결가', '체결금액', '상태'],
+        ...list.map(t => [t.executedAt, t.side === 'BUY' ? '매수' : '매도', t.stockCode, t.stockName, t.quantity, t.price, t.totalAmount, t.status === 'FILLED' ? '체결' : '미체결'] as (string | number)[])];
+      downloadCsv(rows, `WhaleArc_real_transactions_${todayStamp()}.csv`);
+      showToast('체결 내역 CSV를 내려받았어요.');
+    } catch { showToast('체결 내역 CSV 생성에 실패했습니다.', 'error'); }
+    finally { setTxnExporting(false); }
+  };
+
   const openSetup = (t: ExchangeType) => setShowSetup(t);
   const handleDisconnect = async (t: ExchangeType) => {
-    if (!window.confirm(`${EXCHANGES.find(e => e.key === t)?.label} 연결을 해제하시겠습니까?`)) return;
+    if (!window.confirm(`${EXCHANGES.find(e => e.key === t)?.shortName} 연결을 해제하시겠습니까?`)) return;
     try { await exchangeService.deleteAccount(t); setShowSetup(null); showToast('연결이 해제되었습니다.'); load(); }
     catch { showToast('연결 해제에 실패했습니다.', 'error'); }
   };
@@ -832,14 +989,15 @@ const RealAccountPortfolio = () => {
           <Panel style={{ padding: '26px 28px' }}>
             <div className="mb-2.5 flex items-center justify-between">
               <span className="text-[11.5px] font-semibold tracking-[.2em]" style={{ color: SONAR }}>전체 실계좌 자산</span>
-              <button onClick={() => load()} className="text-[12.5px]" style={{ color: 'var(--ci-ink2)' }}>↻ 새로고침</button>
+              <button onClick={() => { setTxns({}); load(); }} className="text-[12.5px]" style={{ color: 'var(--ci-ink2)' }}>↻ 새로고침</button>
             </div>
             <div className="text-[clamp(34px,5vw,50px)] font-bold leading-none tracking-tight">{won(totalAll)}</div>
             <div className="mt-3 font-mono text-[16px] font-semibold" style={{ color: pnlAll >= 0 ? UP : DOWN }}><Tri up={pnlAll >= 0} />{pnlAll >= 0 ? '+' : '-'}{won(Math.abs(pnlAll))} ({returnAll >= 0 ? '+' : ''}{returnAll.toFixed(2)}%)</div>
+            <div className="mt-1 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>수익률은 보유 자산 매입금 대비예요 (예수금 제외)</div>
             <div className="mt-5 grid grid-cols-3 divide-x" style={{ borderTop: '1px solid var(--ci-line)' }}>
               {EXCHANGES.map(e => { const c = isConn(e.key); return (
                 <div key={e.key} className="px-4 pt-4" style={{ borderColor: 'var(--ci-line)' }}>
-                  <div className="flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--ci-ink2)' }}>{c && <span className="h-1.5 w-1.5 rounded-full" style={{ background: '#4ade80' }} />}{e.label} {e.sub}</div>
+                  <div className="flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--ci-ink2)' }}>{c && <span className="h-1.5 w-1.5 rounded-full" style={{ background: '#4ade80' }} />}{e.shortName} {e.asset}</div>
                   <div className="mt-1 font-mono text-[16px] font-semibold">{c ? won(portfolios[e.key]?.totalValue || 0) : <span style={{ color: 'var(--ci-ink3)' }}>미연결</span>}</div>
                 </div>
               ); })}
@@ -852,11 +1010,59 @@ const RealAccountPortfolio = () => {
           <Panel style={{ overflow: 'hidden' }}>
             <PanelHead kicker="VOYAGE LOG" title="자산 추이" right={
               <div className="flex items-center gap-2">
+                <div className="flex gap-[3px] rounded-lg p-[3px]" style={{ background: 'var(--ci-card)', border: '1px solid var(--ci-line)' }}>
+                  {([['value', '총 자산'], ['pct', '수익률 %']] as const).map(([k, l]) => (
+                    <button key={k} onClick={() => setMode(k)} className="rounded-md px-2.5 py-[5px] text-[12.5px] font-semibold" style={{ background: mode === k ? 'rgba(91,157,255,.10)' : 'transparent', color: mode === k ? SONAR : 'var(--ci-ink2)' }}>{l}</button>
+                  ))}
+                </div>
                 <RangeToggle range={range} onChange={setRange} />
-                <span className="hidden text-[12px] text-white/50 lg:inline">{rangeCaption(history, range)} · KRW</span>
+                <span className="hidden text-[12px] text-white/50 lg:inline">{rangeCaption(history, range)} · 전체 거래소 합산(KRW)</span>
               </div>} />
-            <div className="px-3 pb-[18px] pt-2" style={{ height: 250 }}>
-              <TrendChart port={trendSeries(history, range).map(s => s.totalValueKrw)} kospi={null} mode="value" days={history.length} real />
+            <div className="flex justify-end gap-4 px-3.5 pb-2 pt-2.5 text-[12px] text-white/70">
+              <span className="inline-flex items-center gap-1.5"><span style={{ width: 14, height: 2, background: SONAR }} />내 실계좌</span>
+              {chartKospi && <span className="inline-flex items-center gap-1.5"><span style={{ width: 14, borderTop: '2px dashed var(--ci-ink3)' }} />KOSPI</span>}
+            </div>
+            <div className="px-3 pb-[18px]" style={{ height: 250 }}>
+              <TrendChart port={chartPort} kospi={chartKospi} dates={chart?.dates} mode={mode} days={history.length} real />
+            </div>
+            {chartKospi && <div className="px-[22px] pb-3 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>* KOSPI 수익률은 실제 지수 일봉 데이터 기반입니다.</div>}
+          </Panel>
+        )}
+
+        {/* 성과 지표 (스냅샷 기반 — MDD·샤프·알파. 승률 등 거래 기반 지표는 전체 체결 이력 연동 후) */}
+        {hasAny && metrics && (
+          <Panel>
+            <PanelHead kicker="PERFORMANCE" title="성과 지표" right={
+              /* 학습 노트는 VIRT 전용 라우트만 존재 — non-virt /learn은 404라 /virt/learn으로 보낸다 */
+              <button onClick={() => navigate('/virt/learn?tab=glossary')} className="rounded-md px-2.5 py-1 text-[12px] font-semibold text-white/80 transition-colors hover:bg-white/10 hover:text-white" style={{ border: '1px solid rgba(255,255,255,.22)' }}>
+                용어가 궁금하면 → 학습 노트
+              </button>
+            } />
+            <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-3">
+              <MetricCard
+                label="샤프 비율"
+                value={metrics.sharpe != null ? metrics.sharpe.toFixed(2) : '—'}
+                sub="≥1.0이면 양호"
+                color={metrics.sharpe != null ? (metrics.sharpe >= 1 ? UP : metrics.sharpe >= 0 ? 'var(--ci-ink0)' : DOWN) : 'var(--ci-ink3)'}
+                explain={sharpeExplain(metrics.sharpe)}
+              />
+              <MetricCard
+                label="최대낙폭 (MDD)"
+                value={`-${metrics.mdd.toFixed(1)}%`}
+                sub="낮을수록 안전"
+                color={metrics.mdd < 10 ? '#4ade80' : metrics.mdd < 20 ? 'var(--ci-ink0)' : DOWN}
+                explain={mddExplain(metrics.mdd)}
+              />
+              <MetricCard
+                label="KOSPI 대비 Alpha"
+                value={metrics.alpha != null ? `${metrics.alpha >= 0 ? '+' : ''}${metrics.alpha.toFixed(1)}%p` : '—'}
+                sub={metrics.alpha != null ? (metrics.alpha >= 0 ? 'KOSPI 초과' : 'KOSPI 하회') : 'KOSPI 데이터 없음'}
+                color={metrics.alpha != null ? (metrics.alpha >= 0 ? UP : DOWN) : 'var(--ci-ink3)'}
+                explain={alphaExplain(metrics.alpha)}
+              />
+            </div>
+            <div className="px-5 pb-4 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>
+              * 매일 00:30 저장되는 총자산 스냅샷(전체 거래소 합산) 기준. 입출금이 있으면 수익률·지표가 왜곡될 수 있어요. 샤프 비율은 무위험수익률 3.5%/년 기준 연환산입니다.
             </div>
           </Panel>
         )}
@@ -864,8 +1070,8 @@ const RealAccountPortfolio = () => {
         {/* 거래소 탭 */}
         <div className="flex flex-wrap gap-2">
           {EXCHANGES.map(e => { const on = activeTab === e.key, c = isConn(e.key); return (
-            <button key={e.key} onClick={() => { autoPickRef.current = true; setActiveTab(e.key); }} className="inline-flex items-center gap-2 rounded-[10px] px-[18px] py-2.5 text-[15px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : '1px solid var(--ci-line)', background: on ? 'rgba(91,157,255,.12)' : 'var(--ci-card)', color: 'var(--ci-ink0)' }}>
-              {c && <span className="h-1.5 w-1.5 rounded-full" style={{ background: '#4ade80' }} />}{e.label}<span className="text-[12px] font-medium" style={{ color: on ? '#cfe1ff' : 'var(--ci-ink2)' }}>{e.sub}</span>
+            <button key={e.key} onClick={() => { autoPickRef.current = true; setActiveTab(e.key); try { localStorage.setItem(REAL_SRC_KEY, e.key); } catch { /* ignore */ } }} className="inline-flex items-center gap-2 rounded-[10px] px-[18px] py-2.5 text-[15px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : '1px solid var(--ci-line)', background: on ? 'rgba(91,157,255,.12)' : 'var(--ci-card)', color: 'var(--ci-ink0)' }}>
+              {c && <span className="h-1.5 w-1.5 rounded-full" style={{ background: '#4ade80' }} />}{e.shortName}<span className="text-[12px] font-medium" style={{ color: on ? '#cfe1ff' : 'var(--ci-ink2)' }}>{e.asset}</span>
             </button>
           ); })}
         </div>
@@ -876,7 +1082,7 @@ const RealAccountPortfolio = () => {
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: 'rgba(91,157,255,.1)', border: '1px solid rgba(91,157,255,.22)' }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={SONAR} strokeWidth="1.6" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></svg>
               </div>
-              <h3 className="text-[18.5px] font-bold">{EXCHANGES.find(e => e.key === activeTab)?.label} 계좌가 연결되지 않았습니다</h3>
+              <h3 className="text-[18.5px] font-bold">{EXCHANGES.find(e => e.key === activeTab)?.shortName} 계좌가 연결되지 않았습니다</h3>
               <p className="mx-auto mt-2 max-w-[420px] text-[14px]" style={{ color: 'var(--ci-ink1)' }}>거래소 API 키를 등록하면 실제 보유 자산·잔고를 한 곳에서 확인할 수 있습니다. 키는 AES로 암호화되어 안전하게 저장됩니다.</p>
               <button onClick={() => openSetup(activeTab)} className="mt-5 rounded-[10px] px-5 py-3 text-[14.5px] font-semibold text-white" style={{ background: `linear-gradient(180deg, ${SONAR}, #2c6fe6)`, boxShadow: '0 10px 24px -10px rgba(60,120,255,.6)' }}>API 키 등록하기</button>
             </div>
@@ -911,10 +1117,18 @@ const RealAccountPortfolio = () => {
                   <div key={l} style={{ ...panel, padding: '16px 18px' }}><div className="text-[11.5px]" style={{ color: 'var(--ci-ink2)' }}>{l}</div><div className="mt-1.5 font-mono text-[17.5px] font-semibold" style={{ color: c }}>{v}</div></div>
                 ))}
               </div>
-              {/* 보유 종목 */}
+              {/* 보유 종목 / 체결 내역 (페이퍼 포트폴리오의 HoldingsTrades와 동일한 탭 패턴) */}
               <Panel style={{ padding: 0, overflow: 'hidden' }}>
-                <PanelHead kicker="HOLDINGS" title={`보유 ${isStock ? '종목' : '코인'}`} right={<span className="text-[13px] text-white/70">{holdings.length}개</span>} />
-                {holdings.length === 0 ? <div className="px-[22px] py-12 text-center text-[14px]" style={{ color: 'var(--ci-ink3)' }}>보유 자산이 없습니다.</div> : holdings.map((h, i) => {
+                <div className="grid grid-cols-2" style={{ borderBottom: '1px solid var(--ci-line)' }}>
+                  {([['holdings', `보유 ${isStock ? '종목' : '코인'}`, holdings.length], ['txns', '체결 내역', Array.isArray(txnList) ? txnList.length : null]] as [typeof holdTab, string, number | null][]).map(([k, l, n], idx) => (
+                    <button key={k} onClick={() => setHoldTab(k)} className="relative px-4 py-[15px] text-[15px]" style={{ color: holdTab === k ? 'var(--ci-ink0)' : 'var(--ci-ink2)', fontWeight: holdTab === k ? 700 : 500, borderRight: idx === 0 ? '1px solid var(--ci-line)' : undefined }}>
+                      {l} {n != null && <span className="font-semibold text-white/48">({n})</span>}
+                      {holdTab === k && <span className="absolute -bottom-px left-3.5 right-3.5 h-0.5 rounded" style={{ background: SONAR }} />}
+                    </button>
+                  ))}
+                </div>
+                {holdTab === 'holdings' ? (
+                  holdings.length === 0 ? <div className="px-[22px] py-12 text-center text-[14px]" style={{ color: 'var(--ci-ink3)' }}>보유 자산이 없습니다.</div> : holdings.map((h, i) => {
                   const up = h.returnRate >= 0;
                   return (
                     <div key={h.assetCode} className="grid grid-cols-[1fr_auto] items-center gap-3.5 px-[22px] py-3.5" style={{ borderTop: i ? '1px solid var(--ci-line)' : undefined }}>
@@ -922,7 +1136,40 @@ const RealAccountPortfolio = () => {
                       <div className="text-right"><div className="font-mono text-[15px] font-bold">{exMoney(h.marketValue, h.currency)}</div><div className="mt-0.5 font-mono text-[13px] font-semibold" style={{ color: up ? UP : DOWN }}><Tri up={up} />{up ? '+' : ''}{h.returnRate.toFixed(2)}% <span className="text-white/40">({h.profitLoss >= 0 ? '+' : ''}{exMoney(h.profitLoss, h.currency)})</span></div></div>
                     </div>
                   );
-                })}
+                })
+                ) : !TXN_SUPPORTED[activeTab] ? (
+                  <div className="px-[22px] py-12 text-center">
+                    <div className="text-[14px]" style={{ color: 'var(--ci-ink3)' }}>{EXCHANGES.find(e => e.key === activeTab)?.shortName} 체결 내역은 준비 중이에요.</div>
+                    <div className="mt-1.5 text-[12.5px]" style={{ color: 'var(--ci-ink3)' }}>현재는 KIS(국내주식) 체결 내역만 확인할 수 있어요.</div>
+                  </div>
+                ) : txnList === undefined ? (
+                  <div className="px-[22px] py-12 text-center text-[14px]" style={{ color: 'var(--ci-ink3)' }}>{txnLoading ? '체결 내역을 불러오는 중…' : '체결 내역을 준비하고 있어요…'}</div>
+                ) : txnList === null ? (
+                  <div className="px-[22px] py-12 text-center">
+                    <div className="text-[14px]" style={{ color: 'var(--ci-ink3)' }}>체결 내역을 불러오지 못했어요.</div>
+                    <button onClick={() => setTxns(prev => ({ ...prev, [activeTab]: undefined }))} className="mt-3 rounded-lg px-4 py-2 text-[13.5px] font-semibold" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.10)', color: SONAR }}>다시 시도 ↻</button>
+                  </div>
+                ) : txnList.length === 0 ? (
+                  <div className="px-[22px] py-12 text-center text-[14px]" style={{ color: 'var(--ci-ink3)' }}>최근 30일 체결 내역이 없습니다.</div>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse" style={{ minWidth: 560 }}>
+                        <thead><tr>{['시간', '구분', '종목', '수량', '체결가', '체결금액'].map(h => <th key={h} className="px-[18px] py-3 text-left text-[12px] font-semibold uppercase tracking-[.1em] text-white/48" style={{ borderBottom: '1px solid var(--ci-line)' }}>{h}</th>)}</tr></thead>
+                        <tbody>{txnList.map((t, i) => { const buy = t.side === 'BUY', filled = t.status === 'FILLED'; return (
+                          <tr key={`${t.orderId}-${i}`}>
+                            <td className="font-mono text-[14px]" style={td}>{fmtTxnTime(t.executedAt)}</td>
+                            <td style={td}><span className="rounded px-2 py-0.5 text-[12px] font-bold" style={{ color: buy ? UP : DOWN, background: buy ? 'rgba(239,77,77,.12)' : 'rgba(77,138,255,.12)' }}>{buy ? '매수' : '매도'}</span>{!filled && <span className="ml-1.5 rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(245,208,97,.14)', color: '#f5d061' }}>미체결</span>}</td>
+                            <td className="text-[14px]" style={td}><span className="font-semibold">{t.stockName || t.stockCode}</span> <span className="font-mono text-[12px] text-white/40">{t.stockCode}</span></td>
+                            <td className="font-mono text-[14px]" style={td}>{filled ? `${Math.floor(t.quantity).toLocaleString('ko-KR')}주` : '—'}</td>
+                            <td className="font-mono text-[14px]" style={td}>{filled ? won(t.price) : '—'}</td>
+                            <td className="font-mono text-[14px]" style={td}>{filled ? won(t.totalAmount) : '—'}</td>
+                          </tr>); })}</tbody>
+                      </table>
+                    </div>
+                    <div className="px-[18px] py-3 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>* KIS 국내주식 주문·체결 기준, 최근 30일. 해외주식 체결 내역은 추후 지원돼요.</div>
+                  </>
+                )}
               </Panel>
             </div>
             <div className="flex flex-col gap-[18px]">
@@ -932,7 +1179,7 @@ const RealAccountPortfolio = () => {
                   <div className="mb-3.5 text-[11.5px] font-semibold tracking-[.2em] text-white/48">자산 배분</div>
                   <div className="grid grid-cols-[130px_1fr] items-center gap-4">
                     <div style={{ width: 130, height: 130 }}><Donut items={alloc} total={allocTotal} /></div>
-                    <ul className="m-0 flex list-none flex-col gap-2.5 p-0">{alloc.slice(0, 6).map((a, i) => (
+                    <ul className="m-0 flex list-none flex-col gap-2.5 p-0">{alloc.map((a, i) => (
                       <li key={i} className="flex items-center gap-2 text-[13px]">
                         <span className="h-[9px] w-[9px] shrink-0 rounded-full" style={{ background: a.c }} />
                         <span className="truncate">{a.label}</span>
@@ -951,20 +1198,30 @@ const RealAccountPortfolio = () => {
                   <button onClick={() => openSetup(activeTab)} className="flex-1 rounded-lg py-2 text-[13.5px] font-semibold" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink1)' }}>키 수정</button>
                   <button onClick={() => handleDisconnect(activeTab)} className="flex-1 rounded-lg py-2 text-[13.5px] font-semibold" style={{ border: '1px solid rgba(239,77,77,.3)', color: UP }}>연결 해제</button>
                 </div>
-                <p className="mt-3 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>* 체결 내역은 거래 페이지에서 확인하세요. 키는 읽기 전용 권한만 사용합니다.</p>
+                <p className="mt-3 text-[11.5px]" style={{ color: 'var(--ci-ink3)' }}>* 키는 읽기 전용 권한만 사용합니다. 체결 내역은 보유 종목 패널의 '체결 내역' 탭에서 볼 수 있어요.</p>
               </Panel>
             </div>
           </div>
+        )}
+
+        {/* 빠른 액션 — 페이퍼와 동일한 CSV 내보내기 (클라이언트 생성) */}
+        {hasAny && (
+          <Panel style={{ padding: '16px 22px' }}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-[13px] font-semibold tracking-[.08em]" style={{ color: 'var(--ci-ink2)' }}>빠른 액션</span>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={exportHoldingsCsv} className="rounded-lg px-3.5 py-2 text-[13.5px] font-semibold" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink1)' }}>보유 자산 CSV</button>
+                {isConn('KIS') && <button onClick={exportTxnsCsv} disabled={txnExporting} className="rounded-lg px-3.5 py-2 text-[13.5px] font-semibold disabled:opacity-50" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-card)', color: 'var(--ci-ink1)' }}>{txnExporting ? '다운로드 중…' : '체결 내역 CSV (KIS)'}</button>}
+              </div>
+            </div>
+          </Panel>
         )}
 
         {!hasAny && !loading && !error && (
           <Panel style={{ padding: '16px 22px' }}><div className="text-center text-[13.5px]" style={{ color: 'var(--ci-ink3)' }}>연결된 실계좌가 없습니다. 위 거래소 탭에서 API 키를 등록해보세요.</div></Panel>
         )}
 
-        <footer className="mt-2 flex flex-wrap justify-between gap-3 border-t border-white/10 pt-5">
-          <span className="font-mono text-[12.5px] text-white/30">© 2026 WHALEARC · 실계좌 데이터는 거래소 API 기준입니다.</span>
-          <span className="text-[12.5px] text-white/30">Built quietly, beneath the surface.</span>
-        </footer>
+        <ConsoleFooter note="실계좌 데이터는 거래소 API 기준입니다." />
       </div>
 
       {showSetup && <ExchangeConnectModal exchangeType={showSetup} account={accounts.find(a => a.exchangeType === showSetup)} onClose={() => setShowSetup(null)} onSaved={(m, t) => { showToast(m, t); load(); }} />}

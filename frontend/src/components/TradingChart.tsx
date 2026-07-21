@@ -37,6 +37,11 @@ const INTERVALS = [
   { label: '1일', value: '1d' },
 ];
 
+/** 인터벌 → 초. 실시간 틱을 인터벌 버킷에 집계할 때 사용 */
+const INTERVAL_SECONDS: Record<string, number> = {
+  '1m': 60, '10m': 600, '30m': 1800, '1h': 3600, '1d': 86400,
+};
+
 const STOCK_PERIODS = [
   { label: '1개월', months: 1 },
   { label: '3개월', months: 3 },
@@ -567,33 +572,46 @@ const TradingChart = ({
   }, [stockPeriod, assetType, historyLoaded]);
 
   // ─── 실시간 가격 업데이트 ──────────────────────────────
+  // 핵심: 현재가를 "선택 인터벌 버킷"에 집계한다.
+  //  - 같은 버킷이면 마지막 봉을 갱신(고가/저가/종가), 새 버킷이면 봉 1개만 새로 연다.
+  //  - 과거엔 매 틱 Date.now() 시각으로 새 캔들을 append 해 초 단위 캔들이 무한히 쌓였음.
   useEffect(() => {
-    if (!candleSeriesRef.current || !historyLoaded || !price || price === 0) return;
-    const now = Math.floor(Date.now() / 1000) as Time;
+    const series = candleSeriesRef.current;
+    if (!series || !historyLoaded || !price || price === 0) return;
     const lastCandle = dataRef.current[dataRef.current.length - 1];
+    if (!lastCandle) return;
 
-    if (lastCandle && (lastCandle.time as number) > (now as number)) {
-      const forcedTime = ((lastCandle.time as number) + 1) as Time;
-      const updatedCandle: CandlestickData<Time> = { time: forcedTime, open: price, high: price, low: price, close: price };
-      dataRef.current.push(updatedCandle);
-      candleSeriesRef.current.update(updatedCandle);
-      return;
-    }
-
-    if (lastCandle && lastCandle.time === now) {
+    // 마지막 봉을 현재가로 갱신하는 공통 로직
+    const updateLast = () => {
       lastCandle.high = Math.max(lastCandle.high, price);
       lastCandle.low = Math.min(lastCandle.low, price);
       lastCandle.close = price;
-      candleSeriesRef.current.update(lastCandle);
-    } else {
-      const newCandle: CandlestickData<Time> = { time: now, open: price, high: price, low: price, close: price };
-      dataRef.current.push(newCandle);
-      candleSeriesRef.current.update(newCandle);
+      series.update(lastCandle);
+    };
+
+    // 일봉(국내주식·미국주식·ETF): 새 봉을 만들지 않고 오늘(마지막) 봉만 현재가로 갱신.
+    // 사용자가 고른 기간 뷰를 흩뜨리지 않도록 scrollToRealTime 도 호출하지 않는다.
+    if (assetType === 'STOCK' || assetType === 'US_STOCK' || assetType === 'ETF') {
+      updateLast();
+      return;
     }
 
-    if (dataRef.current.length > 2000) dataRef.current = dataRef.current.slice(-2000);
+    // 코인(intraday): 현재가를 선택 인터벌 버킷 시작 시각으로 정렬
+    const intervalSec = INTERVAL_SECONDS[interval] ?? 600;
+    const bucketTime = (Math.floor(Date.now() / 1000 / intervalSec) * intervalSec) as Time;
+
+    if ((bucketTime as number) <= (lastCandle.time as number)) {
+      // 같은(또는 시계 되감김으로 과거로 밀린) 버킷 → 마지막 봉 갱신
+      updateLast();
+    } else {
+      // 새 인터벌 버킷 시작 → 봉 1개만 새로 연다
+      const newCandle: CandlestickData<Time> = { time: bucketTime, open: price, high: price, low: price, close: price };
+      dataRef.current.push(newCandle);
+      series.update(newCandle);
+      if (dataRef.current.length > 2000) dataRef.current = dataRef.current.slice(-2000);
+    }
     chartRef.current?.timeScale().scrollToRealTime();
-  }, [price, historyLoaded]);
+  }, [price, historyLoaded, assetType, interval]);
 
   return (
     <div className={className}>

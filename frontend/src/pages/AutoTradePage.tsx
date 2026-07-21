@@ -4,9 +4,11 @@ import HelmShell from '../components/HelmShell';
 import FunnelSteps from '../components/FunnelSteps';
 import Toast, { type ToastItem } from '../components/Toast';
 import { useRoutePrefix } from '../hooks/useRoutePrefix';
+import { useModalChrome } from '../hooks/useModalChrome';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { formatAmountInput, parseAmountInput } from '../utils/currency';
+import { formatAmountInput, parseAmountInput, FALLBACK_USD_KRW } from '../utils/currency';
+import { ConsoleFooter } from '../components/console/ui';
 import { marketService } from '../services/marketService';
 import { strategyService, type Strategy, type BacktestHistoryItem } from '../services/strategyService';
 import { PRESET_STRATEGIES, type PresetStrategy, TURTLE_PRESET_ID, TURTLE_DEFAULTS, buildTurtleConditions, type TurtleParams, MOMENTUM_PRESET_ID, MOMENTUM_DEFAULTS, type MomentumParams, MOMENTUM_ASSET_META, type MomentumAssetType } from '../data/presetStrategies';
@@ -16,6 +18,7 @@ import {
   type DeploymentStatus,
   type LiveOrderLog,
 } from '../services/liveTradeService';
+import { exchangeService, type ExchangeType } from '../services/exchangeService';
 
 // ── 헬퍼 ──
 const formatKRW = (n?: number) =>
@@ -66,6 +69,20 @@ const nextEvalLabel = (d: { lastEvaluatedAt?: string; interval: string; status: 
   if (mins < 60) return `다음 평가까지 약 ${mins}분`;
   const hrs = Math.floor(mins / 60), rm = mins % 60;
   return `다음 평가까지 약 ${hrs}시간${rm > 0 ? ` ${rm}분` : ''}`;
+};
+
+// Model A: LIVE(실계좌)는 사용자 기기(앱)가 실행하고 서버는 사후 보고만 받는다.
+// lastEvaluatedAt은 기기 보고가 갱신하므로, 그 경과로 '기기가 실제로 돌고 있는지'를 보여준다.
+// stale 기준 = 봉 주기 1.5배 + 10분 여유 (그 이상 보고가 없으면 앱이 꺼져 있을 가능성).
+const deviceReportInfo = (d: { lastEvaluatedAt?: string; interval: string; status: string }): { text: string; tone: 'ok' | 'warn' | 'dim' } => {
+  if (d.status !== 'RUNNING') return { text: '—', tone: 'dim' };
+  if (!d.lastEvaluatedAt) return { text: '보고 없음 · 앱 실행 필요', tone: 'warn' };
+  const elapsed = Date.now() - new Date(d.lastEvaluatedAt).getTime();
+  const ms = parseIntervalMs(d.interval) || 3_600_000;
+  const stale = elapsed > ms * 1.5 + 10 * 60_000;
+  return stale
+    ? { text: `${relTime(d.lastEvaluatedAt)} 보고 · 앱 확인 필요`, tone: 'warn' }
+    : { text: `${relTime(d.lastEvaluatedAt)} 보고`, tone: 'ok' };
 };
 
 const formatLogTime = (iso?: string) => {
@@ -199,9 +216,10 @@ const AutoTradePage = () => {
   const isLive = !isVirt;                 // 일반 섹션=실거래(실제 돈), /virt=모의(가상자금)
   const modeLabel = isLive ? '실거래' : '모의';
   const { isDark } = useTheme();
-  const { session, role, canAutoTrade, onboardingDone } = useAuth();
+  const { profileName, role, canAutoTrade, onboardingDone } = useAuth();
   const isAdmin = role === 'ADMIN';   // 전역 킬스위치 POST는 운영자 전용(백엔드 403). 비운영자에겐 미노출.
-  const userName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
+  // 표시명은 DB 닉네임(profileName) 단일 소스 — 다른 콘솔 페이지와 동일(이메일 ID 노출·깜빡임 방지)
+  const userName = profileName || '항해사';
 
   const [pageLoading, setPageLoading] = useState(true);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
@@ -225,7 +243,9 @@ const AutoTradePage = () => {
   const [fromBacktest, setFromBacktest] = useState<string | null>(null);   // 백테스트 딥링크로 가져온 전략명(도착 안내용)
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [creating, setCreating] = useState(false);
-  const [usdKrw, setUsdKrw] = useState(1380);   // 예상 KRW 표시·환산용 환율(USDT/KRW는 USD/KRW로 근사)
+  const [usdKrw, setUsdKrw] = useState(FALLBACK_USD_KRW);   // 예상 KRW 표시·환산용 환율(USDT/KRW는 USD/KRW로 근사) — 폴백은 프로젝트 공용 상수
+  const [availCash, setAvailCash] = useState<{ amount: number; ccy: string } | null>(null); // 연동 계좌 사용가능 현금
+  const [cashLoading, setCashLoading] = useState(false);
   // 배포 할당금액을 KRW로 환산(카드 수익률·합계용). 네이티브(USD/USDT)는 환율 적용.
   const allocKrw = (d: Deployment) => (d.baseCurrency && d.baseCurrency !== 'KRW')
     ? (d.allocatedCash || 0) * usdKrw : (d.allocatedCash || 0);
@@ -246,6 +266,11 @@ const AutoTradePage = () => {
   });
   const [turtle, setTurtle] = useState<TurtleParams>(TURTLE_DEFAULTS); // 터틀 전용 설정(채널 기간·ADX·유닛)
   const [momentum, setMomentum] = useState<MomentumParams>(MOMENTUM_DEFAULTS); // 모멘텀 로테이션 전용 설정(top-N·룩백·레짐)
+
+  // 모달 크롬(Esc 닫기 + 배경 스크롤 잠금) — 교육 게이트·생성 모달은 인라인 조건부 렌더라 enabled 파라미터로 배선.
+  // 생성 모달은 생성 요청 중엔 Esc로 닫지 않는다(배경 클릭 가드와 동일 규칙).
+  useModalChrome(() => setShowGuide(false), showGuide);
+  useModalChrome(() => { if (!creating) { setShowCreate(false); setFromBacktest(null); } }, showCreate);
 
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
@@ -295,6 +320,30 @@ const AutoTradePage = () => {
   useEffect(() => {
     marketService.getExchangeRate().then(r => { if (r?.usdKrw > 0) setUsdKrw(r.usdKrw); }).catch(() => {});
   }, []);
+
+  // 실거래 연동 계좌 사용가능 현금 조회 — 생성 모달 열림·브로커·전략(통화) 변경 시. 모의(MOCK)는 조회 안 함.
+  useEffect(() => {
+    const isMom = form.strategyId === MOMENTUM_PRESET_ID;
+    const broker = isMom ? (momentum.assetType === 'CRYPTO' ? 'BITGET' : 'KIS') : form.brokerType;
+    if (!showCreate || !isLive || (broker !== 'KIS' && broker !== 'UPBIT' && broker !== 'BITGET')) {
+      setAvailCash(null);
+      return;
+    }
+    const strat = [...PRESET_STRATEGIES, ...strategies].find(s => s.id === form.strategyId);
+    const assetType = isMom ? momentum.assetType : (form.assetType || strat?.assetType);
+    const ccy = resolveBaseCcy(isLive, broker, assetType);
+    let cancelled = false;
+    setCashLoading(true);
+    exchangeService.getPortfolio(broker as ExchangeType)
+      .then(p => {
+        if (cancelled) return;
+        const amount = (ccy === 'USD' || ccy === 'USDT') ? (p.foreignCashUsd ?? 0) : (p.cashBalance ?? 0);
+        setAvailCash({ amount, ccy });
+      })
+      .catch(() => { if (!cancelled) setAvailCash(null); })
+      .finally(() => { if (!cancelled) setCashLoading(false); });
+    return () => { cancelled = true; };
+  }, [showCreate, isLive, form.strategyId, form.brokerType, form.assetType, momentum.assetType, strategies]);
 
   // 백테스트 → "자동매매 시작" 딥링크(?deploy=<전략id>): 그 전략이 선택된 채로 생성 모달 자동 오픈.
   // 등급 게이트(canAutoTrade)가 해결된 뒤에만 처리해, 잠긴 실거래에서 전략 fetch/토스트/모달이 새지 않게 한다.
@@ -503,7 +552,9 @@ const AutoTradePage = () => {
         trailingStopPct: form.trailingStopPct ? Number(form.trailingStopPct) : undefined,
         dailyLossLimit: form.dailyLossLimit ? Number(form.dailyLossLimit) : undefined,
       });
-      pushToast('success', '자동매매 시작', `${modeLabel} 자동매매가 가동되었습니다.`);
+      // Model A: LIVE는 서버가 아닌 폰 앱이 실행 — '가동됨'이라고 단정하지 않고 앱 실행을 안내
+      if (isLive) pushToast('success', '자동매매 설정 완료', '실행은 폰의 WhaleArc 앱이 담당해요. 앱을 실행해두면 다음 봉부터 신호를 평가합니다.');
+      else pushToast('success', '자동매매 시작', '모의 자동매매가 가동되었습니다.');
       setShowCreate(false);
       setFromBacktest(null);
       setForm(prev => ({ ...prev, strategyId: '', targetAssetsText: '', stopLossPct: '', takeProfitPct: '', trailingStopPct: '', dailyLossLimit: '' }));
@@ -660,13 +711,15 @@ const AutoTradePage = () => {
               {modeLabel} 자동매매{isLive && <span className="ml-2 align-middle text-sm font-bold text-amber-500">⚠️ 실제 자금</span>}
             </h1>
             <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--ci-ink1)', maxWidth: 620 }}>
-              {`백테스트한 전략을 ${isLive ? '실제 자금으로' : '모의(가상) 자금으로'} 자동 매매합니다. 봉 단위(시간·일)로 신호를 평가해 주문합니다.`}
+              {isLive
+                ? '백테스트한 전략을 실제 자금으로 자동 매매합니다. 신호 평가·주문은 내 폰의 WhaleArc 앱이 봉 단위로 실행하고, 이 화면에서는 설정과 현황을 관리해요.'
+                : '백테스트한 전략을 모의(가상) 자금으로 자동 매매합니다. 봉 단위(시간·일)로 신호를 평가해 주문합니다.'}
             </p>
           </div>
           <PrimaryBtn onClick={openCreate}>새 자동매매 시작</PrimaryBtn>
         </div>
 
-        {isVirt && <div className="mb-5"><FunnelSteps current={3} /></div>}
+        {isVirt && <div className="mb-5"><FunnelSteps current={2} /></div>}
 
         {/* AUTOPILOT 관제 덱 (좌: 상태·요약 / 우: 전역 킬스위치) */}
         <section style={{ position: 'relative', overflow: 'hidden', background: 'var(--ci-panel)', border: '1px solid var(--ci-line)', borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)', marginBottom: 20 }}>
@@ -682,7 +735,9 @@ const AutoTradePage = () => {
                 {killSwitch ? '전체 정지됨' : (runningCount ? `${runningCount}개 전략 가동 중` : '대기 중')}
               </h2>
               <p style={{ margin: '7px 0 20px', fontSize: 13, color: 'var(--ci-ink2)' }}>
-                {killSwitch ? '킬스위치가 작동했습니다. 모든 자동매매가 멈췄습니다.' : `${isLive ? '실제' : '모의'} 자금으로 신호를 자동 평가·주문하고 있습니다.`}
+                {killSwitch ? '킬스위치가 작동했습니다. 모든 자동매매가 멈췄습니다.'
+                  : isLive ? '실계좌 매매는 내 폰의 WhaleArc 앱이 실행합니다. 여기서는 설정·현황을 관리해요.'
+                  : '모의 자금으로 신호를 자동 평가·주문하고 있습니다.'}
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
                 <DeckStat label="가동 중" value={`${runningCount}개`} />
@@ -806,7 +861,7 @@ const AutoTradePage = () => {
                             ))}
                           </div>
                         ) : (
-                          <div style={{ fontSize: 12, color: 'var(--ci-ink3)' }}>첫 리밸런싱 대기 — '지금 평가'로 즉시 실행할 수 있어요.</div>
+                          <div style={{ fontSize: 12, color: 'var(--ci-ink3)' }}>{d.accountMode === 'LIVE' ? '첫 리밸런싱 대기 — 폰 앱이 다음 평가 때 실행해요.' : "첫 리밸런싱 대기 — '지금 평가'로 즉시 실행할 수 있어요."}</div>
                         )}
                         {d.lastRotationMonth && (
                           <div className="mt-1.5" style={{ fontSize: 11, color: 'var(--ci-ink3)' }}>마지막 리밸런싱: {d.lastRotationMonth}</div>
@@ -848,10 +903,22 @@ const AutoTradePage = () => {
                         <div style={{ fontSize: 10.5, letterSpacing: '.12em', color: 'var(--ci-ink3)', fontWeight: 600 }}>최근 신호</div>
                         <div className="truncate" style={{ fontSize: 12.5, color: 'var(--ci-ink1)', marginTop: 3 }}>{signalText}</div>
                       </div>
+                      {d.accountMode === 'LIVE' ? (() => {
+                        // Model A: LIVE는 기기(앱)가 평가·주문 — '다음 평가' 약속 대신 마지막 기기 보고 경과를 정직하게 표시
+                        const dr = dim ? { text: '—', tone: 'dim' as const } : deviceReportInfo(d);
+                        const drColor = dr.tone === 'ok' ? GREEN : dr.tone === 'warn' ? '#f5d061' : 'var(--ci-ink2)';
+                        return (
+                          <div className="shrink-0 text-right">
+                            <div style={{ fontSize: 10.5, letterSpacing: '.12em', color: 'var(--ci-ink3)', fontWeight: 600 }}>📱 기기 보고</div>
+                            <div className="font-mono" style={{ fontSize: 12.5, color: drColor, marginTop: 3 }}>{dr.text}</div>
+                          </div>
+                        );
+                      })() : (
                       <div className="shrink-0 text-right">
                         <div style={{ fontSize: 10.5, letterSpacing: '.12em', color: 'var(--ci-ink3)', fontWeight: 600 }}>다음 평가</div>
                         <div className="font-mono" style={{ fontSize: 12.5, color: dim ? 'var(--ci-ink2)' : GREEN, marginTop: 3 }}>{dim ? '—' : (nextLbl || '대기')}</div>
                       </div>
+                      )}
                     </div>
 
                     {/* 체결 / 승 — 첫 실행(거래 0)엔 숨김 */}
@@ -1014,9 +1081,14 @@ const AutoTradePage = () => {
 
                   </div>
 
-                  {/* 액션 버튼 (카드 푸터) */}
+                  {/* 액션 버튼 (카드 푸터) — Model A: LIVE는 평가·주문을 기기(앱)가 실행하므로
+                      서버 실행 버튼(지금 평가·지금 청산)은 PAPER 전용(백엔드도 LIVE 요청을 거부한다). */}
                   <div className="flex flex-wrap items-center gap-2" style={{ padding: '12px 14px', borderTop: '1px solid var(--ci-line)' }}>
-                    {d.status === 'RUNNING' && (
+                    {d.accountMode === 'LIVE' && (
+                      <span title="실계좌 자동매매의 신호 평가·주문은 내 폰의 WhaleArc 앱이 실행합니다. 서버는 설정·현황만 보관해요."
+                        style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ci-ink3)' }}>📱 평가·주문은 폰 앱이 실행</span>
+                    )}
+                    {d.accountMode !== 'LIVE' && d.status === 'RUNNING' && (
                       <button disabled={busyId === d.id || killSwitch} onClick={() => evaluateNow(d)}
                         title={killSwitch ? '전역 킬스위치가 켜져 있어 평가할 수 없습니다.' : undefined}
                         className={`px-3.5 py-2 rounded-lg text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed ${isDark ? 'bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>
@@ -1024,7 +1096,7 @@ const AutoTradePage = () => {
                       </button>
                     )}
                     {/* 지금 청산 — 보유 포지션(롱·숏)이 있을 때(신호/익절손절 안 기다리고 즉시 시장가 청산) */}
-                    {(d.positions || []).some(p => p.direction !== 'NONE') && (
+                    {d.accountMode !== 'LIVE' && (d.positions || []).some(p => p.direction !== 'NONE') && (
                       <button disabled={busyId === d.id} onClick={() => closeNow(d)}
                         title="보유 포지션 전부 시장가 청산"
                         className={`px-3.5 py-2 rounded-lg text-xs font-semibold ${isDark ? 'bg-orange-500/15 text-orange-300 hover:bg-orange-500/25' : 'bg-orange-50 text-orange-700 hover:bg-orange-100'}`}>
@@ -1062,6 +1134,8 @@ const AutoTradePage = () => {
             })}
           </div>
         )}
+        {/* 공용 푸터 — 다른 콘솔 페이지와 통일 (이 페이지만 푸터가 없었음) */}
+        <div className="mt-6"><ConsoleFooter /></div>
       </div>
 
       {/* 자동매매 시작 전 교육 게이트 모달 */}
@@ -1090,6 +1164,12 @@ const AutoTradePage = () => {
                       title: '이건 가상 돈입니다',
                       body: '실제 내 계좌 돈이 나가지 않아요. 시스템이 ₩1,000만 가상 자금으로 연습합니다. 잘못 눌러도 괜찮아요.',
                     },
+                // Model A: 실거래 실행 주체는 사용자 기기(앱) — 시작 전 반드시 알아야 할 사실
+                ...(isLive ? [{
+                  icon: '📱',
+                  title: '실행은 내 폰의 앱이 합니다',
+                  body: '서버가 아니라 내 기기의 WhaleArc 앱이 신호를 평가하고 주문합니다. 앱에 거래소 키를 등록하고, 앱이 실행 중이어야 매매가 진행돼요.',
+                }] : []),
                 {
                   icon: '📡',
                   title: '봉 단위 평가 = 정해진 시간마다 신호 확인',
@@ -1157,7 +1237,7 @@ const AutoTradePage = () => {
               <div style={{ position: 'relative' }}>
                 <div style={{ fontSize: 10.5, letterSpacing: '.2em', color: 'rgba(255,255,255,.8)', fontWeight: 700 }}>NEW AUTOPILOT</div>
                 <h2 style={{ margin: '5px 0 0', fontSize: 18, fontWeight: 700, color: 'rgba(255,255,255,.97)' }}>새 {modeLabel} 자동매매 시작</h2>
-                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(255,255,255,.75)' }}>{isLive ? '실전 계좌(KIS·Bitget)에 직접 주문하는 실거래입니다 (실제 자금 ⚠️).' : '가상자금으로 안전하게 연습하는 모의 자동매매입니다. 실제 돈은 나가지 않습니다.'}</p>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(255,255,255,.75)' }}>{isLive ? '실제 자금이 매매되는 실거래입니다 ⚠️. 주문 실행은 내 폰의 WhaleArc 앱이 담당하고, 여기서는 전략·금액·리스크를 설정합니다.' : '가상자금으로 안전하게 연습하는 모의 자동매매입니다. 실제 돈은 나가지 않습니다.'}</p>
               </div>
             </div>
 
@@ -1299,16 +1379,18 @@ const AutoTradePage = () => {
                     )}
                     {form.brokerType === 'KIS' ? (
                       <p className={`text-[12px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
-                        ⚠️ KIS <b>실전 계좌</b>에 직접 주문합니다 — <b>실제 돈이 나갑니다.</b>
-                        거래소 연동에서 KIS 키를 먼저 등록하세요. <b>국내주식(예: 005930)</b>과 <b>미국주식(예: JOBY)</b> 모두 가능하며,
+                        ⚠️ KIS <b>실전 계좌</b>로 매매됩니다 — <b>실제 돈이 나갑니다.</b>
+                        주문 실행은 <b>내 폰의 WhaleArc 앱</b>이 담당하니, 앱에서 KIS 키를 등록하고 앱을 실행해두세요.
+                        <b>국내주식(예: 005930)</b>과 <b>미국주식(예: JOBY)</b> 모두 가능하며,
                         미국주식은 <b>미국 장중(22:30~05:00 KST)</b>에만 체결됩니다(시장가 없어 현재가 지정가로 발주).
                         안전장치로 <b>1건당 10만원 상한</b>이 걸려 있고, 비상 시 상단 킬스위치로 전체 정지하세요.
                         <b>처음엔 1주 극소액으로 검증</b>하길 권장합니다.
                       </p>
                     ) : (
                       <p className={`text-[12px] mt-1 ${isDark ? 'text-amber-300/90' : 'text-amber-700'}`}>
-                        ⚠️ Bitget <b>현물(Spot) 계좌</b>에 직접 주문합니다 — <b>실제 돈이 나갑니다.</b>
-                        거래소 연동에서 Bitget 키(<b>apiKey·secretKey·passphrase</b>)를 먼저 등록하세요. <b>코인(예: BTC, ETH)</b>만 거래하며
+                        ⚠️ Bitget <b>현물(Spot) 계좌</b>로 매매됩니다 — <b>실제 돈이 나갑니다.</b>
+                        주문 실행은 <b>내 폰의 WhaleArc 앱</b>이 담당하니, 앱에서 Bitget 키(<b>apiKey·secretKey·passphrase</b>)를 등록하고 앱을 실행해두세요.
+                        <b>코인(예: BTC, ETH)</b>만 거래하며
                         가격·신호는 <b>Bitget USDT 시세</b> 기준입니다. 할당 금액(원)은 <b>USDT로 환산</b>되어 주문되고,
                         최소 주문금액(보통 5 USDT) 이상이어야 합니다. 안전장치로 <b>1건당 10만원 상한</b>이 걸려 있습니다.
                         <b>처음엔 극소액으로 검증</b>하길 권장합니다.
@@ -1410,6 +1492,12 @@ const AutoTradePage = () => {
                   {modalCcy !== 'KRW' && (
                     <p className={`text-[12px] mt-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                       {modalCcy} 기준 · 예상 ≈ {formatKRW(Math.round(modalAllocNum * usdKrw))} <span className="opacity-60">(환율 {Math.round(usdKrw).toLocaleString('ko-KR')}원 적용, 체결 시점 환율로 달라질 수 있어요)</span>
+                    </p>
+                  )}
+                  {isLive && (cashLoading || availCash) && (
+                    <p className={`text-[12px] mt-1 font-medium ${availCash && modalAllocNum > availCash.amount ? 'text-red-400' : (isDark ? 'text-emerald-400' : 'text-emerald-600')}`}>
+                      사용 가능: {cashLoading ? '조회 중…' : fmtNative(availCash!.amount, availCash!.ccy)}
+                      {availCash && modalAllocNum > availCash.amount && <span> · 잔고 초과</span>}
                     </p>
                   )}
                 </div>

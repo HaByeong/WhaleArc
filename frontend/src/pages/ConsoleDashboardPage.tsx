@@ -8,7 +8,7 @@ import { userService } from '../services/userService';
 import { exchangeService, type ExchangeType, type ExchangeAccount, type ExchangePortfolio } from '../services/exchangeService';
 import { tradeService, type Portfolio } from '../services/tradeService';
 import { strategyService } from '../services/strategyService';
-import { liveTradeService } from '../services/liveTradeService';
+import { liveTradeService, type Deployment } from '../services/liveTradeService';
 import { marketService, type MarketPrice } from '../services/marketService';
 import { useRealtimePrice } from '../hooks/useRealtimePrice';
 import ExchangeConnectModal from '../components/ExchangeConnectModal';
@@ -16,6 +16,8 @@ import apiClient, { getErrorMessage } from '../utils/api';
 import { FALLBACK_USD_KRW } from '../utils/currency';
 import HelmShell from '../components/HelmShell';
 import GuideTour, { type TourStep } from '../components/GuideTour';
+import { SONAR, UP, DOWN, COMPASS, won, fmtQty, stockLikeOf, EXCHANGES, REAL_SRC_KEY } from '../components/console/format';
+import { Panel, PanelHead, Tri, ConsoleFooter } from '../components/console/ui';
 
 /* 신규 사용자 가이드 투어 (옛 Dashboard 복원) — 실계좌 홈 4스텝 */
 const DASH_TOUR: TourStep[] = [
@@ -31,22 +33,7 @@ const DASH_TOUR: TourStep[] = [
    virt     = 모의투자 홈 (tradeService 페이퍼 포트폴리오 ₩1,000만)
    ──────────────────────────────────────────────────────────── */
 
-const SONAR = 'var(--ci-sonar)';
-const UP = '#ef4d4d', DOWN = '#4d8aff', COMPASS = '#f5d061';
-const won = (n: number) => '₩' + Math.round(n).toLocaleString('ko-KR');
-const stripZeros = (s: string) => s.replace(/\.?0+$/, '') || '0';
-const fmtQty = (n: number, stockLike: boolean) => (stockLike ? `${Math.floor(n).toLocaleString('ko-KR')}주` : `${stripZeros(n.toFixed(8))}개`);
-const stockLikeOf = (at?: string) => at === 'STOCK' || at === 'US_STOCK' || at === 'ETF';
-
-const panel: React.CSSProperties = { background: 'var(--ci-panel)', border: '1px solid var(--ci-line)', borderRadius: 16, boxShadow: 'var(--ci-panel-shadow)' };
-const Panel = ({ children, style }: { children: ReactNode; style?: React.CSSProperties }) => <div style={{ ...panel, ...style }}>{children}</div>;
-const PanelHead = ({ kicker, title, right }: { kicker?: string; title: string; right?: ReactNode }) => (
-  <div className="wa-force-dark flex items-center justify-between px-[22px] py-[15px] text-white" style={{ background: 'linear-gradient(105deg,#142647 0%,#1d3c7a 52%,#2c6fe6 100%)', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
-    <div>{kicker && <div className="text-[11.5px] font-bold tracking-[.22em] text-white/70">{kicker}</div>}<div className="text-[17.5px] font-bold">{title}</div></div>
-    {right}
-  </div>
-);
-const Tri = ({ up }: { up: boolean }) => <svg width="9" height="9" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 2 }}><path d={up ? 'M5 1l4 7H1z' : 'M5 9L1 2h8z'} fill={up ? UP : DOWN} /></svg>;
+/* 색·포맷터·Panel/PanelHead/Tri·EXCHANGES는 components/console/ui.tsx 공용 모듈 사용 */
 
 const QIcon = ({ kind }: { kind: string }) => {
   const c = { width: 18, height: 18, viewBox: '0 0 22 22', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -117,12 +104,6 @@ function useIndices(): IdxRow[] {
   return rows;
 }
 
-const EXCHANGES: { key: ExchangeType; label: string; badge: string; name: string; devel: string }[] = [
-  { key: 'KIS', label: '주식', badge: 'KIS', name: 'KIS (한국투자증권)', devel: 'KIS Developers' },
-  { key: 'UPBIT', label: '코인', badge: 'Upbit', name: '업비트', devel: '업비트 Open API' },
-  { key: 'BITGET', label: '코인', badge: 'Bitget', name: '비트겟', devel: 'Bitget API' },
-];
-
 const Step = ({ n, t, s, active }: { n: string; t: string; s: string; active?: boolean }) => (
   <div className="rounded-xl p-[18px]" style={{ background: active ? 'rgba(91,157,255,.10)' : 'var(--ci-inset)', border: active ? '1px solid rgba(91,157,255,.28)' : '1px solid var(--ci-line)' }}>
     <div className="mb-1.5 font-mono text-[12px] font-bold tracking-[.1em]" style={{ color: active ? SONAR : 'var(--ci-ink3)' }}>{n}</div>
@@ -170,10 +151,10 @@ const ErrorCard = ({ onRetry }: { onRetry: () => void }) => (
   </Panel>
 );
 
-/* 자산 요약 카드 (실계좌·페이퍼 공용 — 정규화된 props) */
+/* 자산 요약 카드 (실계좌·페이퍼 공용 — 정규화된 props). footer = 카드 하단 부가 영역(전체 탭의 거래소별 breakdown 등) */
 type SumHolding = { name: string; sub: string; value: number; rate: number };
-const SummaryCard = ({ kicker, title, total, pnl, returnRate, cash, equity, holdings, onAll, allLabel = '포트폴리오 →' }: {
-  kicker: string; title: string; total: number; pnl: number; returnRate: number; cash: number; equity: number; holdings: SumHolding[]; onAll: () => void; allLabel?: string;
+const SummaryCard = ({ kicker, title, total, pnl, returnRate, cash, equity, holdings, onAll, allLabel = '포트폴리오 →', footer }: {
+  kicker: string; title: string; total: number; pnl: number; returnRate: number; cash: number; equity: number; holdings: SumHolding[]; onAll: () => void; allLabel?: string; footer?: ReactNode;
 }) => {
   const sign = pnl > 0 ? 1 : pnl < 0 ? -1 : 0; // 손익 0은 이득이 아닌 '변동 없음'(중립)으로 표시
   return (
@@ -204,13 +185,14 @@ const SummaryCard = ({ kicker, title, total, pnl, returnRate, cash, equity, hold
             ); })}
           </div>
         )}
+        {footer}
       </div>
     </Panel>
   );
 };
 
-const QUICK: [string, string, string][] = [['시세 확인하기', '실시간 시세 조회', 'sonar'], ['내 포트폴리오', '잔고·수익률 한눈에', 'pie'], ['전략 백테스트', '과거 데이터로 시뮬레이션', 'route'], ['전략 학습', '검증된 전략을 단계별로', 'book']];
-const QUICK_PATH = ['/market', '/my-portfolio', '/strategy', '/store'];
+const QUICK: [string, string, string][] = [['시세 확인하기', '실시간 시세 조회', 'sonar'], ['내 포트폴리오', '잔고·수익률 한눈에', 'pie'], ['전략·백테스트', '배우고 과거 데이터로 검증', 'route'], ['자동매매', '검증한 전략을 자동으로', 'book']];
+const QUICK_PATH = ['/market', '/my-portfolio', '/strategy', '/auto-trade'];
 // 정적 투자 원칙(교육용) — 가짜 시세 시그널 대신 정직한 가이드
 const SIGNALS: [string, string, string, string][] = [['원칙', '분산 투자', '한 자산에 몰빵하지 않으면 변동성이 줄어듭니다', SONAR], ['원칙', '손절 규칙', '미리 정한 손실 한계를 지키면 큰 손실을 막아요', COMPASS], ['원칙', '장기 관점', '잦은 매매보다 검증된 전략을 꾸준히', UP]];
 
@@ -240,18 +222,29 @@ const WelcomeBanner = ({ name, blips }: { name: string; blips: { sym: string; x:
 const wlPrice = (s: MarketPrice) => (s.currency === 'USD' ? '$' + s.price.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) : '₩' + Math.round(s.price).toLocaleString('ko-KR'));
 const WatchlistPanel = ({ go }: { go: (path: string) => void }) => {
   const [items, setItems] = useState<MarketPrice[]>([]);
+  const [favs, setFavs] = useState<string[] | null>(null); // null=즐겨찾기 아직 조회 전
   const [loaded, setLoaded] = useState(false);
   const isPreview = import.meta.env.DEV && window.location.pathname.startsWith('/preview');
   // 크립토 실시간(WebSocket) — 관심 종목 시세 즉시 반영
   const { prices: rt } = useRealtimePrice({ enabled: !isPreview });
+  // 즐겨찾기 목록은 60초 폴링 — 매 15초 프로필까지 재조회하던 것을 시세와 분리(★ 목록은 드물게 변함).
+  // 내용이 같으면 참조를 유지해 아래 시세 이펙트의 불필요한 재실행을 막는다.
   useEffect(() => {
-    if (isPreview) { setLoaded(true); return; }
+    if (isPreview) { setFavs([]); setLoaded(true); return; }
     let alive = true;
-    const fetchFavs = async () => {
-      const profile = await userService.getProfile().catch(() => null);
-      const favs = profile?.favoriteAssets || [];
-      if (!alive) return;
-      if (favs.length === 0) { setItems([]); setLoaded(true); return; }
+    const loadFavs = () => userService.getProfile()
+      .then(p => { if (!alive) return; const list = p?.favoriteAssets || []; setFavs(prev => (prev && prev.length === list.length && prev.every((v, i) => v === list[i])) ? prev : list); })
+      .catch(() => { if (alive) setFavs(prev => prev ?? []); });
+    loadFavs();
+    const id = setInterval(loadFavs, 60_000);
+    return () => { alive = false; clearInterval(id); };
+  }, [isPreview]);
+  // 시세는 즐겨찾기가 있을 때만 15초 폴링(빈 목록이면 폴링 0회)
+  useEffect(() => {
+    if (isPreview || favs == null) return;
+    if (favs.length === 0) { setItems([]); setLoaded(true); return; }
+    let alive = true;
+    const fetchPrices = async () => {
       // 즐겨찾기는 모든 자산클래스(코인·국내주식·미국주식·ETF)에서 등록 가능 → 전부 조회해 합쳐서 필터
       const [crypto, stock, usStock, etf] = await Promise.all([
         marketService.getPrices('CRYPTO').catch(() => []),
@@ -264,10 +257,10 @@ const WatchlistPanel = ({ go }: { go: (path: string) => void }) => {
       setItems([...crypto, ...stock, ...usStock, ...etf].filter(p => favSet.has(p.symbol) || favSet.has(p.name)).slice(0, 8));
       setLoaded(true);
     };
-    fetchFavs();
-    const id = setInterval(fetchFavs, 15000); // 15초 폴링(주식 시세 갱신)
+    fetchPrices();
+    const id = setInterval(fetchPrices, 15000); // 15초 폴링(주식 시세 갱신)
     return () => { alive = false; clearInterval(id); };
-  }, [isPreview]);
+  }, [isPreview, favs]);
   // 크립토 항목은 실시간 가격으로 병합
   const merged = useMemo(() => (rt.size === 0 ? items : items.map(s => (s.assetType === 'CRYPTO' ? (rt.get(s.symbol) ?? s) : s))), [items, rt]);
   return (
@@ -278,7 +271,7 @@ const WatchlistPanel = ({ go }: { go: (path: string) => void }) => {
           {!loaded ? <div className="px-3 py-6 text-center text-[13px] text-white/40">불러오는 중…</div>
             : merged.length === 0 ? <div className="px-3 py-6 text-center text-[13px] leading-relaxed text-white/40">시세 페이지에서 ★를 눌러<br />관심 종목을 등록해보세요.</div>
               : merged.map(s => { const up = s.changeRate >= 0; return (
-                <button key={s.symbol} onClick={() => go(`/trade?code=${s.symbol}&type=${s.assetType}`)} className="grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.03]">
+                <button key={s.symbol} onClick={() => go(`/market?code=${s.symbol}&type=${s.assetType}`)} className="grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.03]">
                   <div className="min-w-0"><div className="truncate text-[14px] font-semibold">{s.name}</div><div className="font-mono text-[12px] text-white/40">{s.symbol}</div></div>
                   <div className="text-right"><div className="font-mono text-[13.5px] font-semibold">{wlPrice(s)}</div><div className="font-mono text-[12px] font-semibold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{s.changeRate.toFixed(2)}%</div></div>
                 </button>
@@ -331,6 +324,62 @@ const GoalPanel = ({ returnRate }: { returnRate: number | null }) => {
   );
 };
 
+/* 자동매매 현황 — 운용 중인 배포가 있을 때만 노출 (liveTradeService.getDeployments) */
+const DEPLOY_STATUS: Record<string, { label: string; color: string; bg: string }> = {
+  RUNNING: { label: '운용 중', color: '#3fd6a0', bg: 'rgba(63,214,160,.14)' },
+  PAUSED: { label: '일시정지', color: '#f5d061', bg: 'rgba(245,208,97,.14)' },
+  ERROR: { label: '오류', color: '#ef4d4d', bg: 'rgba(239,77,77,.14)' },
+  STOPPED: { label: '중지', color: 'var(--ci-ink3)', bg: 'var(--ci-chip)' },
+};
+const AutoTradePanel = ({ go }: { go: (path: string) => void }) => {
+  const [deps, setDeps] = useState<Deployment[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const isPreview = import.meta.env.DEV && window.location.pathname.startsWith('/preview');
+  useEffect(() => {
+    if (isPreview) { setLoaded(true); return; } // 프리뷰(비로그인) 401 방지
+    let alive = true;
+    liveTradeService.getDeployments()
+      .then(list => { if (alive) setDeps(list || []); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, [isPreview]);
+  // '자동매매를 돌리고 있다면'만 노출 — 중지/미사용이면 렌더하지 않아 대시보드를 간결하게 유지
+  const active = deps.filter(d => d.status !== 'STOPPED');
+  if (!loaded || active.length === 0) return null;
+  return (
+    <Panel style={{ padding: 0 }}>
+      <PanelHead kicker="AUTO TRADING" title="자동매매 현황" right={<button onClick={() => go('/auto-trade')} className="text-[12px] font-semibold" style={{ color: SONAR }}>관리 →</button>} />
+      <div className="px-2.5 pb-3 pt-1">
+        {active.slice(0, 4).map(d => {
+          const st = DEPLOY_STATUS[d.status] || DEPLOY_STATUS.STOPPED;
+          const pnl = d.realizedPnl ?? 0;
+          const rate = d.allocatedCash > 0 ? (pnl / d.allocatedCash) * 100 : 0;
+          const up = pnl >= 0;
+          return (
+            <button key={d.id} onClick={() => go('/auto-trade')} className="grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.03]">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-[14px] font-semibold">{d.strategyName}</span>
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10.5px] font-bold" style={{ color: st.color, background: st.bg }}>
+                    {d.status === 'RUNNING' && <span className="inline-block h-1.5 w-1.5 rounded-full animate-pulse-dot" style={{ background: st.color }} />}{st.label}
+                  </span>
+                </div>
+                <div className="font-mono text-[12px] text-white/40">{won(d.allocatedCash)} 운용 · {d.tradeCount ?? 0}회 체결</div>
+              </div>
+              <div className="text-right">
+                <div className="font-mono text-[13.5px] font-semibold" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{rate.toFixed(2)}%</div>
+                <div className="font-mono text-[12px]" style={{ color: up ? UP : DOWN }}>{up ? '+' : ''}{won(pnl)}</div>
+              </div>
+            </button>
+          );
+        })}
+        {active.length > 4 && <div className="px-3 pt-1.5 text-[12px] text-white/40">외 {active.length - 4}개 · 자동매매에서 전체 보기 →</div>}
+      </div>
+    </Panel>
+  );
+};
+
 const RightRail = ({ go, returnRate = null }: { go: (path: string) => void; returnRate?: number | null }) => (
   <div className="flex flex-col gap-5 lg:sticky lg:top-[88px]">
     <GoalPanel returnRate={returnRate} />
@@ -347,6 +396,7 @@ const RightRail = ({ go, returnRate = null }: { go: (path: string) => void; retu
       </ul>
       </div>
     </Panel>
+    <AutoTradePanel go={go} />
     <WatchlistPanel go={go} />
     <Panel style={{ padding: 0 }}>
       <PanelHead title="투자 원칙" right={<span className="text-[12px] text-white/30">항해 수칙</span>} />
@@ -358,17 +408,12 @@ const RightRail = ({ go, returnRate = null }: { go: (path: string) => void; retu
     </Panel>
   </div>
 );
-const Footer = () => (
-  <footer className="mt-2 flex flex-wrap justify-between gap-3 border-t border-white/10 pt-5">
-    <span className="font-mono text-[12.5px] text-white/30">© 2026 WHALEARC · 모든 항해는 사용자의 책임 아래 진행됩니다.</span>
-    <span className="text-[12.5px] text-white/30">Built quietly, beneath the surface.</span>
-  </footer>
-);
 // 보유 종목이 없으면 빈 소나(가짜 포지션 표시 안 함)
 const blipsFrom = (hs: { name: string; rate: number }[]) => hs.length === 0 ? []
   : [...hs].sort((a, b) => b.rate - a.rate).slice(0, 3).map((h, i) => ({ sym: h.name.replace(/^KRW-/, '').slice(0, 4), x: [64, 38, 62][i] ?? 50, y: [34, 60, 68][i] ?? 50, up: h.rate >= 0 }));
 
 /* ── 실계좌 홈 (non-virt, exchangeService) ── */
+type SrcTab = 'ALL' | ExchangeType;          // '전체'(연결 거래소 합산) 또는 단일 거래소
 const RealDashboard = () => {
   const navigate = useNavigate();
   const { profileName } = useAuth();
@@ -376,7 +421,8 @@ const RealDashboard = () => {
   const name = profileName || '항해사';
   const [accounts, setAccounts] = useState<ExchangeAccount[]>([]);
   const [ports, setPorts] = useState<Partial<Record<ExchangeType, ExchangePortfolio | null>>>({});
-  const [src, setSrc] = useState<ExchangeType>('KIS');
+  const [src, setSrc] = useState<SrcTab>('KIS');
+  const autoPicked = useRef(false);            // 시작 탭 자동 결정은 1회만(이후 사용자 선택 우선)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false); // 계좌 조회 실패 — '미연결'과 구분해 에러 UI 표시
   const [setup, setSetup] = useState<ExchangeType | null>(null);
@@ -405,30 +451,83 @@ const RealDashboard = () => {
   }, [loading, isPreview]);
 
   const isConn = (t: ExchangeType) => accounts.some(a => a.exchangeType === t && a.connected);
-  const selectedConnected = isConn(src);
-  const selectedPort = ports[src] || null;
-  const meta = EXCHANGES.find(e => e.key === src)!;
+  const connectedKeys = EXCHANGES.filter(e => isConn(e.key)).map(e => e.key);
+
+  // 최초 로드 후 시작 탭 결정 — 저장된 선택(포트폴리오 페이지와 공유) 우선, 없으면 2개 이상 연결=전체, 1개=그 거래소.
+  useEffect(() => {
+    if (autoPicked.current || loading || isPreview) return;
+    autoPicked.current = true;
+    const conn = EXCHANGES.filter(e => accounts.some(a => a.exchangeType === e.key && a.connected)).map(e => e.key);
+    let init: SrcTab | null = null;
+    try {
+      const saved = localStorage.getItem(REAL_SRC_KEY);
+      if (saved === 'ALL' && conn.length >= 2) init = 'ALL';
+      else if (conn.includes(saved as ExchangeType)) init = saved as SrcTab;
+    } catch { /* ignore */ }
+    setSrc(init ?? (conn.length >= 2 ? 'ALL' : conn[0] ?? 'KIS'));
+  }, [loading, accounts, isPreview]);
+
+  // 연결이 1개 이하로 줄면 '전체'는 의미가 없으므로 표시만 단일 거래소로 강등(상태 변경 없이 파생)
+  const effSrc: SrcTab = src === 'ALL' && connectedKeys.length < 2 ? (connectedKeys[0] ?? 'KIS') : src;
+  const isAll = effSrc === 'ALL';
+  const pick = (t: SrcTab) => { setSrc(t); try { localStorage.setItem(REAL_SRC_KEY, t); } catch { /* ignore */ } };
+
+  // ── 전체(합산) 데이터 — 조회 실패(fetchOk=false)·미수신 거래소는 합산에서 제외하고 카드에 표기 ──
+  const okPorts = connectedKeys
+    .map(t => ({ t, p: ports[t] }))
+    .filter((x): x is { t: ExchangeType; p: ExchangePortfolio } => !!x.p && x.p.fetchOk !== false);
+  const failedKeys = connectedKeys.filter(t => !okPorts.some(x => x.t === t));
+  const totalAll = okPorts.reduce((s, x) => s + x.p.totalValue, 0);
+  const pnlAll = okPorts.reduce((s, x) => s + x.p.totalProfitLoss, 0);
+  const cashAll = okPorts.reduce((s, x) => s + x.p.cashBalance, 0);
+  // 합산 수익률 = 보유 매입원금 대비(예수금 제외) — 거래소별 totalReturnRate·포트폴리오 페이지와 동일 기준
+  const investedAll = totalAll - cashAll - pnlAll;
+  const returnAll = investedAll > 0 ? (pnlAll / investedAll) * 100 : 0;
+  // 전 거래소 통합 보유 상위 5 (KRW 환산, 거래소 배지 표기) — 같은 자산을 두 거래소에 나눠 보유하면 각각 표시가 맞다
+  const allHoldings: SumHolding[] = okPorts.flatMap(({ t, p }) => {
+    const fx = p.usdtKrwRate || FALLBACK_USD_KRW;
+    const badge = EXCHANGES.find(e => e.key === t)!.badge;
+    return p.holdings.filter(h => h.quantity > 0).map(h => ({
+      name: h.assetName,
+      sub: `${fmtQty(h.quantity, t === 'KIS')} · ${badge}`,
+      value: h.currency === 'USD' && fx > 0 ? h.marketValue * fx : h.marketValue,
+      rate: h.returnRate,
+    }));
+  }).sort((a, b) => b.value - a.value).slice(0, 5);
+
+  // ── 단일 거래소 데이터 ──
+  const selectedConnected = isAll ? connectedKeys.length > 0 : isConn(effSrc);
+  const selectedPort = isAll ? null : (ports[effSrc] || null);
+  const meta = isAll ? null : EXCHANGES.find(e => e.key === effSrc)!; // 단일 거래소 뷰에서만 사용(항상 존재)
   // 보유 평가/평가액은 항상 KRW로 표시. KIS 해외주식(currency=USD)은 서버가 준 환율로 환산해 합산(통화 혼합 방지).
   const usdKrw = selectedPort?.usdtKrwRate || FALLBACK_USD_KRW; // 환율 누락 시 폴백(USD가 1:1 원화 취급되어 ~1380배 축소되던 버그 방지)
   const krwValue = (h: { marketValue: number; currency?: string }) => (h.currency === 'USD' && usdKrw > 0 ? h.marketValue * usdKrw : h.marketValue);
   const equity = selectedPort ? selectedPort.totalValue - selectedPort.cashBalance : 0;
-  const holdings: SumHolding[] = selectedPort ? [...selectedPort.holdings].sort((a, b) => krwValue(b) - krwValue(a)).slice(0, 5).map(h => ({ name: h.assetName, sub: fmtQty(h.quantity, src === 'KIS'), value: krwValue(h), rate: h.returnRate })) : [];
-  const blips = useMemo(() => blipsFrom((selectedPort?.holdings ?? []).map(h => ({ name: h.assetName, rate: h.returnRate }))), [selectedPort]);
-  const goConnect = () => setSetup(src); // 1스텝: 대시보드에서 바로 연결 모달
+  const holdings: SumHolding[] = selectedPort ? [...selectedPort.holdings].sort((a, b) => krwValue(b) - krwValue(a)).slice(0, 5).map(h => ({ name: h.assetName, sub: fmtQty(h.quantity, effSrc === 'KIS'), value: krwValue(h), rate: h.returnRate })) : [];
+  const blips = blipsFrom(isAll ? allHoldings : (selectedPort?.holdings ?? []).map(h => ({ name: h.assetName, rate: h.returnRate })));
+  const goConnect = () => { if (!isAll) setSetup(effSrc); }; // 1스텝: 대시보드에서 바로 연결 모달(단일 거래소 뷰 전용)
+  // '+ 연결' 버튼 대상 — 전체 탭에서는 아직 미연결인 첫 거래소, 단일 탭에서는 그 거래소
+  const connectTarget = isAll ? (EXCHANGES.find(e => !isConn(e.key))?.key ?? null) : effSrc;
 
   return (
     <HelmShell active="home" virt={false} userName={name} session="실계좌 · 거래소 연동">
       <div className="mx-auto flex max-w-[1560px] flex-col gap-5">
         <WelcomeBanner name={name} blips={blips} />
-        {/* 자산 소스 탭 (실 연결상태) */}
+        {/* 자산 소스 탭 (실 연결상태) — 2개 이상 연결 시 '전체' 합산 탭 노출 */}
         <div className="flex flex-wrap items-center gap-2" data-tour="source">
-          {EXCHANGES.map(e => { const on = src === e.key, c = isConn(e.key); return (
-            <button key={e.key} onClick={() => setSrc(e.key)} className="inline-flex items-center gap-2 rounded-[10px] px-4 py-[9px] text-[15px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : '1px solid var(--ci-line)', background: on ? 'rgba(91,157,255,.10)' : 'var(--ci-inset)' }}>
-              {e.label}<span className="rounded px-1.5 py-0.5 text-[12px] font-bold" style={{ background: on ? 'rgba(91,157,255,.22)' : 'var(--ci-chip)', color: on ? '#cfe1ff' : 'var(--ci-ink1)' }}>{e.badge}</span>
+          {connectedKeys.length >= 2 && (
+            <button onClick={() => pick('ALL')} className="inline-flex items-center gap-2 rounded-[10px] px-4 py-[9px] text-[15px] font-semibold" style={{ border: isAll ? '1px solid rgba(91,157,255,.35)' : '1px solid var(--ci-line)', background: isAll ? 'rgba(91,157,255,.10)' : 'var(--ci-inset)' }}>
+              전체<span className="rounded px-1.5 py-0.5 text-[12px] font-bold" style={{ background: isAll ? 'rgba(91,157,255,.22)' : 'var(--ci-chip)', color: isAll ? '#cfe1ff' : 'var(--ci-ink1)' }}>합산</span>
+              <span className="text-[12px]" style={{ color: '#3fd6a0' }}>· {connectedKeys.length}개 연결</span>
+            </button>
+          )}
+          {EXCHANGES.map(e => { const on = effSrc === e.key, c = isConn(e.key); return (
+            <button key={e.key} onClick={() => pick(e.key)} className="inline-flex items-center gap-2 rounded-[10px] px-4 py-[9px] text-[15px] font-semibold" style={{ border: on ? '1px solid rgba(91,157,255,.35)' : '1px solid var(--ci-line)', background: on ? 'rgba(91,157,255,.10)' : 'var(--ci-inset)' }}>
+              {e.asset}<span className="rounded px-1.5 py-0.5 text-[12px] font-bold" style={{ background: on ? 'rgba(91,157,255,.22)' : 'var(--ci-chip)', color: on ? '#cfe1ff' : 'var(--ci-ink1)' }}>{e.badge}</span>
               <span className="text-[12px]" style={{ color: c ? '#3fd6a0' : 'var(--ci-ink3)' }}>· {c ? '연결됨' : '미연결'}</span>
             </button>
           ); })}
-          <button onClick={goConnect} className="rounded-[10px] px-3.5 py-[9px] text-[14.5px] font-medium text-white/70" style={{ border: '1px dashed var(--ci-line-strong)' }}>+ {meta.name.split(' ')[0]} 연결</button>
+          {connectTarget && <button onClick={() => setSetup(connectTarget)} className="rounded-[10px] px-3.5 py-[9px] text-[14.5px] font-medium text-white/70" style={{ border: '1px dashed var(--ci-line-strong)' }}>+ {EXCHANGES.find(e => e.key === connectTarget)!.shortName} 연결</button>}
           <button onClick={() => setTour(true)} className="ml-auto rounded-[10px] px-3 py-[9px] text-[14px] text-white/55" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-inset)' }} title="가이드 다시 보기">? 가이드</button>
           <button onClick={() => loadData()} className="rounded-[10px] px-3 py-[9px] text-[14px] text-white/55" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-inset)' }} title="새로고침">↻ 새로고침</button>
         </div>
@@ -436,11 +535,28 @@ const RealDashboard = () => {
           <div className="flex flex-col gap-5" data-tour="summary">
             {loading ? <LoadingCard />
               : error ? <ErrorCard onRetry={() => loadData()} />
-              : selectedConnected
-                ? ((selectedPort && selectedPort.fetchOk !== false)
-                    ? <SummaryCard kicker={meta.badge.toUpperCase()} title={`${meta.name} 포트폴리오`} total={selectedPort.totalValue} pnl={selectedPort.totalProfitLoss} returnRate={selectedPort.totalReturnRate} cash={selectedPort.cashBalance} equity={equity} holdings={holdings} onAll={() => navigate('/my-portfolio')} />
-                    : <ErrorCard onRetry={() => loadData()} />)
-                : <OnboardingCard ex={meta} onSetup={goConnect} />}
+              : isAll
+                ? (okPorts.length === 0
+                    ? <ErrorCard onRetry={() => loadData()} />
+                    : <SummaryCard kicker="ALL ACCOUNTS" title="전체 실계좌 포트폴리오" total={totalAll} pnl={pnlAll} returnRate={returnAll} cash={cashAll} equity={totalAll - cashAll} holdings={allHoldings} onAll={() => navigate('/my-portfolio')}
+                        footer={
+                          <div className="mt-5">
+                            <div className="grid grid-cols-3 divide-x rounded-xl" style={{ border: '1px solid var(--ci-line)', background: 'var(--ci-inset)' }}>
+                              {EXCHANGES.map(e => { const c = isConn(e.key); const p = ports[e.key]; const ok = !!p && p.fetchOk !== false; return (
+                                <div key={e.key} className="px-4 py-3" style={{ borderColor: 'var(--ci-line)' }}>
+                                  <div className="flex items-center gap-1.5 text-[12px] text-white/45">{c && ok && <span className="h-1.5 w-1.5 rounded-full" style={{ background: '#3fd6a0' }} />}{e.badge} {e.asset}</div>
+                                  <div className="mt-1 font-mono text-[15px] font-semibold">{!c ? <span className="text-white/30">미연결</span> : !ok ? <span style={{ color: COMPASS }}>조회 실패</span> : won(p.totalValue)}</div>
+                                </div>
+                              ); })}
+                            </div>
+                            {failedKeys.length > 0 && <div className="mt-2 text-[12px]" style={{ color: COMPASS }}>⚠ {failedKeys.map(k => EXCHANGES.find(e => e.key === k)!.badge).join(' · ')} 조회 실패 — 합산에서 제외됐어요. ↻ 새로고침을 시도해보세요.</div>}
+                          </div>
+                        } />)
+                : selectedConnected
+                  ? ((selectedPort && selectedPort.fetchOk !== false)
+                      ? <SummaryCard kicker={meta!.badge.toUpperCase()} title={`${meta!.name} 포트폴리오`} total={selectedPort.totalValue} pnl={selectedPort.totalProfitLoss} returnRate={selectedPort.totalReturnRate} cash={selectedPort.cashBalance} equity={equity} holdings={holdings} onAll={() => navigate('/my-portfolio')} />
+                      : <ErrorCard onRetry={() => loadData()} />)
+                  : <OnboardingCard ex={meta!} onSetup={goConnect} />}
             {/* VIRT 체험 카드 */}
             <Panel style={{ padding: '26px 30px', background: 'linear-gradient(135deg, rgba(91,157,255,.14), rgba(91,157,255,.03) 60%, transparent)', border: '1px solid rgba(91,157,255,.28)' }}>
               <div className="mb-2 flex items-center gap-2.5"><span className="rounded px-2 py-[3px] text-[11.5px] font-bold tracking-[.06em] text-white" style={{ background: SONAR }}>VIRT</span><span className="text-[12px] font-semibold tracking-[.18em]" style={{ color: 'var(--ci-sonar)' }}>가상 항해 · 체험하기</span></div>
@@ -449,9 +565,9 @@ const RealDashboard = () => {
               <button onClick={() => navigate('/virt/dashboard')} className="mt-5 inline-flex items-center gap-2.5 rounded-xl px-6 py-3.5 text-[15px] font-semibold text-white" style={{ border: '1px solid rgba(140,190,255,.5)', background: 'linear-gradient(180deg,#4d8aff 0%,#2c6fe6 62%,#2257c8 100%)', boxShadow: '0 12px 28px -12px rgba(44,111,230,.7), inset 0 1px 0 rgba(255,255,255,.38)' }}>VIRT 모드 시작하기<span className="flex h-5 w-5 items-center justify-center rounded-full text-[13px]" style={{ background: 'rgba(255,255,255,.18)' }}>→</span></button>
             </Panel>
           </div>
-          <RightRail go={p => navigate(p)} returnRate={selectedConnected ? (selectedPort?.totalReturnRate ?? null) : null} />
+          <RightRail go={p => navigate(p)} returnRate={selectedConnected ? (isAll ? returnAll : selectedPort?.totalReturnRate ?? null) : null} />
         </div>
-        <Footer />
+        <ConsoleFooter />
       </div>
       {setup && <ExchangeConnectModal exchangeType={setup} account={accounts.find(a => a.exchangeType === setup)} onClose={() => setSetup(null)} onSaved={() => loadData()} />}
       <GuideTour steps={DASH_TOUR} isActive={tour} onFinish={() => { setTour(false); try { localStorage.setItem('whalearc_dash_tour', 'done'); } catch { /* ignore */ } }} />
@@ -467,7 +583,7 @@ const FIRST_BUYS: { stockCode: string; stockName: string; quantity: number; asse
 ];
 
 const ONBOARD_STEPS = [
-  { key: 'trade', icon: '🛒', title: '첫 종목 매수해보기', desc: '시장가로 한 종목만 사봐도 거래의 흐름을 느낄 수 있어요.', action: '/virt/trade', label: '거래 화면으로 →', doneLabel: '첫 거래 완료' },
+  { key: 'trade', icon: '🛒', title: '첫 종목 매수해보기', desc: '시장가로 한 종목만 사봐도 거래의 흐름을 느낄 수 있어요.', action: '/virt/market', label: '시세·거래 화면으로 →', doneLabel: '첫 거래 완료' },
   { key: 'backtest', icon: '📊', title: '전략 백테스트 실행', desc: '내가 만든 조건이 과거에 돈을 벌었는지 한 번 눌러 확인해보세요.', action: '/virt/strategy', label: '백테스트 해보기 →', doneLabel: '백테스트 경험함' },
   { key: 'auto', icon: '🤖', title: '자동매매 설정하기', desc: '전략을 골라 자동으로 사고 팔도록 맡기면 24시간 운영됩니다.', action: '/virt/auto-trade', label: '자동매매 시작 →', doneLabel: '자동매매 가동함' },
 ] as const;
@@ -604,7 +720,7 @@ const VirtDashboard = () => {
                   {FIRST_BUYS.map(o => (
                     <button key={o.stockCode} onClick={() => quickBuy(o)} disabled={qbBusy != null} className="rounded-[10px] px-4 py-2.5 text-[14px] font-semibold disabled:opacity-50" style={{ border: '1px solid rgba(91,157,255,.32)', background: 'rgba(91,157,255,.1)', color: SONAR }}>{qbBusy === o.stockCode ? '매수 중…' : `⚡ ${o.label} 사보기`}</button>
                   ))}
-                  <button onClick={() => navigate('/virt/trade')} className="rounded-[10px] px-4 py-2.5 text-[14px] font-semibold text-white/70" style={{ border: '1px solid var(--ci-line-strong)' }}>직접 골라 매수 →</button>
+                  <button onClick={() => navigate('/virt/market')} className="rounded-[10px] px-4 py-2.5 text-[14px] font-semibold text-white/70" style={{ border: '1px solid var(--ci-line-strong)' }}>직접 골라 매수 →</button>
                 </div>
                 {qbMsg && <div className="mt-3 rounded-lg px-3.5 py-2.5 text-[13.5px] font-semibold" style={qbMsg.ok ? { background: 'rgba(63,214,160,.1)', border: '1px solid rgba(63,214,160,.28)', color: '#3fd6a0' } : { background: 'rgba(239,77,77,.1)', border: '1px solid rgba(239,77,77,.25)', color: '#fca5a5' }}>{qbMsg.msg}</div>}
               </Panel>
@@ -626,7 +742,7 @@ const VirtDashboard = () => {
           </div>
           <RightRail go={p => navigate(`/virt${p}`)} returnRate={portfolio?.returnRate ?? null} />
         </div>
-        <Footer />
+        <ConsoleFooter />
       </div>
     </HelmShell>
   );

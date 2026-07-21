@@ -48,6 +48,7 @@ export interface ExchangePortfolio {
   holdings: ExchangeHolding[];
   usdtKrwRate?: number;  // BITGET: USDT→KRW 환산 환율 / KIS: USD→KRW 환율 (0/미설정이면 미표시)
   fetchOk?: boolean;     // 거래소 API 조회 성공 여부 (false면 실패 → 빈 계좌와 구분, 에러 UI 표시)
+  balanceReportedAt?: string; // 기기 보고(device-report) 기준시각(ISO). 있으면 '기준 N분 전' 표시, 없으면 서버 실시간
 }
 
 export interface ExchangeTransaction {

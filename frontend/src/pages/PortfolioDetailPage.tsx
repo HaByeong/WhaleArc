@@ -38,9 +38,10 @@ interface PortfolioSummary {
 const PortfolioDetailPage = () => {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const { prefix, isVirt } = useRoutePrefix();
-  const { session } = useAuth();
+  const { profileName } = useAuth();
   const navigate = useNavigate();
-  const userName = session?.user?.email ? session.user.email.split('@')[0] : '항해사';
+  // 표시명은 DB 닉네임(profileName) 단일 소스 — 대시보드·포트폴리오와 동일(이메일 ID 노출 방지)
+  const userName = profileName || '항해사';
   const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
